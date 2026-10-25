@@ -282,6 +282,30 @@
     animation: none !important;
     width: 100% !important;
   }
+  .animate-marquee {
+    animation: none !important;
+  }
+}
+
+/* Infinite marquee ticker animation for top announcement banner */
+@keyframes marquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: marquee 45s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
 }
 
 /* Hide scrollbars utility for clean horizontal and vertical overflows */
@@ -295,4 +319,5 @@
   width: 0 !important;
   height: 0 !important;
 }
+
 

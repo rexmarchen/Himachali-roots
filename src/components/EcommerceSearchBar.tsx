@@ -105,27 +105,37 @@ export function EcommerceSearchBar({
 
   return (
     <div ref={containerRef} className={`relative w-full ${className}`}>
-      {/* Search Input Box (Amazon / Flipkart Style) */}
+      {/* Search Input Box */}
       <form
         onSubmit={handleSubmit}
         className={`group flex items-center h-11 w-full rounded-full transition-all duration-200 ${
           isOpen
-            ? 'ring-2 ring-terra bg-white shadow-lg'
+            ? light
+              ? 'ring-2 ring-terra bg-[#101918]/95 border-terra/60 shadow-2xl'
+              : 'ring-2 ring-terra bg-white border-terra shadow-lg'
             : light
-              ? 'bg-white/95 hover:bg-white text-ink shadow-sm border border-white/40'
-              : 'bg-white hover:bg-white text-ink border border-[#DDD3C4] shadow-xs'
+              ? 'bg-[#172321]/80 hover:bg-[#172321]/90 text-[#F7F3EB] border border-white/25 backdrop-blur-md shadow-md'
+              : 'bg-[#F2ECE1] hover:bg-[#ECE4D7] text-ink border border-[#D8CEBF] shadow-xs'
         }`}
       >
-        {/* Category Dropdown (Amazon style) */}
-        <div className="relative shrink-0 hidden sm:flex items-center h-full border-r border-[#E5DED2] bg-[#F7F3EB]/80 rounded-l-full px-3 text-xs text-muted hover:text-ink transition-colors">
+        {/* Category Dropdown */}
+        <div
+          className={`relative shrink-0 hidden sm:flex items-center h-full rounded-l-full px-3 text-xs transition-colors border-r ${
+            light
+              ? 'bg-white/10 hover:bg-white/15 text-white/90 border-white/20'
+              : 'bg-[#EAE2D5] hover:bg-[#E2D8C9] text-forest border-[#D8CEBF]'
+          }`}
+        >
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="bg-transparent text-xs font-medium text-ink outline-none cursor-pointer pr-4 appearance-none"
+            className={`bg-transparent text-xs font-medium outline-none cursor-pointer pr-4 appearance-none ${
+              light ? 'text-white' : 'text-forest'
+            }`}
             aria-label="Filter search by category"
           >
             {CATEGORIES.map((cat) => (
-              <option key={cat.value} value={cat.value} className="text-ink bg-white">
+              <option key={cat.value} value={cat.value} className="text-forest bg-[#F7F3EB]">
                 {cat.label}
               </option>
             ))}
@@ -133,7 +143,9 @@ export function EcommerceSearchBar({
           <svg
             viewBox="0 0 20 20"
             fill="currentColor"
-            className="w-3.5 h-3.5 text-muted pointer-events-none absolute right-2"
+            className={`w-3.5 h-3.5 pointer-events-none absolute right-2 transition-colors ${
+              light ? 'text-white/70' : 'text-muted'
+            }`}
             aria-hidden
           >
             <path
@@ -150,7 +162,9 @@ export function EcommerceSearchBar({
             viewBox="0 0 20 20"
             fill="none"
             stroke="currentColor"
-            className="h-4 w-4 text-[#8C8275] shrink-0 mr-2.5 sm:hidden"
+            className={`h-4 w-4 shrink-0 mr-2.5 sm:hidden ${
+              light ? 'text-white/60' : 'text-[#8C8275]'
+            }`}
             aria-hidden
           >
             <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="1.8" />
@@ -167,7 +181,11 @@ export function EcommerceSearchBar({
               setIsOpen(true);
             }}
             placeholder="Search shawls, Kangra tea, wild honey, rajma, oils…"
-            className="w-full bg-transparent text-[13px] sm:text-sm text-ink placeholder-[#8C8275] outline-none"
+            className={`w-full bg-transparent text-[13px] sm:text-sm outline-none transition-colors ${
+              light
+                ? 'text-[#F7F3EB] placeholder-white/55'
+                : 'text-ink placeholder-[#7A7163]'
+            }`}
             aria-label="Search products, makers and categories"
           />
 
@@ -178,7 +196,11 @@ export function EcommerceSearchBar({
                 setQuery('');
                 inputRef.current?.focus();
               }}
-              className="p-1 mr-1 text-muted hover:text-ink text-xs rounded-full hover:bg-sand/60 transition-colors"
+              className={`p-1 mr-1 text-xs rounded-full transition-colors ${
+                light
+                  ? 'text-white/60 hover:text-white hover:bg-white/15'
+                  : 'text-muted hover:text-ink hover:bg-sand/60'
+              }`}
               aria-label="Clear search"
             >
               ✕
@@ -186,10 +208,10 @@ export function EcommerceSearchBar({
           ) : null}
         </div>
 
-        {/* Flipkart / Amazon Search Submit Button */}
+        {/* Search Submit Button */}
         <button
           type="submit"
-          className="h-full px-4 sm:px-5 flex items-center justify-center bg-terra hover:bg-[#B36347] text-white rounded-r-full font-medium transition-colors shrink-0 shadow-xs"
+          className="h-full px-4 sm:px-5 flex items-center justify-center bg-terra hover:bg-[#B36347] text-white rounded-r-full font-medium transition-colors shrink-0 shadow-xs border-l border-white/15"
           aria-label="Submit Search"
         >
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>

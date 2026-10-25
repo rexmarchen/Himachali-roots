@@ -162,6 +162,54 @@ function MenuLink({ to, children, onClick }: { to: string; children: React.React
   );
 }
 
+const HIMACHAL_HERITAGE_TAGLINES = [
+  { tag: 'Devbhoomi', text: 'देवभूमि हिमाचल — Land of the Gods & Centuries of Living Mountain Heritage' },
+  { tag: 'GI Tagged', text: 'Authentic Kullu Handloom Shawls, Kinnauri Pattus & Chamba Rumals' },
+  { tag: 'High Altitude', text: 'Kangra Orthodox Tea · 100% Pure First Flush Leaf from Valley Gardens' },
+  { tag: 'Cold Pressed', text: 'Pure Wild Apricot (Chulli) Kernel Oil & High-Altitude Forest Honey' },
+  { tag: 'Verified Origin', text: '100% Direct Dispatches from Reviewed Village Artisans & Orchardists' },
+  { tag: 'Free Shipping', text: 'Complimentary Mountain Express Shipping on orders over ₹1,499' },
+  { tag: 'Pure Harvest', text: 'Zero Chemical Adulteration · Traceable to Named Valley Workshops' },
+];
+
+function HeritageAnnouncementMarquee({ light = false, customText }: { light?: boolean; customText?: string }) {
+  const baseItems = customText
+    ? [{ tag: 'Notice', text: customText }, ...HIMACHAL_HERITAGE_TAGLINES]
+    : HIMACHAL_HERITAGE_TAGLINES;
+  const items = [...baseItems, ...baseItems];
+
+  return (
+    <div
+      className={`relative h-8 w-full overflow-hidden transition-colors duration-300 ${
+        light
+          ? 'bg-black/55 text-[#F7F3EB]/90 border-b border-white/10'
+          : 'bg-[#172321] text-[#F7F3EB] border-b border-[#101918]'
+      }`}
+      style={{
+        maskImage: 'linear-gradient(to right, transparent 0%, black 48px, black calc(100% - 48px), transparent 100%)',
+        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 48px, black calc(100% - 48px), transparent 100%)',
+      }}
+      aria-label="Himachal Pradesh authentic heritage announcements"
+    >
+      <div className="animate-marquee flex items-center h-full whitespace-nowrap text-[11px] sm:text-[11.5px] font-medium tracking-[0.03em]">
+        {items.map((item, index) => (
+          <div key={`${item.tag}-${index}`} className="flex items-center shrink-0">
+            <span className="flex items-center gap-2 px-3 sm:px-4 hover:text-white transition-colors cursor-default">
+              <span className="rounded-full bg-terra/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-terra border border-terra/30">
+                {item.tag}
+              </span>
+              <span>{item.text}</span>
+            </span>
+            <span className="text-terra/70 text-[9px] px-2 select-none" aria-hidden>
+              ✦
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Header() {
   const { user } = useAuth();
   const cartCount = useCartCount();
@@ -193,24 +241,10 @@ function Header() {
           : 'bg-[#F7F3EB]/95 backdrop-blur-md border-b border-[#E5DED2] shadow-xs'
       }`}
     >
-      {announcement?.active ? (
-        <div
-          className={`transition-colors duration-300 ${
-            isTransparent ? 'bg-black/40 text-paper/90 border-b border-white/10' : 'bg-forest text-paper'
-          }`}
-        >
-          <div className="mx-auto flex max-w-7xl items-center justify-center gap-2 px-4 py-2 text-center text-[10.5px] tracking-[0.04em] sm:text-[11.5px] font-medium">
-            <span className="hidden h-1.5 w-1.5 rounded-full bg-terra sm:block animate-pulse" aria-hidden />
-            {announcement.href ? (
-              <Link to={announcement.href} className="hover:underline underline-offset-2">
-                {announcement.text}
-              </Link>
-            ) : (
-              <span>{announcement.text}</span>
-            )}
-          </div>
-        </div>
-      ) : null}
+      <HeritageAnnouncementMarquee
+        light={isTransparent}
+        customText={announcement?.active && announcement.text ? announcement.text : undefined}
+      />
 
       <div className="mx-auto flex h-[72px] sm:h-[78px] max-w-7xl items-center justify-between gap-3 sm:gap-6 px-4 sm:px-6 lg:px-8">
         {/* Brand Logo */}
