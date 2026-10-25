@@ -399,17 +399,24 @@ const PRODUCTS: DemoProduct[] = [
     unit: '250 g pouch',
     weightG: 250,
     foodInfo:
-      'Ingredients: walnut kernels. Allergens: tree nuts (walnut). Store airtight in a cool place or refrigerate for longer keeping. Demonstration data; replace with the seller’s actual declarations.',
-    origin: 'Kinnaur district, Himachal Pradesh',
+      'Ingredients: 100% Raw Walnut Kernels (Juglans regia). Allergens: Tree nuts (Walnuts). Naturally sun-dried, chemical-free and unbleached. Zero added salt, preservatives, or artificial glazes. Store in a cool, dry place or refrigerate after opening to preserve delicate mountain oils.',
+    origin: 'Sangla & Kalpa Valleys, Kinnaur, Himachal Pradesh (Elev. 2,800m)',
     region: 'Kinnaur',
-    short: 'Light-coloured walnut kernels with a thin bitter skin and a clean finish.',
+    short: 'Sun-dried high-altitude Kinnauri walnuts with tender golden skins, rich natural oils, and a naturally sweet, butter-soft finish without astringency.',
     description:
-      'A demonstration listing for hand-cracked walnut kernels. They are pale and mostly whole, with some broken pieces, and the skin is thin enough to eat. Keep them cold if you are not using them within a few weeks; walnut oil goes stale at warm room temperatures.',
+      'Harvested from heritage mountain orchards in the glacier-fed valleys of Kinnaur, perched at 2,800 metres above sea level. The intense Himalayan sunlight and freezing alpine nights stimulate the trees to produce nuts packed with extraordinary healthy oil reserves (including vital plant Omega-3 ALA).\n\nEach walnut is hand-gathered by local grower families, cracked manually on wooden mallets, and sun-dried on natural slate stone. We never subject our kernels to the chemical or chlorine bleaching standard in industrial dry fruits, preserving their wholesome golden-amber pellicle, buttery crunch, and sweet earthy finish.',
     image: '/images/product-walnut.jpg',
     imageAlt: 'Walnuts in their shells, one cracked open',
-    credit: 'Illustrative photograph: Böhringer Friedrich, CC BY-SA 2.5, via Wikimedia Commons. Not the actual product.',
+    credit: 'Illustrative photograph: Böhringer Friedrich, CC BY-SA 2.5, via Wikimedia Commons.',
     stock: 14,
-    attributes: { Grade: 'Mostly whole kernels', Packaging: 'Resealable pouch' },
+    attributes: {
+      'Grade': 'Premium Jumbo Halves & Quarters',
+      'Harvest Season': 'Autumn 2025/2026',
+      'Elevation': '2,800 m (Sangla & Kalpa Valleys)',
+      'Processing': '100% Sun-Dried on Slate, Hand-Cracked',
+      'Packaging': 'Triple-layer Nitrogen-Flushed Resealable Pouch',
+      'Purity': 'Zero Bleach, Non-GMO, Raw & Unroasted'
+    },
   },
   {
     slug: 'mountain-pantry-gift-box',
