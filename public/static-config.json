@@ -1,0 +1,19 @@
+{
+  "payments": {
+    "provider": "razorpay",
+    "configured": false,
+    "webhookConfigured": false,
+    "mode": "unconfigured",
+    "devPaymentsEnabled": true
+  },
+  "shipping": {
+    "freeThresholdPaise": 149900,
+    "flatRatePaise": 7900
+  },
+  "supportEmail": "hello@pahadiroots.example",
+  "supportEmailIsPlaceholder": true,
+  "devMode": true,
+  "devAuthHelpers": true,
+  "legalReviewRequired": true,
+  "commissionBasisNote": "Commission is calculated on product value after discounts, excluding shipping and taxes."
+}

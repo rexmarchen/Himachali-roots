@@ -1,0 +1,77 @@
+{
+  "categories": [
+    {
+      "id": "cat_148f005a-c915-41b9-92f0-5a154c93992c",
+      "name": "Shawls & weaves",
+      "slug": "shawls-and-weaves",
+      "description": "Handloom shawls, stoles and yardage from mountain looms.",
+      "parentId": null,
+      "imageUrl": "/images/product-shawl.jpg",
+      "productCount": 1
+    },
+    {
+      "id": "cat_67dfabd3-3ddb-4f96-8f63-900b8151091d",
+      "name": "Knitwear",
+      "slug": "knitwear",
+      "description": "Wool socks, caps and small knitted goods for cold rooms and long walks.",
+      "parentId": null,
+      "imageUrl": "/images/product-socks.jpg",
+      "productCount": 1
+    },
+    {
+      "id": "cat_2c71b3fb-a8f1-4037-80b9-d6555a06942a",
+      "name": "Tea & infusions",
+      "slug": "tea-and-infusions",
+      "description": "Small-garden tea and herbal infusions grown in Himachal.",
+      "parentId": null,
+      "imageUrl": "/images/product-tea.jpg",
+      "productCount": 1
+    },
+    {
+      "id": "cat_c10d5e91-093c-4d0c-b5ab-538e1cd7077e",
+      "name": "Pantry & preserves",
+      "slug": "pantry-and-preserves",
+      "description": "Honey, pickles, preserves and everyday food from mountain kitchens.",
+      "parentId": null,
+      "imageUrl": "/images/product-honey.jpg",
+      "productCount": 2
+    },
+    {
+      "id": "cat_b7b00b68-b9f3-4dd9-97af-0d84a377821a",
+      "name": "Dry fruit & nuts",
+      "slug": "dry-fruit-and-nuts",
+      "description": "Apricots, walnuts and orchard produce from high valleys.",
+      "parentId": null,
+      "imageUrl": "/images/product-walnut.jpg",
+      "productCount": 2
+    },
+    {
+      "id": "cat_33cd4dff-5cbb-4cf8-82c6-593233b69724",
+      "name": "Pulses & staples",
+      "slug": "pulses-and-staples",
+      "description": "Beans, lentils and staples grown on terraced fields.",
+      "parentId": null,
+      "imageUrl": "/images/product-rajma.jpg",
+      "productCount": 1
+    },
+    {
+      "id": "cat_a0f2036b-c685-4a12-8f48-f98d4f4ed3fc",
+      "name": "Caps & headwear",
+      "slug": "caps-and-headwear",
+      "description": "Wool caps in local shapes, made for actual winters.",
+      "parentId": null,
+      "imageUrl": "/images/product-cap.jpg",
+      "productCount": 1
+    },
+    {
+      "id": "cat_67e2d317-bdfc-463b-92de-0facb9f2ef57",
+      "name": "Gifting",
+      "slug": "gifting",
+      "description": "Small collections of food and handmade things, packed as gifts.",
+      "parentId": null,
+      "imageUrl": "/images/editorial-terrace.jpg",
+      "productCount": 1
+    }
+  ],
+  "subcategories": []
+}

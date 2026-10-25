@@ -1,0 +1,820 @@
+{
+  "kullu-handwoven-wool-shawl": {
+    "product": {
+      "id": "prd_04441df7-5c73-41a4-8ee5-e3e3fb58e023",
+      "slug": "kullu-handwoven-wool-shawl",
+      "name": "Kullu handwoven wool shawl",
+      "shortDescription": "A generous wool shawl in a traditional geometric pattern, woven on a pit loom.",
+      "pricePaise": 680000,
+      "compareAtPricePaise": 780000,
+      "imageUrl": "/images/product-shawl.jpg",
+      "imageAlt": "A geometrically patterned handwoven textile on a wooden loom",
+      "sellerName": "Kullu Loom Collective (demo)",
+      "sellerSlug": "kullu-loom-collective-demo",
+      "categoryName": "Shawls & weaves",
+      "categorySlug": "shawls-and-weaves",
+      "stock": 5,
+      "isDemo": true,
+      "region": "Kullu",
+      "isFeatured": true,
+      "ratingAverage": null,
+      "ratingCount": 0,
+      "description": "A demonstration listing for a handwoven wool shawl. The pattern language borrows from Kullu’s pit-loom tradition; in a live listing the seller would describe the specific motifs, the yarn count and the weaver. The cloth is warm without being heavy, with a firm hand that softens with wear.",
+      "sku": "DEMO-KUL-SHW-01",
+      "unit": "piece",
+      "weightG": 620,
+      "dimensions": "200 × 90 cm",
+      "materials": "Wool; cotton warp",
+      "careInstructions": "Dry clean or hand wash cold with a wool detergent. Dry flat in shade.",
+      "foodInfo": null,
+      "originPlace": "Kullu valley, Himachal Pradesh",
+      "originVerified": false,
+      "attributes": {
+        "Weave": "Pit loom",
+        "Finish": "Hand-finished fringe",
+        "Colour": "Natural with madder-red border"
+      },
+      "taxRateBp": 0,
+      "images": [
+        {
+          "id": "img_546c73e8-976d-4d35-b874-7f43c857cc98",
+          "url": "/images/product-shawl.jpg",
+          "alt": "A geometrically patterned handwoven textile on a wooden loom",
+          "credit": "Illustrative photograph: Rajani Gairshail, CC BY-SA 4.0, via Wikimedia Commons. Not the actual product."
+        }
+      ],
+      "seller": {
+        "id": "sel_052b0b3f-3aec-40e8-9768-f802128b6d32",
+        "name": "Kullu Loom Collective (demo)",
+        "slug": "kullu-loom-collective-demo",
+        "tagline": "Handloom and knitwear from the Kullu valley — demonstration storefront.",
+        "story": "Demonstration seller profile. In a live marketplace this section would carry the workshop’s own account of its looms, its members and its production calendar, reviewed by the marketplace team. No real cooperative is represented by this seed record.",
+        "region": "Kullu"
+      },
+      "category": {
+        "id": "cat_148f005a-c915-41b9-92f0-5a154c93992c",
+        "name": "Shawls & weaves",
+        "slug": "shawls-and-weaves"
+      },
+      "reviews": [],
+      "reviewSummary": {
+        "average": null,
+        "count": 0,
+        "distribution": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        }
+      },
+      "related": [],
+      "returnPolicy": "7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.",
+      "shippingEstimate": "Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch."
+    }
+  },
+  "kangra-valley-green-tea": {
+    "product": {
+      "id": "prd_2a06bb8d-de06-4f70-9c05-773419d06208",
+      "slug": "kangra-valley-green-tea",
+      "name": "Kangra valley green tea",
+      "shortDescription": "A light, grassy green tea from the first flush, packed in a small tin.",
+      "pricePaise": 62000,
+      "compareAtPricePaise": null,
+      "imageUrl": "/images/product-tea.jpg",
+      "imageAlt": "Terraced tea gardens on a hillside",
+      "sellerName": "Kangra Tea Cooperative (demo)",
+      "sellerSlug": "kangra-tea-cooperative-demo",
+      "categoryName": "Tea & infusions",
+      "categorySlug": "tea-and-infusions",
+      "stock": 24,
+      "isDemo": true,
+      "region": "Kangra",
+      "isFeatured": true,
+      "ratingAverage": null,
+      "ratingCount": 0,
+      "description": "A demonstration listing for Kangra green tea. Expect a pale liquor, a vegetal aroma and very little bitterness if steeped briefly. This is an everyday tea rather than a competition grade, and the tin is sized for a household rather than a café.",
+      "sku": "DEMO-KAN-TEA-01",
+      "unit": "100 g tin",
+      "weightG": 100,
+      "dimensions": null,
+      "materials": "Camellia sinensis leaf",
+      "careInstructions": null,
+      "foodInfo": "Ingredients: green tea leaf. Allergens: none declared. Store airtight away from light and strong smells. Best within 12 months of packing. Demonstration data — the live listing must carry the seller’s actual FSSAI details and batch information.",
+      "originPlace": "Kangra valley, Himachal Pradesh",
+      "originVerified": false,
+      "attributes": {
+        "Type": "Green tea",
+        "Steeping": "80 °C, 2–3 minutes",
+        "Pack": "100 g tin"
+      },
+      "taxRateBp": 0,
+      "images": [
+        {
+          "id": "img_dcf02ac0-f69c-4009-a961-610c2d29f125",
+          "url": "/images/product-tea.jpg",
+          "alt": "Terraced tea gardens on a hillside",
+          "credit": "Illustrative photograph: UnpetitproleX, CC BY-SA 4.0, via Wikimedia Commons. Not the actual product."
+        }
+      ],
+      "seller": {
+        "id": "sel_60e276d3-e16d-4c3a-b79b-fc8bdb016db1",
+        "name": "Kangra Tea Cooperative (demo)",
+        "slug": "kangra-tea-cooperative-demo",
+        "tagline": "Small-garden tea from the Kangra valley — demonstration storefront.",
+        "story": "Demonstration seller profile. A real seller would supply garden details, plucking seasons and food-safety registrations here. This record exists to exercise the catalogue and is not a claim about any existing tea garden.",
+        "region": "Kangra"
+      },
+      "category": {
+        "id": "cat_2c71b3fb-a8f1-4037-80b9-d6555a06942a",
+        "name": "Tea & infusions",
+        "slug": "tea-and-infusions"
+      },
+      "reviews": [],
+      "reviewSummary": {
+        "average": null,
+        "count": 0,
+        "distribution": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        }
+      },
+      "related": [],
+      "returnPolicy": "7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.",
+      "shippingEstimate": "Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch."
+    }
+  },
+  "lahaul-wildflower-honey": {
+    "product": {
+      "id": "prd_2a729972-5b0f-4eac-a18b-352b232a0bd1",
+      "slug": "lahaul-wildflower-honey",
+      "name": "Lahaul wildflower honey",
+      "shortDescription": "A single-season honey with a strong floral scent and a soft, grainy set.",
+      "pricePaise": 54000,
+      "compareAtPricePaise": null,
+      "imageUrl": "/images/product-honey.jpg",
+      "imageAlt": "A small jar of honey with a piece of honeycomb",
+      "sellerName": "Lahaul Apiary & Kitchen (demo)",
+      "sellerSlug": "lahaul-apiary-demo",
+      "categoryName": "Pantry & preserves",
+      "categorySlug": "pantry-and-preserves",
+      "stock": 30,
+      "isDemo": true,
+      "region": "Lahaul and Spiti",
+      "isFeatured": true,
+      "ratingAverage": null,
+      "ratingCount": 0,
+      "description": "A demonstration listing for honey from a short high-altitude flowering season. The flavour is full and slightly resinous, and the texture sets firmly. Because it is not pasteurised for clarity, it may crystallise; warm the jar gently in water if you prefer it runny.",
+      "sku": "DEMO-LAH-HON-01",
+      "unit": "250 g jar",
+      "weightG": 250,
+      "dimensions": null,
+      "materials": null,
+      "careInstructions": null,
+      "foodInfo": "Ingredients: honey. Allergens: none declared. Crystallisation is normal. Do not feed honey to infants under 12 months. Store at room temperature. Demonstration data — replace with the seller’s actual food-safety declarations before launch.",
+      "originPlace": "Lahaul valley, Himachal Pradesh",
+      "originVerified": false,
+      "attributes": {
+        "Floral source": "Mixed mountain wildflowers",
+        "Texture": "Set"
+      },
+      "taxRateBp": 0,
+      "images": [
+        {
+          "id": "img_593d4a4e-8e0c-4408-bc81-0c4c7a19d7fe",
+          "url": "/images/product-honey.jpg",
+          "alt": "A small jar of honey with a piece of honeycomb",
+          "credit": "Illustrative photograph: Alabama Extension, CC0, via Wikimedia Commons. Not the actual product."
+        }
+      ],
+      "seller": {
+        "id": "sel_f157875c-a9a2-4fa5-8536-b67b80ce518c",
+        "name": "Lahaul Apiary & Kitchen (demo)",
+        "slug": "lahaul-apiary-demo",
+        "tagline": "Honey, apricots and preserves from a high cold desert — demonstration storefront.",
+        "story": "Demonstration seller profile. The high-altitude season is short, and this seller would normally describe its apiary locations, orchard partners and kitchen practices. None of that is asserted by this seed record.",
+        "region": "Lahaul and Spiti"
+      },
+      "category": {
+        "id": "cat_c10d5e91-093c-4d0c-b5ab-538e1cd7077e",
+        "name": "Pantry & preserves",
+        "slug": "pantry-and-preserves"
+      },
+      "reviews": [],
+      "reviewSummary": {
+        "average": null,
+        "count": 0,
+        "distribution": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        }
+      },
+      "related": [
+        {
+          "id": "prd_5453dffc-e913-4abb-8562-b21a0bd00e11",
+          "slug": "mountain-kitchen-pickle",
+          "name": "Mountain kitchen pickle",
+          "shortDescription": "A sharp, oily pickle in the mountain style, made for dal and rice.",
+          "pricePaise": 36000,
+          "compareAtPricePaise": null,
+          "imageUrl": "/images/product-pickle.jpg",
+          "imageAlt": "A jar of Indian pickle with visible spices",
+          "sellerName": "Chamba Farm Collective (demo)",
+          "sellerSlug": "chamba-farm-collective-demo",
+          "categoryName": "Pantry & preserves",
+          "categorySlug": "pantry-and-preserves",
+          "stock": 16,
+          "isDemo": true,
+          "region": "Chamba",
+          "isFeatured": false,
+          "ratingAverage": null,
+          "ratingCount": 0
+        }
+      ],
+      "returnPolicy": "7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.",
+      "shippingEstimate": "Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch."
+    }
+  },
+  "hand-knitted-himalayan-socks": {
+    "product": {
+      "id": "prd_d1c14365-f530-4482-9c1b-1635951f59dc",
+      "slug": "hand-knitted-himalayan-socks",
+      "name": "Hand-knitted Himalayan socks",
+      "shortDescription": "Thick, plainly knitted house socks for cold floors and early mornings.",
+      "pricePaise": 89000,
+      "compareAtPricePaise": null,
+      "imageUrl": "/images/product-socks.jpg",
+      "imageAlt": "A pair of hand-knitted patterned socks",
+      "sellerName": "Kullu Loom Collective (demo)",
+      "sellerSlug": "kullu-loom-collective-demo",
+      "categoryName": "Knitwear",
+      "categorySlug": "knitwear",
+      "stock": 18,
+      "isDemo": true,
+      "region": "Kullu",
+      "isFeatured": false,
+      "ratingAverage": null,
+      "ratingCount": 0,
+      "description": "A demonstration listing for a pair of hand-knitted socks. The knit is dense and slightly irregular, as hand-work is. These are house socks, not hiking socks: the wool is soft rather than technical, and the fit is generous.",
+      "sku": "DEMO-KUL-SOC-02",
+      "unit": "pair",
+      "weightG": 180,
+      "dimensions": null,
+      "materials": "Wool blend",
+      "careInstructions": "Hand wash cold. Do not tumble dry.",
+      "foodInfo": null,
+      "originPlace": "Kullu valley, Himachal Pradesh",
+      "originVerified": false,
+      "attributes": {
+        "Size": "Adult, approximate UK 6–10",
+        "Yarn": "Woollen blend",
+        "Made": "Hand-knitted"
+      },
+      "taxRateBp": 0,
+      "images": [
+        {
+          "id": "img_3d9de724-d81f-4df2-872f-48b8f8c152b6",
+          "url": "/images/product-socks.jpg",
+          "alt": "A pair of hand-knitted patterned socks",
+          "credit": "Illustrative photograph: Rajani Gairshail, CC BY-SA 4.0, via Wikimedia Commons. Not the actual product."
+        }
+      ],
+      "seller": {
+        "id": "sel_052b0b3f-3aec-40e8-9768-f802128b6d32",
+        "name": "Kullu Loom Collective (demo)",
+        "slug": "kullu-loom-collective-demo",
+        "tagline": "Handloom and knitwear from the Kullu valley — demonstration storefront.",
+        "story": "Demonstration seller profile. In a live marketplace this section would carry the workshop’s own account of its looms, its members and its production calendar, reviewed by the marketplace team. No real cooperative is represented by this seed record.",
+        "region": "Kullu"
+      },
+      "category": {
+        "id": "cat_67dfabd3-3ddb-4f96-8f63-900b8151091d",
+        "name": "Knitwear",
+        "slug": "knitwear"
+      },
+      "reviews": [],
+      "reviewSummary": {
+        "average": null,
+        "count": 0,
+        "distribution": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        }
+      },
+      "related": [],
+      "returnPolicy": "7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.",
+      "shippingEstimate": "Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch."
+    }
+  },
+  "himachali-wool-cap": {
+    "product": {
+      "id": "prd_f088c0a1-779d-4c37-84ac-0a64e0913470",
+      "slug": "himachali-wool-cap",
+      "name": "Himachali wool cap",
+      "shortDescription": "A close-fitting knitted cap in a traditional banded shape.",
+      "pricePaise": 125000,
+      "compareAtPricePaise": null,
+      "imageUrl": "/images/product-cap.jpg",
+      "imageAlt": "Several knitted Himachali caps in different colours",
+      "sellerName": "Kullu Loom Collective (demo)",
+      "sellerSlug": "kullu-loom-collective-demo",
+      "categoryName": "Caps & headwear",
+      "categorySlug": "caps-and-headwear",
+      "stock": 11,
+      "isDemo": true,
+      "region": "Kullu",
+      "isFeatured": false,
+      "ratingAverage": null,
+      "ratingCount": 0,
+      "description": "A demonstration listing for a knitted woollen cap. The shape is the familiar close-fitting Himachali cap, with a patterned band and a small crown. Colour and pattern will vary between pieces because they are knitted by hand.",
+      "sku": "DEMO-KUL-CAP-03",
+      "unit": "piece",
+      "weightG": 140,
+      "dimensions": null,
+      "materials": "Wool",
+      "careInstructions": "Hand wash cold. Reshape and dry flat.",
+      "foodInfo": null,
+      "originPlace": "Kullu valley, Himachal Pradesh",
+      "originVerified": false,
+      "attributes": {
+        "Fit": "Close-fitting",
+        "Pattern": "Assorted, varies by piece"
+      },
+      "taxRateBp": 0,
+      "images": [
+        {
+          "id": "img_fb733f5a-fbaf-4c10-868c-0b1fa99a7353",
+          "url": "/images/product-cap.jpg",
+          "alt": "Several knitted Himachali caps in different colours",
+          "credit": "Illustrative photograph: Ravi Kumar, CC BY 3.0, via Wikimedia Commons. Not the actual product."
+        }
+      ],
+      "seller": {
+        "id": "sel_052b0b3f-3aec-40e8-9768-f802128b6d32",
+        "name": "Kullu Loom Collective (demo)",
+        "slug": "kullu-loom-collective-demo",
+        "tagline": "Handloom and knitwear from the Kullu valley — demonstration storefront.",
+        "story": "Demonstration seller profile. In a live marketplace this section would carry the workshop’s own account of its looms, its members and its production calendar, reviewed by the marketplace team. No real cooperative is represented by this seed record.",
+        "region": "Kullu"
+      },
+      "category": {
+        "id": "cat_a0f2036b-c685-4a12-8f48-f98d4f4ed3fc",
+        "name": "Caps & headwear",
+        "slug": "caps-and-headwear"
+      },
+      "reviews": [],
+      "reviewSummary": {
+        "average": null,
+        "count": 0,
+        "distribution": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        }
+      },
+      "related": [],
+      "returnPolicy": "7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.",
+      "shippingEstimate": "Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch."
+    }
+  },
+  "dried-apricots-lahaul": {
+    "product": {
+      "id": "prd_f9e42c25-b2f9-44c1-998f-5503712433af",
+      "slug": "dried-apricots-lahaul",
+      "name": "Dried apricots from Lahaul",
+      "shortDescription": "Sun-dried apricots with a tart edge, unsulphured and dark in colour.",
+      "pricePaise": 48000,
+      "compareAtPricePaise": null,
+      "imageUrl": "/images/product-apricot.jpg",
+      "imageAlt": "A bowl of dried apricots",
+      "sellerName": "Lahaul Apiary & Kitchen (demo)",
+      "sellerSlug": "lahaul-apiary-demo",
+      "categoryName": "Dry fruit & nuts",
+      "categorySlug": "dry-fruit-and-nuts",
+      "stock": 22,
+      "isDemo": true,
+      "region": "Lahaul and Spiti",
+      "isFeatured": false,
+      "ratingAverage": null,
+      "ratingCount": 0,
+      "description": "A demonstration listing for orchard apricots dried in the open air. They are unsulphured, so the colour is deep amber rather than bright orange, and the flavour is more acidic than sweet. Good in a lunchbox, or steeped with tea.",
+      "sku": "DEMO-LAH-APR-02",
+      "unit": "250 g pouch",
+      "weightG": 250,
+      "dimensions": null,
+      "materials": null,
+      "careInstructions": null,
+      "foodInfo": "Ingredients: dried apricots. Allergens: none declared. May contain natural stones or fragments — check before eating. Store cool and dry. Demonstration data; the live listing must state the seller’s food registrations.",
+      "originPlace": "Lahaul valley, Himachal Pradesh",
+      "originVerified": false,
+      "attributes": {
+        "Treatment": "Unsulphured",
+        "Grade": "Mixed sizes"
+      },
+      "taxRateBp": 0,
+      "images": [
+        {
+          "id": "img_76bf6250-607c-48e2-8864-369ba9c5b420",
+          "url": "/images/product-apricot.jpg",
+          "alt": "A bowl of dried apricots",
+          "credit": "Illustrative photograph: Andrey Butko, CC BY-SA 3.0, via Wikimedia Commons. Not the actual product."
+        }
+      ],
+      "seller": {
+        "id": "sel_f157875c-a9a2-4fa5-8536-b67b80ce518c",
+        "name": "Lahaul Apiary & Kitchen (demo)",
+        "slug": "lahaul-apiary-demo",
+        "tagline": "Honey, apricots and preserves from a high cold desert — demonstration storefront.",
+        "story": "Demonstration seller profile. The high-altitude season is short, and this seller would normally describe its apiary locations, orchard partners and kitchen practices. None of that is asserted by this seed record.",
+        "region": "Lahaul and Spiti"
+      },
+      "category": {
+        "id": "cat_b7b00b68-b9f3-4dd9-97af-0d84a377821a",
+        "name": "Dry fruit & nuts",
+        "slug": "dry-fruit-and-nuts"
+      },
+      "reviews": [],
+      "reviewSummary": {
+        "average": null,
+        "count": 0,
+        "distribution": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        }
+      },
+      "related": [
+        {
+          "id": "prd_9af5e48f-840b-4cae-9b12-505dda6603f1",
+          "slug": "kinnaur-walnut-kernels",
+          "name": "Kinnaur walnut kernels",
+          "shortDescription": "Light-coloured walnut kernels with a thin bitter skin and a clean finish.",
+          "pricePaise": 98000,
+          "compareAtPricePaise": null,
+          "imageUrl": "/images/product-walnut.jpg",
+          "imageAlt": "Walnuts in their shells, one cracked open",
+          "sellerName": "Kinnaur Orchard Growers (demo)",
+          "sellerSlug": "kinnaur-orchard-growers-demo",
+          "categoryName": "Dry fruit & nuts",
+          "categorySlug": "dry-fruit-and-nuts",
+          "stock": 14,
+          "isDemo": true,
+          "region": "Kinnaur",
+          "isFeatured": false,
+          "ratingAverage": null,
+          "ratingCount": 0
+        }
+      ],
+      "returnPolicy": "7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.",
+      "shippingEstimate": "Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch."
+    }
+  },
+  "chamba-rajma": {
+    "product": {
+      "id": "prd_71bbe8b2-a49b-4c7d-8fdb-673a44f84a50",
+      "slug": "chamba-rajma",
+      "name": "Chamba rajma",
+      "shortDescription": "Small, thin-skinned red beans that hold their shape in a slow curry.",
+      "pricePaise": 32000,
+      "compareAtPricePaise": null,
+      "imageUrl": "/images/product-rajma.jpg",
+      "imageAlt": "A close view of red kidney beans",
+      "sellerName": "Chamba Farm Collective (demo)",
+      "sellerSlug": "chamba-farm-collective-demo",
+      "categoryName": "Pulses & staples",
+      "categorySlug": "pulses-and-staples",
+      "stock": 40,
+      "isDemo": true,
+      "region": "Chamba",
+      "isFeatured": false,
+      "ratingAverage": null,
+      "ratingCount": 0,
+      "description": "A demonstration listing for rajma grown on terraced fields. The beans are smaller than the common market grade and cook to a firm, creamy centre. Soak overnight, discard the water, and simmer with aromatics until tender.",
+      "sku": "DEMO-CHA-RAJ-01",
+      "unit": "500 g pouch",
+      "weightG": 500,
+      "dimensions": null,
+      "materials": null,
+      "careInstructions": null,
+      "foodInfo": "Ingredients: kidney beans. Allergens: none declared. Soak before cooking and boil thoroughly; never eat raw or undercooked beans. Store cool and dry. Demonstration data; the live listing must carry the seller’s actual declarations.",
+      "originPlace": "Chamba district, Himachal Pradesh",
+      "originVerified": false,
+      "attributes": {
+        "Size": "Small grade",
+        "Cooking": "Soak 8 hours, simmer 45–60 minutes"
+      },
+      "taxRateBp": 0,
+      "images": [
+        {
+          "id": "img_6422fa0b-b2b5-4648-8451-91e1e5934666",
+          "url": "/images/product-rajma.jpg",
+          "alt": "A close view of red kidney beans",
+          "credit": "Illustrative photograph: Sanjay Acharya, CC BY-SA 3.0, via Wikimedia Commons. Not the actual product."
+        }
+      ],
+      "seller": {
+        "id": "sel_8c134816-824c-4a9c-a05f-166091c9811f",
+        "name": "Chamba Farm Collective (demo)",
+        "slug": "chamba-farm-collective-demo",
+        "tagline": "Terraced-field staples from the Ravi valley — demonstration storefront.",
+        "story": "Demonstration seller profile. This storefront would list the collective’s member farms, harvest calendar and grading standards. The seed record is sample data and does not represent a real collective.",
+        "region": "Chamba"
+      },
+      "category": {
+        "id": "cat_33cd4dff-5cbb-4cf8-82c6-593233b69724",
+        "name": "Pulses & staples",
+        "slug": "pulses-and-staples"
+      },
+      "reviews": [],
+      "reviewSummary": {
+        "average": null,
+        "count": 0,
+        "distribution": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        }
+      },
+      "related": [],
+      "returnPolicy": "7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.",
+      "shippingEstimate": "Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch."
+    }
+  },
+  "mountain-kitchen-pickle": {
+    "product": {
+      "id": "prd_5453dffc-e913-4abb-8562-b21a0bd00e11",
+      "slug": "mountain-kitchen-pickle",
+      "name": "Mountain kitchen pickle",
+      "shortDescription": "A sharp, oily pickle in the mountain style, made for dal and rice.",
+      "pricePaise": 36000,
+      "compareAtPricePaise": null,
+      "imageUrl": "/images/product-pickle.jpg",
+      "imageAlt": "A jar of Indian pickle with visible spices",
+      "sellerName": "Chamba Farm Collective (demo)",
+      "sellerSlug": "chamba-farm-collective-demo",
+      "categoryName": "Pantry & preserves",
+      "categorySlug": "pantry-and-preserves",
+      "stock": 16,
+      "isDemo": true,
+      "region": "Chamba",
+      "isFeatured": false,
+      "ratingAverage": null,
+      "ratingCount": 0,
+      "description": "A demonstration listing for a small-batch pickle. It is salty and sour rather than sweet, with a mustard-oil base and a slow chilli heat. The jar is sized for one household; keep the spoon dry and the lid closed.",
+      "sku": "DEMO-CHA-PIC-01",
+      "unit": "300 g jar",
+      "weightG": 300,
+      "dimensions": null,
+      "materials": null,
+      "careInstructions": null,
+      "foodInfo": "Ingredients (demonstration): mango or local fruit, mustard oil, salt, chilli, spices. Allergens: mustard. Store in a cool place; use a dry spoon. Demonstration data — replace with the seller’s actual recipe, allergens and FSSAI details.",
+      "originPlace": "Chamba district, Himachal Pradesh",
+      "originVerified": false,
+      "attributes": {
+        "Heat": "Medium",
+        "Base": "Mustard oil",
+        "Allergens": "Mustard"
+      },
+      "taxRateBp": 0,
+      "images": [
+        {
+          "id": "img_77727996-380f-4661-8c06-f50fd0ac345c",
+          "url": "/images/product-pickle.jpg",
+          "alt": "A jar of Indian pickle with visible spices",
+          "credit": "Illustrative photograph: Miansari66, CC0, via Wikimedia Commons. Not the actual product."
+        }
+      ],
+      "seller": {
+        "id": "sel_8c134816-824c-4a9c-a05f-166091c9811f",
+        "name": "Chamba Farm Collective (demo)",
+        "slug": "chamba-farm-collective-demo",
+        "tagline": "Terraced-field staples from the Ravi valley — demonstration storefront.",
+        "story": "Demonstration seller profile. This storefront would list the collective’s member farms, harvest calendar and grading standards. The seed record is sample data and does not represent a real collective.",
+        "region": "Chamba"
+      },
+      "category": {
+        "id": "cat_c10d5e91-093c-4d0c-b5ab-538e1cd7077e",
+        "name": "Pantry & preserves",
+        "slug": "pantry-and-preserves"
+      },
+      "reviews": [],
+      "reviewSummary": {
+        "average": null,
+        "count": 0,
+        "distribution": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        }
+      },
+      "related": [
+        {
+          "id": "prd_2a729972-5b0f-4eac-a18b-352b232a0bd1",
+          "slug": "lahaul-wildflower-honey",
+          "name": "Lahaul wildflower honey",
+          "shortDescription": "A single-season honey with a strong floral scent and a soft, grainy set.",
+          "pricePaise": 54000,
+          "compareAtPricePaise": null,
+          "imageUrl": "/images/product-honey.jpg",
+          "imageAlt": "A small jar of honey with a piece of honeycomb",
+          "sellerName": "Lahaul Apiary & Kitchen (demo)",
+          "sellerSlug": "lahaul-apiary-demo",
+          "categoryName": "Pantry & preserves",
+          "categorySlug": "pantry-and-preserves",
+          "stock": 30,
+          "isDemo": true,
+          "region": "Lahaul and Spiti",
+          "isFeatured": true,
+          "ratingAverage": null,
+          "ratingCount": 0
+        }
+      ],
+      "returnPolicy": "7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.",
+      "shippingEstimate": "Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch."
+    }
+  },
+  "kinnaur-walnut-kernels": {
+    "product": {
+      "id": "prd_9af5e48f-840b-4cae-9b12-505dda6603f1",
+      "slug": "kinnaur-walnut-kernels",
+      "name": "Kinnaur walnut kernels",
+      "shortDescription": "Light-coloured walnut kernels with a thin bitter skin and a clean finish.",
+      "pricePaise": 98000,
+      "compareAtPricePaise": null,
+      "imageUrl": "/images/product-walnut.jpg",
+      "imageAlt": "Walnuts in their shells, one cracked open",
+      "sellerName": "Kinnaur Orchard Growers (demo)",
+      "sellerSlug": "kinnaur-orchard-growers-demo",
+      "categoryName": "Dry fruit & nuts",
+      "categorySlug": "dry-fruit-and-nuts",
+      "stock": 14,
+      "isDemo": true,
+      "region": "Kinnaur",
+      "isFeatured": false,
+      "ratingAverage": null,
+      "ratingCount": 0,
+      "description": "A demonstration listing for hand-cracked walnut kernels. They are pale and mostly whole, with some broken pieces, and the skin is thin enough to eat. Keep them cold if you are not using them within a few weeks; walnut oil goes stale at warm room temperatures.",
+      "sku": "DEMO-KIN-WAL-01",
+      "unit": "250 g pouch",
+      "weightG": 250,
+      "dimensions": null,
+      "materials": null,
+      "careInstructions": null,
+      "foodInfo": "Ingredients: walnut kernels. Allergens: tree nuts (walnut). Store airtight in a cool place or refrigerate for longer keeping. Demonstration data; replace with the seller’s actual declarations.",
+      "originPlace": "Kinnaur district, Himachal Pradesh",
+      "originVerified": false,
+      "attributes": {
+        "Grade": "Mostly whole kernels",
+        "Packaging": "Resealable pouch"
+      },
+      "taxRateBp": 0,
+      "images": [
+        {
+          "id": "img_681679b2-69d2-4d01-a438-e323751482d2",
+          "url": "/images/product-walnut.jpg",
+          "alt": "Walnuts in their shells, one cracked open",
+          "credit": "Illustrative photograph: Böhringer Friedrich, CC BY-SA 2.5, via Wikimedia Commons. Not the actual product."
+        }
+      ],
+      "seller": {
+        "id": "sel_b4b49676-6e96-445d-a4c2-bc76b3780460",
+        "name": "Kinnaur Orchard Growers (demo)",
+        "slug": "kinnaur-orchard-growers-demo",
+        "tagline": "Orchard fruit and walnuts from Kinnaur — demonstration storefront.",
+        "story": "Demonstration seller profile. A live listing would explain orchard altitude, drying methods and the grading the grower applies. Nothing in this seed record is a verified origin claim.",
+        "region": "Kinnaur"
+      },
+      "category": {
+        "id": "cat_b7b00b68-b9f3-4dd9-97af-0d84a377821a",
+        "name": "Dry fruit & nuts",
+        "slug": "dry-fruit-and-nuts"
+      },
+      "reviews": [],
+      "reviewSummary": {
+        "average": null,
+        "count": 0,
+        "distribution": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        }
+      },
+      "related": [
+        {
+          "id": "prd_f9e42c25-b2f9-44c1-998f-5503712433af",
+          "slug": "dried-apricots-lahaul",
+          "name": "Dried apricots from Lahaul",
+          "shortDescription": "Sun-dried apricots with a tart edge, unsulphured and dark in colour.",
+          "pricePaise": 48000,
+          "compareAtPricePaise": null,
+          "imageUrl": "/images/product-apricot.jpg",
+          "imageAlt": "A bowl of dried apricots",
+          "sellerName": "Lahaul Apiary & Kitchen (demo)",
+          "sellerSlug": "lahaul-apiary-demo",
+          "categoryName": "Dry fruit & nuts",
+          "categorySlug": "dry-fruit-and-nuts",
+          "stock": 22,
+          "isDemo": true,
+          "region": "Lahaul and Spiti",
+          "isFeatured": false,
+          "ratingAverage": null,
+          "ratingCount": 0
+        }
+      ],
+      "returnPolicy": "7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.",
+      "shippingEstimate": "Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch."
+    }
+  },
+  "mountain-pantry-gift-box": {
+    "product": {
+      "id": "prd_714459e2-61d4-4057-9a7e-cc894ec54604",
+      "slug": "mountain-pantry-gift-box",
+      "name": "The mountain pantry gift box",
+      "shortDescription": "Honey, apricots and a small tea tin in a plain kraft box, with a handwritten note.",
+      "pricePaise": 185000,
+      "compareAtPricePaise": null,
+      "imageUrl": "/images/product-honey.jpg",
+      "imageAlt": "A jar of honey with honeycomb, suggesting a pantry gift",
+      "sellerName": "Lahaul Apiary & Kitchen (demo)",
+      "sellerSlug": "lahaul-apiary-demo",
+      "categoryName": "Gifting",
+      "categorySlug": "gifting",
+      "stock": 9,
+      "isDemo": true,
+      "region": "Lahaul and Spiti",
+      "isFeatured": false,
+      "ratingAverage": null,
+      "ratingCount": 0,
+      "description": "A demonstration gift listing that combines three pantry items in one box. It is packed in plain kraft with paper tape and a card; no plastic tray. Because it contains food, it is not returnable once opened unless something is damaged or missing.",
+      "sku": "DEMO-LAH-GFT-01",
+      "unit": "box",
+      "weightG": 1400,
+      "dimensions": null,
+      "materials": null,
+      "careInstructions": null,
+      "foodInfo": "Contains honey, dried apricots and tea. Allergens and food-safety declarations must be taken from each component listing. Demonstration gift set; contents may change. Replace all declarations before launch.",
+      "originPlace": "Assembled in Himachal Pradesh",
+      "originVerified": false,
+      "attributes": {
+        "Contains": "Honey 250 g, dried apricots 250 g, green tea 50 g",
+        "Packaging": "Kraft box, paper tape"
+      },
+      "taxRateBp": 0,
+      "images": [
+        {
+          "id": "img_944f5fe2-8aa4-4deb-8ffc-958091b0a069",
+          "url": "/images/product-honey.jpg",
+          "alt": "A jar of honey with honeycomb, suggesting a pantry gift",
+          "credit": "Illustrative photograph: Alabama Extension, CC0, via Wikimedia Commons. Not the actual product."
+        }
+      ],
+      "seller": {
+        "id": "sel_f157875c-a9a2-4fa5-8536-b67b80ce518c",
+        "name": "Lahaul Apiary & Kitchen (demo)",
+        "slug": "lahaul-apiary-demo",
+        "tagline": "Honey, apricots and preserves from a high cold desert — demonstration storefront.",
+        "story": "Demonstration seller profile. The high-altitude season is short, and this seller would normally describe its apiary locations, orchard partners and kitchen practices. None of that is asserted by this seed record.",
+        "region": "Lahaul and Spiti"
+      },
+      "category": {
+        "id": "cat_67e2d317-bdfc-463b-92de-0facb9f2ef57",
+        "name": "Gifting",
+        "slug": "gifting"
+      },
+      "reviews": [],
+      "reviewSummary": {
+        "average": null,
+        "count": 0,
+        "distribution": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        }
+      },
+      "related": [],
+      "returnPolicy": "7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.",
+      "shippingEstimate": "Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch."
+    }
+  }
+}

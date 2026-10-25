@@ -1,0 +1,54 @@
+{
+  "sellers": [
+    {
+      "id": "sel_052b0b3f-3aec-40e8-9768-f802128b6d32",
+      "name": "Kullu Loom Collective (demo)",
+      "slug": "kullu-loom-collective-demo",
+      "tagline": "Handloom and knitwear from the Kullu valley — demonstration storefront.",
+      "story": "Demonstration seller profile. In a live marketplace this section would carry the workshop’s own account of its looms, its members and its production calendar, reviewed by the marketplace team. No real cooperative is represented by this seed record.",
+      "region": "Kullu",
+      "productCount": 3,
+      "imageUrl": "/images/product-shawl.jpg"
+    },
+    {
+      "id": "sel_f157875c-a9a2-4fa5-8536-b67b80ce518c",
+      "name": "Lahaul Apiary & Kitchen (demo)",
+      "slug": "lahaul-apiary-demo",
+      "tagline": "Honey, apricots and preserves from a high cold desert — demonstration storefront.",
+      "story": "Demonstration seller profile. The high-altitude season is short, and this seller would normally describe its apiary locations, orchard partners and kitchen practices. None of that is asserted by this seed record.",
+      "region": "Lahaul and Spiti",
+      "productCount": 3,
+      "imageUrl": "/images/product-honey.jpg"
+    },
+    {
+      "id": "sel_8c134816-824c-4a9c-a05f-166091c9811f",
+      "name": "Chamba Farm Collective (demo)",
+      "slug": "chamba-farm-collective-demo",
+      "tagline": "Terraced-field staples from the Ravi valley — demonstration storefront.",
+      "story": "Demonstration seller profile. This storefront would list the collective’s member farms, harvest calendar and grading standards. The seed record is sample data and does not represent a real collective.",
+      "region": "Chamba",
+      "productCount": 2,
+      "imageUrl": "/images/product-rajma.jpg"
+    },
+    {
+      "id": "sel_60e276d3-e16d-4c3a-b79b-fc8bdb016db1",
+      "name": "Kangra Tea Cooperative (demo)",
+      "slug": "kangra-tea-cooperative-demo",
+      "tagline": "Small-garden tea from the Kangra valley — demonstration storefront.",
+      "story": "Demonstration seller profile. A real seller would supply garden details, plucking seasons and food-safety registrations here. This record exists to exercise the catalogue and is not a claim about any existing tea garden.",
+      "region": "Kangra",
+      "productCount": 1,
+      "imageUrl": "/images/product-tea.jpg"
+    },
+    {
+      "id": "sel_b4b49676-6e96-445d-a4c2-bc76b3780460",
+      "name": "Kinnaur Orchard Growers (demo)",
+      "slug": "kinnaur-orchard-growers-demo",
+      "tagline": "Orchard fruit and walnuts from Kinnaur — demonstration storefront.",
+      "story": "Demonstration seller profile. A live listing would explain orchard altitude, drying methods and the grading the grower applies. Nothing in this seed record is a verified origin claim.",
+      "region": "Kinnaur",
+      "productCount": 1,
+      "imageUrl": "/images/product-walnut.jpg"
+    }
+  ]
+}
