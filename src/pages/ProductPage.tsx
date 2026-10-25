@@ -518,7 +518,7 @@ export function ProductPage() {
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 text-xs text-muted">
+                <div className="flex items-center justify-center pt-2 text-xs text-muted">
                   <button
                     type="button"
                     onClick={() => {
@@ -528,16 +528,10 @@ export function ProductPage() {
                       }
                       toggleWishlist.mutate(isSaved);
                     }}
-                    className="flex items-center gap-1 hover:text-forest underline underline-offset-4"
+                    className="flex items-center gap-1.5 hover:text-forest underline underline-offset-4 transition-colors"
                   >
                     <span>{isSaved ? '♥' : '♡'}</span> {isSaved ? 'In saved items' : 'Save for later'}
                   </button>
-                  <Link to="/policies/shipping" className="hover:text-forest underline underline-offset-4">
-                    Shipping estimates
-                  </Link>
-                  <Link to="/policies/returns" className="hover:text-forest underline underline-offset-4">
-                    7-Day Returns
-                  </Link>
                 </div>
               </div>
             )}
