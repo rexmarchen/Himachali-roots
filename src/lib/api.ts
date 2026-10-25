@@ -338,6 +338,33 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
     }
 
     if (cleanPath === '/seller/dashboard') {
+      const urlParams = new URLSearchParams(path.includes('?') ? path.split('?')[1] : '');
+      const reqDays = Number(urlParams.get('days'));
+      const days = [7, 30, 90].includes(reqDays) ? reqDays : 30;
+      const since = new Date(Date.now() - days * 86400000).toISOString();
+
+      const scale = days === 7 ? 0.28 : days === 90 ? 2.65 : 1.0;
+      const gross = Math.round(18600000 * scale);
+      const commission = Math.round(gross * 0.15);
+      const earnings = gross - commission;
+      const orderCount = Math.round(28 * scale);
+
+      const series: { date: string; label: string; grossPaise: number; orders: number }[] = [];
+      const baseDailyGross = gross / days;
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400000);
+        const dayKey = d.toISOString().slice(0, 10);
+        const dayFactor = 0.6 + 0.8 * Math.abs(Math.sin((i + 3) * 0.7));
+        const dayGross = Math.round(baseDailyGross * dayFactor);
+        const dayOrders = Math.max(0, Math.round((dayGross / 650000) * 1.5));
+        series.push({
+          date: dayKey,
+          label: d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+          grossPaise: dayGross,
+          orders: dayOrders,
+        });
+      }
+
       return {
         store: {
           status: 'active',
@@ -372,22 +399,29 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
           delivered: 18,
           cancelled: 0,
         },
-        period: { days: 30, since: '2026-01-01' },
+        period: { days, since },
         sales: {
-          gross: 18600000,
-          commission: 2790000,
-          earnings: 15810000,
-          orders: 28,
+          gross,
+          commission,
+          earnings,
+          orders: orderCount,
         },
+        series,
+        topProducts: [
+          { id: 'prod_kullu_shawl_01', name: 'Handwoven Kullu Merino Wool Shawl', unitsSold: Math.round(14 * scale), revenuePaise: Math.round(5390000 * scale) },
+          { id: 'prod_chamba_rumal_03', name: 'Chamba Embroidered Silk Rumal', unitsSold: Math.round(9 * scale), revenuePaise: Math.round(4410000 * scale) },
+          { id: 'prod_kinnaur_muffler_04', name: 'Kinnauri Geometric Woolen Muffler', unitsSold: Math.round(11 * scale), revenuePaise: Math.round(3135000 * scale) },
+          { id: 'prod_naggar_rug_05', name: 'Naggar Hand-Knotted Sheep Wool Rug', unitsSold: Math.round(4 * scale), revenuePaise: Math.round(2900000 * scale) },
+        ],
         ledger: {
-          pending: 3400000,
-          eligible: 7200000,
-          settled: 5210000,
+          pending: Math.round(3400000 * scale),
+          eligible: Math.round(7200000 * scale),
+          settled: Math.round(5210000 * scale),
           refunds: 0,
         },
         settlement: {
           pending_batches: 1,
-          paid_total: 5210000,
+          paid_total: Math.round(5210000 * scale),
         },
         recentOrders: [
           {
@@ -492,6 +526,14 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
 
       if (options.method === 'POST' && options.body) {
         const bodyObj = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        const pricePaise = bodyObj.pricePaise
+          ? Number(bodyObj.pricePaise)
+          : Math.round(Number(bodyObj.priceRupees || 100) * 100);
+        const compareAtPricePaise = bodyObj.compareAtPricePaise
+          ? Number(bodyObj.compareAtPricePaise)
+          : bodyObj.compareAtRupees
+          ? Math.round(Number(bodyObj.compareAtRupees) * 100)
+          : null;
         const newProduct = {
           id: 'prod_' + Math.random().toString(36).slice(2, 9),
           name: bodyObj.name || 'New Mountain Product',
@@ -501,19 +543,35 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
           categoryName: 'Artisanal Craft',
           status: 'approved',
           workflowStatus: 'published',
-          pricePaise: Math.round(Number(bodyObj.priceRupees || 100) * 100),
-          compareAtPaise: bodyObj.compareAtRupees ? Math.round(Number(bodyObj.compareAtRupees) * 100) : null,
+          pricePaise,
+          compareAtPricePaise,
+          compareAtPaise: compareAtPricePaise,
           shortDescription: bodyObj.shortDescription || '',
           description: bodyObj.description || '',
-          inventoryQuantity: Number(bodyObj.initialStock || 25),
-          available: Number(bodyObj.initialStock || 25),
+          unit: bodyObj.unit || 'piece',
+          weightG: bodyObj.weightG || 500,
+          dimensions: bodyObj.dimensions || '',
+          materials: bodyObj.materials || 'Pure local natural materials',
+          careInstructions: bodyObj.careInstructions || 'Handle with gentle care.',
+          foodInfo: bodyObj.foodInfo || '',
+          compliance: bodyObj.compliance || {},
+          originPlace: bodyObj.originPlace || 'Naggar, Himachal Pradesh',
+          region: bodyObj.region || bodyObj.originDistrict || 'Kullu Valley',
+          inventoryQuantity: Number(bodyObj.initialStock || bodyObj.inventory?.quantity || 25),
+          available: Number(bodyObj.initialStock || bodyObj.inventory?.quantity || 25),
           reserved: 0,
-          lowStockThreshold: 5,
-          region: bodyObj.originDistrict || 'Himachal Pradesh',
+          lowStockThreshold: Number(bodyObj.lowStockThreshold || 5),
           sellerName: 'Kullu Valley Handlooms & Mountain Crafts',
+          sellerSlug: 'kullu-valley-crafts',
           images: [{ url: bodyObj.imageUrl || '/images/product-shawl.jpg', alt: bodyObj.name || 'Product Image' }],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          inventory: {
+            quantity: Number(bodyObj.initialStock || 25),
+            reserved: 0,
+            available: Number(bodyObj.initialStock || 25),
+            lowStockThreshold: 5,
+          },
         };
         products = [newProduct, ...products];
         localStorage.setItem('pr_custom_seller_products', JSON.stringify(products));
@@ -528,15 +586,50 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
       const prodId = parts[3];
       const action = parts[4];
       const stored = localStorage.getItem('pr_custom_seller_products');
-      const products = stored ? JSON.parse(stored) : [];
-      const found = products.find((p: any) => p.id === prodId || p.slug === prodId);
+      let products = stored ? JSON.parse(stored) : [];
+      let found = products.find((p: any) => p.id === prodId || p.slug === prodId);
 
       if (action === 'submit') {
+        if (found) {
+          found.workflowStatus = 'submitted';
+          localStorage.setItem('pr_custom_seller_products', JSON.stringify(products));
+        }
         return { ok: true, status: 'approved' } as unknown as T;
+      }
+      if (action === 'pause') {
+        if (found) {
+          found.status = 'paused';
+          localStorage.setItem('pr_custom_seller_products', JSON.stringify(products));
+        }
+        return { ok: true, status: 'paused' } as unknown as T;
+      }
+      if (action === 'resume') {
+        if (found) {
+          found.status = 'approved';
+          localStorage.setItem('pr_custom_seller_products', JSON.stringify(products));
+        }
+        return { ok: true, status: 'approved' } as unknown as T;
+      }
+      if (action === 'archive') {
+        if (found) {
+          found.status = 'archived';
+          localStorage.setItem('pr_custom_seller_products', JSON.stringify(products));
+        }
+        return { ok: true, status: 'archived' } as unknown as T;
       }
       if (action === 'images') {
         return { ok: true, imageUrl: '/images/product-shawl.jpg' } as unknown as T;
       }
+
+      if (options.method === 'PATCH' && options.body) {
+        const bodyObj = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        if (found) {
+          Object.assign(found, bodyObj);
+          localStorage.setItem('pr_custom_seller_products', JSON.stringify(products));
+        }
+        return { ok: true, product: found } as unknown as T;
+      }
+
       return {
         product: found || {
           id: prodId,
@@ -544,13 +637,21 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
           slug: 'handcrafted-himalayan-article',
           sku: 'DEMO-SKU-01',
           pricePaise: 240000,
+          compareAtPricePaise: 280000,
+          unit: 'piece',
           inventoryQuantity: 20,
           status: 'approved',
           workflowStatus: 'published',
           shortDescription: 'Pure handloom piece from Himachal Pradesh.',
           description: 'Spun on traditional handlooms in Naggar, Kullu Valley using natural local sheep wool.',
-          originDistrict: 'Kullu',
+          materials: '100% natural mountain wool',
+          careInstructions: 'Dry clean only',
+          originPlace: 'Naggar, Kullu Valley',
+          region: 'Kullu Valley',
           sellerName: 'Kullu Valley Handlooms & Mountain Crafts',
+          images: [{ id: 'img_1', url: '/images/product-shawl.jpg', alt: 'Himalayan handloom weave' }],
+          inventory: { quantity: 20, reserved: 0, available: 20, lowStockThreshold: 5 },
+          compliance: {},
         },
         categories: [],
         subcategories: [],
@@ -559,12 +660,46 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
 
     if (cleanPath === '/seller/inventory') {
       const stored = localStorage.getItem('pr_custom_seller_products');
-      const products = stored ? JSON.parse(stored) : [];
+      const products = stored ? JSON.parse(stored) : [
+        {
+          id: 'prod_kullu_shawl_01',
+          name: 'Handwoven Kullu Merino Wool Shawl',
+          sku: 'KLU-SHW-01',
+          inventoryQuantity: 18,
+          available: 18,
+          reserved: 0,
+          lowStockThreshold: 5,
+          pricePaise: 385000,
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'prod_kangra_tea_02',
+          name: 'First Flush Kangra Orthodox Green Tea',
+          sku: 'KNG-TEA-02',
+          inventoryQuantity: 42,
+          available: 42,
+          reserved: 2,
+          lowStockThreshold: 10,
+          pricePaise: 89000,
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'prod_chulli_oil_03',
+          name: 'Kinnauri Wild Apricot (Chulli) Kernel Oil',
+          sku: 'KIN-OIL-03',
+          inventoryQuantity: 4,
+          available: 4,
+          reserved: 1,
+          lowStockThreshold: 5,
+          pricePaise: 125000,
+          updatedAt: new Date().toISOString(),
+        },
+      ];
       const inventory = products.map((p: any) => ({
         productId: p.id,
         name: p.name,
         sku: p.sku,
-        quantity: p.inventoryQuantity || 20,
+        quantity: p.inventoryQuantity || p.quantity || 20,
         available: p.available ?? p.inventoryQuantity ?? 20,
         reserved: p.reserved || 0,
         lowStockThreshold: p.lowStockThreshold || 5,
@@ -575,36 +710,207 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
       return { inventory } as unknown as T;
     }
 
+    if (cleanPath.startsWith('/seller/inventory/')) {
+      const parts = cleanPath.split('/');
+      const prodId = parts[3];
+      if (options.method === 'POST' && options.body) {
+        const bodyObj = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        const stored = localStorage.getItem('pr_custom_seller_products');
+        if (stored) {
+          const products = JSON.parse(stored);
+          const found = products.find((p: any) => p.id === prodId);
+          if (found) {
+            if (bodyObj.quantity !== undefined) found.inventoryQuantity = Number(bodyObj.quantity);
+            if (bodyObj.lowStockThreshold !== undefined) found.lowStockThreshold = Number(bodyObj.lowStockThreshold);
+            found.updatedAt = new Date().toISOString();
+            localStorage.setItem('pr_custom_seller_products', JSON.stringify(products));
+          }
+        }
+        return { ok: true } as unknown as T;
+      }
+    }
+
     if (cleanPath === '/seller/orders') {
-      return {
-        orders: [
-          {
-            id: 'ord_1',
-            orderNumber: 'PR-ORD-9021',
-            reference: 'PR-ORD-9021',
-            status: 'confirmed',
-            totalPaise: 480000,
-            earningPaise: 408000,
-            customerName: 'Rohit Sharma',
-            itemCount: 1,
-            dispatchBy: new Date(Date.now() + 86400000).toISOString(),
-            createdAt: new Date().toISOString(),
+      const storedOrders = localStorage.getItem('pr_custom_seller_orders');
+      let orders = storedOrders ? JSON.parse(storedOrders) : [
+        {
+          id: 'ord_1',
+          orderNumber: 'PR-ORD-9021',
+          reference: 'PR-ORD-9021',
+          status: 'confirmed',
+          totalPaise: 480000,
+          earningPaise: 408000,
+          commissionPaise: 72000,
+          customerName: 'Rohit Sharma',
+          destination: 'Shimla, Himachal Pradesh',
+          itemCount: 1,
+          dispatchBy: new Date(Date.now() + 86400000).toISOString(),
+          createdAt: new Date(Date.now() - 12000000).toISOString(),
+        },
+        {
+          id: 'ord_2',
+          orderNumber: 'PR-ORD-8942',
+          reference: 'PR-ORD-8942',
+          status: 'packed',
+          totalPaise: 295000,
+          earningPaise: 250750,
+          commissionPaise: 44250,
+          customerName: 'Priya Mehra',
+          destination: 'Chandigarh',
+          itemCount: 2,
+          dispatchBy: new Date(Date.now() + 43200000).toISOString(),
+          createdAt: new Date(Date.now() - 48000000).toISOString(),
+        },
+      ];
+      return { orders, total: orders.length } as unknown as T;
+    }
+
+    if (cleanPath.startsWith('/seller/orders/')) {
+      const parts = cleanPath.split('/');
+      const orderId = parts[3];
+      const action = parts[4];
+
+      const storedOrders = localStorage.getItem('pr_custom_seller_orders');
+      let orders = storedOrders ? JSON.parse(storedOrders) : [
+        {
+          id: 'ord_1',
+          reference: 'PR-ORD-9021',
+          orderNumber: 'PR-ORD-9021',
+          status: 'confirmed',
+          createdAt: new Date(Date.now() - 12000000).toISOString(),
+          dispatchBy: new Date(Date.now() + 86400000).toISOString(),
+          shippedAt: null,
+          deliveredAt: null,
+          subtotalPaise: 480000,
+          discountPaise: 0,
+          shippingPaise: 0,
+          taxPaise: 0,
+          totalPaise: 480000,
+          commissionPaise: 72000,
+          commissionRateBp: 1500,
+          earningPaise: 408000,
+          customerName: 'Rohit Sharma',
+          customerNote: 'Please wrap carefully in traditional paper.',
+          address: {
+            fullName: 'Rohit Sharma',
+            phone: '+91 98160 12345',
+            line1: 'The Mall Road, Near Town Hall',
+            city: 'Shimla',
+            state: 'Himachal Pradesh',
+            pincode: '171001',
           },
-          {
-            id: 'ord_2',
-            orderNumber: 'PR-ORD-8942',
-            reference: 'PR-ORD-8942',
-            status: 'packed',
-            totalPaise: 295000,
-            earningPaise: 250750,
-            customerName: 'Priya Mehra',
-            itemCount: 2,
-            dispatchBy: new Date(Date.now() + 43200000).toISOString(),
-            createdAt: new Date(Date.now() - 36000000).toISOString(),
+          items: [
+            {
+              id: 'item_1',
+              name: 'Handwoven Kullu Merino Wool Shawl',
+              sku: 'KLU-SHW-01',
+              quantity: 1,
+              unitPricePaise: 480000,
+              lineSubtotalPaise: 480000,
+              status: 'confirmed',
+              imageUrl: '/images/product-shawl.jpg',
+            },
+          ],
+          shipment: null,
+          commissionNote: 'Standard 15% marketplace commission covers packaging materials, payment gateway fees, and quality verification.',
+        },
+        {
+          id: 'ord_2',
+          reference: 'PR-ORD-8942',
+          orderNumber: 'PR-ORD-8942',
+          status: 'packed',
+          createdAt: new Date(Date.now() - 48000000).toISOString(),
+          dispatchBy: new Date(Date.now() + 43200000).toISOString(),
+          shippedAt: null,
+          deliveredAt: null,
+          subtotalPaise: 295000,
+          discountPaise: 0,
+          shippingPaise: 0,
+          taxPaise: 0,
+          totalPaise: 295000,
+          commissionPaise: 44250,
+          commissionRateBp: 1500,
+          earningPaise: 250750,
+          customerName: 'Priya Mehra',
+          customerNote: null,
+          address: {
+            fullName: 'Priya Mehra',
+            phone: '+91 98721 98765',
+            line1: 'Sector 17, Heritage Enclave',
+            city: 'Chandigarh',
+            state: 'Chandigarh',
+            pincode: '160017',
           },
-        ],
-        total: 2,
-      } as unknown as T;
+          items: [
+            {
+              id: 'item_2',
+              name: 'First Flush Kangra Orthodox Green Tea',
+              sku: 'KNG-TEA-02',
+              quantity: 2,
+              unitPricePaise: 89000,
+              lineSubtotalPaise: 178000,
+              status: 'packed',
+              imageUrl: '/images/product-tea.jpg',
+            },
+            {
+              id: 'item_3',
+              name: 'Kinnauri Wild Apricot (Chulli) Kernel Oil',
+              sku: 'KIN-OIL-03',
+              quantity: 1,
+              unitPricePaise: 117000,
+              lineSubtotalPaise: 117000,
+              status: 'packed',
+              imageUrl: '/images/product-oil.jpg',
+            },
+          ],
+          shipment: null,
+          commissionNote: 'Standard 15% marketplace commission covers packaging materials, payment gateway fees, and quality verification.',
+        },
+      ];
+
+      let order = orders.find((o: any) => o.id === orderId || o.reference === orderId) || orders[0];
+
+      if (action === 'action' && options.method === 'POST') {
+        const bodyObj = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        const nextStatus =
+          bodyObj.action === 'confirm'
+            ? 'confirmed'
+            : bodyObj.action === 'pack'
+            ? 'packed'
+            : bodyObj.action === 'deliver'
+            ? 'delivered'
+            : bodyObj.action === 'cancel'
+            ? 'cancelled'
+            : order.status;
+        order.status = nextStatus;
+        localStorage.setItem('pr_custom_seller_orders', JSON.stringify(orders));
+        return { ok: true, status: nextStatus, order } as unknown as T;
+      }
+
+      if (action === 'tracking' && options.method === 'POST') {
+        const bodyObj = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        order.status = 'shipped';
+        order.shippedAt = new Date().toISOString();
+        order.shipment = {
+          carrier: bodyObj.carrier || 'India Post EMS',
+          trackingNumber: bodyObj.trackingNumber || 'HP982183921IN',
+          trackingUrl: bodyObj.trackingUrl || 'https://www.indiapost.gov.in',
+          status: 'shipped',
+          shippedAt: new Date().toISOString(),
+          deliveredAt: null,
+          events: [
+            {
+              status: 'shipped',
+              description: 'Consignment booked at Kullu Head Post Office',
+              occurredAt: new Date().toISOString(),
+            },
+          ],
+        };
+        localStorage.setItem('pr_custom_seller_orders', JSON.stringify(orders));
+        return { ok: true, status: 'shipped', shipment: order.shipment, order } as unknown as T;
+      }
+
+      return { order } as unknown as T;
     }
 
     if (cleanPath === '/seller/earnings') {
@@ -614,9 +920,29 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
           pendingPaise: 3400000,
           paidPaise: 5210000,
         },
-        settlements: [],
+        settlements: [
+          {
+            id: 'set_101',
+            reference: 'SET-HP-2026-004',
+            amountPaise: 5210000,
+            status: 'completed',
+            periodStart: '2026-01-01T00:00:00.000Z',
+            periodEnd: '2026-01-15T00:00:00.000Z',
+            paidAt: '2026-01-18T10:30:00.000Z',
+            payoutMethod: 'NEFT Transfer (State Bank of India, Naggar Branch)',
+            transactionRef: 'NEFT-HP-SBIN0048291',
+          },
+        ],
       } as unknown as T;
     }
+
+    if (cleanPath === '/seller/requests') {
+      return {
+        cancellations: [],
+        returns: [],
+      } as unknown as T;
+    }
+
 
     if (cleanPath === '/seller/profile') {
       return {

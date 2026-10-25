@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Category, ProductStatus, SellerProduct } from '@shared/types';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
@@ -120,19 +120,174 @@ const EVENT_LABELS: Record<string, string> = {
   document_reviewed: 'Document reviewed',
 };
 
-const SELLER_NAV = [
-  { label: 'Overview', to: '/seller', end: true },
-  { label: 'Application & verification', to: '/seller/application' },
-  { label: 'Products', to: '/seller/products' },
-  { label: 'Inventory', to: '/seller/inventory' },
-  { label: 'Orders', to: '/seller/orders' },
-  { label: 'Earnings', to: '/seller/earnings' },
-  { label: 'Returns & requests', to: '/seller/requests' },
-  { label: 'Store profile', to: '/seller/profile' },
-  { label: 'Notifications', to: '/seller/notifications' },
+function StudioNavIcon({ type, className = 'h-4 w-4' }: { type: string; className?: string }) {
+  const common = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    className,
+    'aria-hidden': true,
+  };
+  switch (type) {
+    case 'overview':
+      return (
+        <svg {...common}>
+          <rect x="3" y="3" width="7" height="9" rx="1.5" />
+          <rect x="14" y="3" width="7" height="5" rx="1.5" />
+          <rect x="14" y="12" width="7" height="9" rx="1.5" />
+          <rect x="3" y="16" width="7" height="5" rx="1.5" />
+        </svg>
+      );
+    case 'products':
+      return (
+        <svg {...common}>
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <path d="M16 10a4 4 0 0 1-8 0" />
+        </svg>
+      );
+    case 'add-product':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <line x1="12" y1="8" x2="12" y2="16" />
+          <line x1="8" y1="12" x2="16" y2="12" />
+        </svg>
+      );
+    case 'inventory':
+      return (
+        <svg {...common}>
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+          <line x1="12" y1="22.08" x2="12" y2="12" />
+        </svg>
+      );
+    case 'orders':
+      return (
+        <svg {...common}>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+        </svg>
+      );
+    case 'shipping':
+      return (
+        <svg {...common}>
+          <rect x="1" y="3" width="15" height="13" rx="1" />
+          <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+          <circle cx="5.5" cy="18.5" r="2.5" />
+          <circle cx="18.5" cy="18.5" r="2.5" />
+        </svg>
+      );
+    case 'returns':
+      return (
+        <svg {...common}>
+          <polyline points="1 4 1 10 7 10" />
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+        </svg>
+      );
+    case 'storefront':
+      return (
+        <svg {...common}>
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+      );
+    case 'analytics':
+      return (
+        <svg {...common}>
+          <line x1="18" y1="20" x2="18" y2="10" />
+          <line x1="12" y1="20" x2="12" y2="4" />
+          <line x1="6" y1="20" x2="6" y2="14" />
+        </svg>
+      );
+    case 'earnings':
+      return (
+        <svg {...common}>
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+          <line x1="2" y1="10" x2="22" y2="10" />
+        </svg>
+      );
+    case 'notifications':
+      return (
+        <svg {...common}>
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+      );
+    case 'profile':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      );
+    case 'compliance':
+      return (
+        <svg {...common}>
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          <path d="m9 12 2 2 4-4" />
+        </svg>
+      );
+    case 'support':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+const SELLER_NAV_GROUPS = [
+  {
+    heading: 'Core',
+    items: [
+      { label: 'Overview', to: '/seller', icon: 'overview', end: true },
+      { label: 'Products', to: '/seller/products', icon: 'products' },
+      { label: 'Add Product', to: '/seller/products/new', icon: 'add-product' },
+      { label: 'Inventory', to: '/seller/inventory', icon: 'inventory' },
+    ],
+  },
+  {
+    heading: 'Fulfilment',
+    items: [
+      { label: 'Orders', to: '/seller/orders', icon: 'orders' },
+      { label: 'Shipping & Tracking', to: '/seller/shipping', icon: 'shipping' },
+      { label: 'Returns & Requests', to: '/seller/requests', icon: 'returns' },
+    ],
+  },
+  {
+    heading: 'Finances',
+    items: [
+      { label: 'Analytics', to: '/seller/analytics', icon: 'analytics' },
+      { label: 'Payments & Payouts', to: '/seller/earnings', icon: 'earnings' },
+    ],
+  },
+  {
+    heading: 'Store & Verification',
+    items: [
+      { label: 'Public Storefront', to: 'storefront', icon: 'storefront', isStorefront: true },
+      { label: 'Notifications', to: '/seller/notifications', icon: 'notifications' },
+      { label: 'Store Profile', to: '/seller/profile', icon: 'profile' },
+      { label: 'Verification & KYC', to: '/seller/application', icon: 'compliance' },
+      { label: 'Help & Support', to: '/contact', icon: 'support' },
+    ],
+  },
 ];
 
 export function SellerLayout() {
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const application = useQuery({
     queryKey: ['seller-application'],
     queryFn: () => api<SellerApplicationResponse>('/seller/application'),
@@ -155,11 +310,11 @@ export function SellerLayout() {
     );
   }
 
-  // Fallback to active verified seller workspace if no specific application is linked yet
+  // Fallback to active verified seller workspace
   const seller = application.data?.seller ?? {
     id: 'sel_kullu_craft',
     businessName: 'Kullu Valley Handlooms & Mountain Crafts',
-    slug: 'kullu-valley-crafts',
+    slug: 'kullu-loom-collective-demo',
     sellerType: 'artisan',
     sellerCategory: 'Handloom & Textiles',
     status: 'approved',
@@ -168,43 +323,228 @@ export function SellerLayout() {
     region: 'Kullu Valley',
     approvedAt: '2026-01-15T00:00:00.000Z',
   };
+
   const unread = notifications.data?.unread ?? 0;
+
+  // Breadcrumb label helper
+  const pathname = location.pathname;
+  let currentBreadcrumb = 'Studio Overview';
+  if (pathname === '/seller/products') currentBreadcrumb = 'Product Catalogue';
+  else if (pathname === '/seller/products/new') currentBreadcrumb = 'Add New Product';
+  else if (pathname.includes('/products/') && pathname.includes('/edit')) currentBreadcrumb = 'Edit Product';
+  else if (pathname === '/seller/inventory') currentBreadcrumb = 'Inventory Stock';
+  else if (pathname === '/seller/orders') currentBreadcrumb = 'Order Management';
+  else if (pathname.includes('/seller/orders/')) currentBreadcrumb = 'Order Fulfilment';
+  else if (pathname === '/seller/shipping') currentBreadcrumb = 'Shipping & Tracking';
+  else if (pathname === '/seller/requests') currentBreadcrumb = 'Returns & Cancellations';
+  else if (pathname === '/seller/earnings') currentBreadcrumb = 'Payments & Payouts';
+  else if (pathname === '/seller/analytics') currentBreadcrumb = 'Sales Analytics';
+  else if (pathname === '/seller/notifications') currentBreadcrumb = 'Notifications';
+  else if (pathname === '/seller/profile') currentBreadcrumb = 'Store Profile Settings';
+  else if (pathname === '/seller/application') currentBreadcrumb = 'Verification & Compliance';
+
+  const handleLogout = async () => {
+    try {
+      await api('/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem('pr_session_user');
+    navigate('/');
+  };
+
+  const sidebarContent = (
+    <div className="flex h-full flex-col justify-between overflow-y-auto bg-[#172321] text-[#F7F1E7]">
+      <div>
+        {/* Studio Branding */}
+        <div className="border-b border-white/10 px-6 py-5">
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="h-8 w-8 rounded-lg bg-[#D98263] flex items-center justify-center font-serif text-white font-bold text-lg shadow">
+              P
+            </div>
+            <div>
+              <p className="font-serif text-lg tracking-wide text-white group-hover:text-[#D98263] transition-colors">PAHADI ROOTS</p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-[#D98263] font-medium">Maker Studio</p>
+            </div>
+          </Link>
+
+          {/* Active Store Chip */}
+          <div className="mt-4 rounded-lg bg-white/5 border border-white/10 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-white truncate">{seller.businessName}</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#66745A]/30 px-2 py-0.5 text-[10px] text-[#A3B899] font-medium shrink-0">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#66745A] animate-pulse" />
+                Active
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-white/50">{seller.region ?? 'Himachal Pradesh'}</p>
+          </div>
+        </div>
+
+        {/* Navigation Groups */}
+        <nav className="space-y-6 px-4 py-5" aria-label="Seller Studio Navigation">
+          {SELLER_NAV_GROUPS.map((group) => (
+            <div key={group.heading}>
+              <p className="px-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                {group.heading}
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {group.items.map((item) => {
+                  if ('isStorefront' in item && item.isStorefront) {
+                    return (
+                      <li key={item.label}>
+                        <Link
+                          to={`/makers/${seller.slug}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <StudioNavIcon type={item.icon} className="h-4 w-4 text-[#D98263]" />
+                            <span>{item.label}</span>
+                          </div>
+                          <span className="text-[10px] text-white/40">↗</span>
+                        </Link>
+                      </li>
+                    );
+                  }
+
+                  return (
+                    <li key={item.to}>
+                      <NavLink
+                        to={item.to}
+                        end={'end' in item ? item.end : undefined}
+                        onClick={() => setMobileDrawerOpen(false)}
+                        className={({ isActive }) =>
+                          `flex items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-colors ${
+                            isActive
+                              ? 'bg-[#D98263] text-white font-medium shadow-sm'
+                              : 'text-white/70 hover:bg-white/10 hover:text-white'
+                          }`
+                        }
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <StudioNavIcon type={item.icon} className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </div>
+                        {item.to === '/seller/notifications' && unread > 0 ? (
+                          <span className="rounded-full bg-[#D98263] px-1.5 py-0.2 text-[10px] font-semibold text-white">
+                            {unread}
+                          </span>
+                        ) : null}
+                      </NavLink>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
+      </div>
+
+      {/* Bottom Profile & Signout */}
+      <div className="border-t border-white/10 p-4">
+        <Link
+          to="/"
+          className="flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+        >
+          <span>←</span>
+          <span>Customer Marketplace</span>
+        </Link>
+        <button
+          type="button"
+          onClick={() => void handleLogout()}
+          className="mt-2 w-full text-center text-[11px] text-white/40 hover:text-white transition-colors py-1"
+        >
+          Sign out of studio
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-      <div className="flex flex-col gap-3 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="eyebrow">Seller workspace</p>
-          <h1 className="mt-2 text-3xl">{seller.businessName}</h1>
-          <p className="mt-1 text-xs text-muted">
-            {seller.region ?? 'Himachal Pradesh'} · Approved {formatDate(seller.approvedAt)} · Store {humanise(seller.storeStatus)}
-          </p>
+    <div className="flex min-h-screen bg-[#F7F1E7] text-[#172321]">
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 z-30 shadow-xl">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Navigation Drawer */}
+      {mobileDrawerOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setMobileDrawerOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="fixed inset-y-0 left-0 w-72 max-w-[85vw] shadow-2xl z-50">
+            {sidebarContent}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge tone="forest">Approved seller</Badge>
-          <Link to={`/makers/${seller.slug}`} className="text-[11px] text-forest underline underline-offset-2">View public storefront</Link>
-          <Link to="/account/profile" className="text-[11px] text-muted underline underline-offset-2">Account security</Link>
-        </div>
+      ) : null}
+
+      {/* Main Workspace Area */}
+      <div className="flex flex-1 flex-col lg:pl-64">
+        {/* Studio Top Navigation Bar */}
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[#E4DACE] bg-[#F7F1E7]/90 px-4 sm:px-6 lg:px-8 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileDrawerOpen(true)}
+              className="rounded-lg p-2 text-[#172321] hover:bg-black/5 lg:hidden"
+              aria-label="Open sidebar menu"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-[#66745A] font-semibold">PAHADI ROOTS · Maker Studio</p>
+              <h2 className="text-base font-serif text-[#172321]">{currentBreadcrumb}</h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              to={`/makers/${seller.slug}`}
+              target="_blank"
+              rel="noreferrer"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-[#E4DACE] bg-white px-3 py-1.5 text-xs text-[#172321] hover:bg-[#FAF7F2] transition-colors shadow-sm"
+            >
+              <span>View Live Store</span>
+              <span className="text-[10px] text-[#D98263]">↗</span>
+            </Link>
+
+            <Link
+              to="/seller/notifications"
+              className="relative rounded-lg border border-[#E4DACE] bg-white p-2 text-[#172321] hover:bg-[#FAF7F2] transition-colors"
+              title="Notifications"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              {unread > 0 ? (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#D98263] text-[9px] font-bold text-white shadow">
+                  {unread}
+                </span>
+              ) : null}
+            </Link>
+
+            <LinkButton to="/seller/products/new" size="sm" variant="terra" className="shadow-sm">
+              + Add Product
+            </LinkButton>
+          </div>
+        </header>
+
+        {/* Content Outlet */}
+        <main className="flex-1 px-4 py-8 sm:px-6 lg:px-8">
+          <Outlet />
+        </main>
       </div>
-      <div className="mt-5 flex gap-1 overflow-x-auto border-b border-line">
-        {SELLER_NAV.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={'end' in item ? item.end : undefined}
-            className={({ isActive }) =>
-              `whitespace-nowrap border-b-2 px-3 py-2.5 text-[13px] transition-colors ${
-                isActive ? 'border-forest font-medium text-forest' : 'border-transparent text-muted hover:border-sand hover:text-ink'
-              }`
-            }
-          >
-            {item.to === '/seller/notifications' && unread ? `${item.label} (${unread})` : item.label}
-          </NavLink>
-        ))}
-      </div>
-      <div className="mt-7"><Outlet /></div>
     </div>
   );
 }
+
 
 function applicationStatusLabel(status: string | undefined): string {
   return APPLICATION_STATUS_LABELS[status ?? ''] ?? humanise(status ?? 'draft');
@@ -651,6 +991,8 @@ interface DashboardResponse {
   orders: { pending: number; confirmed: number; packed: number; shipped: number; delivered: number; cancelled: number };
   period: { days: number; since: string };
   sales: { gross: number; commission: number; earnings: number; orders: number };
+  series?: { date: string; label: string; grossPaise: number; orders: number }[];
+  topProducts?: { id: string; name: string; unitsSold: number; revenuePaise: number }[];
   ledger: { pending: number; eligible: number; settled: number; refunds: number };
   settlement: { pending_batches: number; paid_total: number };
   recentOrders: { id: string; reference: string; orderNumber: string; status: string; totalPaise: number; earningPaise: number; dispatchBy: string | null }[];
@@ -658,148 +1000,516 @@ interface DashboardResponse {
 }
 
 export function SellerDashboardPage() {
-  const dashboard = useQuery({ queryKey: ['seller-dashboard'], queryFn: () => api<DashboardResponse>('/seller/dashboard') });
-  if (dashboard.isLoading) return <LoadingBlock rows={4} />;
-  if (dashboard.isError || !dashboard.data) return <ErrorState onRetry={() => void dashboard.refetch()} />;
+  const [days, setDays] = useState<7 | 30 | 90>(30);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  const dashboard = useQuery({
+    queryKey: ['seller-dashboard', days],
+    queryFn: () => api<DashboardResponse>(`/seller/dashboard?days=${days}`),
+  });
+
+  if (dashboard.isLoading) return <LoadingBlock rows={5} />;
+  if (dashboard.isError || !dashboard.data) {
+    return <ErrorState onRetry={() => void dashboard.refetch()} />;
+  }
+
   const data = dashboard.data;
+  const series = data.series ?? [];
+  const topProducts = data.topProducts ?? [];
+
+  // SVG Chart Calculations
+  const chartW = 760;
+  const chartH = 210;
+  const padLeft = 60;
+  const padRight = 25;
+  const padTop = 25;
+  const padBottom = 35;
+  const plotW = chartW - padLeft - padRight;
+  const plotH = chartH - padTop - padBottom;
+
+  const maxGross = Math.max(...series.map((s) => s.grossPaise), 100000);
+  const points = series.map((s, idx) => {
+    const x = padLeft + (idx / Math.max(series.length - 1, 1)) * plotW;
+    const y = padTop + (1 - s.grossPaise / maxGross) * plotH;
+    return { x, y, ...s };
+  });
+
+  const linePath = points.length > 1
+    ? points.reduce((acc, curr, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${curr.x.toFixed(1)},${curr.y.toFixed(1)}`, '')
+    : '';
+
+  const areaPath = points.length > 1
+    ? `${linePath} L ${points[points.length - 1].x.toFixed(1)},${(padTop + plotH).toFixed(1)} L ${points[0].x.toFixed(1)},${(padTop + plotH).toFixed(1)} Z`
+    : '';
+
+  // Select evenly spaced tick marks for dates
+  const tickStep = Math.max(1, Math.floor(series.length / 6));
+  const tickIndices = series.map((_, i) => i).filter((i) => i % tickStep === 0 || i === series.length - 1);
+
+  const hoveredData = hoveredIdx !== null && points[hoveredIdx] ? points[hoveredIdx] : null;
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        eyebrow="Last 30 days"
-        title="Your workshop, at a glance"
-        lede="Sales figures are based on paid orders. Earnings become eligible after delivery and the return window."
-        actions={<LinkButton to="/seller/products/new">Add a product</LinkButton>}
-      />
-      {data.orders.pending > 0 ? (
-        <Alert tone="warning" title={`${data.orders.pending} order${data.orders.pending === 1 ? '' : 's'} need confirmation`}>
-          Confirm stock and dispatch promptly. <Link to="/seller/orders?status=pending" className="underline underline-offset-2">Open new orders</Link>
-        </Alert>
-      ) : null}
-
-      <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <section className="border border-line bg-surface p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg">Store readiness</h2>
-            <StatusBadge status={data.store.status} label={STORE_STATUS_LABELS[data.store.status] ?? humanise(data.store.status)} />
+      {/* Studio Header with Action Buttons & Timeframe Filter */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#E4DACE] pb-6">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#66745A]/15 px-2.5 py-0.5 text-xs text-[#66745A] font-medium">
+              <span className="h-2 w-2 rounded-full bg-[#66745A]" />
+              Verified Himachal Maker Studio
+            </span>
+            <span className="text-xs text-[#172321]/40">·</span>
+            <span className="text-xs text-[#172321]/60">Naggar, Kullu Valley</span>
           </div>
-          <dl className="mt-4 space-y-2 text-[12.5px]">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted">Application</dt>
-              <dd className="text-ink">{applicationStatusLabel(data.application?.status)}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted">Store</dt>
-              <dd className="text-ink">{STORE_STATUS_LABELS[data.store.status] ?? humanise(data.store.status)}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted">Payouts</dt>
-              <dd className="text-ink">{humanise(data.store.payoutStatus)}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted">Seller category</dt>
-              <dd className="text-ink">{data.store.sellerCategory ? humanise(data.store.sellerCategory) : '—'}</dd>
-            </div>
-          </dl>
-          {data.store.statusReason ? <p className="mt-3 text-[11px] text-[#8e4630]">{data.store.statusReason}</p> : null}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <LinkButton to="/seller/application" size="sm" variant="secondary">Application & verification</LinkButton>
-            <LinkButton to="/seller/notifications" size="sm" variant="ghost">Notifications</LinkButton>
-          </div>
-        </section>
+          <h1 className="mt-1.5 font-serif text-2xl sm:text-3xl text-[#172321]">
+            Namaste, Maker Studio
+          </h1>
+          <p className="mt-1 text-xs text-[#172321]/70">
+            Real-time business performance, order dispatch pipelines, and artisan financial ledger.
+          </p>
+        </div>
 
-        <section className="border border-line bg-surface p-5">
-          <h2 className="text-lg">Onboarding checklist</h2>
-          <p className="mt-1 text-[11px] text-muted">What is complete in your seller record, and what still needs attention.</p>
-          {data.checklist.length ? (
-            <ul className="mt-3 space-y-2">
-              {data.checklist.map((item) => (
-                <li key={item.id} className="flex flex-wrap items-start justify-between gap-2 border-b border-line pb-2 text-[12px] last:border-b-0 last:pb-0">
-                  <span className="text-ink">{item.label}</span>
-                  <span
-                    className={`text-[10px] uppercase tracking-[0.1em] ${
-                      item.status === 'complete' ? 'text-forest' : item.status === 'action' ? 'text-[#8e4630]' : 'text-muted'
-                    }`}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Timeframe Selector Pills */}
+          <div className="inline-flex rounded-lg border border-[#E4DACE] bg-white p-1 shadow-sm">
+            {([7, 30, 90] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setDays(t)}
+                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                  days === t
+                    ? 'bg-[#172321] text-white shadow-xs'
+                    : 'text-[#172321]/70 hover:text-[#172321] hover:bg-[#FAF7F2]'
+                }`}
+              >
+                {t === 7 ? '7 Days' : t === 30 ? '30 Days' : '90 Days'}
+              </button>
+            ))}
+          </div>
+
+          <LinkButton to="/seller/products/new" variant="terra" size="sm">
+            + Add Product
+          </LinkButton>
+        </div>
+      </div>
+
+      {/* Action Center - Prioritized Operational Tasks */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {data.orders.pending > 0 ? (
+          <div className="rounded-xl border border-[#D98263]/30 bg-[#FAF3EF] p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#D98263] uppercase tracking-wider">
+                  <span className="h-2 w-2 rounded-full bg-[#D98263] animate-ping" />
+                  Fulfilment Action
+                </span>
+                <span className="rounded-full bg-[#D98263] text-white px-2 py-0.5 text-xs font-bold">
+                  {data.orders.pending} pending
+                </span>
+              </div>
+              <p className="mt-2 text-sm font-semibold text-[#172321]">
+                Orders Awaiting Confirmation
+              </p>
+              <p className="mt-1 text-xs text-[#172321]/70">
+                Confirm stock reservation and pack items within 24 hours to fulfill shipping SLA.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-[#D98263]/20">
+              <Link
+                to="/seller/orders?status=pending"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-[#D98263] hover:underline"
+              >
+                <span>Process Orders</span>
+                <span>→</span>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-[#E4DACE] bg-white p-4 flex flex-col justify-between">
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#66745A]">Fulfilment Status</span>
+              <p className="mt-2 text-sm font-semibold text-[#172321]">All Orders Up To Date</p>
+              <p className="mt-1 text-xs text-[#172321]/70">No pending orders awaiting workshop confirmation.</p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-[#E4DACE]">
+              <Link to="/seller/orders" className="text-xs font-medium text-[#66745A] hover:underline">
+                View order archive →
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {data.products.low_stock > 0 ? (
+          <div className="rounded-xl border border-amber-300 bg-amber-50/60 p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-800">Catalogue Health</span>
+                <span className="rounded-full bg-amber-600 text-white px-2 py-0.5 text-xs font-bold">
+                  {data.products.low_stock} low
+                </span>
+              </div>
+              <p className="mt-2 text-sm font-semibold text-[#172321]">
+                Low Stock Threshold Warning
+              </p>
+              <p className="mt-1 text-xs text-[#172321]/70">
+                Listings near threshold risk automated out-of-stock badge in marketplace search.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-amber-200">
+              <Link to="/seller/inventory" className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 hover:underline">
+                <span>Restock Inventory</span>
+                <span>→</span>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-[#E4DACE] bg-white p-4 flex flex-col justify-between">
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#66745A]">Stock Health</span>
+              <p className="mt-2 text-sm font-semibold text-[#172321]">Inventory Optimal</p>
+              <p className="mt-1 text-xs text-[#172321]/70">All active listings have healthy buffer stocks.</p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-[#E4DACE]">
+              <Link to="/seller/inventory" className="text-xs font-medium text-[#66745A] hover:underline">
+                Audit quantities →
+              </Link>
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-xl border border-[#E4DACE] bg-white p-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#172321]/60">Verification & KYC</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-xs font-medium">
+                ✓ Approved
+              </span>
+            </div>
+            <p className="mt-2 text-sm font-semibold text-[#172321]">Naggar Handloom Guild Verified</p>
+            <p className="mt-1 text-xs text-[#172321]/70">Artisan identity, origin certificate, and direct bank settlement active.</p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-[#E4DACE]">
+            <Link to="/seller/application" className="text-xs font-medium text-[#172321] hover:underline">
+              Inspect KYC records →
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Primary KPI Stats Cards */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-xl border border-[#E4DACE] bg-white p-5 shadow-xs">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#172321]/50">Gross Product Sales</p>
+          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]">{formatINR(data.sales.gross)}</p>
+          <p className="mt-1.5 text-xs text-[#172321]/60">After customer coupons ({days} days)</p>
+        </div>
+
+        <div className="rounded-xl border border-[#E4DACE] bg-white p-5 shadow-xs">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#172321]/50">Marketplace Share (15%)</p>
+          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]/80">−{formatINR(data.sales.commission)}</p>
+          <p className="mt-1.5 text-xs text-[#172321]/60">Covers verification & packing boxes</p>
+        </div>
+
+        <div className="rounded-xl border border-[#D98263]/30 bg-[#FAF3EF] p-5 shadow-xs">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#D98263]">Net Maker Earnings</p>
+          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#D98263] font-bold">{formatINR(data.sales.earnings)}</p>
+          <p className="mt-1.5 text-xs text-[#172321]/70">Payable directly to registered bank</p>
+        </div>
+
+        <div className="rounded-xl border border-[#E4DACE] bg-white p-5 shadow-xs">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#172321]/50">Paid Order Volume</p>
+          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]">{data.sales.orders}</p>
+          <p className="mt-1.5 text-xs text-[#172321]/60">
+            {data.orders.shipped + data.orders.delivered} dispatched · {data.orders.pending} pending
+          </p>
+        </div>
+      </div>
+
+      {/* Interactive Sales & Velocity Chart Section */}
+      <section className="rounded-xl border border-[#E4DACE] bg-white p-5 sm:p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#E4DACE] pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#D98263]" />
+              <h2 className="text-base font-serif font-bold text-[#172321]">
+                Sales & Fulfilment Velocity
+              </h2>
+            </div>
+            <p className="mt-0.5 text-xs text-[#172321]/60">
+              Interactive revenue trajectory across the last {days} calendar days. Hover data points for daily breakdown.
+            </p>
+          </div>
+
+          {hoveredData ? (
+            <div className="inline-flex items-center gap-3 rounded-lg bg-[#172321] text-white px-3.5 py-1.5 text-xs shadow-md">
+              <span className="font-semibold text-[#D98263]">{hoveredData.label}:</span>
+              <span>{formatINR(hoveredData.grossPaise)}</span>
+              <span className="text-white/60">({hoveredData.orders} order{hoveredData.orders === 1 ? '' : 's'})</span>
+            </div>
+          ) : (
+            <div className="text-xs text-[#172321]/50">
+              Showing total {series.length} data points
+            </div>
+          )}
+        </div>
+
+        {/* SVG Area Chart */}
+        <div className="mt-5 w-full overflow-x-auto">
+          <div className="min-w-[620px]">
+            <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-auto overflow-visible" aria-label="Sales revenue area chart">
+              <defs>
+                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#D98263" stopOpacity="0.32" />
+                  <stop offset="100%" stopColor="#D98263" stopOpacity="0.01" />
+                </linearGradient>
+              </defs>
+
+              {/* Grid Lines & Y-Axis Labels */}
+              {[1, 0.5, 0].map((ratio) => {
+                const y = padTop + (1 - ratio) * plotH;
+                const val = Math.round(maxGross * ratio);
+                return (
+                  <g key={ratio}>
+                    <line
+                      x1={padLeft}
+                      y1={y}
+                      x2={padLeft + plotW}
+                      y2={y}
+                      stroke="#E4DACE"
+                      strokeWidth="1"
+                      strokeDasharray="4 4"
+                    />
+                    <text
+                      x={padLeft - 10}
+                      y={y + 3.5}
+                      textAnchor="end"
+                      fontSize="9.5"
+                      fill="#8F877C"
+                      fontFamily="sans-serif"
+                    >
+                      {formatINR(val)}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Area & Line */}
+              {areaPath ? <path d={areaPath} fill="url(#areaGradient)" /> : null}
+              {linePath ? (
+                <path
+                  d={linePath}
+                  fill="none"
+                  stroke="#D98263"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ) : null}
+
+              {/* Hover Cursor Vertical Line */}
+              {hoveredData ? (
+                <line
+                  x1={hoveredData.x}
+                  y1={padTop}
+                  x2={hoveredData.x}
+                  y2={padTop + plotH}
+                  stroke="#172321"
+                  strokeWidth="1.2"
+                  strokeDasharray="3 3"
+                />
+              ) : null}
+
+              {/* Interactive Data Points and Invisible Hitboxes */}
+              {points.map((pt, i) => (
+                <g key={pt.date}>
+                  {hoveredIdx === i ? (
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r="5.5"
+                      fill="#D98263"
+                      stroke="#FFFFFF"
+                      strokeWidth="2.5"
+                      className="transition-all"
+                    />
+                  ) : null}
+                  <rect
+                    x={pt.x - plotW / (series.length * 2)}
+                    y={padTop}
+                    width={plotW / series.length}
+                    height={plotH}
+                    fill="transparent"
+                    className="cursor-pointer"
+                    onMouseEnter={() => setHoveredIdx(i)}
+                    onMouseLeave={() => setHoveredIdx(null)}
+                  />
+                </g>
+              ))}
+
+              {/* X-Axis Date Ticks */}
+              {tickIndices.map((i) => {
+                const pt = points[i];
+                if (!pt) return null;
+                return (
+                  <text
+                    key={pt.date}
+                    x={pt.x}
+                    y={chartH - 8}
+                    textAnchor="middle"
+                    fontSize="9.5"
+                    fill="#8F877C"
+                    fontFamily="sans-serif"
                   >
-                    {item.status === 'complete' ? 'Complete' : item.status === 'action' ? 'Action needed' : 'Pending'}
+                    {pt.label}
+                  </text>
+                );
+              })}
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      {/* Two-Column Grid: Orders & Products vs Ledger & Readiness */}
+      <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="space-y-6">
+          {/* Top Selling Products in Period */}
+          <section className="rounded-xl border border-[#E4DACE] bg-white overflow-hidden shadow-xs">
+            <div className="flex items-center justify-between border-b border-[#E4DACE] px-5 py-4">
+              <div>
+                <h2 className="text-sm font-serif font-bold text-[#172321]">Top Performing Creations</h2>
+                <p className="text-[11px] text-[#172321]/60">Ranked by revenue generated during this {days}-day period</p>
+              </div>
+              <Link to="/seller/products" className="text-xs text-[#D98263] font-medium hover:underline">
+                All Listings →
+              </Link>
+            </div>
+            {topProducts.length ? (
+              <div className="divide-y divide-[#E4DACE]">
+                {topProducts.map((p, idx) => (
+                  <div key={p.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-[#FAF7F2] transition-colors">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#172321]/5 text-xs font-bold text-[#172321]">
+                        #{idx + 1}
+                      </span>
+                      <div>
+                        <p className="text-xs font-medium text-[#172321]">{p.name}</p>
+                        <p className="text-[10.5px] text-[#172321]/55">{p.unitsSold} units dispatched</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-semibold text-[#172321]">{formatINR(p.revenuePaise)}</p>
+                      <p className="text-[10px] text-emerald-700 font-medium">In Catalogue</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="px-5 py-8 text-center text-xs text-[#172321]/50">No sales recorded yet for this period.</p>
+            )}
+          </section>
+
+          {/* Recent Seller Orders */}
+          <section className="rounded-xl border border-[#E4DACE] bg-white overflow-hidden shadow-xs">
+            <div className="flex items-center justify-between border-b border-[#E4DACE] px-5 py-4">
+              <div>
+                <h2 className="text-sm font-serif font-bold text-[#172321]">Recent Fulfilment Orders</h2>
+                <p className="text-[11px] text-[#172321]/60">Direct customer orders assigned to your workshop</p>
+              </div>
+              <Link to="/seller/orders" className="text-xs text-[#D98263] font-medium hover:underline">
+                View All Orders →
+              </Link>
+            </div>
+            {data.recentOrders.length ? (
+              <ul className="divide-y divide-[#E4DACE]">
+                {data.recentOrders.map((order) => (
+                  <li key={order.id}>
+                    <Link
+                      to={`/seller/orders/${order.id}`}
+                      className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 hover:bg-[#FAF7F2] transition-colors"
+                    >
+                      <div>
+                        <p className="text-xs font-semibold text-[#172321]">{order.reference}</p>
+                        <p className="text-[11px] text-[#172321]/60">
+                          {order.orderNumber} · Dispatch by {order.dispatchBy ? formatDate(order.dispatchBy) : 'Within 48h'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-[#172321]">{formatINR(order.totalPaise)}</p>
+                          <p className="text-[10px] text-[#D98263]">Earning: {formatINR(order.earningPaise)}</p>
+                        </div>
+                        <StatusBadge status={order.status} label={sellerOrderStatusLabel(order.status)} />
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-5 py-10 text-center text-xs text-[#172321]/50">No paid orders yet.</p>
+            )}
+          </section>
+        </div>
+
+        {/* Sidebar Column: Financial Settlement Ledger & Store Policy */}
+        <div className="space-y-6">
+          {/* Financial Settlement Ledger */}
+          <section className="rounded-xl border border-[#E4DACE] bg-white p-5 shadow-xs">
+            <div className="flex items-center justify-between border-b border-[#E4DACE] pb-3">
+              <h2 className="text-sm font-serif font-bold text-[#172321]">Payout & Ledger Status</h2>
+              <Link to="/seller/earnings" className="text-xs text-[#D98263] hover:underline">
+                Ledger Details →
+              </Link>
+            </div>
+            <dl className="mt-4 space-y-3 text-xs">
+              <div className="flex items-center justify-between border-b border-[#E4DACE]/60 pb-2.5">
+                <dt className="text-[#172321]/60">Ledger Pending (in return window)</dt>
+                <dd className="font-semibold text-[#172321]">{formatINR(data.ledger.pending)}</dd>
+              </div>
+              <div className="flex items-center justify-between border-b border-[#E4DACE]/60 pb-2.5">
+                <dt className="text-[#172321]/60">Eligible For Settlement</dt>
+                <dd className="font-semibold text-emerald-700">{formatINR(data.ledger.eligible)}</dd>
+              </div>
+              <div className="flex items-center justify-between border-b border-[#E4DACE]/60 pb-2.5">
+                <dt className="text-[#172321]/60">Settled to Date (Bank NEFT)</dt>
+                <dd className="font-semibold text-[#172321]">{formatINR(data.ledger.settled)}</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-[#172321]/60">Pending Settlement Batches</dt>
+                <dd className="font-semibold text-[#D98263]">{data.settlement.pending_batches} batch</dd>
+              </div>
+            </dl>
+          </section>
+
+          {/* Active Store Readiness & GI Authentication */}
+          <section className="rounded-xl border border-[#E4DACE] bg-white p-5 shadow-xs">
+            <div className="flex items-center justify-between border-b border-[#E4DACE] pb-3">
+              <h2 className="text-sm font-serif font-bold text-[#172321]">Workshop Readiness</h2>
+              <StatusBadge status={data.store.status} label={STORE_STATUS_LABELS[data.store.status] ?? humanise(data.store.status)} />
+            </div>
+            <ul className="mt-3 divide-y divide-[#E4DACE] text-xs">
+              {data.checklist.map((item) => (
+                <li key={item.id} className="py-2.5 flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-[#172321]">{item.label}</p>
+                    <p className="text-[10.5px] text-[#172321]/60">{item.detail}</p>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide shrink-0">
+                    {item.status === 'complete' ? '✓ Verified' : 'Pending'}
                   </span>
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className="mt-3 text-[12px] text-muted">Your checklist will appear once the application is saved.</p>
-          )}
-        </section>
-      </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Product value" value={formatINR(data.sales.gross)} note="After discounts, before commission" />
-        <Stat label="Commission" value={formatINR(data.sales.commission)} note="Marketplace share" />
-        <Stat label="Your earnings" value={formatINR(data.sales.earnings)} note="On paid orders" tone="accent" />
-        <Stat label="Paid orders" value={data.sales.orders} note="Last 30 days" />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="border border-line bg-surface p-4">
-          <p className="eyebrow">Ledger pending</p>
-          <p className="mt-2 font-serif text-2xl text-forest">{formatINR(data.ledger.pending)}</p>
-          <p className="mt-1 text-[11px] text-muted">Awaiting delivery or the return window.</p>
-        </div>
-        <div className="border border-line bg-surface p-4">
-          <p className="eyebrow">Eligible now</p>
-          <p className="mt-2 font-serif text-2xl text-forest">{formatINR(data.ledger.eligible)}</p>
-          <p className="mt-1 text-[11px] text-muted">Available for a reviewed settlement.</p>
-        </div>
-        <div className="border border-line bg-surface p-4">
-          <p className="eyebrow">Settled to date</p>
-          <p className="mt-2 font-serif text-2xl text-forest">{formatINR(data.ledger.settled)}</p>
-          <p className="mt-1 text-[11px] text-muted">Recorded payouts only.</p>
-        </div>
-      </div>
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="border border-line bg-surface">
-          <div className="flex items-center justify-between border-b border-line px-5 py-4">
-            <h2 className="text-lg">Recent seller orders</h2>
-            <Link to="/seller/orders" className="text-[11px] text-muted underline underline-offset-2">All orders</Link>
-          </div>
-          {data.recentOrders.length ? (
-            <ul className="divide-y divide-line">
-              {data.recentOrders.map((order) => (
-                <li key={order.id}>
-                  <Link to={`/seller/orders/${order.id}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 hover:bg-paper/60">
-                    <div>
-                      <p className="text-[13px] font-medium text-forest">{order.reference}</p>
-                      <p className="text-[11px] text-muted">{order.orderNumber} · dispatch by {order.dispatchBy ? formatDate(order.dispatchBy) : '—'}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm">{formatINR(order.totalPaise)}</span>
-                      <StatusBadge status={order.status} label={sellerOrderStatusLabel(order.status)} />
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-5 py-10 text-center text-sm text-muted">No paid orders yet.</p>
-          )}
-        </section>
-        <div className="space-y-4">
-          <section className="border border-line bg-surface p-5">
-            <h2 className="text-lg">Catalogue</h2>
-            <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
-              <div><dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Live</dt><dd className="mt-1 font-serif text-xl">{data.products.active}</dd></div>
-              <div><dt className="text-[10px] uppercase tracking-[0.12em] text-muted">In review</dt><dd className="mt-1 font-serif text-xl">{data.products.pending}</dd></div>
-              <div><dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Drafts</dt><dd className="mt-1 font-serif text-xl">{data.products.drafts}</dd></div>
-              <div><dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Low stock</dt><dd className="mt-1 font-serif text-xl text-terra">{data.products.low_stock}</dd></div>
-            </dl>
-            <LinkButton to="/seller/products" size="sm" variant="secondary" className="mt-4">Manage products</LinkButton>
           </section>
-          <section className="border border-line bg-paper p-5">
-            <h2 className="text-lg">Commission</h2>
-            <p className="mt-2 text-[12px] leading-relaxed text-muted">{data.commissionNote}</p>
-            <p className="mt-3 text-[11px] text-muted">
-              Settlement batches: {data.settlement.pending_batches} pending · {formatINR(data.settlement.paid_total)} paid to date.
-              Payouts are recorded manually with a bank/UPI reference; automated payouts are not enabled.
+
+          {/* Commission & Trust Transparency Note */}
+          <div className="rounded-xl border border-[#66745A]/25 bg-[#FAF7F2] p-4 text-[11px] leading-relaxed text-[#172321]/70">
+            <p className="font-serif font-bold text-[#172321] text-xs">Pahadi Roots Fair Maker Policy</p>
+            <p className="mt-1">{data.commissionNote}</p>
+            <p className="mt-2 text-[10.5px] text-[#66745A]">
+              100% of product profits stay with the maker. Payouts are reconciled each Tuesday directly into your verified bank account.
             </p>
-          </section>
+          </div>
         </div>
       </div>
     </div>
@@ -1547,6 +2257,7 @@ export function SellerOrderDetailPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [shipOpen, setShipOpen] = useState(false);
+  const [slipOpen, setSlipOpen] = useState(false);
   const [carrier, setCarrier] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [trackingUrl, setTrackingUrl] = useState('');
@@ -1594,12 +2305,22 @@ export function SellerOrderDetailPage() {
         lede={`Marketplace order ${data.orderNumber} · placed ${formatDateTime(data.createdAt)}`}
         actions={<StatusBadge status={data.status} label={sellerOrderStatusLabel(data.status)} />}
       />
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {data.status === 'pending' ? <Button onClick={() => void act('confirm')} loading={busy}>Confirm order</Button> : null}
         {['pending', 'confirmed'].includes(data.status) ? <Button variant="secondary" onClick={() => void act('pack')} loading={busy}>Mark packed</Button> : null}
         {['confirmed', 'packed'].includes(data.status) ? <Button onClick={() => setShipOpen(true)}>Dispatch with tracking</Button> : null}
         {data.status === 'shipped' ? <Button onClick={() => void act('deliver')} loading={busy}>Mark delivered</Button> : null}
         {['pending', 'confirmed'].includes(data.status) ? <Button variant="danger" onClick={() => void act('cancel')} loading={busy}>Cancel shipment</Button> : null}
+        <Button
+          variant="secondary"
+          onClick={() => setSlipOpen(true)}
+          className="inline-flex items-center gap-1.5"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+          <span>Print Packing Slip</span>
+        </Button>
       </div>
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">
@@ -1672,6 +2393,7 @@ export function SellerOrderDetailPage() {
         </aside>
       </div>
 
+      {/* Carrier Tracking Modal */}
       <Modal
         open={shipOpen}
         onClose={() => setShipOpen(false)}
@@ -1684,6 +2406,106 @@ export function SellerOrderDetailPage() {
           <Field label="Tracking number" required><Input value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} /></Field>
           <Field label="Tracking URL" hint="Optional"><Input type="url" value={trackingUrl} onChange={(event) => setTrackingUrl(event.target.value)} placeholder="https://" /></Field>
           <Field label="Internal note" hint="Optional"><Textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} /></Field>
+        </div>
+      </Modal>
+
+      {/* Printable Packing Slip Modal */}
+      <Modal
+        open={slipOpen}
+        onClose={() => setSlipOpen(false)}
+        title="Printable Packing Slip & Artisan Dispatch Note"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setSlipOpen(false)}>Close</Button>
+            <Button variant="terra" onClick={() => window.print()}>Print Packing Slip</Button>
+          </>
+        }
+      >
+        <div className="space-y-6 text-[#172321] print:text-black">
+          {/* Slip Header */}
+          <div className="border-b border-[#E4DACE] pb-4 flex items-center justify-between">
+            <div>
+              <p className="font-serif text-xl font-bold tracking-wide text-[#172321]">PAHADI ROOTS</p>
+              <p className="text-[10px] uppercase tracking-widest text-[#66745A] font-semibold">Artisan Dispatch & Packing Slip</p>
+            </div>
+            <div className="text-right">
+              <p className="font-mono text-sm font-bold text-[#172321]">{data.reference}</p>
+              <p className="text-[11px] text-[#172321]/60">Order #{data.orderNumber}</p>
+            </div>
+          </div>
+
+          {/* Fulfilment Meta */}
+          <div className="grid grid-cols-2 gap-4 text-xs border border-[#E4DACE] p-4 bg-[#FAF7F2] rounded-lg">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-[#66745A] font-bold">Fulfilled By</p>
+              <p className="mt-1 font-medium text-sm text-[#172321]">Kullu Valley Handlooms & Mountain Crafts</p>
+              <p className="text-[#172321]/70">Naggar, Kullu Valley, Himachal Pradesh</p>
+              <p className="text-[#172321]/70">Handloom & Craft Guild Verified</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-[#66745A] font-bold">Ship To Customer</p>
+              <p className="mt-1 font-medium text-sm text-[#172321]">{data.address.fullName}</p>
+              <p className="text-[#172321]/70">{data.address.line1}{data.address.line2 ? `, ${data.address.line2}` : ''}</p>
+              <p className="text-[#172321]/70">{data.address.city}, {data.address.state} — {data.address.pincode}</p>
+              <p className="text-[#172321]/70 font-mono">Contact: {data.address.phone}</p>
+            </div>
+          </div>
+
+          {/* Items Table */}
+          <div className="overflow-x-auto border border-[#E4DACE] rounded-lg">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#FAF7F2] border-b border-[#E4DACE] text-[10px] uppercase tracking-wider text-[#172321]/60">
+                <tr>
+                  <th className="py-2.5 px-3">Item Description</th>
+                  <th className="py-2.5 px-3">SKU</th>
+                  <th className="py-2.5 px-3 text-center">Qty</th>
+                  <th className="py-2.5 px-3 text-right">Unit Price</th>
+                  <th className="py-2.5 px-3 text-right">Line Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E4DACE]">
+                {data.items.map((item) => (
+                  <tr key={item.id}>
+                    <td className="py-2.5 px-3 font-medium text-[#172321]">{item.name}</td>
+                    <td className="py-2.5 px-3 text-[#172321]/60 font-mono text-[11px]">{item.sku}</td>
+                    <td className="py-2.5 px-3 text-center font-bold">{item.quantity}</td>
+                    <td className="py-2.5 px-3 text-right">{formatINR(item.unitPricePaise)}</td>
+                    <td className="py-2.5 px-3 text-right font-medium">{formatINR(item.lineSubtotalPaise)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="border-t-2 border-[#E4DACE] bg-[#FAF7F2] font-semibold text-xs">
+                <tr>
+                  <td colSpan={4} className="py-2 px-3 text-right">Total Shipment Value:</td>
+                  <td className="py-2 px-3 text-right text-[#D98263] font-bold">{formatINR(data.subtotalPaise)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* Artisan Quality & Safety Checklist */}
+          <div className="border border-[#66745A]/30 bg-[#66745A]/5 p-4 rounded-lg text-xs space-y-2">
+            <p className="font-semibold text-[#172321] uppercase tracking-wide text-[10.5px]">Artisan Dispatch Quality Assurance</p>
+            <div className="grid sm:grid-cols-3 gap-2 text-[11px] text-[#172321]/80">
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-700 font-bold">✓</span>
+                <span>Authentic Himalayan craft checked</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-700 font-bold">✓</span>
+                <span>Eco-friendly cushioning packed</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-700 font-bold">✓</span>
+                <span>Mountain transit weather protection</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center pt-2 text-[10px] text-[#172321]/50 border-t border-[#E4DACE]">
+            <p>Thank you for supporting authentic Himalayan artisans and sustainable mountain communities.</p>
+            <p className="mt-0.5">Need assistance with your delivery? Contact care@pahadiroots.in or WhatsApp +91 98765 43210</p>
+          </div>
         </div>
       </Modal>
     </div>

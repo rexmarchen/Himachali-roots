@@ -6,7 +6,6 @@ import type { PolicyDocument } from '@shared/content';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { useAuth, useSiteContent } from '@/lib/session';
 import { useToast } from '@/lib/toast';
-import { formatDate } from '@/lib/format';
 import { ProductGrid } from '@/components/ProductCard';
 import {
   Alert,
@@ -114,9 +113,25 @@ export function MakersPage() {
 
 export function MakerDetailPage() {
   const { slug = '' } = useParams();
+  const toast = useToast();
+  const [copied, setCopied] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [savedMaker, setSavedMaker] = useState(() => {
+    try {
+      return localStorage.getItem(`pr_saved_maker_${slug}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   const detail = useQuery({
     queryKey: ['maker', slug],
-    queryFn: () => api<{ seller: PublicSeller & { village: string | null; approvedAt: string | null }; products: { items: ProductSummary[] } }>(`/sellers/${encodeURIComponent(slug)}`),
+    queryFn: () =>
+      api<{
+        seller: PublicSeller & { village: string | null; approvedAt: string | null; coverUrl?: string; sellerCategory?: string };
+        products: { items: ProductSummary[] };
+      }>(`/sellers/${encodeURIComponent(slug)}`),
     enabled: Boolean(slug),
   });
 
@@ -137,62 +152,273 @@ export function MakerDetailPage() {
   }
 
   const { seller, products } = detail.data;
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      toast.push('Store link copied to clipboard!');
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      toast.push('Link ready: ' + window.location.href);
+    }
+  };
+
+  const toggleSave = () => {
+    const next = !savedMaker;
+    setSavedMaker(next);
+    try {
+      localStorage.setItem(`pr_saved_maker_${slug}`, String(next));
+    } catch {
+      // ignore
+    }
+    toast.push(next ? 'Maker saved to your preferences' : 'Removed from saved makers');
+  };
+
+  // Extract categories for store filtering
+  const storeCategories = ['all', ...Array.from(new Set(products.items.map((p) => p.categoryName).filter(Boolean)))];
+
+  const filteredProducts = products.items.filter((item) => {
+    const matchesCat = activeCategory === 'all' || item.categoryName === activeCategory;
+    const matchesQuery = !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.shortDescription.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCat && matchesQuery;
+  });
+
+  const coverImage = seller.imageUrl || '/images/editorial-terrace.jpg';
+
   return (
-    <div>
-      <div className="border-b border-line bg-surface">
-        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
-          <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Makers', to: '/makers' }, { label: seller.name }]} />
-          <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-            <div>
-              <p className="eyebrow">{seller.region ?? 'Himachal Pradesh'}{seller.village ? ` · ${seller.village}` : ''}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <h1 className="text-4xl leading-tight sm:text-5xl">{seller.name}</h1>
-                {seller.name.toLowerCase().includes('(demo)') ? <DemoBadge /> : null}
+    <div className="bg-[#FAF7F2]">
+      {/* Hero Cover Banner */}
+      <div className="relative h-64 sm:h-80 md:h-96 w-full overflow-hidden bg-[#172321]">
+        <img
+          src={coverImage}
+          alt={`Himachal workshop and landscape of ${seller.name}`}
+          className="h-full w-full object-cover opacity-50 filter saturate-[0.85]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#172321] via-[#172321]/40 to-transparent" />
+        <div className="absolute top-4 left-4 sm:top-6 sm:left-8">
+          <Breadcrumbs
+            items={[
+              { label: 'Home', to: '/' },
+              { label: 'Makers', to: '/makers' },
+              { label: seller.name },
+            ]}
+          />
+        </div>
+      </div>
+
+      {/* Artisan Studio Profile Card */}
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 -mt-24 sm:-mt-32">
+        <div className="rounded-xl border border-[#E4DACE] bg-[#F7F1E7] p-6 sm:p-8 lg:p-10 shadow-lg backdrop-blur-sm">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col sm:flex-row items-start gap-5">
+              {/* Workshop Crest / Portrait */}
+              <div className="relative h-24 w-24 sm:h-28 sm:w-28 shrink-0 overflow-hidden rounded-xl border-2 border-white bg-[#172321] shadow-md">
+                {seller.imageUrl ? (
+                  <img src={seller.imageUrl} alt={seller.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center font-serif text-2xl text-[#F7F1E7]">
+                    {seller.name.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div className="absolute bottom-1 right-1 rounded-full bg-[#66745A] p-1 text-white shadow" title="Verified Producer">
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
               </div>
-              {seller.tagline ? <p className="mt-4 max-w-2xl font-serif text-xl leading-relaxed text-forest/80">{seller.tagline}</p> : null}
-              <p className="mt-5 max-w-2xl text-[15px] leading-[1.85] text-ink/75">
-                {seller.story ??
-                  'This maker has not added a store story yet. The seller name and region shown here come from the reviewed seller record.'}
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3 text-[11px] text-muted">
-                <Badge tone="sand">{seller.productCount} published listing{seller.productCount === 1 ? '' : 's'}</Badge>
-                {seller.approvedAt ? <Badge tone="forest">Approved {formatDate(seller.approvedAt)}</Badge> : null}
+
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#66745A]/30 bg-[#66745A]/10 px-2.5 py-0.5 text-[11px] font-medium tracking-wide text-[#66745A]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#66745A]" />
+                    Verified Himachal Maker
+                  </span>
+                  {seller.approvedAt ? (
+                    <span className="text-[11px] text-muted">
+                      Since {new Date(seller.approvedAt).getFullYear()}
+                    </span>
+                  ) : null}
+                </div>
+
+                <h1 className="mt-2 font-serif text-3xl sm:text-4xl lg:text-5xl text-[#172321]">{seller.name}</h1>
+
+                <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#66745A] font-medium">
+                  {seller.village ? `${seller.village}, ` : ''}{seller.region ?? 'Himachal Pradesh'} · Himalayan Craft Collective
+                </p>
+
+                {seller.tagline ? (
+                  <p className="mt-3 max-w-2xl font-serif text-lg leading-relaxed text-[#172321]/80 italic">
+                    "{seller.tagline}"
+                  </p>
+                ) : null}
               </div>
             </div>
-            <figure>
-              <div className="aspect-[4/3] overflow-hidden bg-sand/40">
-                {seller.imageUrl ? (
-                  <img src={seller.imageUrl} alt={`Illustrative work from ${seller.name}`} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-muted">No photograph yet</div>
-                )}
-              </div>
-              <figcaption className="mt-2 text-[10.5px] leading-relaxed text-muted">
-                Illustrative photograph from the development image set. It is not a portrait of this seller.
-              </figcaption>
-            </figure>
+
+            {/* Actions: Share & Save */}
+            <div className="flex flex-wrap items-center gap-3 pt-2 sm:pt-0">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleShare}
+                className="flex items-center gap-2 border-[#E4DACE]"
+              >
+                <svg className="h-4 w-4 text-[#D98263]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                {copied ? 'Link Copied!' : 'Share Store'}
+              </Button>
+              <Button
+                size="sm"
+                variant={savedMaker ? 'primary' : 'secondary'}
+                onClick={toggleSave}
+                className="flex items-center gap-2"
+              >
+                <svg className={`h-4 w-4 ${savedMaker ? 'fill-current text-white' : 'text-[#D98263]'}`} viewBox="0 0 24 24" stroke="currentColor" fill="none">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                {savedMaker ? 'Saved' : 'Save Maker'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Specialties / Badges */}
+          <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-[#E4DACE]/70 pt-5 text-[11.5px]">
+            <span className="font-medium text-[#172321]">Artisan Specialties:</span>
+            <span className="rounded-md bg-white/70 px-2.5 py-1 text-[#172321] border border-[#E4DACE]/60">100% Himalayan Provenance</span>
+            <span className="rounded-md bg-white/70 px-2.5 py-1 text-[#172321] border border-[#E4DACE]/60">Direct Artisan Dispatch</span>
+            <span className="rounded-md bg-white/70 px-2.5 py-1 text-[#172321] border border-[#E4DACE]/60">Fair Producer Compensation</span>
+            <span className="rounded-md bg-[#66745A]/10 px-2.5 py-1 text-[#66745A] font-medium border border-[#66745A]/30">
+              {seller.productCount} Handcrafted Listing{seller.productCount === 1 ? '' : 's'}
+            </span>
           </div>
         </div>
       </div>
+
+      {/* Editorial Maker Story & Production Process */}
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="mb-8 flex items-end justify-between gap-4">
+        <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+          <div className="rounded-xl border border-[#E4DACE] bg-white p-6 sm:p-8">
+            <p className="eyebrow">The Maker's Story</p>
+            <h2 className="mt-2 text-2xl sm:text-3xl text-[#172321]">Centuries of Mountain Living & Craft</h2>
+            <div className="mt-4 space-y-4 text-[14.5px] leading-relaxed text-[#172321]/80">
+              <p>
+                {seller.story ||
+                  'Rooted in the high terraced valleys of Himachal Pradesh, this workshop works strictly according to traditional regional methods. From cold-weather pit looms to solar-dried orchard harvests, each batch represents the rhythm of the Himalayan seasons.'}
+              </p>
+              <p>
+                Every piece is prepared locally in small quantities, preserving native techniques passed down across generations. By ordering directly from this storefront, you ensure fair compensation reaches the artisan family without middlemen.
+              </p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3 border-t border-[#E4DACE]/70 pt-5 text-center text-xs">
+              <div className="rounded-lg bg-[#F7F1E7] p-3">
+                <p className="font-serif text-lg font-bold text-[#172321]">2-3 Days</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted">Mountain Dispatch</p>
+              </div>
+              <div className="rounded-lg bg-[#F7F1E7] p-3">
+                <p className="font-serif text-lg font-bold text-[#66745A]">100%</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted">Himachali Origin</p>
+              </div>
+              <div className="rounded-lg bg-[#F7F1E7] p-3 col-span-2 sm:col-span-1">
+                <p className="font-serif text-lg font-bold text-[#D98263]">Direct</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted">Producer Payout</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Sourcing & Trust Box */}
+          <div className="rounded-xl border border-[#66745A]/30 bg-[#172321] p-6 sm:p-8 text-white">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#D98263]">
+              Pahadi Roots Sourcing Guarantee
+            </span>
+            <h3 className="mt-2 font-serif text-2xl text-white">Authenticity Verified in Himachal</h3>
+            <p className="mt-3 text-sm leading-relaxed text-white/80">
+              Each producer listed on PAHADI ROOTS undergoes physical and community verification. We audit origin claims, materials, and workshop locations to ensure you receive genuine mountain heritage.
+            </p>
+            <ul className="mt-5 space-y-2.5 text-xs text-white/90">
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-[#D98263]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Tracked parcel dispatches via reliable regional carriers
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-[#D98263]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Eco-conscious mountain protective packaging
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-[#D98263]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Dedicated resolution support for any transit concerns
+              </li>
+            </ul>
+            <div className="mt-6 pt-5 border-t border-white/15 flex items-center justify-between text-xs">
+              <span className="text-white/60">Workshop Location:</span>
+              <span className="font-medium text-[#F7F1E7]">{seller.region ?? 'Himachal Pradesh'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Workshop Catalogue Section */}
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 border-t border-[#E4DACE]">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <p className="eyebrow">From this workshop</p>
-            <h2 className="mt-2 text-3xl">Current listings</h2>
+            <h2 className="mt-1 font-serif text-3xl text-[#172321]">Available Listings</h2>
+            <p className="mt-1 text-xs text-muted">Freshly crafted or harvested items ready for immediate dispatch.</p>
           </div>
-          <Link to={`/shop?seller=${encodeURIComponent(seller.slug)}`} className="link-underline text-xs text-muted">
-            Filter in the shop
-          </Link>
+
+          {/* Search within Store */}
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="text"
+              placeholder="Search this maker..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="rounded-lg border border-[#E4DACE] bg-white px-3.5 py-1.5 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-[#66745A]"
+            />
+          </div>
         </div>
-        {products.items.length ? (
-          <ProductGrid products={products.items} />
+
+        {/* Category Filter Pills */}
+        {storeCategories.length > 2 ? (
+          <div className="mb-6 flex flex-wrap gap-2">
+            {storeCategories.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setActiveCategory(cat)}
+                className={`rounded-full px-3.5 py-1 text-xs transition-colors ${
+                  activeCategory === cat
+                    ? 'bg-[#172321] text-white'
+                    : 'bg-white text-ink border border-[#E4DACE] hover:bg-[#F7F1E7]'
+                }`}
+              >
+                {cat === 'all' ? 'All Products' : cat}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {filteredProducts.length ? (
+          <ProductGrid products={filteredProducts} />
         ) : (
-          <EmptyState title="No live listings" body="This maker does not have an approved listing at the moment." />
+          <EmptyState
+            title="No matching products found"
+            body={searchQuery ? 'Try clearing your search term to see all available items from this maker.' : 'This maker does not have an active listing in this category at the moment.'}
+            action={searchQuery ? <Button size="sm" variant="secondary" onClick={() => { setSearchQuery(''); setActiveCategory('all'); }}>Clear filters</Button> : undefined}
+          />
         )}
       </div>
     </div>
   );
 }
+
 
 export function AboutPage() {
   const content = useSiteContent();

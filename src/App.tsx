@@ -207,6 +207,9 @@ export function App() {
           </Route>
         </Route>
 
+        <Route path="*" element={<NotFoundPage />} />
+        </Route>
+
         <Route element={<RequireSellerAccount />}>
           <Route path="seller" element={<SellerLayout />}>
             <Route index element={<SellerDashboardPage />} />
@@ -221,10 +224,9 @@ export function App() {
             <Route path="earnings" element={<SellerEarningsPage />} />
             <Route path="requests" element={<SellerRequestsPage />} />
             <Route path="profile" element={<SellerProfilePage />} />
+            <Route path="analytics" element={<SellerDashboardPage />} />
+            <Route path="shipping" element={<SellerOrdersPage />} />
           </Route>
-        </Route>
-
-        <Route path="*" element={<NotFoundPage />} />
         </Route>
 
         <Route element={<RequireAdmin />}>

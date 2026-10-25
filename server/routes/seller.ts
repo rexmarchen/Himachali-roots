@@ -843,7 +843,9 @@ export function sellerRouter(db: Db): Router {
 
   router.get('/dashboard', (req, res) => {
     const id = sellerId(req);
-    const since = new Date(Date.now() - 30 * 86400_000).toISOString();
+    const requestedDays = Number(req.query.days);
+    const days = [7, 30, 90].includes(requestedDays) ? requestedDays : 30;
+    const since = new Date(Date.now() - days * 86400_000).toISOString();
     const products = queryOne<{ active: number; pending: number; low_stock: number; drafts: number }>(
       db,
       `SELECT
@@ -923,6 +925,52 @@ export function sellerRouter(db: Db): Router {
       store_status_reason: string | null;
     }>(db, 'SELECT seller_category, store_status, payout_status, store_status_reason FROM seller_profiles WHERE id = ?', id);
     const application = latestApplication(db, id);
+
+    // Compute continuous daily series for interactive area chart
+    const dailySeries = queryAll<{ day: string; gross_paise: number; order_count: number }>(
+      db,
+      `SELECT substr(o.created_at, 1, 10) AS day,
+              COALESCE(SUM(so.subtotal_paise - so.discount_paise), 0) AS gross_paise,
+              COUNT(*) AS order_count
+         FROM seller_orders so JOIN orders o ON o.id = so.order_id
+        WHERE so.seller_id = ? AND o.paid_at IS NOT NULL AND o.created_at >= ?
+          AND so.status != 'cancelled'
+        GROUP BY substr(o.created_at, 1, 10)
+        ORDER BY day ASC`,
+      id,
+      since,
+    );
+    const seriesMap = new Map(dailySeries.map((s) => [s.day, s]));
+    const series: { date: string; label: string; grossPaise: number; orders: number }[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400_000);
+      const dayKey = d.toISOString().slice(0, 10);
+      const match = seriesMap.get(dayKey);
+      series.push({
+        date: dayKey,
+        label: d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+        grossPaise: match ? match.gross_paise : 0,
+        orders: match ? match.order_count : 0,
+      });
+    }
+
+    // Top selling products for this seller within the selected timeframe
+    const topProducts = queryAll<{ id: string; name: string; units_sold: number; revenue_paise: number }>(
+      db,
+      `SELECT oi.product_id AS id, oi.name,
+              COALESCE(SUM(oi.quantity), 0) AS units_sold,
+              COALESCE(SUM(oi.line_subtotal_paise), 0) AS revenue_paise
+         FROM order_items oi
+         JOIN seller_orders so ON so.id = oi.seller_order_id
+         JOIN orders o ON o.id = so.order_id
+        WHERE so.seller_id = ? AND o.paid_at IS NOT NULL AND o.created_at >= ?
+        GROUP BY oi.product_id, oi.name
+        ORDER BY revenue_paise DESC
+        LIMIT 5`,
+      id,
+      since,
+    );
+
     res.json({
       store: {
         status: profile?.store_status ?? 'active',
@@ -950,8 +998,15 @@ export function sellerRouter(db: Db): Router {
         delivered: orderCounts.find((row) => row.status === 'delivered')?.count ?? 0,
         cancelled: orderCounts.find((row) => row.status === 'cancelled')?.count ?? 0,
       },
-      period: { days: 30, since },
+      period: { days, since },
       sales: sales ?? { gross: 0, commission: 0, earnings: 0, orders: 0 },
+      series,
+      topProducts: topProducts.map((p) => ({
+        id: p.id,
+        name: p.name,
+        unitsSold: p.units_sold,
+        revenuePaise: p.revenue_paise,
+      })),
       ledger: ledger ?? { pending: 0, eligible: 0, settled: 0, refunds: 0 },
       settlement: settlement ?? { pending_batches: 0, paid_total: 0 },
       recentOrders: recentOrders.map((row) => ({
