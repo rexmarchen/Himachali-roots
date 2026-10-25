@@ -1,0 +1,426 @@
+import { queryAll, queryOne, type Db } from '../db.js';
+import type { Category, Paged, ProductDetail, ProductSummary, Review } from '../../shared/types.js';
+import { notFound } from './http.js';
+
+const PUBLIC_CONDITION = "p.status = 'approved' AND s.status = 'approved'";
+
+interface SummaryRow {
+  id: string;
+  slug: string;
+  name: string;
+  short_description: string;
+  price_paise: number;
+  compare_at_price_paise: number | null;
+  image_url: string | null;
+  image_alt: string | null;
+  seller_name: string;
+  seller_slug: string;
+  category_name: string;
+  category_slug: string;
+  stock: number;
+  is_demo: number;
+  region: string | null;
+  is_featured: number;
+  rating_average: number | null;
+  rating_count: number;
+}
+
+function mapSummary(row: SummaryRow): ProductSummary {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    shortDescription: row.short_description,
+    pricePaise: row.price_paise,
+    compareAtPricePaise: row.compare_at_price_paise,
+    imageUrl: row.image_url,
+    imageAlt: row.image_alt,
+    sellerName: row.seller_name,
+    sellerSlug: row.seller_slug,
+    categoryName: row.category_name,
+    categorySlug: row.category_slug,
+    stock: row.stock,
+    isDemo: row.is_demo === 1,
+    region: row.region,
+    isFeatured: row.is_featured === 1,
+    ratingAverage: row.rating_average,
+    ratingCount: row.rating_count,
+  };
+}
+
+const SUMMARY_SELECT = `
+  SELECT p.id, p.slug, p.name, p.short_description, p.price_paise, p.compare_at_price_paise,
+         p.region, p.is_featured, p.is_demo,
+         i.quantity - i.reserved_quantity AS stock,
+         s.business_name AS seller_name, s.slug AS seller_slug,
+         c.name AS category_name, c.slug AS category_slug,
+         (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url,
+         (SELECT alt FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_alt,
+         (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.product_id = p.id AND r.status = 'published') AS rating_average,
+         (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id AND r.status = 'published') AS rating_count
+    FROM products p
+    JOIN seller_profiles s ON s.id = p.seller_id
+    JOIN categories c ON c.id = p.category_id
+    JOIN inventory i ON i.product_id = p.id
+`;
+
+export interface ProductQuery {
+  q?: string;
+  category?: string;
+  seller?: string;
+  region?: string;
+  minPricePaise?: number;
+  maxPricePaise?: number;
+  inStock?: boolean;
+  featured?: boolean;
+  sort?: 'relevance' | 'newest' | 'price_asc' | 'price_desc' | 'popular';
+  page?: number;
+  pageSize?: number;
+  excludeId?: string;
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+export function categoryIdsFor(db: Db, slug: string): string[] {
+  const category = queryOne<{ id: string }>(db, 'SELECT id FROM categories WHERE slug = ? AND is_active = 1', slug);
+  if (!category) return [];
+  const children = queryAll<{ id: string }>(db, 'SELECT id FROM categories WHERE parent_id = ? AND is_active = 1', category.id);
+  return [category.id, ...children.map((child) => child.id)];
+}
+
+export function listProducts(db: Db, query: ProductQuery): Paged<ProductSummary> {
+  const page = Math.max(1, query.page ?? 1);
+  const pageSize = Math.min(48, Math.max(1, query.pageSize ?? 12));
+  const conditions: string[] = [PUBLIC_CONDITION];
+  const params: (string | number)[] = [];
+
+  if (query.q?.trim()) {
+    const like = `%${escapeLike(query.q.trim())}%`;
+    conditions.push(
+      `(p.name LIKE ? ESCAPE '\\' OR p.short_description LIKE ? ESCAPE '\\' OR p.description LIKE ? ESCAPE '\\'
+        OR p.materials LIKE ? ESCAPE '\\' OR p.origin_place LIKE ? ESCAPE '\\' OR s.business_name LIKE ? ESCAPE '\\'
+        OR c.name LIKE ? ESCAPE '\\')`,
+    );
+    params.push(like, like, like, like, like, like, like);
+  }
+  if (query.category) {
+    const ids = categoryIdsFor(db, query.category);
+    if (ids.length === 0) {
+      return { items: [], page, pageSize, total: 0, totalPages: 0 };
+    }
+    conditions.push(`p.category_id IN (${ids.map(() => '?').join(',')})`);
+    params.push(...ids);
+  }
+  if (query.seller) {
+    conditions.push('s.slug = ?');
+    params.push(query.seller);
+  }
+  if (query.region) {
+    conditions.push('p.region = ?');
+    params.push(query.region);
+  }
+  if (query.minPricePaise !== undefined) {
+    conditions.push('p.price_paise >= ?');
+    params.push(query.minPricePaise);
+  }
+  if (query.maxPricePaise !== undefined) {
+    conditions.push('p.price_paise <= ?');
+    params.push(query.maxPricePaise);
+  }
+  if (query.inStock) {
+    conditions.push('i.quantity > i.reserved_quantity');
+  }
+  if (query.featured) {
+    conditions.push('p.is_featured = 1');
+  }
+  if (query.excludeId) {
+    conditions.push('p.id != ?');
+    params.push(query.excludeId);
+  }
+
+  const where = conditions.join(' AND ');
+  const totalRow = queryOne<{ total: number }>(
+    db,
+    `SELECT COUNT(*) AS total FROM products p
+       JOIN seller_profiles s ON s.id = p.seller_id
+       JOIN categories c ON c.id = p.category_id
+       JOIN inventory i ON i.product_id = p.id
+      WHERE ${where}`,
+    ...params,
+  );
+  const total = totalRow?.total ?? 0;
+
+  let orderBy = 'p.is_featured DESC, p.created_at DESC';
+  if (query.sort === 'newest') orderBy = 'p.created_at DESC';
+  else if (query.sort === 'price_asc') orderBy = 'p.price_paise ASC';
+  else if (query.sort === 'price_desc') orderBy = 'p.price_paise DESC';
+  else if (query.sort === 'popular') {
+    orderBy = `(SELECT COALESCE(SUM(oi.quantity),0) FROM order_items oi
+                 JOIN orders o ON o.id = oi.order_id
+                WHERE oi.product_id = p.id AND o.paid_at IS NOT NULL) DESC, p.is_featured DESC, p.created_at DESC`;
+  } else if (query.sort === 'relevance' && query.q?.trim()) {
+    orderBy = 'p.name LIKE ? DESC, p.is_featured DESC, p.created_at DESC';
+    params.push(`${escapeLike(query.q.trim())}%`);
+  }
+
+  const rows = queryAll<SummaryRow>(
+    db,
+    `${SUMMARY_SELECT} WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+    ...params,
+    pageSize,
+    (page - 1) * pageSize,
+  );
+
+  return {
+    items: rows.map(mapSummary),
+    page,
+    pageSize,
+    total,
+    totalPages: Math.ceil(total / pageSize),
+  };
+}
+
+export function getProduct(db: Db, slug: string): ProductDetail {
+  const row = queryOne<
+    SummaryRow & {
+      description: string;
+      sku: string;
+      unit: string;
+      weight_g: number | null;
+      dimensions: string | null;
+      materials: string | null;
+      care_instructions: string | null;
+      food_info: string | null;
+      origin_place: string | null;
+      origin_verified: number;
+      attributes: string | null;
+      tax_rate_bp: number;
+      seller_id: string;
+      seller_tagline: string | null;
+      seller_story: string | null;
+      seller_region: string | null;
+      category_id: string;
+      created_at: string;
+    }
+  >(
+    db,
+    `SELECT p.*, i.quantity - i.reserved_quantity AS stock,
+            s.business_name AS seller_name, s.slug AS seller_slug, s.id AS seller_id,
+            s.tagline AS seller_tagline, s.story AS seller_story, s.region AS seller_region,
+            c.name AS category_name, c.slug AS category_slug,
+            (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url,
+            (SELECT alt FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_alt,
+            (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.product_id = p.id AND r.status = 'published') AS rating_average,
+            (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id AND r.status = 'published') AS rating_count
+       FROM products p
+       JOIN seller_profiles s ON s.id = p.seller_id
+       JOIN categories c ON c.id = p.category_id
+       JOIN inventory i ON i.product_id = p.id
+      WHERE p.slug = ? AND p.status = 'approved' AND s.status = 'approved'`,
+    slug,
+  );
+  if (!row) throw notFound('That product is not available.');
+
+  const images = queryAll<{ id: string; url: string; alt: string; credit: string | null }>(
+    db,
+    'SELECT id, url, alt, credit FROM product_images WHERE product_id = ? ORDER BY sort_order',
+    row.id,
+  );
+  const reviews = queryAll<{
+    id: string;
+    rating: number;
+    title: string | null;
+    body: string;
+    full_name: string;
+    created_at: string;
+    order_item_id: string;
+  }>(
+    db,
+    `SELECT r.id, r.rating, r.title, r.body, r.created_at, r.order_item_id,
+            COALESCE(NULLIF(p.full_name,''), 'Verified customer') AS full_name
+       FROM reviews r
+       JOIN users u ON u.id = r.user_id
+       LEFT JOIN profiles p ON p.id = u.id
+      WHERE r.product_id = ? AND r.status = 'published'
+      ORDER BY r.created_at DESC LIMIT 30`,
+    row.id,
+  );
+  const distribution: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+  for (const review of reviews) distribution[String(review.rating)] += 1;
+
+  const related = listProducts(db, {
+    category: row.category_slug,
+    excludeId: row.id,
+    pageSize: 4,
+    sort: 'newest',
+  }).items;
+
+  let attributes: Record<string, string> | null = null;
+  try {
+    attributes = row.attributes ? (JSON.parse(row.attributes) as Record<string, string>) : null;
+  } catch {
+    attributes = null;
+  }
+
+  const mappedReviews: Review[] = reviews.map((review) => ({
+    id: review.id,
+    rating: review.rating,
+    title: review.title,
+    body: review.body,
+    authorName: review.full_name,
+    createdAt: review.created_at,
+    verifiedPurchase: true,
+  }));
+
+  return {
+    ...mapSummary(row),
+    description: row.description,
+    sku: row.sku,
+    unit: row.unit,
+    weightG: row.weight_g,
+    dimensions: row.dimensions,
+    materials: row.materials,
+    careInstructions: row.care_instructions,
+    foodInfo: row.food_info,
+    originPlace: row.origin_place,
+    originVerified: row.origin_verified === 1,
+    attributes,
+    taxRateBp: row.tax_rate_bp,
+    images,
+    seller: {
+      id: row.seller_id,
+      name: row.seller_name,
+      slug: row.seller_slug,
+      tagline: row.seller_tagline,
+      story: row.seller_story,
+      region: row.seller_region,
+    },
+    category: { id: row.category_id, name: row.category_name, slug: row.category_slug },
+    reviews: mappedReviews,
+    reviewSummary: {
+      average: mappedReviews.length
+        ? Math.round((mappedReviews.reduce((sum, review) => sum + review.rating, 0) / mappedReviews.length) * 10) / 10
+        : null,
+      count: mappedReviews.length,
+      distribution,
+    },
+    related,
+    returnPolicy:
+      '7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.',
+    shippingEstimate: 'Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch.',
+  };
+}
+
+export function listCategories(db: Db): Category[] {
+  return queryAll<{
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    parent_id: string | null;
+    image_url: string | null;
+    product_count: number;
+  }>(
+    db,
+    `SELECT c.id, c.name, c.slug, c.description, c.parent_id, c.image_url,
+            (SELECT COUNT(*) FROM products p
+              JOIN seller_profiles s ON s.id = p.seller_id
+             WHERE p.category_id = c.id AND p.status = 'approved' AND s.status = 'approved') AS product_count
+       FROM categories c WHERE c.is_active = 1 ORDER BY c.sort_order, c.name`,
+  ).map((row) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description,
+    parentId: row.parent_id,
+    imageUrl: row.image_url,
+    productCount: row.product_count,
+  }));
+}
+
+export function listPublicSellers(db: Db): {
+  id: string;
+  name: string;
+  slug: string;
+  tagline: string | null;
+  story: string | null;
+  region: string | null;
+  productCount: number;
+  imageUrl: string | null;
+}[] {
+  return queryAll<{
+    id: string;
+    name: string;
+    slug: string;
+    tagline: string | null;
+    story: string | null;
+    region: string | null;
+    product_count: number;
+    image_url: string | null;
+  }>(
+    db,
+    `SELECT s.id, s.business_name AS name, s.slug, s.tagline, s.story, s.region,
+            (SELECT COUNT(*) FROM products p WHERE p.seller_id = s.id AND p.status = 'approved') AS product_count,
+            (SELECT pi.url FROM products p JOIN product_images pi ON pi.product_id = p.id
+              WHERE p.seller_id = s.id AND p.status = 'approved' ORDER BY p.is_featured DESC, pi.sort_order LIMIT 1) AS image_url
+       FROM seller_profiles s
+      WHERE s.status = 'approved'
+      ORDER BY product_count DESC, s.business_name`,
+  ).map((row) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    tagline: row.tagline,
+    story: row.story,
+    region: row.region,
+    productCount: row.product_count,
+    imageUrl: row.image_url,
+  }));
+}
+
+export function getSellerStorefront(db: Db, slug: string): {
+  id: string;
+  name: string;
+  slug: string;
+  tagline: string | null;
+  story: string | null;
+  region: string | null;
+  village: string | null;
+  approvedAt: string | null;
+  productCount: number;
+} {
+  const seller = queryOne<{
+    id: string;
+    name: string;
+    slug: string;
+    tagline: string | null;
+    story: string | null;
+    region: string | null;
+    village: string | null;
+    approved_at: string | null;
+  }>(
+    db,
+    `SELECT id, business_name AS name, slug, tagline, story, region, village, approved_at
+       FROM seller_profiles WHERE slug = ? AND status = 'approved'`,
+    slug,
+  );
+  if (!seller) throw notFound('That maker is not available.');
+  const count = queryOne<{ count: number }>(
+    db,
+    "SELECT COUNT(*) AS count FROM products WHERE seller_id = ? AND status = 'approved'",
+    seller.id,
+  );
+  return { ...seller, approvedAt: seller.approved_at, productCount: count?.count ?? 0 };
+}
+
+export function getRegions(db: Db): { region: string; productCount: number }[] {
+  return queryAll<{ region: string; product_count: number }>(
+    db,
+    `SELECT p.region, COUNT(*) AS product_count
+       FROM products p JOIN seller_profiles s ON s.id = p.seller_id
+      WHERE p.status = 'approved' AND s.status = 'approved' AND p.region IS NOT NULL AND p.region != ''
+      GROUP BY p.region ORDER BY product_count DESC`,
+  ).map((row) => ({ region: row.region, productCount: row.product_count }));
+}
