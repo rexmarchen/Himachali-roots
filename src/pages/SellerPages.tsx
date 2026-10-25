@@ -1790,57 +1790,75 @@ export function SellerProductEditorPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
+
   const [form, setForm] = useState(EMPTY_PRODUCT);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [prefilledProductId, setPrefilledProductId] = useState<string | null>(null);
-  const [imageAlt, setImageAlt] = useState('');
-  const [imageCredit, setImageCredit] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [inventory, setInventory] = useState({ quantity: '0', lowStockThreshold: '3', note: '' });
-  const [savingStock, setSavingStock] = useState(false);
+
+  // Direct & Pending Image Queue
+  const [pendingPhotos, setPendingPhotos] = useState<
+    Array<{ id: string; file: File; previewUrl: string; alt: string; sizeKb: number }>
+  >([]);
+  const [uploadingDirect, setUploadingDirect] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
+  // Stepper / Section view state ('all' or 1..6)
+  const [activeStep, setActiveStep] = useState<number | 'all'>('all');
+
+  // Inventory state
+  const [inventory, setInventory] = useState({ quantity: '10', lowStockThreshold: '3', note: '' });
 
   const categories = useQuery({
     queryKey: ['categories'],
     queryFn: () => api<{ categories: Category[]; subcategories: Category[] }>('/categories'),
   });
+
   const product = useQuery({
     queryKey: ['seller-product', id],
     queryFn: () => api<ProductEditorResponse>(`/seller/products/${id}`),
     enabled: Boolean(id),
   });
+
   const sellerApplication = useQuery<SellerApplicationResponse>({
     queryKey: ['seller-application'],
     queryFn: () => api<SellerApplicationResponse>('/seller/application'),
     retry: false,
     staleTime: 60_000,
   });
+
   const isFoodSeller = sellerApplication.data?.seller?.sellerCategory === 'food_producer';
   const workflowStatus = product.data?.product?.workflowStatus;
   const inReview = workflowStatus === 'submitted';
 
-  // Derive category specifics
+  // Category determination
   const selectedCategoryObj =
     categories.data?.categories.find((c) => c.id === form.categoryId) ||
     categories.data?.subcategories.find((c) => c.id === form.categoryId);
+
   const isFruitCategory =
     selectedCategoryObj?.slug?.includes('fruit') ||
     selectedCategoryObj?.slug?.includes('produce') ||
+    selectedCategoryObj?.slug?.includes('apple') ||
     selectedCategoryObj?.name?.toLowerCase().includes('fruit') ||
     selectedCategoryObj?.name?.toLowerCase().includes('produce');
+
   const isTextileCategory =
     selectedCategoryObj?.slug?.includes('textile') ||
     selectedCategoryObj?.slug?.includes('clothing') ||
     selectedCategoryObj?.slug?.includes('woollen') ||
+    selectedCategoryObj?.slug?.includes('shawl') ||
     selectedCategoryObj?.name?.toLowerCase().includes('clothing') ||
     selectedCategoryObj?.name?.toLowerCase().includes('shawl');
+
   const isCraftCategory =
     selectedCategoryObj?.slug?.includes('craft') ||
+    selectedCategoryObj?.slug?.includes('wood') ||
+    selectedCategoryObj?.slug?.includes('metal') ||
     selectedCategoryObj?.name?.toLowerCase().includes('craft') ||
     selectedCategoryObj?.name?.toLowerCase().includes('handicraft');
 
-  // Populate the editor once per product. Adjusting state during render is the
-  // documented React pattern for deriving editable state from fetched data.
+  // Populate editor on load
   const loadedProduct = product.data?.product;
   if (loadedProduct && prefilledProductId !== loadedProduct.id) {
     setPrefilledProductId(loadedProduct.id);
@@ -1850,9 +1868,15 @@ export function SellerProductEditorPage() {
       shortDescription: loadedProduct.shortDescription,
       description: loadedProduct.description,
       priceRupees: (loadedProduct.pricePaise / 100).toFixed(2).replace(/\.00$/, ''),
-      compareAtRupees: loadedProduct.compareAtPricePaise ? (loadedProduct.compareAtPricePaise / 100).toFixed(2).replace(/\.00$/, '') : '',
-      estimatedCostRupees: loadedProduct.estimatedCostPaise ? (loadedProduct.estimatedCostPaise / 100).toFixed(2).replace(/\.00$/, '') : '',
-      packagingCostRupees: loadedProduct.packagingCostPaise ? (loadedProduct.packagingCostPaise / 100).toFixed(2).replace(/\.00$/, '') : '',
+      compareAtRupees: loadedProduct.compareAtPricePaise
+        ? (loadedProduct.compareAtPricePaise / 100).toFixed(2).replace(/\.00$/, '')
+        : '',
+      estimatedCostRupees: loadedProduct.estimatedCostPaise
+        ? (loadedProduct.estimatedCostPaise / 100).toFixed(2).replace(/\.00$/, '')
+        : '',
+      packagingCostRupees: loadedProduct.packagingCostPaise
+        ? (loadedProduct.packagingCostPaise / 100).toFixed(2).replace(/\.00$/, '')
+        : '',
       varietyGrade: loadedProduct.varietyGrade ?? '',
       harvestInfo: loadedProduct.harvestInfo ?? '',
       dispatchConditions: loadedProduct.dispatchConditions ?? '',
@@ -1881,95 +1905,82 @@ export function SellerProductEditorPage() {
     });
   }
 
-  const save = async (event: FormEvent) => {
-    event.preventDefault();
-    if (inReview) {
-      toast.push('This listing is with a reviewer. Wait for the decision before editing it.', 'error');
-      return;
-    }
-    setSaving(true);
-    setFields({});
-    const compliance = Object.fromEntries(
-      Object.entries(form.compliance)
-        .map(([key, value]) => [key, value.trim()])
-        .filter(([, value]) => value.length > 0),
-    );
-    const payload = {
-      name: form.name,
-      categoryId: form.categoryId,
-      shortDescription: form.shortDescription,
-      description: form.description,
-      pricePaise: toPaise(form.priceRupees),
-      compareAtPricePaise: form.compareAtRupees ? toPaise(form.compareAtRupees) : null,
-      estimatedCostPaise: form.estimatedCostRupees ? toPaise(form.estimatedCostRupees) : 0,
-      packagingCostPaise: form.packagingCostRupees ? toPaise(form.packagingCostRupees) : 0,
-      varietyGrade: form.varietyGrade || undefined,
-      harvestInfo: form.harvestInfo || undefined,
-      dispatchConditions: form.dispatchConditions || undefined,
-      sku: form.sku,
-      unit: form.unit || 'piece',
-      weightG: form.weightG ? Number(form.weightG) : null,
-      dimensions: form.dimensions || undefined,
-      materials: form.materials || undefined,
-      careInstructions: form.careInstructions || undefined,
-      foodInfo: form.foodInfo || undefined,
-      compliance: Object.keys(compliance).length ? compliance : undefined,
-      originPlace: form.originPlace || undefined,
-      region: form.region || undefined,
-    };
-    try {
-      if (isNew) {
-        const result = await api<{ id: string }>('/seller/products', { method: 'POST', body: payload });
-        await queryClient.invalidateQueries({ queryKey: ['seller-products'] });
-        toast.push('Draft created. Add a photograph, stock and submit for review.');
-        navigate(`/seller/products/${result.id}/edit`, { replace: true });
-      } else {
-        const result = await api<{ status: string; message: string }>(`/seller/products/${id}`, { method: 'PATCH', body: payload });
-        await queryClient.invalidateQueries({ queryKey: ['seller-product', id] });
-        await queryClient.invalidateQueries({ queryKey: ['seller-products'] });
-        toast.push(result.message);
+  // Handle incoming photos from dropzone or file picker
+  const handleFiles = (files: FileList | File[]) => {
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const added: typeof pendingPhotos = [];
+    for (const file of Array.from(files)) {
+      if (!validTypes.includes(file.type.toLowerCase())) {
+        toast.push(`${file.name}: only JPEG, PNG, or WebP images are permitted.`, 'error');
+        continue;
       }
-    } catch (error) {
-      setFields(errorFields(error));
-      toast.push(errorMessage(error), 'error');
-    } finally {
-      setSaving(false);
+      if (file.size > 8 * 1024 * 1024) {
+        toast.push(`${file.name} is larger than the 8MB limit.`, 'error');
+        continue;
+      }
+      added.push({
+        id: 'pend_' + Math.random().toString(36).slice(2, 9),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        alt: form.name ? `${form.name} photograph` : 'Authentic Himachali product photograph',
+        sizeKb: Math.round(file.size / 1024),
+      });
+    }
+
+    if (added.length > 0) {
+      setPendingPhotos((prev) => {
+        const totalExisting = loadedProduct?.images.length ?? 0;
+        const total = prev.length + added.length + totalExisting;
+        if (total > 6) {
+          toast.push(`Maximum 6 photographs permitted. Kept ${Math.max(0, 6 - totalExisting - prev.length)} new ones.`, 'error');
+          return [...prev, ...added].slice(0, Math.max(0, 6 - totalExisting));
+        }
+        return [...prev, ...added];
+      });
+      toast.push(`${added.length} photograph${added.length === 1 ? '' : 's'} added to queue.`);
     }
   };
 
-  const uploadImage = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!id) return;
-    if (imageAlt.trim().length < 5) {
-      toast.push('Add descriptive alt text (at least 5 characters).', 'error');
-      return;
-    }
-    const input = document.getElementById('product-image-input') as HTMLInputElement | null;
-    const file = input?.files?.[0];
-    if (!file) {
-      toast.push('Choose an image first.', 'error');
-      return;
-    }
-    const data = new FormData();
-    data.append('image', file);
-    data.append('alt', imageAlt);
-    data.append('credit', imageCredit);
-    setUploading(true);
+  const removePendingPhoto = (photoId: string) => {
+    setPendingPhotos((prev) => {
+      const match = prev.find((p) => p.id === photoId);
+      if (match?.previewUrl) URL.revokeObjectURL(match.previewUrl);
+      return prev.filter((p) => p.id !== photoId);
+    });
+  };
+
+  const generateAutoSku = () => {
+    const raw = (form.name || 'PRODUCT').replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() || 'HPR';
+    const num = Math.floor(1000 + Math.random() * 9000);
+    const newSku = `HR-${raw}-${num}`;
+    setForm((prev) => ({ ...prev, sku: newSku }));
+    toast.push(`Generated SKU: ${newSku}`);
+  };
+
+  // Upload pending photos directly for an existing product
+  const uploadPendingToExisting = async () => {
+    if (!id || pendingPhotos.length === 0) return;
+    setUploadingDirect(true);
+    let successCount = 0;
     try {
-      await api(`/seller/products/${id}/images`, { method: 'POST', body: data });
+      for (const photo of pendingPhotos) {
+        const data = new FormData();
+        data.append('image', photo.file);
+        data.append('alt', photo.alt || `${form.name || 'Himachali creation'} photo`);
+        await api(`/seller/products/${id}/images`, { method: 'POST', body: data });
+        successCount++;
+      }
+      setPendingPhotos([]);
       await queryClient.invalidateQueries({ queryKey: ['seller-product', id] });
-      setImageAlt('');
-      setImageCredit('');
-      if (input) input.value = '';
-      toast.push('Photograph added.');
-    } catch (error) {
-      toast.push(errorMessage(error), 'error');
+      toast.push(`Successfully uploaded ${successCount} photograph${successCount === 1 ? '' : 's'}!`);
+    } catch (err) {
+      toast.push(errorMessage(err), 'error');
     } finally {
-      setUploading(false);
+      setUploadingDirect(false);
     }
   };
 
-  const deleteImage = async (imageId: string) => {
+  const deleteExistingImage = async (imageId: string) => {
     if (!id || !window.confirm('Delete this photograph?')) return;
     try {
       await api(`/seller/products/${id}/images/${imageId}`, { method: 'DELETE' });
@@ -1980,30 +1991,144 @@ export function SellerProductEditorPage() {
     }
   };
 
-  const saveStock = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!id) return;
-    setSavingStock(true);
+  // Main Save handler (saves product, uploads pending images, updates stock, and optionally submits)
+  const saveProduct = async (shouldSubmit = false) => {
+    if (inReview) {
+      toast.push('This listing is with a reviewer. Wait for the decision before editing it.', 'error');
+      return;
+    }
+
+    if (!form.name.trim()) {
+      setFields({ name: 'Product name is required.' });
+      toast.push('Please enter a product name.', 'error');
+      setActiveStep(1);
+      return;
+    }
+
+    if (!form.categoryId) {
+      setFields({ categoryId: 'Please choose a category.' });
+      toast.push('Please choose a product category.', 'error');
+      setActiveStep(1);
+      return;
+    }
+
+    if (!form.priceRupees || Number(form.priceRupees) < 1) {
+      setFields({ pricePaise: 'Set a valid selling price (at least ₹1).' });
+      toast.push('Please set a customer selling price.', 'error');
+      setActiveStep(5);
+      return;
+    }
+
+    setSaving(true);
+    setFields({});
+
+    const compliance = Object.fromEntries(
+      Object.entries(form.compliance)
+        .map(([key, value]) => [key, value.trim()])
+        .filter(([, value]) => value.length > 0),
+    );
+
+    let effectiveSku = form.sku.trim();
+    if (!effectiveSku) {
+      const raw = form.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() || 'HPR';
+      effectiveSku = `HR-${raw}-${Math.floor(1000 + Math.random() * 9000)}`;
+      setForm((prev) => ({ ...prev, sku: effectiveSku }));
+    }
+
+    const payload = {
+      name: form.name.trim(),
+      categoryId: form.categoryId,
+      shortDescription: form.shortDescription.trim() || `${form.name.trim()} — Authentic Himalayan handpicked creation.`,
+      description: form.description.trim() || `${form.name.trim()}. Handcrafted with traditional Himachali artisan techniques and authentic regional materials.`,
+      pricePaise: toPaise(form.priceRupees),
+      compareAtPricePaise: form.compareAtRupees ? toPaise(form.compareAtRupees) : null,
+      estimatedCostPaise: form.estimatedCostRupees ? toPaise(form.estimatedCostRupees) : 0,
+      packagingCostPaise: form.packagingCostRupees ? toPaise(form.packagingCostRupees) : 0,
+      varietyGrade: form.varietyGrade || undefined,
+      harvestInfo: form.harvestInfo || undefined,
+      dispatchConditions: form.dispatchConditions || undefined,
+      sku: effectiveSku,
+      unit: form.unit.trim() || 'piece',
+      weightG: form.weightG ? Number(form.weightG) : 500,
+      dimensions: form.dimensions || undefined,
+      materials: form.materials || undefined,
+      careInstructions: form.careInstructions || undefined,
+      foodInfo: form.foodInfo || undefined,
+      compliance: Object.keys(compliance).length ? compliance : undefined,
+      originPlace: form.originPlace || undefined,
+      region: form.region || undefined,
+    };
+
     try {
-      await api(`/seller/inventory/${id}`, {
-        method: 'POST',
-        body: {
-          quantity: Number(inventory.quantity),
-          lowStockThreshold: Number(inventory.lowStockThreshold),
-          note: inventory.note || undefined,
-        },
-      });
-      await queryClient.invalidateQueries({ queryKey: ['seller-product', id] });
+      let targetProductId = id;
+
+      if (isNew) {
+        // 1. Create product
+        const result = await api<{ id: string; sku?: string }>('/seller/products', { method: 'POST', body: payload });
+        targetProductId = result.id;
+      } else {
+        // Update product
+        await api(`/seller/products/${id}`, { method: 'PATCH', body: payload });
+      }
+
+      // 2. Upload any queued photographs
+      if (pendingPhotos.length > 0 && targetProductId) {
+        for (const photo of pendingPhotos) {
+          try {
+            const data = new FormData();
+            data.append('image', photo.file);
+            data.append('alt', photo.alt || `${form.name} photo`);
+            await api(`/seller/products/${targetProductId}/images`, { method: 'POST', body: data });
+          } catch (uploadErr) {
+            console.error('Image upload warning:', uploadErr);
+          }
+        }
+        setPendingPhotos([]);
+      }
+
+      // 3. Save initial inventory
+      if (targetProductId && inventory.quantity) {
+        try {
+          await api(`/seller/inventory/${targetProductId}`, {
+            method: 'POST',
+            body: {
+              quantity: Number(inventory.quantity) || 0,
+              lowStockThreshold: Number(inventory.lowStockThreshold) || 3,
+              note: inventory.note || 'Initial catalogue stock',
+            },
+          });
+        } catch (stockErr) {
+          console.error('Inventory update warning:', stockErr);
+        }
+      }
+
+      // 4. Submit for review if requested
+      if (shouldSubmit && targetProductId) {
+        try {
+          await api(`/seller/products/${targetProductId}/submit`, { method: 'POST' });
+          toast.push('🎉 Product created, photos uploaded, and submitted for review!');
+        } catch (subErr) {
+          toast.push(`Product saved, but review submission note: ${errorMessage(subErr)}`, 'error');
+        }
+      } else {
+        toast.push(isNew ? '✓ Product draft created with photos and stock saved!' : '✓ Product updated successfully!');
+      }
+
       await queryClient.invalidateQueries({ queryKey: ['seller-products'] });
-      toast.push('Stock updated.');
+      await queryClient.invalidateQueries({ queryKey: ['seller-product', targetProductId] });
+
+      if (isNew && targetProductId) {
+        navigate(`/seller/products/${targetProductId}/edit`, { replace: true });
+      }
     } catch (error) {
+      setFields(errorFields(error));
       toast.push(errorMessage(error), 'error');
     } finally {
-      setSavingStock(false);
+      setSaving(false);
     }
   };
 
-  const submitForReview = async () => {
+  const submitExistingForReview = async () => {
     if (!id) return;
     try {
       await api(`/seller/products/${id}/submit`, { method: 'POST' });
@@ -2016,179 +2141,470 @@ export function SellerProductEditorPage() {
   };
 
   if (id && product.isLoading) return <LoadingBlock rows={4} />;
-  if (id && (product.isError || !product.data)) return <ErrorState title="Product not found" body="This listing does not belong to your seller account." onRetry={() => void product.refetch()} />;
+  if (id && (product.isError || !product.data)) {
+    return (
+      <ErrorState
+        title="Product not found"
+        body="This listing does not belong to your seller account."
+        onRetry={() => void product.refetch()}
+      />
+    );
+  }
+
   const current = product.data?.product;
+  const existingImages = current?.images ?? [];
+
+  // Live Unit Margin Calculation
+  const priceNum = Number(form.priceRupees || 0);
+  const cogsNum = Number(form.estimatedCostRupees || 0);
+  const pkgNum = Number(form.packagingCostRupees || 0);
+  const commissionNum = priceNum * 0.15;
+  const unitProfitNum = Math.max(0, priceNum - commissionNum - cogsNum - pkgNum);
+  const unitMarginPercent = priceNum > 0 ? ((unitProfitNum / priceNum) * 100).toFixed(1) : '0.0';
+
+  const steps = [
+    { num: 1, label: 'Basics & Category', icon: '🏷️' },
+    { num: 2, label: 'Photos & Gallery', icon: '📷', count: existingImages.length + pendingPhotos.length },
+    { num: 3, label: 'Himachal Provenance', icon: '🏔️' },
+    { num: 4, label: 'Story & Description', icon: '✍️' },
+    { num: 5, label: 'Pricing & Profit', icon: '💰' },
+    { num: 6, label: 'Stock & Fulfilment', icon: '📦' },
+    ...(isFoodSeller ? [{ num: 7, label: 'Food Compliance', icon: '🍯' }] : []),
+  ];
 
   return (
-    <div>
-      <PageHeader
-        eyebrow={isNew ? 'New listing' : `Listing · ${PRODUCT_WORKFLOW_LABELS[current?.workflowStatus ?? current?.status ?? 'draft'] ?? humanise(current?.status ?? 'draft')}`}
-        title={isNew ? 'Add a product' : current?.name ?? 'Edit product'}
-        lede="Write what the buyer needs to know. Claims must be supportable, photographs must be yours or properly licensed, and stock must reflect what you can actually ship."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <LinkButton to="/seller/products" variant="secondary" size="sm">Back to products</LinkButton>
+    <div className="space-y-6 pb-16">
+      {/* Top Header Bar */}
+      <div className="rounded-2xl border border-[#E4DACE] bg-gradient-to-r from-[#FAF7F2] via-white to-[#FAF3EF] p-5 sm:p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#172321] text-white px-2.5 py-0.5 text-xs font-semibold">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#D98263]" />
+                {isNew ? 'New Catalogue Product' : 'Editing Product'}
+              </span>
+              {!isNew && current ? (
+                <StatusBadge
+                  status={current.workflowStatus ?? current.status}
+                  label={PRODUCT_WORKFLOW_LABELS[current.workflowStatus ?? current.status] ?? humanise(current.status)}
+                />
+              ) : null}
+            </div>
+            <h1 className="mt-2 text-2xl sm:text-3xl font-serif font-bold text-[#172321]">
+              {isNew ? 'Add an Authentic Himachali Product' : form.name || 'Edit Product Listing'}
+            </h1>
+            <p className="mt-1 text-xs sm:text-sm text-[#172321]/70 max-w-2xl">
+              Showcase authentic mountain creations from Himachal Pradesh. Fill in the details in sequence, upload
+              photographs directly, calculate your net profit margin, and submit for marketplace review.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <LinkButton to="/seller/products" variant="secondary" size="sm">
+              ← Back to Catalogue
+            </LinkButton>
+            {!isNew && current?.status === 'approved' ? (
+              <LinkButton to={`/shop/${current.slug}`} size="sm" variant="secondary">
+                View Live ↗
+              </LinkButton>
+            ) : null}
             {!isNew && current && (['draft', 'rejected', 'paused'].includes(current.status) || current.workflowStatus === 'changes_requested') ? (
-              <Button size="sm" onClick={() => void submitForReview()}>
-                {current.workflowStatus === 'changes_requested' ? 'Resubmit for review' : 'Submit for review'}
+              <Button size="sm" variant="ghost" onClick={() => void submitExistingForReview()}>
+                {current.workflowStatus === 'changes_requested' ? 'Resubmit for Review' : 'Submit for Review'}
               </Button>
             ) : null}
-            {!isNew && current?.status === 'approved' ? (
-              <LinkButton to={`/shop/${current.slug}`} size="sm" variant="secondary">View live</LinkButton>
-            ) : null}
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={saving}
+              disabled={inReview}
+              onClick={() => void saveProduct(false)}
+            >
+              {isNew ? 'Save Draft' : 'Save Changes'}
+            </Button>
+            <Button
+              size="sm"
+              loading={saving}
+              disabled={inReview}
+              onClick={() => void saveProduct(true)}
+              className="bg-[#D98263] text-white hover:bg-[#c26e50] border-transparent font-medium shadow-xs"
+            >
+              ✓ {isNew ? 'Create & Submit' : 'Save & Submit'}
+            </Button>
           </div>
-        }
-      />
+        </div>
+
+        {/* Sequential Step Progress Navigator Bar */}
+        <div className="mt-6 pt-5 border-t border-[#E4DACE]/70">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#172321]/60">
+              Listing Sequence Guide
+            </span>
+            <button
+              type="button"
+              onClick={() => setActiveStep('all')}
+              className={`text-xs font-medium px-2 py-0.5 rounded transition-colors ${
+                activeStep === 'all' ? 'bg-[#172321] text-white' : 'text-[#D98263] hover:underline'
+              }`}
+            >
+              View All Sections
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 lg:grid-cols-6 gap-2">
+            {steps.map((s) => {
+              const isSelected = activeStep === s.num;
+              return (
+                <button
+                  key={s.num}
+                  type="button"
+                  onClick={() => setActiveStep(s.num)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs transition-all border ${
+                    isSelected
+                      ? 'border-[#D98263] bg-[#FAF3EF] text-[#D98263] font-bold shadow-xs'
+                      : 'border-[#E4DACE] bg-white text-[#172321]/80 hover:border-[#D98263]/50'
+                  }`}
+                >
+                  <span className="text-sm shrink-0">{s.icon}</span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider opacity-60">Step {s.num}</p>
+                    <p className="truncate font-medium">{s.label}</p>
+                  </div>
+                  {s.count !== undefined && s.count > 0 ? (
+                    <span className="ml-auto inline-flex items-center justify-center rounded-full bg-[#172321]/10 px-1.5 text-[10px] font-bold text-[#172321]">
+                      {s.count}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Moderation Alerts if any */}
       {current?.workflowStatus === 'changes_requested' ? (
-        <div className="mt-5">
-          <Alert tone="warning" title="Changes requested by the reviewer">
-            {current.moderationNote ?? current.rejectionReason ?? 'Update this listing, then resubmit it for review.'} Saving is enabled so you can fix the listing, then press Resubmit for review.
-          </Alert>
-        </div>
+        <Alert tone="warning" title="Reviewer Feedback — Changes Requested">
+          {current.moderationNote ?? current.rejectionReason ?? 'Update the requested details below and resubmit.'}
+        </Alert>
       ) : current?.rejectionReason ? (
-        <div className="mt-5"><Alert tone="warning" title="Changes requested">{current.rejectionReason}</Alert></div>
+        <Alert tone="warning" title="Moderation Note">{current.rejectionReason}</Alert>
       ) : null}
+
       {inReview ? (
-        <div className="mt-5">
-          <Alert tone="info" title="With a reviewer">
-            This listing is under moderation and is read-only until a decision is recorded. Any reviewer note will appear here.
-          </Alert>
-        </div>
-      ) : null}
-      {!isNew && current?.isDemo ? (
-        <div className="mt-5"><Alert tone="info" title="Demonstration listing">This seeded listing is labelled as demo data in the public catalogue. Replace it with real seller content before launch.</Alert></div>
+        <Alert tone="info" title="Under Review">
+          This listing is currently in the moderation queue and is read-only until approved by the admin team.
+        </Alert>
       ) : null}
 
-      <form onSubmit={save} className="mt-7 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="space-y-6">
-          <section className="border border-line bg-surface p-5 sm:p-6">
-            <h2 className="text-xl">The listing</h2>
-            <div className="mt-4 space-y-4">
-              <Field label="Product name" required error={fields.name}>
-                <Input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Category" required error={fields.categoryId}>
-                  <Select required value={form.categoryId} onChange={(event) => setForm({ ...form, categoryId: event.target.value })}>
-                    <option value="">Choose a category</option>
-                    {categories.data?.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-                    {categories.data?.subcategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-                  </Select>
-                </Field>
-                <Field label="SKU" required hint="Unique within your catalogue" error={fields.sku}>
-                  <Input required value={form.sku} onChange={(event) => setForm({ ...form, sku: event.target.value.toUpperCase() })} />
-                </Field>
+      {/* Main Form Body Arranged in Sequences */}
+      <div className="space-y-6">
+        {/* =========================================================================
+            STEP 1: Basic Information & Category Foundation
+            ========================================================================= */}
+        {(activeStep === 'all' || activeStep === 1) && (
+          <section className="rounded-2xl border border-[#E4DACE] bg-white p-5 sm:p-7 shadow-xs">
+            <div className="flex items-center justify-between border-b border-[#E4DACE] pb-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FAF3EF] text-sm text-[#D98263] font-bold border border-[#D98263]/30">
+                  1
+                </span>
+                <div>
+                  <h2 className="text-lg font-serif font-bold text-[#172321]">Core Essentials & Category</h2>
+                  <p className="text-xs text-[#172321]/60">Product title, unique SKU identifier, unit of sale, and category</p>
+                </div>
               </div>
-              <Field label="Short summary" required hint="At least 20 characters" error={fields.shortDescription}>
-                <Textarea required minLength={20} maxLength={240} rows={2} value={form.shortDescription} onChange={(event) => setForm({ ...form, shortDescription: event.target.value })} />
-              </Field>
-              <Field label="Full description" required hint="At least 80 characters" error={fields.description}>
-                <Textarea required minLength={80} maxLength={6000} rows={8} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
-              </Field>
-            </div>
-          </section>
-
-          <section className="border border-line bg-surface p-5 sm:p-6">
-            <div className="flex items-center justify-between border-b border-line pb-3">
-              <div>
-                <h2 className="text-xl">Pricing, Costs & Profit Estimator</h2>
-                <p className="mt-0.5 text-xs text-muted">Set customer pricing and your private unit production costs.</p>
-              </div>
-              <span className="rounded-full bg-[#66745A]/15 px-2.5 py-0.5 text-[10.5px] font-semibold text-[#66745A]">
-                Confidential Ledger
+              <span className="rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium">
+                Mandatory
               </span>
             </div>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="Customer selling price" required hint="₹, GST inclusive" error={fields.pricePaise}>
-                <Input required inputMode="decimal" value={form.priceRupees} onChange={(event) => setForm({ ...form, priceRupees: event.target.value })} placeholder="450" />
+            <div className="mt-5 space-y-4">
+              <Field label="Product Title" required error={fields.name} hint="e.g. Royal Delicious Shimla Hill Apples, Handwoven Kullu Merino Shawl">
+                <Input
+                  required
+                  value={form.name}
+                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                  placeholder="e.g. Pure Himalayan Wild Multiflora Honey"
+                  className="font-medium text-base text-[#172321]"
+                />
               </Field>
-              <Field label="Compare-at price" hint="Optional MRP strike-through, ₹">
-                <Input inputMode="decimal" value={form.compareAtRupees} onChange={(event) => setForm({ ...form, compareAtRupees: event.target.value })} placeholder="550" />
-              </Field>
-              <Field label="Maker production cost (COGS)" hint="Private to you: procurement or creation cost, ₹">
-                <Input inputMode="decimal" value={form.estimatedCostRupees} onChange={(event) => setForm({ ...form, estimatedCostRupees: event.target.value })} placeholder="180" />
-              </Field>
-              <Field label="Packaging & box cost" hint="Private to you: cartons, wrapping, seals, ₹">
-                <Input inputMode="decimal" value={form.packagingCostRupees} onChange={(event) => setForm({ ...form, packagingCostRupees: event.target.value })} placeholder="35" />
-              </Field>
-              <Field label="Unit of sale" required hint="e.g. piece, 1 kg box, pair, 500 g">
-                <Input required value={form.unit} onChange={(event) => setForm({ ...form, unit: event.target.value })} placeholder="1 kg box" />
-              </Field>
-              <Field label="Packed weight (g)" required hint="Needed for shipping tier" error={fields.weightG}>
-                <Input inputMode="numeric" value={form.weightG} onChange={(event) => setForm({ ...form, weightG: event.target.value.replace(/\D/g, '') })} placeholder="1200" />
-              </Field>
-            </div>
 
-            {/* Live Profit Estimator Breakdown Box */}
-            <div className="mt-5 rounded-xl border border-[#66745A]/25 bg-[#FAF7F2] p-4 text-xs">
-              <div className="flex items-center justify-between border-b border-[#66745A]/20 pb-2">
-                <span className="font-semibold text-[#172321] uppercase tracking-wider text-[11px]">
-                  Unit Contribution & Profit Breakdown
-                </span>
-                <span className="text-[10.5px] text-[#66745A] font-medium">
-                  Never shared with buyers
-                </span>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Product Category" required error={fields.categoryId} hint="Choose the most appropriate Himachali catalogue department">
+                  <Select
+                    required
+                    value={form.categoryId}
+                    onChange={(event) => setForm({ ...form, categoryId: event.target.value })}
+                  >
+                    <option value="">Select a category</option>
+                    {categories.data?.categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                    {categories.data?.subcategories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        ↳ {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-[#172321]">
+                      SKU Code <span className="text-[#D98263]">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={generateAutoSku}
+                      className="text-[11px] font-semibold text-[#D98263] hover:underline flex items-center gap-1"
+                    >
+                      ✨ Auto-generate SKU
+                    </button>
+                  </div>
+                  <div className="mt-1">
+                    <Input
+                      value={form.sku}
+                      onChange={(event) => setForm({ ...form, sku: event.target.value.toUpperCase() })}
+                      placeholder="e.g. HR-APPL-4921"
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-[#172321]/55">Leave blank to auto-generate from product name.</p>
+                </div>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4 text-center">
-                <div className="rounded-lg border border-line bg-white p-2.5 shadow-xs">
-                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Customer Price</p>
-                  <p className="mt-1 text-sm font-semibold text-ink">₹{form.priceRupees || '0'}</p>
-                </div>
-                <div className="rounded-lg border border-line bg-white p-2.5 shadow-xs">
-                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Marketplace (15%)</p>
-                  <p className="mt-1 text-sm font-semibold text-ink">−₹{(Number(form.priceRupees || 0) * 0.15).toFixed(2)}</p>
-                </div>
-                <div className="rounded-lg border border-line bg-white p-2.5 shadow-xs">
-                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Direct Costs</p>
-                  <p className="mt-1 text-sm font-semibold text-ink">−₹{(Number(form.estimatedCostRupees || 0) + Number(form.packagingCostRupees || 0)).toFixed(2)}</p>
-                </div>
-                <div className="rounded-lg border border-[#D98263]/40 bg-[#FAF3EF] p-2.5 shadow-xs">
-                  <p className="text-[10px] uppercase font-bold text-[#D98263]">Est. Profit / Unit</p>
-                  <p className="mt-1 text-sm font-bold text-[#D98263]">
-                    ₹{(
-                      Number(form.priceRupees || 0) * 0.85 -
-                      (Number(form.estimatedCostRupees || 0) + Number(form.packagingCostRupees || 0))
-                    ).toFixed(2)}
-                  </p>
-                  {Number(form.priceRupees || 0) > 0 ? (
-                    <p className="text-[9.5px] font-semibold text-[#D98263] mt-0.5">
-                      {(
-                        ((Number(form.priceRupees || 0) * 0.85 -
-                          (Number(form.estimatedCostRupees || 0) + Number(form.packagingCostRupees || 0))) /
-                          Number(form.priceRupees || 1)) *
-                        100
-                      ).toFixed(1)}% margin
-                    </p>
-                  ) : null}
-                </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Unit of Sale" required hint="e.g. 1 kg box, piece, 500 g jar, pair, set of 4">
+                  <Input
+                    required
+                    value={form.unit}
+                    onChange={(event) => setForm({ ...form, unit: event.target.value })}
+                    placeholder="e.g. 5 kg carton"
+                  />
+                </Field>
+                <Field label="Packed Shipping Weight (Grams)" required hint="Used to accurately calculate express courier freight tier">
+                  <Input
+                    inputMode="numeric"
+                    value={form.weightG}
+                    onChange={(event) => setForm({ ...form, weightG: event.target.value.replace(/\D/g, '') })}
+                    placeholder="e.g. 1500 (for 1.5 kg)"
+                  />
+                </Field>
               </div>
             </div>
           </section>
+        )}
 
-          {/* Dynamic Himachal Category Provenance & Specifications Section */}
-          <section className="border border-line bg-surface p-5 sm:p-6">
-            <h2 className="text-xl">Himachal Provenance & Regional Specs</h2>
-            <p className="mt-1 text-xs text-muted">
-              Pahadi Roots verifies authentic Himachal Pradesh origin. Provide details tailored to your craft or produce.
-            </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        {/* =========================================================================
+            STEP 2: Visual Photography & Product Gallery (Direct Upload Enabled)
+            ========================================================================= */}
+        {(activeStep === 'all' || activeStep === 2) && (
+          <section className="rounded-2xl border border-[#E4DACE] bg-white p-5 sm:p-7 shadow-xs">
+            <div className="flex items-center justify-between border-b border-[#E4DACE] pb-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FAF3EF] text-sm text-[#D98263] font-bold border border-[#D98263]/30">
+                  2
+                </span>
+                <div>
+                  <h2 className="text-lg font-serif font-bold text-[#172321]">Product Photographs & Gallery</h2>
+                  <p className="text-xs text-[#172321]/60">
+                    Add clear, high-resolution photographs. First image acts as the primary catalogue cover. Up to 6 photos.
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-[#172321]/10 px-2.5 py-0.5 text-xs font-semibold text-[#172321]">
+                {existingImages.length + pendingPhotos.length} / 6 Photos
+              </span>
+            </div>
+
+            {/* Existing Saved Photographs (if any) */}
+            {existingImages.length > 0 && (
+              <div className="mt-5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#172321]/60 mb-3">
+                  Currently Saved In Catalogue
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                  {existingImages.map((img, idx) => (
+                    <div
+                      key={img.id}
+                      className="group relative rounded-xl border border-[#E4DACE] bg-[#FAF7F2] overflow-hidden shadow-xs"
+                    >
+                      <img src={img.url} alt={img.alt} className="aspect-square w-full object-cover" />
+                      {idx === 0 && (
+                        <span className="absolute top-1.5 left-1.5 rounded-md bg-[#172321]/90 text-white text-[9px] font-bold uppercase px-1.5 py-0.5">
+                          Cover
+                        </span>
+                      )}
+                      <div className="p-2 bg-white">
+                        <p className="truncate text-[10px] text-[#172321]/70">{img.alt || 'Product Photo'}</p>
+                        <button
+                          type="button"
+                          onClick={() => void deleteExistingImage(img.id)}
+                          className="mt-1 text-[10.5px] font-medium text-[#D98263] hover:underline"
+                        >
+                          ✕ Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Pending Queued Photographs (Selected for upload) */}
+            {pendingPhotos.length > 0 && (
+              <div className="mt-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#D98263]">
+                    Selected Photographs Ready for Upload ({pendingPhotos.length})
+                  </h3>
+                  {!isNew && (
+                    <Button
+                      size="sm"
+                      onClick={() => void uploadPendingToExisting()}
+                      loading={uploadingDirect}
+                      className="bg-[#D98263] text-white hover:bg-[#c26e50] border-transparent text-xs"
+                    >
+                      Upload Now
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                  {pendingPhotos.map((photo, pIdx) => (
+                    <div
+                      key={photo.id}
+                      className="relative rounded-xl border-2 border-dashed border-[#D98263]/60 bg-[#FAF3EF]/50 overflow-hidden shadow-xs"
+                    >
+                      <img src={photo.previewUrl} alt={photo.alt} className="aspect-square w-full object-cover" />
+                      {existingImages.length === 0 && pIdx === 0 && (
+                        <span className="absolute top-1.5 left-1.5 rounded-md bg-[#D98263] text-white text-[9px] font-bold uppercase px-1.5 py-0.5">
+                          Cover
+                        </span>
+                      )}
+                      <div className="p-2 bg-white/95">
+                        <p className="truncate text-[10px] font-medium text-[#172321]">{photo.file.name}</p>
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-[9.5px] text-[#172321]/50">{photo.sizeKb} KB</span>
+                          <button
+                            type="button"
+                            onClick={() => removePendingPhoto(photo.id)}
+                            className="text-[10px] text-red-600 font-semibold hover:underline"
+                          >
+                            ✕ Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {isNew && (
+                  <p className="mt-2 text-[11px] text-[#66745A]">
+                    ✓ These {pendingPhotos.length} photograph{pendingPhotos.length === 1 ? '' : 's'} will be uploaded
+                    automatically when you save the product below!
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Interactive Drag & Drop Zone */}
+            {existingImages.length + pendingPhotos.length < 6 ? (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragActive(true);
+                }}
+                onDragLeave={() => setDragActive(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragActive(false);
+                  if (e.dataTransfer.files?.length) {
+                    handleFiles(e.dataTransfer.files);
+                  }
+                }}
+                onClick={() => {
+                  const input = document.getElementById('seller-file-dropzone-input') as HTMLInputElement | null;
+                  input?.click();
+                }}
+                className={`mt-5 cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all ${
+                  dragActive
+                    ? 'border-[#D98263] bg-[#FAF3EF]'
+                    : 'border-[#E4DACE] bg-[#FAF7F2]/60 hover:border-[#D98263]/70 hover:bg-[#FAF3EF]/40'
+                }`}
+              >
+                <input
+                  id="seller-file-dropzone-input"
+                  type="file"
+                  multiple
+                  accept=".jpg,.jpeg,.png,.webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.length) {
+                      handleFiles(e.target.files);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#D98263]/15 text-[#D98263] text-2xl shadow-inner">
+                  📸
+                </div>
+                <h3 className="mt-3 text-sm font-semibold text-[#172321]">
+                  Click to browse or drag and drop photographs here
+                </h3>
+                <p className="mt-1 text-xs text-[#172321]/60">
+                  Select 1 to {6 - existingImages.length - pendingPhotos.length} high-quality images · JPG, PNG, or WebP up to 8MB
+                </p>
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-medium text-[#172321] border border-[#E4DACE] shadow-xs">
+                  <span>📁 Choose Photos</span>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-4 text-xs text-center text-[#66745A] font-medium bg-[#FAF7F2] p-3 rounded-xl border border-[#E4DACE]">
+                ✓ Maximum 6 photographs reached. Delete an existing image to upload an alternate.
+              </p>
+            )}
+          </section>
+        )}
+
+        {/* =========================================================================
+            STEP 3: Authentic Himachal Provenance & Regional Specifications
+            ========================================================================= */}
+        {(activeStep === 'all' || activeStep === 3) && (
+          <section className="rounded-2xl border border-[#E4DACE] bg-white p-5 sm:p-7 shadow-xs">
+            <div className="flex items-center justify-between border-b border-[#E4DACE] pb-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FAF3EF] text-sm text-[#D98263] font-bold border border-[#D98263]/30">
+                  3
+                </span>
+                <div>
+                  <h2 className="text-lg font-serif font-bold text-[#172321]">Himachal Provenance & Craft Specs</h2>
+                  <p className="text-xs text-[#172321]/60">
+                    Geographic origin, artisan collective, harvest plucking season, and materials
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-[#66745A]/15 text-[#66745A] px-2.5 py-0.5 text-xs font-semibold">
+                Authenticity Seal
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Field
                 label={
                   isFruitCategory
                     ? 'Fruit Variety & Commercial Grade'
                     : isTextileCategory
-                    ? 'Wool / Weave Variety'
+                    ? 'Wool or Weave Grade'
                     : isCraftCategory
-                    ? 'Craft / Wood Variety'
+                    ? 'Craft Material / Wood Variety'
                     : 'Variety or Grade'
                 }
                 hint={
                   isFruitCategory
                     ? 'e.g. Royal Delicious, Golden Delicious, Super Grade A'
                     : isTextileCategory
-                    ? 'e.g. Pure Merino Wool, Handloom Kullu Motif'
-                    : 'e.g. Seasoned Walnut Wood, Hand-carved'
+                    ? 'e.g. Pure Merino Mountain Wool, Kullu Geometric Motif'
+                    : 'e.g. Seasoned Himalayan Walnut Wood, Hand-carved'
                 }
               >
                 <Input
@@ -2196,10 +2612,10 @@ export function SellerProductEditorPage() {
                   onChange={(event) => setForm({ ...form, varietyGrade: event.target.value })}
                   placeholder={
                     isFruitCategory
-                      ? 'e.g. Royal Delicious · Extra Fancy'
+                      ? 'e.g. Royal Delicious · Extra Fancy Grade'
                       : isTextileCategory
-                      ? 'e.g. Handloom Wool · Grade A'
-                      : 'e.g. Hand-carved Walnut'
+                      ? 'e.g. Handloom Merino Wool · Pure Weave'
+                      : 'e.g. Seasoned Wild Walnut'
                   }
                 />
               </Field>
@@ -2214,13 +2630,13 @@ export function SellerProductEditorPage() {
                   placeholder={
                     isFruitCategory
                       ? 'e.g. October 2026 Pluck, Kotgarh Valley'
-                      : 'e.g. Woven in Naggar Handloom Guild'
+                      : 'e.g. Woven in Naggar Handloom Guild, Kullu'
                   }
                 />
               </Field>
 
               <Field
-                label="Dispatch & Packaging Conditions"
+                label="Dispatch & Packaging Transit Protection"
                 hint="Protective packaging or perishable transit details"
                 className="sm:col-span-2"
               >
@@ -2229,9 +2645,25 @@ export function SellerProductEditorPage() {
                   onChange={(event) => setForm({ ...form, dispatchConditions: event.target.value })}
                   placeholder={
                     isFruitCategory
-                      ? 'e.g. Packed in 5-ply ventilated fruit cartons with foam liners; 48h express dispatch'
-                      : 'e.g. Shipped in moisture-proof cedar wrap with tracking'
+                      ? 'e.g. Packed in 5-ply ventilated fruit cartons with foam liners; 48h express mountain dispatch'
+                      : 'e.g. Shipped in moisture-proof cedar wrap with seal and express tracking'
                   }
+                />
+              </Field>
+
+              <Field label="Place of Origin / Village / District" hint="Must be in Himachal Pradesh">
+                <Input
+                  value={form.originPlace}
+                  onChange={(event) => setForm({ ...form, originPlace: event.target.value })}
+                  placeholder="e.g. Kotgarh, Shimla District"
+                />
+              </Field>
+
+              <Field label="Valley / Region" hint="Appears on public product provenance badge">
+                <Input
+                  value={form.region}
+                  onChange={(event) => setForm({ ...form, region: event.target.value })}
+                  placeholder="e.g. Kullu Valley, Himachal Pradesh"
                 />
               </Field>
 
@@ -2241,181 +2673,394 @@ export function SellerProductEditorPage() {
                   onChange={(event) => setForm({ ...form, materials: event.target.value })}
                   placeholder={
                     isTextileCategory
-                      ? 'e.g. 100% Himalayan Sheep Wool'
+                      ? 'e.g. 100% Pure Himalayan Sheep Wool'
                       : isCraftCategory
-                      ? 'e.g. Himalayan Walnut Wood, Natural Beeswax'
-                      : 'e.g. Fresh Apples, Cane Sugar'
+                      ? 'e.g. Himalayan Walnut Wood, Natural Beeswax Polish'
+                      : 'e.g. Fresh Apples, Mountain Water, Cane Sugar'
                   }
                 />
               </Field>
 
-              <Field label="Place of Origin / District" hint="Must be within Himachal Pradesh">
-                <Input
-                  value={form.originPlace}
-                  onChange={(event) => setForm({ ...form, originPlace: event.target.value })}
-                  placeholder="e.g. Kotgarh, Shimla District"
-                />
-              </Field>
-
-              <Field label="Region / Valley" hint="Displayed on the public product badge">
-                <Input
-                  value={form.region}
-                  onChange={(event) => setForm({ ...form, region: event.target.value })}
-                  placeholder="e.g. Kullu Valley, Himachal Pradesh"
-                />
-              </Field>
-
-              <Field label="Dimensions / Sizing" hint="Optional">
+              <Field label="Dimensions or Sizing" hint="Optional sizing specifications">
                 <Input
                   value={form.dimensions}
                   onChange={(event) => setForm({ ...form, dimensions: event.target.value })}
-                  placeholder="e.g. 200 × 100 cm (Shawl) or 30 × 20 × 15 cm"
+                  placeholder="e.g. 200 × 100 cm (Shawl) or 30 × 20 cm box"
                 />
               </Field>
 
-              <Field label="Care Instructions" hint="Optional">
+              <Field label="Care or Preservation Instructions" hint="Optional storage advice">
                 <Input
                   value={form.careInstructions}
                   onChange={(event) => setForm({ ...form, careInstructions: event.target.value })}
-                  placeholder="e.g. Dry clean only or Store in airtight container"
-                />
-              </Field>
-
-              <Field label="Culinary / Taste & Food Info" hint="Optional ingredients or usage advice" className="sm:col-span-2">
-                <Textarea
-                  rows={3}
-                  value={form.foodInfo}
-                  onChange={(event) => setForm({ ...form, foodInfo: event.target.value })}
-                  placeholder="e.g. Traditional Pahadi recipe made with sun-dried hill chillies and mustard oil"
+                  placeholder="e.g. Dry clean only or Store in a cool dry dark space"
                 />
               </Field>
             </div>
           </section>
+        )}
 
-          {isFoodSeller ? (
-            <section className="border border-line bg-surface p-5 sm:p-6">
-              <h2 className="text-xl">Food compliance</h2>
-              <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
-                Required because your seller category is Food Producer. Each food listing needs an FSSAI licence number,
-                ingredients and shelf life before it can be submitted for review. These details must match the product,
-                not just the business.
-              </p>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Field label="FSSAI licence number" required error={fields['compliance.fssaiLicense']}>
-                  <Input
-                    value={form.compliance.fssaiLicense}
-                    onChange={(event) =>
-                      setForm({ ...form, compliance: { ...form.compliance, fssaiLicense: event.target.value.replace(/\s/g, '') } })
-                    }
-                    maxLength={30}
-                  />
-                </Field>
-                <Field label="Shelf life" required hint="e.g. 6 months from packing">
-                  <Input
-                    value={form.compliance.shelfLife}
-                    onChange={(event) => setForm({ ...form, compliance: { ...form.compliance, shelfLife: event.target.value } })}
-                    maxLength={120}
-                  />
-                </Field>
-                <Field label="Ingredients" required className="sm:col-span-2" error={fields['compliance.ingredients']}>
-                  <Textarea
-                    rows={3}
-                    value={form.compliance.ingredients}
-                    onChange={(event) => setForm({ ...form, compliance: { ...form.compliance, ingredients: event.target.value } })}
-                    maxLength={1000}
-                  />
-                </Field>
-                <Field label="Batch number" hint="If already assigned">
-                  <Input
-                    value={form.compliance.batchNumber}
-                    onChange={(event) => setForm({ ...form, compliance: { ...form.compliance, batchNumber: event.target.value } })}
-                    maxLength={80}
-                  />
-                </Field>
-                <Field label="Storage instructions">
-                  <Input
-                    value={form.compliance.storage}
-                    onChange={(event) => setForm({ ...form, compliance: { ...form.compliance, storage: event.target.value } })}
-                    maxLength={300}
-                  />
-                </Field>
-                <Field label="Allergen information" className="sm:col-span-2">
-                  <Input
-                    value={form.compliance.allergenInfo}
-                    onChange={(event) => setForm({ ...form, compliance: { ...form.compliance, allergenInfo: event.target.value } })}
-                    maxLength={300}
-                  />
-                </Field>
+        {/* =========================================================================
+            STEP 4: Artisan Story & Product Highlights
+            ========================================================================= */}
+        {(activeStep === 'all' || activeStep === 4) && (
+          <section className="rounded-2xl border border-[#E4DACE] bg-white p-5 sm:p-7 shadow-xs">
+            <div className="flex items-center justify-between border-b border-[#E4DACE] pb-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FAF3EF] text-sm text-[#D98263] font-bold border border-[#D98263]/30">
+                  4
+                </span>
+                <div>
+                  <h2 className="text-lg font-serif font-bold text-[#172321]">Story & Detailed Description</h2>
+                  <p className="text-xs text-[#172321]/60">
+                    Tell the heritage behind your creation, why buyers love it, and what makes it special
+                  </p>
+                </div>
               </div>
-            </section>
-          ) : null}
+              <span className="text-xs text-[#172321]/50 font-mono">
+                {form.description.length} characters
+              </span>
+            </div>
 
-          <div className="flex flex-wrap gap-3">
-            <Button type="submit" size="lg" loading={saving} disabled={inReview}>{isNew ? 'Create draft' : 'Save changes'}</Button>
-            <span className="self-center text-[11px] text-muted">
-              {inReview
-                ? 'Read-only while a reviewer holds this listing.'
-                : 'Material changes to a live listing return it to moderation.'}
-            </span>
+            <div className="mt-5 space-y-4">
+              <Field
+                label="Short Highlights Summary"
+                hint="One to two sentences displayed on catalogue cards and search snippets (max 240 chars)"
+              >
+                <Textarea
+                  rows={2}
+                  maxLength={240}
+                  value={form.shortDescription}
+                  onChange={(event) => setForm({ ...form, shortDescription: event.target.value })}
+                  placeholder="e.g. Hand-picked crisp apples from high-altitude Kotgarh orchards, harvested in peak autumn."
+                />
+                <p className="mt-1 text-right text-[10.5px] text-[#172321]/50">
+                  {form.shortDescription.length} / 240
+                </p>
+              </Field>
+
+              <Field
+                label="Full Heritage & Craft Description"
+                hint="Explain the crafting tradition, heritage techniques, taste notes, or harvesting journey"
+              >
+                <Textarea
+                  rows={7}
+                  maxLength={6000}
+                  value={form.description}
+                  onChange={(event) => setForm({ ...form, description: event.target.value })}
+                  placeholder="Write the story of how this product is made, its cultural significance in Himachal Pradesh, and the artisan heritage behind it..."
+                />
+                <div className="flex items-center justify-between mt-1 text-[10.5px] text-[#172321]/50">
+                  <span>Recommended: at least 80 characters for public moderation approval.</span>
+                  <span>{form.description.length} / 6000</span>
+                </div>
+              </Field>
+            </div>
+          </section>
+        )}
+
+        {/* =========================================================================
+            STEP 5: Pricing, Direct Costs & Live Profit Estimator
+            ========================================================================= */}
+        {(activeStep === 'all' || activeStep === 5) && (
+          <section className="rounded-2xl border border-[#E4DACE] bg-white p-5 sm:p-7 shadow-xs">
+            <div className="flex items-center justify-between border-b border-[#E4DACE] pb-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FAF3EF] text-sm text-[#D98263] font-bold border border-[#D98263]/30">
+                  5
+                </span>
+                <div>
+                  <h2 className="text-lg font-serif font-bold text-[#172321]">Pricing & Live Profit Estimator</h2>
+                  <p className="text-xs text-[#172321]/60">
+                    Set your buyer pricing and enter confidential direct costs to see your live profit per unit
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-[#172321] text-white px-2.5 py-0.5 text-xs font-semibold">
+                Private Ledger
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Customer Selling Price (₹)"
+                required
+                error={fields.pricePaise}
+                hint="Price the buyer pays (all taxes inclusive)"
+              >
+                <Input
+                  required
+                  inputMode="decimal"
+                  value={form.priceRupees}
+                  onChange={(event) => setForm({ ...form, priceRupees: event.target.value })}
+                  placeholder="450"
+                  className="font-bold text-base text-[#172321]"
+                />
+              </Field>
+
+              <Field label="Original Compare-At Price (₹ MRP)" hint="Optional strike-through retail price">
+                <Input
+                  inputMode="decimal"
+                  value={form.compareAtRupees}
+                  onChange={(event) => setForm({ ...form, compareAtRupees: event.target.value })}
+                  placeholder="550"
+                />
+              </Field>
+
+              <Field
+                label="Your Direct Production Cost (COGS, ₹)"
+                hint="Private to you: raw materials, plucking, weaving, or crafting cost"
+              >
+                <Input
+                  inputMode="decimal"
+                  value={form.estimatedCostRupees}
+                  onChange={(event) => setForm({ ...form, estimatedCostRupees: event.target.value })}
+                  placeholder="180"
+                />
+              </Field>
+
+              <Field
+                label="Packaging & Box Cost (₹)"
+                hint="Private to you: cartons, cushioning liners, seal tape"
+              >
+                <Input
+                  inputMode="decimal"
+                  value={form.packagingCostRupees}
+                  onChange={(event) => setForm({ ...form, packagingCostRupees: event.target.value })}
+                  placeholder="30"
+                />
+              </Field>
+            </div>
+
+            {/* Live Interactive Unit Economics Card */}
+            <div className="mt-6 rounded-2xl border border-[#D98263]/30 bg-gradient-to-br from-[#FAF7F2] to-[#FAF3EF] p-5 shadow-xs">
+              <div className="flex items-center justify-between border-b border-[#D98263]/20 pb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#172321]">
+                  Live Unit Margin & Profit Calculator
+                </span>
+                <span className="text-[11px] font-medium text-[#66745A]">
+                  🔒 Completely confidential — Never shown to customers
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 text-center">
+                <div className="rounded-xl border border-[#E4DACE] bg-white p-3 shadow-xs">
+                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Selling Price</p>
+                  <p className="mt-1 font-serif text-lg font-bold text-[#172321]">
+                    ₹{form.priceRupees || '0'}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[#E4DACE] bg-white p-3 shadow-xs">
+                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Marketplace Share (15%)</p>
+                  <p className="mt-1 font-serif text-lg font-bold text-[#172321]/70">
+                    −₹{commissionNum.toFixed(2)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[#E4DACE] bg-white p-3 shadow-xs">
+                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Your Direct Costs</p>
+                  <p className="mt-1 font-serif text-lg font-bold text-[#172321]/70">
+                    −₹{(cogsNum + pkgNum).toFixed(2)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[#D98263]/50 bg-white p-3 shadow-xs">
+                  <p className="text-[10px] uppercase font-bold text-[#D98263]">Est. Profit / Unit</p>
+                  <p className="mt-1 font-serif text-xl font-bold text-[#D98263]">
+                    ₹{unitProfitNum.toFixed(2)}
+                  </p>
+                  <p className="text-[10px] font-bold text-[#66745A] mt-0.5">
+                    {unitMarginPercent}% margin
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* =========================================================================
+            STEP 6: Inventory Stock & Dispatch Settings
+            ========================================================================= */}
+        {(activeStep === 'all' || activeStep === 6) && (
+          <section className="rounded-2xl border border-[#E4DACE] bg-white p-5 sm:p-7 shadow-xs">
+            <div className="flex items-center justify-between border-b border-[#E4DACE] pb-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FAF3EF] text-sm text-[#D98263] font-bold border border-[#D98263]/30">
+                  6
+                </span>
+                <div>
+                  <h2 className="text-lg font-serif font-bold text-[#172321]">Inventory & Stock Management</h2>
+                  <p className="text-xs text-[#172321]/60">
+                    Keep stock honest. Only list units you can dispatch within 48 hours
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-[#172321]/10 px-2.5 py-0.5 text-xs font-semibold text-[#172321]">
+                Stock Control
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              <Field label="Available Physical Stock" required hint="Ready for immediate shipment">
+                <Input
+                  required
+                  inputMode="numeric"
+                  value={inventory.quantity}
+                  onChange={(event) =>
+                    setInventory({ ...inventory, quantity: event.target.value.replace(/\D/g, '') })
+                  }
+                  placeholder="10"
+                />
+              </Field>
+
+              <Field label="Low Stock Alert Threshold" hint="Get notified when stock drops below this number">
+                <Input
+                  inputMode="numeric"
+                  value={inventory.lowStockThreshold}
+                  onChange={(event) =>
+                    setInventory({ ...inventory, lowStockThreshold: event.target.value.replace(/\D/g, '') })
+                  }
+                  placeholder="3"
+                />
+              </Field>
+
+              <Field label="Inventory Movement Note" hint="e.g. Fresh autumn harvest plucking or New loom weave batch">
+                <Input
+                  value={inventory.note}
+                  onChange={(event) => setInventory({ ...inventory, note: event.target.value })}
+                  placeholder="e.g. Workshop batch 2026"
+                />
+              </Field>
+            </div>
+          </section>
+        )}
+
+        {/* =========================================================================
+            STEP 7: Food Compliance (Only for Food Producers)
+            ========================================================================= */}
+        {isFoodSeller && (activeStep === 'all' || activeStep === 7) && (
+          <section className="rounded-2xl border border-[#E4DACE] bg-white p-5 sm:p-7 shadow-xs">
+            <div className="flex items-center justify-between border-b border-[#E4DACE] pb-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FAF3EF] text-sm text-[#D98263] font-bold border border-[#D98263]/30">
+                  7
+                </span>
+                <div>
+                  <h2 className="text-lg font-serif font-bold text-[#172321]">Food Compliance & FSSAI Details</h2>
+                  <p className="text-xs text-[#172321]/60">
+                    Required for food producers before product can be approved for sale
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-semibold">
+                FSSAI Required
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <Field label="FSSAI Licence Number" required error={fields['compliance.fssaiLicense']}>
+                <Input
+                  value={form.compliance.fssaiLicense}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      compliance: { ...form.compliance, fssaiLicense: event.target.value.replace(/\s/g, '') },
+                    })
+                  }
+                  placeholder="e.g. 10921011000123"
+                  maxLength={30}
+                />
+              </Field>
+
+              <Field label="Shelf Life" required hint="e.g. 12 months from packing">
+                <Input
+                  value={form.compliance.shelfLife}
+                  onChange={(event) =>
+                    setForm({ ...form, compliance: { ...form.compliance, shelfLife: event.target.value } })
+                  }
+                  placeholder="e.g. 9 months from packing"
+                  maxLength={120}
+                />
+              </Field>
+
+              <Field label="Ingredients List" required className="sm:col-span-2" error={fields['compliance.ingredients']}>
+                <Textarea
+                  rows={3}
+                  value={form.compliance.ingredients}
+                  onChange={(event) =>
+                    setForm({ ...form, compliance: { ...form.compliance, ingredients: event.target.value } })
+                  }
+                  placeholder="e.g. Wild Himalayan Apples, Raw Cane Sugar, Natural Fruit Pectin, Lemon Juice"
+                  maxLength={1000}
+                />
+              </Field>
+
+              <Field label="Batch Number (If assigned)">
+                <Input
+                  value={form.compliance.batchNumber}
+                  onChange={(event) =>
+                    setForm({ ...form, compliance: { ...form.compliance, batchNumber: event.target.value } })
+                  }
+                  placeholder="e.g. B-2026-10"
+                  maxLength={80}
+                />
+              </Field>
+
+              <Field label="Storage Instructions">
+                <Input
+                  value={form.compliance.storage}
+                  onChange={(event) =>
+                    setForm({ ...form, compliance: { ...form.compliance, storage: event.target.value } })
+                  }
+                  placeholder="e.g. Store in a cool dry place away from direct sunlight."
+                  maxLength={300}
+                />
+              </Field>
+            </div>
+          </section>
+        )}
+
+        {/* =========================================================================
+            BOTTOM ACTION BAR & CONFIRMATION
+            ========================================================================= */}
+        <div className="rounded-2xl border border-[#E4DACE] bg-white p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-[#172321]">
+              Ready to {isNew ? 'publish your product draft' : 'update your catalogue listing'}?
+            </p>
+            <p className="text-xs text-[#172321]/60">
+              {pendingPhotos.length > 0
+                ? `${pendingPhotos.length} photograph${pendingPhotos.length === 1 ? '' : 's'} queued for immediate upload.`
+                : 'All changes are automatically validated against marketplace guidelines.'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <LinkButton to="/seller/products" variant="secondary" size="md">
+              Cancel
+            </LinkButton>
+            <Button
+              size="md"
+              variant="secondary"
+              loading={saving}
+              disabled={inReview}
+              onClick={() => void saveProduct(false)}
+            >
+              {isNew ? 'Save Draft' : 'Save Changes'}
+            </Button>
+            <Button
+              size="md"
+              loading={saving}
+              disabled={inReview}
+              onClick={() => void saveProduct(true)}
+              className="bg-[#D98263] text-white hover:bg-[#c26e50] border-transparent font-semibold shadow-xs"
+            >
+              ✓ {isNew ? 'Create & Submit for Review' : 'Save & Submit for Review'}
+            </Button>
           </div>
         </div>
-
-        <aside className="space-y-6">
-          <section className="border border-line bg-surface p-5">
-            <h2 className="text-lg">Photographs</h2>
-            <p className="mt-1 text-[11px] leading-relaxed text-muted">At least one is required before submission. Maximum six. Alt text is required for accessibility.</p>
-            {current?.images.length ? (
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                {current.images.map((image) => (
-                  <div key={image.id} className="border border-line">
-                    <img src={image.url} alt={image.alt} className="aspect-square w-full object-cover" />
-                    <div className="p-2">
-                      <p className="line-clamp-2 text-[10.5px] text-muted">{image.alt}</p>
-                      <button type="button" onClick={() => void deleteImage(image.id)} className="mt-1 text-[10.5px] text-terra underline underline-offset-2">Delete</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="mt-4 border border-dashed border-sand px-3 py-6 text-center text-xs text-muted">No photographs yet.</p>}
-            {isNew ? (
-              <p className="mt-4 text-[11px] text-muted">Create the draft first, then upload photographs.</p>
-            ) : (
-              <form onSubmit={uploadImage} className="mt-5 space-y-3 border-t border-line pt-4">
-                <Field label="Image file"><Input id="product-image-input" type="file" accept=".jpg,.jpeg,.png,.webp" required /></Field>
-                <Field label="Alt text" required><Input value={imageAlt} onChange={(event) => setImageAlt(event.target.value)} placeholder="Describe what is visible" /></Field>
-                <Field label="Credit" hint="Optional"><Input value={imageCredit} onChange={(event) => setImageCredit(event.target.value)} placeholder="Photographer or licence" /></Field>
-                <Button type="submit" size="sm" variant="secondary" loading={uploading}>Upload photograph</Button>
-              </form>
-            )}
-          </section>
-
-          {!isNew && current ? (
-            <section className="border border-line bg-surface p-5">
-              <h2 className="text-lg">Stock</h2>
-              <p className="mt-1 text-[11px] text-muted">Reserved units are held by paid or in-progress orders and cannot be removed.</p>
-              <form onSubmit={saveStock} className="mt-4 space-y-3">
-                <Field label="Quantity" required><Input required inputMode="numeric" value={inventory.quantity} onChange={(event) => setInventory({ ...inventory, quantity: event.target.value.replace(/\D/g, '') })} /></Field>
-                <Field label="Low stock threshold"><Input inputMode="numeric" value={inventory.lowStockThreshold} onChange={(event) => setInventory({ ...inventory, lowStockThreshold: event.target.value.replace(/\D/g, '') })} /></Field>
-                <Field label="Note" hint="Recorded in inventory movements"><Input value={inventory.note} onChange={(event) => setInventory({ ...inventory, note: event.target.value })} /></Field>
-                <p className="text-[11px] text-muted">{current.inventory.reserved} unit{current.inventory.reserved === 1 ? '' : 's'} currently reserved.</p>
-                <Button type="submit" size="sm" variant="secondary" loading={savingStock}>Update stock</Button>
-              </form>
-            </section>
-          ) : null}
-
-          <section className="border border-line bg-paper p-5 text-[11.5px] leading-relaxed text-muted">
-            <p className="font-medium text-ink">Moderation notes</p>
-            <p className="mt-1">
-              Approval requires at least one photograph and an 80-character description. Rejected listings show the reviewer's
-              note here. Commission is calculated on product value after discounts, excluding shipping and taxes.
-            </p>
-            {current?.moderationNote ? (
-              <p className="mt-2 border-l-2 border-harvest pl-2 text-bark">{current.moderationNote}</p>
-            ) : null}
-            {current?.taxRateBp !== undefined ? <p className="mt-2">Tax rate on file: {percentFromBp(current.taxRateBp)}.</p> : null}
-          </section>
-        </aside>
-      </form>
+      </div>
     </div>
   );
 }

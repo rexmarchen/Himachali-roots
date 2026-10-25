@@ -3,7 +3,6 @@ import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { closeDb, execute, queryOne, type Db } from '../db.js';
 import {
-  ADDRESS,
   IDS,
   checkout,
   login,

@@ -144,18 +144,13 @@ function applicationView(row: ApplicationRow | undefined) {
 }
 
 const productSchema = z.object({
-  name: z.string().trim().min(3, 'Enter a product name.').max(140),
-  categoryId: z.string().min(3),
-  shortDescription: z.string().trim().min(20, 'Write a short summary of at least 20 characters.').max(240),
-  description: z.string().trim().min(80, 'Write at least 80 characters about the product.').max(6000),
+  name: z.string().trim().min(2, 'Enter a product name.').max(140),
+  categoryId: z.string().min(2, 'Choose a valid category.'),
+  shortDescription: z.string().trim().max(240).optional().default(''),
+  description: z.string().trim().max(6000).optional().default(''),
   pricePaise: z.number().int().min(100, 'Price must be at least ₹1.').max(10_000_000),
   compareAtPricePaise: z.number().int().min(0).max(10_000_000).nullable().optional(),
-  sku: z
-    .string()
-    .trim()
-    .min(2, 'Add a SKU.')
-    .max(60)
-    .regex(/^[A-Za-z0-9._-]+$/, 'Use letters, numbers, dots, dashes, or underscores only.'),
+  sku: z.string().trim().max(60).optional().default(''),
   unit: z.string().trim().min(1).max(30).default('piece'),
   weightG: z.number().int().min(1, 'Add the packed weight in grams.').max(200_000).nullable().optional(),
   dimensions: z.string().trim().max(120).optional(),
@@ -1250,9 +1245,20 @@ export function sellerRouter(db: Db): Router {
     }
     const category = queryOne<{ id: string }>(db, 'SELECT id FROM categories WHERE id = ? AND is_active = 1', input.categoryId);
     if (!category) throw badRequest('Choose a valid category.', { categoryId: 'Invalid category.' });
-    if (queryOne(db, 'SELECT 1 FROM products WHERE seller_id = ? AND sku = ?', id, input.sku)) {
-      throw badRequest('That SKU is already used in your catalogue.', { sku: 'SKU must be unique.' });
+    
+    // Auto-generate unique SKU if empty or whitespace
+    let sku = (input.sku || '').trim().toUpperCase();
+    if (!sku) {
+      const slugClean = input.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() || 'PRD';
+      sku = `HR-${slugClean}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
+    if (queryOne(db, 'SELECT 1 FROM products WHERE seller_id = ? AND sku = ?', id, sku)) {
+      sku = `${sku}-${Math.floor(100 + Math.random() * 900)}`;
+    }
+
+    const shortDescription = input.shortDescription?.trim() || `${input.name} — Authentic handpicked Himachali creation.`;
+    const description = input.description?.trim() || `${input.name}. Crafted with authentic Himalayan heritage and traditional methods from the mountains of Himachal Pradesh.`;
+
     const productId = newId('prd_');
     const slug = uniqueSlug(input.name, (candidate) => Boolean(queryOne(db, 'SELECT 1 FROM products WHERE slug = ?', candidate)));
     tx(db, () => {
@@ -1269,11 +1275,11 @@ export function sellerRouter(db: Db): Router {
         input.categoryId,
         input.name,
         slug,
-        input.shortDescription,
-        input.description,
+        shortDescription,
+        description,
         input.pricePaise,
         input.compareAtPricePaise ?? null,
-        input.sku,
+        sku,
         input.unit,
         input.weightG ?? null,
         emptyToNull(input.dimensions),
@@ -1293,7 +1299,7 @@ export function sellerRouter(db: Db): Router {
       execute(db, 'INSERT INTO inventory (product_id, quantity) VALUES (?, 0)', productId);
       audit(db, req.user!, 'product.created', 'product', productId, null, { name: input.name, productSeller: id });
     });
-    res.status(201).json({ id: productId, slug, status: 'draft', message: 'Draft saved. Add images, stock, and submit for review.' });
+    res.status(201).json({ id: productId, slug, sku, status: 'draft', message: 'Draft saved. Add images, stock, and submit for review.' });
   });
 
   router.patch('/products/:id', (req, res) => {
@@ -1303,6 +1309,7 @@ export function sellerRouter(db: Db): Router {
       status: string;
       name: string;
       price_paise: number;
+      short_description: string;
       description: string;
       category_id: string;
       materials: string | null;
@@ -1323,16 +1330,19 @@ export function sellerRouter(db: Db): Router {
     }
     const category = queryOne<{ id: string }>(db, 'SELECT id FROM categories WHERE id = ? AND is_active = 1', input.categoryId);
     if (!category) throw badRequest('Choose a valid category.', { categoryId: 'Invalid category.' });
+    const effectiveSku = (input.sku || '').trim() || existing.sku;
     if (
-      input.sku !== existing.sku &&
-      queryOne(db, 'SELECT 1 FROM products WHERE seller_id = ? AND sku = ? AND id != ?', id, input.sku, existing.id)
+      effectiveSku !== existing.sku &&
+      queryOne(db, 'SELECT 1 FROM products WHERE seller_id = ? AND sku = ? AND id != ?', id, effectiveSku, existing.id)
     ) {
       throw badRequest('That SKU is already used in your catalogue.', { sku: 'SKU must be unique.' });
     }
+    const shortDesc: string = input.shortDescription?.trim() || existing.short_description || `${input.name} — Authentic handpicked Himachali creation.`;
+    const desc: string = input.description?.trim() || existing.description || `${input.name}. Crafted with authentic Himalayan heritage and traditional methods from the mountains of Himachal Pradesh.`;
     const materialChange =
       input.name !== existing.name ||
       input.pricePaise !== existing.price_paise ||
-      input.description !== existing.description ||
+      desc !== existing.description ||
       input.categoryId !== existing.category_id ||
       (input.materials ?? null) !== existing.materials ||
       (input.originPlace ?? null) !== existing.origin_place ||
@@ -1356,11 +1366,11 @@ export function sellerRouter(db: Db): Router {
           WHERE id = ? AND seller_id = ?`,
         input.categoryId,
         input.name,
-        input.shortDescription,
-        input.description,
+        shortDesc,
+        desc,
         input.pricePaise,
         input.compareAtPricePaise ?? null,
-        input.sku,
+        effectiveSku,
         input.unit,
         input.weightG ?? null,
         emptyToNull(input.dimensions),
@@ -1417,8 +1427,8 @@ export function sellerRouter(db: Db): Router {
       String(product.id),
     );
     if ((count?.count ?? 0) >= 6) throw conflict('A product can have at most 6 images.');
-    const alt = String(req.body.alt ?? '').trim();
-    if (alt.length < 5) throw badRequest('Add a descriptive alt text for accessibility.', { alt: 'Alt text is required.' });
+    const rawAlt = String(req.body.alt ?? '').trim();
+    const alt = rawAlt.length >= 3 ? rawAlt : `${product.name || 'Authentic Himachali Creation'} photograph`;
     const url = `/uploads/${path.basename(req.file.filename)}`;
     const imageId = newId('img_');
     const becomesPending = product.status === 'approved';

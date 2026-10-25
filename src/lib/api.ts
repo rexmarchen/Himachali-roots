@@ -618,7 +618,14 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
         return { ok: true, status: 'archived' } as unknown as T;
       }
       if (action === 'images') {
-        return { ok: true, imageUrl: '/images/product-shawl.jpg' } as unknown as T;
+        const imageId = 'img_' + Math.random().toString(36).slice(2, 8);
+        const imageUrl = '/images/product-shawl.jpg';
+        if (found) {
+          if (!Array.isArray(found.images)) found.images = [];
+          found.images.push({ id: imageId, url: imageUrl, alt: (found.name || 'Himachali creation') + ' photo' });
+          localStorage.setItem('pr_custom_seller_products', JSON.stringify(products));
+        }
+        return { ok: true, id: imageId, url: imageUrl, status: 'approved', message: 'Image added.' } as unknown as T;
       }
 
       if (options.method === 'PATCH' && options.body) {
