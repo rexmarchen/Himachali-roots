@@ -90,6 +90,9 @@ export interface ProductDetail extends ProductSummary {
   foodInfo: string | null;
   originPlace: string | null;
   originVerified: boolean;
+  varietyGrade?: string | null;
+  harvestInfo?: string | null;
+  dispatchConditions?: string | null;
   attributes: Record<string, string> | null;
   taxRateBp: number;
   images: ProductImage[];

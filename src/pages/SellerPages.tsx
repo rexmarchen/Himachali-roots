@@ -991,8 +991,25 @@ interface DashboardResponse {
   orders: { pending: number; confirmed: number; packed: number; shipped: number; delivered: number; cancelled: number };
   period: { days: number; since: string };
   sales: { gross: number; commission: number; earnings: number; orders: number };
+  finances?: {
+    grossPaise: number;
+    commissionPaise: number;
+    netRevenuePaise: number;
+    cogsPaise: number;
+    packagingPaise: number;
+    estimatedProfitPaise: number;
+    profitMarginPercent: number;
+    hasCostData: boolean;
+  };
+  costs?: {
+    cogsPaise: number;
+    packagingPaise: number;
+    totalCostPaise: number;
+    estimatedProfitPaise: number;
+    hasCostData: boolean;
+  };
   series?: { date: string; label: string; grossPaise: number; orders: number }[];
-  topProducts?: { id: string; name: string; unitsSold: number; revenuePaise: number }[];
+  topProducts?: { id: string; name: string; slug: string; unitsSold: number; revenuePaise: number; costPaise?: number; profitPaise?: number }[];
   ledger: { pending: number; eligible: number; settled: number; refunds: number };
   settlement: { pending_batches: number; paid_total: number };
   recentOrders: { id: string; reference: string; orderNumber: string; status: string; totalPaise: number; earningPaise: number; dispatchBy: string | null }[];
@@ -1201,20 +1218,20 @@ export function SellerDashboardPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-xl border border-[#E4DACE] bg-white p-5 shadow-xs">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#172321]/50">Gross Product Sales</p>
-          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]">{formatINR(data.sales.gross)}</p>
-          <p className="mt-1.5 text-xs text-[#172321]/60">After customer coupons ({days} days)</p>
+          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]">{formatINR(data.finances?.grossPaise ?? data.sales.gross)}</p>
+          <p className="mt-1.5 text-xs text-[#172321]/60">Buyer checkout value ({days} days)</p>
         </div>
 
         <div className="rounded-xl border border-[#E4DACE] bg-white p-5 shadow-xs">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#172321]/50">Marketplace Share (15%)</p>
-          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]/80">−{formatINR(data.sales.commission)}</p>
+          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]/80">−{formatINR(data.finances?.commissionPaise ?? data.sales.commission)}</p>
           <p className="mt-1.5 text-xs text-[#172321]/60">Covers verification & packing boxes</p>
         </div>
 
         <div className="rounded-xl border border-[#D98263]/30 bg-[#FAF3EF] p-5 shadow-xs">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#D98263]">Net Maker Earnings</p>
-          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#D98263] font-bold">{formatINR(data.sales.earnings)}</p>
-          <p className="mt-1.5 text-xs text-[#172321]/70">Payable directly to registered bank</p>
+          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#D98263] font-bold">{formatINR(data.finances?.netRevenuePaise ?? data.sales.earnings)}</p>
+          <p className="mt-1.5 text-xs text-[#172321]/70">Authoritative net settlement value</p>
         </div>
 
         <div className="rounded-xl border border-[#E4DACE] bg-white p-5 shadow-xs">
@@ -1222,6 +1239,47 @@ export function SellerDashboardPage() {
           <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]">{data.sales.orders}</p>
           <p className="mt-1.5 text-xs text-[#172321]/60">
             {data.orders.shipped + data.orders.delivered} dispatched · {data.orders.pending} pending
+          </p>
+        </div>
+      </div>
+
+      {/* Production Costs & Estimated Profit Cards */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-xl border border-[#E4DACE] bg-[#FAF7F2] p-4 shadow-xs">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[#172321]/50">Product Costs (COGS)</p>
+          <p className="mt-1.5 font-serif text-xl sm:text-2xl text-[#172321]">
+            {data.finances?.hasCostData ? `−${formatINR(data.finances.cogsPaise)}` : '—'}
+          </p>
+          <p className="mt-1 text-[11px] text-[#172321]/60">
+            {data.finances?.hasCostData ? 'Private maker production costs' : 'Set unit cost in product editor'}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-[#E4DACE] bg-[#FAF7F2] p-4 shadow-xs">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[#172321]/50">Packaging Expenses</p>
+          <p className="mt-1.5 font-serif text-xl sm:text-2xl text-[#172321]">
+            {data.finances?.hasCostData ? `−${formatINR(data.finances.packagingPaise)}` : '—'}
+          </p>
+          <p className="mt-1 text-[11px] text-[#172321]/60">Boxes, wrapping & transit seals</p>
+        </div>
+
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50/70 p-4 shadow-xs">
+          <p className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-800">Estimated Net Profit</p>
+          <p className="mt-1.5 font-serif text-xl sm:text-2xl text-emerald-900 font-bold">
+            {data.finances?.hasCostData ? formatINR(data.finances.estimatedProfitPaise) : formatINR(data.sales.earnings)}
+          </p>
+          <p className="mt-1 text-[11px] text-emerald-700">
+            {data.finances?.hasCostData ? 'Net earnings minus direct costs' : 'Estimated before unit costs'}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-[#66745A]/30 bg-white p-4 shadow-xs">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[#66745A]">Profit Margin</p>
+          <p className="mt-1.5 font-serif text-xl sm:text-2xl text-[#172321]">
+            {data.finances?.hasCostData ? `${data.finances.profitMarginPercent}%` : '85.0%'}
+          </p>
+          <p className="mt-1 text-[11px] text-[#172321]/60">
+            {data.finances?.hasCostData ? 'Net profit / Gross sales' : 'Marketplace retention rate'}
           </p>
         </div>
       </div>
@@ -1399,7 +1457,11 @@ export function SellerDashboardPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-semibold text-[#172321]">{formatINR(p.revenuePaise)}</p>
-                      <p className="text-[10px] text-emerald-700 font-medium">In Catalogue</p>
+                      {p.profitPaise !== undefined && p.profitPaise > 0 ? (
+                        <p className="text-[10px] text-[#D98263] font-medium">Profit: {formatINR(p.profitPaise)}</p>
+                      ) : (
+                        <p className="text-[10px] text-emerald-700 font-medium">In Catalogue</p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1656,6 +1718,11 @@ interface ProductEditorResponse {
     description: string;
     pricePaise: number;
     compareAtPricePaise: number | null;
+    estimatedCostPaise?: number;
+    packagingCostPaise?: number;
+    varietyGrade?: string | null;
+    harvestInfo?: string | null;
+    dispatchConditions?: string | null;
     sku: string;
     unit: string;
     weightG: number | null;
@@ -1696,6 +1763,11 @@ const EMPTY_PRODUCT = {
   description: '',
   priceRupees: '',
   compareAtRupees: '',
+  estimatedCostRupees: '',
+  packagingCostRupees: '',
+  varietyGrade: '',
+  harvestInfo: '',
+  dispatchConditions: '',
   sku: '',
   unit: 'piece',
   weightG: '',
@@ -1747,6 +1819,26 @@ export function SellerProductEditorPage() {
   const workflowStatus = product.data?.product?.workflowStatus;
   const inReview = workflowStatus === 'submitted';
 
+  // Derive category specifics
+  const selectedCategoryObj =
+    categories.data?.categories.find((c) => c.id === form.categoryId) ||
+    categories.data?.subcategories.find((c) => c.id === form.categoryId);
+  const isFruitCategory =
+    selectedCategoryObj?.slug?.includes('fruit') ||
+    selectedCategoryObj?.slug?.includes('produce') ||
+    selectedCategoryObj?.name?.toLowerCase().includes('fruit') ||
+    selectedCategoryObj?.name?.toLowerCase().includes('produce');
+  const isTextileCategory =
+    selectedCategoryObj?.slug?.includes('textile') ||
+    selectedCategoryObj?.slug?.includes('clothing') ||
+    selectedCategoryObj?.slug?.includes('woollen') ||
+    selectedCategoryObj?.name?.toLowerCase().includes('clothing') ||
+    selectedCategoryObj?.name?.toLowerCase().includes('shawl');
+  const isCraftCategory =
+    selectedCategoryObj?.slug?.includes('craft') ||
+    selectedCategoryObj?.name?.toLowerCase().includes('craft') ||
+    selectedCategoryObj?.name?.toLowerCase().includes('handicraft');
+
   // Populate the editor once per product. Adjusting state during render is the
   // documented React pattern for deriving editable state from fetched data.
   const loadedProduct = product.data?.product;
@@ -1759,6 +1851,11 @@ export function SellerProductEditorPage() {
       description: loadedProduct.description,
       priceRupees: (loadedProduct.pricePaise / 100).toFixed(2).replace(/\.00$/, ''),
       compareAtRupees: loadedProduct.compareAtPricePaise ? (loadedProduct.compareAtPricePaise / 100).toFixed(2).replace(/\.00$/, '') : '',
+      estimatedCostRupees: loadedProduct.estimatedCostPaise ? (loadedProduct.estimatedCostPaise / 100).toFixed(2).replace(/\.00$/, '') : '',
+      packagingCostRupees: loadedProduct.packagingCostPaise ? (loadedProduct.packagingCostPaise / 100).toFixed(2).replace(/\.00$/, '') : '',
+      varietyGrade: loadedProduct.varietyGrade ?? '',
+      harvestInfo: loadedProduct.harvestInfo ?? '',
+      dispatchConditions: loadedProduct.dispatchConditions ?? '',
       sku: loadedProduct.sku,
       unit: loadedProduct.unit,
       weightG: loadedProduct.weightG ? String(loadedProduct.weightG) : '',
@@ -1804,6 +1901,11 @@ export function SellerProductEditorPage() {
       description: form.description,
       pricePaise: toPaise(form.priceRupees),
       compareAtPricePaise: form.compareAtRupees ? toPaise(form.compareAtRupees) : null,
+      estimatedCostPaise: form.estimatedCostRupees ? toPaise(form.estimatedCostRupees) : 0,
+      packagingCostPaise: form.packagingCostRupees ? toPaise(form.packagingCostRupees) : 0,
+      varietyGrade: form.varietyGrade || undefined,
+      harvestInfo: form.harvestInfo || undefined,
+      dispatchConditions: form.dispatchConditions || undefined,
       sku: form.sku,
       unit: form.unit || 'piece',
       weightG: form.weightG ? Number(form.weightG) : null,
@@ -1987,37 +2089,205 @@ export function SellerProductEditorPage() {
           </section>
 
           <section className="border border-line bg-surface p-5 sm:p-6">
-            <h2 className="text-xl">Price & materials</h2>
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <div>
+                <h2 className="text-xl">Pricing, Costs & Profit Estimator</h2>
+                <p className="mt-0.5 text-xs text-muted">Set customer pricing and your private unit production costs.</p>
+              </div>
+              <span className="rounded-full bg-[#66745A]/15 px-2.5 py-0.5 text-[10.5px] font-semibold text-[#66745A]">
+                Confidential Ledger
+              </span>
+            </div>
+
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="Selling price" required hint="₹, GST inclusive" error={fields.pricePaise}>
-                <Input required inputMode="decimal" value={form.priceRupees} onChange={(event) => setForm({ ...form, priceRupees: event.target.value })} />
+              <Field label="Customer selling price" required hint="₹, GST inclusive" error={fields.pricePaise}>
+                <Input required inputMode="decimal" value={form.priceRupees} onChange={(event) => setForm({ ...form, priceRupees: event.target.value })} placeholder="450" />
               </Field>
-              <Field label="Compare-at price" hint="Optional, ₹">
-                <Input inputMode="decimal" value={form.compareAtRupees} onChange={(event) => setForm({ ...form, compareAtRupees: event.target.value })} />
+              <Field label="Compare-at price" hint="Optional MRP strike-through, ₹">
+                <Input inputMode="decimal" value={form.compareAtRupees} onChange={(event) => setForm({ ...form, compareAtRupees: event.target.value })} placeholder="550" />
               </Field>
-              <Field label="Unit" required>
-                <Input required value={form.unit} onChange={(event) => setForm({ ...form, unit: event.target.value })} placeholder="piece, 100 g, pair" />
+              <Field label="Maker production cost (COGS)" hint="Private to you: procurement or creation cost, ₹">
+                <Input inputMode="decimal" value={form.estimatedCostRupees} onChange={(event) => setForm({ ...form, estimatedCostRupees: event.target.value })} placeholder="180" />
               </Field>
-              <Field label="Packed weight (g)" required hint="Needed to submit" error={fields.weightG}>
-                <Input inputMode="numeric" value={form.weightG} onChange={(event) => setForm({ ...form, weightG: event.target.value.replace(/\D/g, '') })} />
+              <Field label="Packaging & box cost" hint="Private to you: cartons, wrapping, seals, ₹">
+                <Input inputMode="decimal" value={form.packagingCostRupees} onChange={(event) => setForm({ ...form, packagingCostRupees: event.target.value })} placeholder="35" />
               </Field>
-              <Field label="Dimensions" hint="Optional">
-                <Input value={form.dimensions} onChange={(event) => setForm({ ...form, dimensions: event.target.value })} placeholder="30 × 20 × 5 cm" />
+              <Field label="Unit of sale" required hint="e.g. piece, 1 kg box, pair, 500 g">
+                <Input required value={form.unit} onChange={(event) => setForm({ ...form, unit: event.target.value })} placeholder="1 kg box" />
               </Field>
-              <Field label="Region" hint="Shown on the listing">
-                <Input value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })} />
+              <Field label="Packed weight (g)" required hint="Needed for shipping tier" error={fields.weightG}>
+                <Input inputMode="numeric" value={form.weightG} onChange={(event) => setForm({ ...form, weightG: event.target.value.replace(/\D/g, '') })} placeholder="1200" />
               </Field>
-              <Field label="Materials" className="sm:col-span-2">
-                <Input value={form.materials} onChange={(event) => setForm({ ...form, materials: event.target.value })} />
+            </div>
+
+            {/* Live Profit Estimator Breakdown Box */}
+            <div className="mt-5 rounded-xl border border-[#66745A]/25 bg-[#FAF7F2] p-4 text-xs">
+              <div className="flex items-center justify-between border-b border-[#66745A]/20 pb-2">
+                <span className="font-semibold text-[#172321] uppercase tracking-wider text-[11px]">
+                  Unit Contribution & Profit Breakdown
+                </span>
+                <span className="text-[10.5px] text-[#66745A] font-medium">
+                  Never shared with buyers
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4 text-center">
+                <div className="rounded-lg border border-line bg-white p-2.5 shadow-xs">
+                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Customer Price</p>
+                  <p className="mt-1 text-sm font-semibold text-ink">₹{form.priceRupees || '0'}</p>
+                </div>
+                <div className="rounded-lg border border-line bg-white p-2.5 shadow-xs">
+                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Marketplace (15%)</p>
+                  <p className="mt-1 text-sm font-semibold text-ink">−₹{(Number(form.priceRupees || 0) * 0.15).toFixed(2)}</p>
+                </div>
+                <div className="rounded-lg border border-line bg-white p-2.5 shadow-xs">
+                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Direct Costs</p>
+                  <p className="mt-1 text-sm font-semibold text-ink">−₹{(Number(form.estimatedCostRupees || 0) + Number(form.packagingCostRupees || 0)).toFixed(2)}</p>
+                </div>
+                <div className="rounded-lg border border-[#D98263]/40 bg-[#FAF3EF] p-2.5 shadow-xs">
+                  <p className="text-[10px] uppercase font-bold text-[#D98263]">Est. Profit / Unit</p>
+                  <p className="mt-1 text-sm font-bold text-[#D98263]">
+                    ₹{(
+                      Number(form.priceRupees || 0) * 0.85 -
+                      (Number(form.estimatedCostRupees || 0) + Number(form.packagingCostRupees || 0))
+                    ).toFixed(2)}
+                  </p>
+                  {Number(form.priceRupees || 0) > 0 ? (
+                    <p className="text-[9.5px] font-semibold text-[#D98263] mt-0.5">
+                      {(
+                        ((Number(form.priceRupees || 0) * 0.85 -
+                          (Number(form.estimatedCostRupees || 0) + Number(form.packagingCostRupees || 0))) /
+                          Number(form.priceRupees || 1)) *
+                        100
+                      ).toFixed(1)}% margin
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Dynamic Himachal Category Provenance & Specifications Section */}
+          <section className="border border-line bg-surface p-5 sm:p-6">
+            <h2 className="text-xl">Himachal Provenance & Regional Specs</h2>
+            <p className="mt-1 text-xs text-muted">
+              Pahadi Roots verifies authentic Himachal Pradesh origin. Provide details tailored to your craft or produce.
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field
+                label={
+                  isFruitCategory
+                    ? 'Fruit Variety & Commercial Grade'
+                    : isTextileCategory
+                    ? 'Wool / Weave Variety'
+                    : isCraftCategory
+                    ? 'Craft / Wood Variety'
+                    : 'Variety or Grade'
+                }
+                hint={
+                  isFruitCategory
+                    ? 'e.g. Royal Delicious, Golden Delicious, Super Grade A'
+                    : isTextileCategory
+                    ? 'e.g. Pure Merino Wool, Handloom Kullu Motif'
+                    : 'e.g. Seasoned Walnut Wood, Hand-carved'
+                }
+              >
+                <Input
+                  value={form.varietyGrade}
+                  onChange={(event) => setForm({ ...form, varietyGrade: event.target.value })}
+                  placeholder={
+                    isFruitCategory
+                      ? 'e.g. Royal Delicious · Extra Fancy'
+                      : isTextileCategory
+                      ? 'e.g. Handloom Wool · Grade A'
+                      : 'e.g. Hand-carved Walnut'
+                  }
+                />
               </Field>
-              <Field label="Place of origin" hint="Only if supportable">
-                <Input value={form.originPlace} onChange={(event) => setForm({ ...form, originPlace: event.target.value })} />
+
+              <Field
+                label={isFruitCategory ? 'Harvest Season & Orchard Origin' : 'Harvest / Sourcing / Workshop Origin'}
+                hint="Specific valley, orchard, or artisan collective"
+              >
+                <Input
+                  value={form.harvestInfo}
+                  onChange={(event) => setForm({ ...form, harvestInfo: event.target.value })}
+                  placeholder={
+                    isFruitCategory
+                      ? 'e.g. October 2026 Pluck, Kotgarh Valley'
+                      : 'e.g. Woven in Naggar Handloom Guild'
+                  }
+                />
               </Field>
-              <Field label="Care instructions">
-                <Input value={form.careInstructions} onChange={(event) => setForm({ ...form, careInstructions: event.target.value })} />
+
+              <Field
+                label="Dispatch & Packaging Conditions"
+                hint="Protective packaging or perishable transit details"
+                className="sm:col-span-2"
+              >
+                <Input
+                  value={form.dispatchConditions}
+                  onChange={(event) => setForm({ ...form, dispatchConditions: event.target.value })}
+                  placeholder={
+                    isFruitCategory
+                      ? 'e.g. Packed in 5-ply ventilated fruit cartons with foam liners; 48h express dispatch'
+                      : 'e.g. Shipped in moisture-proof cedar wrap with tracking'
+                  }
+                />
               </Field>
-              <Field label="Food information" hint="Ingredients, allergens, shelf life" className="sm:col-span-2">
-                <Textarea rows={4} value={form.foodInfo} onChange={(event) => setForm({ ...form, foodInfo: event.target.value })} />
+
+              <Field label="Materials or Ingredients" className="sm:col-span-2">
+                <Input
+                  value={form.materials}
+                  onChange={(event) => setForm({ ...form, materials: event.target.value })}
+                  placeholder={
+                    isTextileCategory
+                      ? 'e.g. 100% Himalayan Sheep Wool'
+                      : isCraftCategory
+                      ? 'e.g. Himalayan Walnut Wood, Natural Beeswax'
+                      : 'e.g. Fresh Apples, Cane Sugar'
+                  }
+                />
+              </Field>
+
+              <Field label="Place of Origin / District" hint="Must be within Himachal Pradesh">
+                <Input
+                  value={form.originPlace}
+                  onChange={(event) => setForm({ ...form, originPlace: event.target.value })}
+                  placeholder="e.g. Kotgarh, Shimla District"
+                />
+              </Field>
+
+              <Field label="Region / Valley" hint="Displayed on the public product badge">
+                <Input
+                  value={form.region}
+                  onChange={(event) => setForm({ ...form, region: event.target.value })}
+                  placeholder="e.g. Kullu Valley, Himachal Pradesh"
+                />
+              </Field>
+
+              <Field label="Dimensions / Sizing" hint="Optional">
+                <Input
+                  value={form.dimensions}
+                  onChange={(event) => setForm({ ...form, dimensions: event.target.value })}
+                  placeholder="e.g. 200 × 100 cm (Shawl) or 30 × 20 × 15 cm"
+                />
+              </Field>
+
+              <Field label="Care Instructions" hint="Optional">
+                <Input
+                  value={form.careInstructions}
+                  onChange={(event) => setForm({ ...form, careInstructions: event.target.value })}
+                  placeholder="e.g. Dry clean only or Store in airtight container"
+                />
+              </Field>
+
+              <Field label="Culinary / Taste & Food Info" hint="Optional ingredients or usage advice" className="sm:col-span-2">
+                <Textarea
+                  rows={3}
+                  value={form.foodInfo}
+                  onChange={(event) => setForm({ ...form, foodInfo: event.target.value })}
+                  placeholder="e.g. Traditional Pahadi recipe made with sun-dried hill chillies and mustard oil"
+                />
               </Field>
             </div>
           </section>
@@ -2174,17 +2444,35 @@ export function SellerOrdersPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Fulfilment"
-        title="Orders"
-        lede="Confirm stock, pack, dispatch with tracking, and mark delivery. The buyer sees each seller shipment separately."
+        eyebrow="Fulfilment & Dispatch"
+        title="Customer Orders"
+        lede="Receive genuine customer orders, accept and pack items, record carrier tracking, and track delivery progress."
       />
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <Select value={status} onChange={(event) => setStatus(event.target.value)} className="max-w-52">
-          <option value="">All statuses</option>
-          {['pending', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled', 'returned', 'refunded'].map((value) => (
-            <option key={value} value={value}>{sellerOrderStatusLabel(value)}</option>
-          ))}
-        </Select>
+
+      {/* Status Filter Tabs */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        {[
+          { label: 'All Orders', value: '' },
+          { label: 'Awaiting Action', value: 'pending' },
+          { label: 'Accepted', value: 'confirmed' },
+          { label: 'Packed', value: 'packed' },
+          { label: 'Shipped', value: 'shipped' },
+          { label: 'Delivered', value: 'delivered' },
+          { label: 'Cancelled', value: 'cancelled' },
+        ].map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => setStatus(tab.value)}
+            className={`rounded-full px-3.5 py-1 text-xs font-medium transition-all ${
+              status === tab.value
+                ? 'bg-[#172321] text-white shadow-xs'
+                : 'bg-white text-[#172321]/70 hover:bg-[#FAF7F2] hover:text-[#172321] border border-[#E4DACE]'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
       <div className="mt-6">
         {orders.isLoading ? <LoadingBlock rows={4} /> : null}
@@ -2258,6 +2546,9 @@ export function SellerOrderDetailPage() {
   const queryClient = useQueryClient();
   const [shipOpen, setShipOpen] = useState(false);
   const [slipOpen, setSlipOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('Out of stock / harvest damaged');
+  const [rejectDetails, setRejectDetails] = useState('');
   const [carrier, setCarrier] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [trackingUrl, setTrackingUrl] = useState('');
@@ -2275,16 +2566,22 @@ export function SellerOrderDetailPage() {
     await queryClient.invalidateQueries({ queryKey: ['seller-dashboard'] });
   };
 
-  const act = async (action: string) => {
+  const act = async (action: string, customNote?: string) => {
     setBusy(true);
     try {
+      const finalNote = customNote !== undefined ? customNote : note;
       await api(`/seller/orders/${id}/action`, {
         method: 'POST',
-        body: action === 'ship' ? { action, carrier, trackingNumber, trackingUrl: trackingUrl || undefined, note: note || undefined } : { action, note: note || undefined },
+        body:
+          action === 'ship'
+            ? { action, carrier, trackingNumber, trackingUrl: trackingUrl || undefined, note: finalNote || undefined }
+            : { action, note: finalNote || undefined },
       });
       setShipOpen(false);
+      setRejectOpen(false);
       setNote('');
-      toast.push('Order updated.');
+      setRejectDetails('');
+      toast.push(action === 'accept' || action === 'confirm' ? 'Order accepted.' : action === 'reject' || action === 'cancel' ? 'Order rejected & stock restored.' : 'Order updated.');
       await refresh();
     } catch (error) {
       toast.push(errorMessage(error), 'error');
@@ -2306,11 +2603,44 @@ export function SellerOrderDetailPage() {
         actions={<StatusBadge status={data.status} label={sellerOrderStatusLabel(data.status)} />}
       />
       <div className="flex flex-wrap items-center gap-2">
-        {data.status === 'pending' ? <Button onClick={() => void act('confirm')} loading={busy}>Confirm order</Button> : null}
-        {['pending', 'confirmed'].includes(data.status) ? <Button variant="secondary" onClick={() => void act('pack')} loading={busy}>Mark packed</Button> : null}
-        {['confirmed', 'packed'].includes(data.status) ? <Button onClick={() => setShipOpen(true)}>Dispatch with tracking</Button> : null}
-        {data.status === 'shipped' ? <Button onClick={() => void act('deliver')} loading={busy}>Mark delivered</Button> : null}
-        {['pending', 'confirmed'].includes(data.status) ? <Button variant="danger" onClick={() => void act('cancel')} loading={busy}>Cancel shipment</Button> : null}
+        {data.status === 'pending' ? (
+          <>
+            <Button onClick={() => void act('accept')} loading={busy} className="bg-[#66745A] hover:bg-[#525E48] text-white">
+              ✓ Accept Order
+            </Button>
+            <Button variant="danger" onClick={() => setRejectOpen(true)}>
+              ✕ Reject Order
+            </Button>
+          </>
+        ) : null}
+        {data.status === 'confirmed' ? (
+          <>
+            <Button variant="secondary" onClick={() => void act('pack')} loading={busy}>
+              Mark Packed
+            </Button>
+            <Button onClick={() => setShipOpen(true)}>
+              Dispatch with Tracking
+            </Button>
+            <Button variant="ghost" onClick={() => setRejectOpen(true)} className="text-red-700 hover:text-red-800">
+              Cancel Order
+            </Button>
+          </>
+        ) : null}
+        {data.status === 'packed' ? (
+          <>
+            <Button onClick={() => setShipOpen(true)}>
+              Dispatch with Tracking
+            </Button>
+            <Button variant="ghost" onClick={() => setRejectOpen(true)} className="text-red-700 hover:text-red-800">
+              Cancel Order
+            </Button>
+          </>
+        ) : null}
+        {data.status === 'shipped' ? (
+          <Button onClick={() => void act('deliver')} loading={busy}>
+            Mark Delivered
+          </Button>
+        ) : null}
         <Button
           variant="secondary"
           onClick={() => setSlipOpen(true)}
@@ -2506,6 +2836,54 @@ export function SellerOrderDetailPage() {
             <p>Thank you for supporting authentic Himalayan artisans and sustainable mountain communities.</p>
             <p className="mt-0.5">Need assistance with your delivery? Contact care@pahadiroots.in or WhatsApp +91 98765 43210</p>
           </div>
+        </div>
+      </Modal>
+
+      {/* Reject / Cancel Order Modal with Reason */}
+      <Modal
+        open={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        title="Reject or Cancel Order"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRejectOpen(false)}>
+              Keep Order
+            </Button>
+            <Button
+              variant="danger"
+              loading={busy}
+              onClick={() => {
+                const combinedNote = `${rejectReason}${rejectDetails ? ': ' + rejectDetails.trim() : ''}`;
+                void act('reject', combinedNote);
+              }}
+            >
+              Confirm Cancellation & Release Stock
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Alert tone="warning">
+            Rejecting or cancelling this order will immediately restore all reserved units back to your active inventory, update your seller metrics, and inform the customer.
+          </Alert>
+          <Field label="Cancellation / Rejection Reason" required>
+            <Select value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}>
+              <option value="Out of stock / harvest damaged">Out of stock / harvest damaged</option>
+              <option value="Quality check or craft inspection failed">Quality check or craft inspection failed</option>
+              <option value="Courier transit unserviceable for this pincode">Courier transit unserviceable for this pincode</option>
+              <option value="Severe weather / mountain road blockage">Severe weather / mountain road blockage</option>
+              <option value="Customer requested cancellation prior to packing">Customer requested cancellation prior to packing</option>
+              <option value="Other verified operational constraint">Other verified operational constraint</option>
+            </Select>
+          </Field>
+          <Field label="Additional Note / Context" hint="Recorded in the order status event history">
+            <Textarea
+              rows={2}
+              value={rejectDetails}
+              onChange={(e) => setRejectDetails(e.target.value)}
+              placeholder="e.g. Fresh autumn apple crop batch was damaged during transit from Kotgarh."
+            />
+          </Field>
         </div>
       </Modal>
     </div>

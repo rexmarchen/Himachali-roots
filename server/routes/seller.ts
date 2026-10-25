@@ -164,6 +164,11 @@ const productSchema = z.object({
   foodInfo: z.string().trim().max(1500).optional(),
   originPlace: z.string().trim().max(120).optional(),
   region: z.string().trim().max(80).optional(),
+  varietyGrade: z.string().trim().max(120).optional(),
+  harvestInfo: z.string().trim().max(200).optional(),
+  dispatchConditions: z.string().trim().max(200).optional(),
+  estimatedCostPaise: z.number().int().min(0).max(10_000_000).optional().default(0),
+  packagingCostPaise: z.number().int().min(0).max(10_000_000).optional().default(0),
   attributes: z.record(z.string().max(40), z.string().max(200)).optional(),
   compliance: z
     .object({
@@ -954,16 +959,51 @@ export function sellerRouter(db: Db): Router {
       });
     }
 
-    // Top selling products for this seller within the selected timeframe
-    const topProducts = queryAll<{ id: string; name: string; units_sold: number; revenue_paise: number }>(
+    // Cost and profit calculations based on seller-provided product costs
+    const costs = queryOne<{ total_cogs: number; total_packaging: number; items_with_cost: number }>(
       db,
-      `SELECT oi.product_id AS id, oi.name,
-              COALESCE(SUM(oi.quantity), 0) AS units_sold,
-              COALESCE(SUM(oi.line_subtotal_paise), 0) AS revenue_paise
+      `SELECT COALESCE(SUM(oi.quantity * COALESCE(p.estimated_cost_paise, 0)), 0) AS total_cogs,
+              COALESCE(SUM(oi.quantity * COALESCE(p.packaging_cost_paise, 0)), 0) AS total_packaging,
+              COUNT(CASE WHEN p.estimated_cost_paise > 0 THEN 1 END) AS items_with_cost
          FROM order_items oi
          JOIN seller_orders so ON so.id = oi.seller_order_id
          JOIN orders o ON o.id = so.order_id
+         LEFT JOIN products p ON p.id = oi.product_id
         WHERE so.seller_id = ? AND o.paid_at IS NOT NULL AND o.created_at >= ?
+          AND so.status != 'cancelled'`,
+      id,
+      since,
+    );
+
+    const grossPaise = sales?.gross ?? 0;
+    const commissionPaise = sales?.commission ?? 0;
+    const netRevenuePaise = sales?.earnings ?? 0;
+    const cogsPaise = costs?.total_cogs ?? 0;
+    const packagingPaise = costs?.total_packaging ?? 0;
+    const estimatedProfitPaise = Math.max(0, netRevenuePaise - cogsPaise - packagingPaise);
+    const profitMarginPercent = grossPaise > 0 ? Math.round((estimatedProfitPaise / grossPaise) * 1000) / 10 : 0;
+
+    // Top selling products for this seller within the selected timeframe
+    const topProducts = queryAll<{
+      id: string;
+      name: string;
+      units_sold: number;
+      revenue_paise: number;
+      cost_paise: number;
+      profit_paise: number;
+    }>(
+      db,
+      `SELECT oi.product_id AS id, oi.name,
+              COALESCE(SUM(oi.quantity), 0) AS units_sold,
+              COALESCE(SUM(oi.line_subtotal_paise), 0) AS revenue_paise,
+              COALESCE(SUM(oi.quantity * COALESCE(p.estimated_cost_paise, 0)), 0) AS cost_paise,
+              COALESCE(SUM(oi.seller_earning_paise - (oi.quantity * (COALESCE(p.estimated_cost_paise, 0) + COALESCE(p.packaging_cost_paise, 0)))), 0) AS profit_paise
+         FROM order_items oi
+         JOIN seller_orders so ON so.id = oi.seller_order_id
+         JOIN orders o ON o.id = so.order_id
+         LEFT JOIN products p ON p.id = oi.product_id
+        WHERE so.seller_id = ? AND o.paid_at IS NOT NULL AND o.created_at >= ?
+          AND so.status != 'cancelled'
         GROUP BY oi.product_id, oi.name
         ORDER BY revenue_paise DESC
         LIMIT 5`,
@@ -1000,12 +1040,24 @@ export function sellerRouter(db: Db): Router {
       },
       period: { days, since },
       sales: sales ?? { gross: 0, commission: 0, earnings: 0, orders: 0 },
+      finances: {
+        grossPaise,
+        commissionPaise,
+        netRevenuePaise,
+        cogsPaise,
+        packagingPaise,
+        estimatedProfitPaise,
+        profitMarginPercent,
+        hasCostData: (costs?.items_with_cost ?? 0) > 0,
+      },
       series,
       topProducts: topProducts.map((p) => ({
         id: p.id,
         name: p.name,
         unitsSold: p.units_sold,
         revenuePaise: p.revenue_paise,
+        costPaise: p.cost_paise,
+        profitPaise: p.profit_paise,
       })),
       ledger: ledger ?? { pending: 0, eligible: 0, settled: 0, refunds: 0 },
       settlement: settlement ?? { pending_batches: 0, paid_total: 0 },
@@ -1158,6 +1210,11 @@ export function sellerRouter(db: Db): Router {
         originPlace: product.origin_place,
         originVerified: product.origin_verified === 1,
         region: product.region,
+        varietyGrade: (product.variety_grade as string | null) ?? null,
+        harvestInfo: (product.harvest_info as string | null) ?? null,
+        dispatchConditions: (product.dispatch_conditions as string | null) ?? null,
+        estimatedCostPaise: (product.estimated_cost_paise as number) ?? 0,
+        packagingCostPaise: (product.packaging_cost_paise as number) ?? 0,
         attributes: product.attributes ? JSON.parse(String(product.attributes)) : null,
         status: product.status,
         workflowStatus:
@@ -1204,8 +1261,9 @@ export function sellerRouter(db: Db): Router {
         `INSERT INTO products
            (id, seller_id, category_id, name, slug, short_description, description, price_paise, compare_at_price_paise,
             sku, unit, weight_g, dimensions, materials, care_instructions, food_info, compliance_json,
-            origin_place, region, attributes, status, is_demo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0)`,
+            origin_place, region, variety_grade, harvest_info, dispatch_conditions, estimated_cost_paise, packaging_cost_paise,
+            attributes, status, is_demo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0)`,
         productId,
         id,
         input.categoryId,
@@ -1225,6 +1283,11 @@ export function sellerRouter(db: Db): Router {
         input.compliance ? JSON.stringify(input.compliance) : null,
         emptyToNull(input.originPlace),
         emptyToNull(input.region),
+        emptyToNull(input.varietyGrade),
+        emptyToNull(input.harvestInfo),
+        emptyToNull(input.dispatchConditions),
+        input.estimatedCostPaise ?? 0,
+        input.packagingCostPaise ?? 0,
         input.attributes ? JSON.stringify(input.attributes) : null,
       );
       execute(db, 'INSERT INTO inventory (product_id, quantity) VALUES (?, 0)', productId);
@@ -1286,8 +1349,10 @@ export function sellerRouter(db: Db): Router {
         db,
         `UPDATE products SET category_id = ?, name = ?, short_description = ?, description = ?, price_paise = ?,
                 compare_at_price_paise = ?, sku = ?, unit = ?, weight_g = ?, dimensions = ?, materials = ?,
-                care_instructions = ?, food_info = ?, compliance_json = ?, origin_place = ?, region = ?, attributes = ?,
-                status = ?, rejection_reason = CASE WHEN ? = 'pending' THEN NULL ELSE rejection_reason END, updated_at = ?
+                care_instructions = ?, food_info = ?, compliance_json = ?, origin_place = ?, region = ?,
+                variety_grade = ?, harvest_info = ?, dispatch_conditions = ?,
+                estimated_cost_paise = COALESCE(?, estimated_cost_paise), packaging_cost_paise = COALESCE(?, packaging_cost_paise),
+                attributes = ?, status = ?, rejection_reason = CASE WHEN ? = 'pending' THEN NULL ELSE rejection_reason END, updated_at = ?
           WHERE id = ? AND seller_id = ?`,
         input.categoryId,
         input.name,
@@ -1305,6 +1370,11 @@ export function sellerRouter(db: Db): Router {
         input.compliance ? JSON.stringify(input.compliance) : null,
         emptyToNull(input.originPlace),
         emptyToNull(input.region),
+        emptyToNull(input.varietyGrade),
+        emptyToNull(input.harvestInfo),
+        emptyToNull(input.dispatchConditions),
+        input.estimatedCostPaise ?? 0,
+        input.packagingCostPaise ?? 0,
         input.attributes ? JSON.stringify(input.attributes) : null,
         nextStatus,
         nextStatus,
@@ -1729,45 +1799,76 @@ export function sellerRouter(db: Db): Router {
     const id = sellerId(req);
     const input = parse(
       z.object({
-        action: z.enum(['confirm', 'pack', 'ship', 'deliver', 'cancel']),
+        action: z.enum(['confirm', 'accept', 'pack', 'ship', 'deliver', 'cancel', 'reject']),
         carrier: z.string().trim().max(80).optional(),
         trackingNumber: z.string().trim().max(120).optional(),
         trackingUrl: z.string().trim().url().max(500).optional().or(z.literal('')),
         note: z.string().trim().max(500).optional(),
+        reason: z.string().trim().max(500).optional(),
       }),
       req.body,
     );
+    const canonicalAction =
+      input.action === 'accept' ? 'confirm' : input.action === 'reject' ? 'cancel' : input.action;
+
     sellerOrderAction(db, {
       sellerOrderId: req.params.id,
       ownerSellerId: id,
       actor: req.user!,
-      action: input.action as SellerAction,
+      action: canonicalAction as SellerAction,
       carrier: input.carrier,
       trackingNumber: input.trackingNumber,
       trackingUrl: input.trackingUrl || undefined,
-      note: input.note,
+      note: input.reason || input.note,
     });
-    if (input.action === 'ship') {
-      const so = queryOne<{ reference: string; order_id: string }>(db, 'SELECT reference, order_id FROM seller_orders WHERE id = ?', req.params.id);
-      const order = so
-        ? queryOne<{ email: string; user_id: string; order_number: string }>(
-            db,
-            'SELECT email, user_id, order_number FROM orders WHERE id = ?',
-            so.order_id,
-          )
-        : null;
-      if (order) {
-        void notify(db, {
-          userId: order.user_id,
-          email: order.email,
-          type: 'order_dispatched',
-          subject: `Your order ${order.order_number} has been dispatched`,
-          body: `<p>A shipment from your order is on its way.</p><p><strong>Courier:</strong> ${escapeHtml(input.carrier ?? '')}<br/><strong>Tracking:</strong> ${escapeHtml(input.trackingNumber ?? '')}</p>`,
-          dedupeKey: `dispatch:${so?.reference}:${input.trackingNumber}`,
-        });
-      }
+
+    const so = queryOne<{ reference: string; order_id: string }>(
+      db,
+      'SELECT reference, order_id FROM seller_orders WHERE id = ?',
+      req.params.id,
+    );
+    const order = so
+      ? queryOne<{ email: string; user_id: string; order_number: string }>(
+          db,
+          'SELECT email, user_id, order_number FROM orders WHERE id = ?',
+          so.order_id,
+        )
+      : null;
+
+    if (canonicalAction === 'confirm' && order) {
+      void notify(db, {
+        userId: order.user_id,
+        email: order.email,
+        type: 'order_accepted',
+        subject: `Your order ${order.order_number} has been confirmed by the maker`,
+        body: `<p>Great news! The artisan has confirmed your order (${so?.reference}) and is preparing it for dispatch from Himachal Pradesh.</p>`,
+        dedupeKey: `order-accepted:${so?.reference}`,
+      });
     }
-    res.json({ ok: true, message: 'Order updated.' });
+
+    if (canonicalAction === 'ship' && order) {
+      void notify(db, {
+        userId: order.user_id,
+        email: order.email,
+        type: 'order_dispatched',
+        subject: `Your order ${order.order_number} has been dispatched`,
+        body: `<p>A shipment from your order is on its way from Himachal Pradesh.</p><p><strong>Courier:</strong> ${escapeHtml(input.carrier ?? '')}<br/><strong>Tracking:</strong> ${escapeHtml(input.trackingNumber ?? '')}</p>`,
+        dedupeKey: `dispatch:${so?.reference}:${input.trackingNumber}`,
+      });
+    }
+
+    if (canonicalAction === 'cancel' && order) {
+      void notify(db, {
+        userId: order.user_id,
+        email: order.email,
+        type: 'order_cancelled',
+        subject: `Update regarding order ${order.order_number}`,
+        body: `<p>Your seller order (${so?.reference}) could not be fulfilled and was cancelled by the maker.</p>${input.reason || input.note ? `<p><strong>Reason:</strong> ${escapeHtml(input.reason || input.note || '')}</p>` : ''}<p>Any amount paid for this item is being processed for a refund.</p>`,
+        dedupeKey: `order-cancelled:${so?.reference}:${Date.now()}`,
+      });
+    }
+
+    res.json({ ok: true, message: `Order ${canonicalAction}ed successfully.` });
   });
 
   router.post('/orders/:id/tracking', (req, res) => {

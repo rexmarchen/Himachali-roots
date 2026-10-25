@@ -370,8 +370,31 @@ export function ProductPage() {
           <h1 className="mt-3 text-3xl leading-[1.08] sm:text-[2.65rem] font-serif font-normal text-forest">{product.name}</h1>
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-ink/75">{product.shortDescription}</p>
 
+          {/* Authentic Himachal Provenance Chips */}
+          <div className="mt-3.5 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#66745A]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#66745A]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#66745A]" />
+              Verified Himachal Origin
+            </span>
+            {product.varietyGrade ? (
+              <span className="inline-flex items-center rounded-full bg-[#FAF3EF] px-2.5 py-0.5 text-[11px] font-medium text-[#D98263] border border-[#D98263]/30">
+                {product.varietyGrade}
+              </span>
+            ) : null}
+            {product.originPlace ? (
+              <span className="inline-flex items-center rounded-full bg-[#FAF7F2] px-2.5 py-0.5 text-[11px] font-medium text-[#172321]/75 border border-[#E4DACE]">
+                📍 {product.originPlace}
+              </span>
+            ) : null}
+            {product.harvestInfo ? (
+              <span className="inline-flex items-center rounded-full bg-[#FAF7F2] px-2.5 py-0.5 text-[11px] font-medium text-[#172321]/75 border border-[#E4DACE]">
+                🗓 {product.harvestInfo}
+              </span>
+            ) : null}
+          </div>
+
           {/* Pricing & Savings Block */}
-          <div className="mt-6 rounded-sm bg-surface border border-line p-5 shadow-xs">
+          <div className="mt-5 rounded-sm bg-surface border border-line p-5 shadow-xs">
             <div className="flex items-baseline justify-between">
               <div>
                 <div className="flex items-baseline gap-3">
@@ -628,31 +651,103 @@ export function ProductPage() {
         <div className="mt-8 max-w-4xl mx-auto">
           {activeTab === 'story' && (
             <div className="space-y-6 text-[14.5px] leading-relaxed text-ink/80 bg-surface border border-line p-6 sm:p-8 rounded-sm">
-              <h3 className="font-serif text-2xl text-forest">Nourished by Glacial Waters & Alpine Frost</h3>
-              <p>
-                In the valleys of Kinnaur, walnut trees thrive between 2,500 and 3,000 metres above sea level. 
-                Fed by natural snowmelt from the Kinner Kailash range and exposed to intense ultraviolet mountain sunlight followed by crisp sub-zero nights, 
-                these trees adapt by storing concentrated essential fatty acids and natural sugars inside the kernel.
-              </p>
-              <div className="grid sm:grid-cols-2 gap-5 my-6 border-y border-line py-6">
-                <div>
-                  <h4 className="font-serif text-lg text-forest mb-2">Heritage Hand-Cracking</h4>
-                  <p className="text-xs text-muted leading-relaxed">
-                    Commercial industrial walnuts are machine-shucked and bleached in chlorine baths to create a uniform white appearance. 
-                    Our Kinnaur growers crack each nut on wooden blocks by hand, ensuring the delicate amber skin remains intact and chemical-free.
+              {isWalnut ? (
+                <>
+                  <h3 className="font-serif text-2xl text-forest">Nourished by Glacial Waters & Alpine Frost</h3>
+                  <p>
+                    In the valleys of Kinnaur, walnut trees thrive between 2,500 and 3,000 metres above sea level. 
+                    Fed by natural snowmelt from the Kinner Kailash range and exposed to intense ultraviolet mountain sunlight followed by crisp sub-zero nights, 
+                    these trees adapt by storing concentrated essential fatty acids and natural sugars inside the kernel.
                   </p>
+                  <div className="grid sm:grid-cols-2 gap-5 my-6 border-y border-line py-6">
+                    <div>
+                      <h4 className="font-serif text-lg text-forest mb-2">Heritage Hand-Cracking</h4>
+                      <p className="text-xs text-muted leading-relaxed">
+                        Commercial industrial walnuts are machine-shucked and bleached in chlorine baths to create a uniform white appearance. 
+                        Our Kinnaur growers crack each nut on wooden blocks by hand, ensuring the delicate amber skin remains intact and chemical-free.
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="font-serif text-lg text-forest mb-2">Zero Tannin Astringency</h4>
+                      <p className="text-xs text-muted leading-relaxed">
+                        If commercial walnuts have ever left a harsh, drying bitterness in the back of your throat, that is oxidized surface oil. 
+                        Kinnauri walnuts have a tender, paper-thin pellicle that tastes naturally creamy, sweet, and nutty.
+                      </p>
+                    </div>
+                  </div>
+                  <p>{product.description}</p>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between border-b border-line pb-3">
+                    <h3 className="font-serif text-2xl text-forest">{product.name}</h3>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-[#66745A]">
+                      {product.categoryName}
+                    </span>
+                  </div>
+                  <p className="whitespace-pre-line text-sm leading-relaxed text-ink/85">{product.description}</p>
+                </>
+              )}
+
+              {/* Himachal Specifications & Provenance Table */}
+              <div className="mt-6 border border-line rounded-sm overflow-hidden bg-white">
+                <div className="bg-[#FAF7F2] border-b border-line px-4 py-3 flex items-center justify-between">
+                  <span className="font-serif font-bold text-sm text-forest">Himachal Provenance & Product Specifications</span>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-wider text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
+                    Verified Origin
+                  </span>
                 </div>
-                <div>
-                  <h4 className="font-serif text-lg text-forest mb-2">Zero Tannin Astringency</h4>
-                  <p className="text-xs text-muted leading-relaxed">
-                    If commercial walnuts have ever left a harsh, drying bitterness in the back of your throat, that is oxidized surface oil. 
-                    Kinnauri walnuts have a tender, paper-thin pellicle that tastes naturally creamy, sweet, and nutty.
-                  </p>
-                </div>
+                <dl className="divide-y divide-line text-xs">
+                  {product.varietyGrade ? (
+                    <div className="grid grid-cols-3 px-4 py-2.5">
+                      <dt className="text-muted font-medium">Variety / Grade</dt>
+                      <dd className="col-span-2 font-semibold text-ink">{product.varietyGrade}</dd>
+                    </div>
+                  ) : null}
+                  {product.originPlace || product.region ? (
+                    <div className="grid grid-cols-3 px-4 py-2.5">
+                      <dt className="text-muted font-medium">Origin / Region</dt>
+                      <dd className="col-span-2 text-ink">{product.originPlace ? `${product.originPlace}, ` : ''}{product.region ?? 'Himachal Pradesh'}</dd>
+                    </div>
+                  ) : null}
+                  {product.harvestInfo ? (
+                    <div className="grid grid-cols-3 px-4 py-2.5">
+                      <dt className="text-muted font-medium">Harvest / Crafting</dt>
+                      <dd className="col-span-2 text-ink">{product.harvestInfo}</dd>
+                    </div>
+                  ) : null}
+                  {product.dispatchConditions ? (
+                    <div className="grid grid-cols-3 px-4 py-2.5">
+                      <dt className="text-muted font-medium">Dispatch Conditions</dt>
+                      <dd className="col-span-2 text-ink">{product.dispatchConditions}</dd>
+                    </div>
+                  ) : null}
+                  {product.materials ? (
+                    <div className="grid grid-cols-3 px-4 py-2.5">
+                      <dt className="text-muted font-medium">Materials / Ingredients</dt>
+                      <dd className="col-span-2 text-ink">{product.materials}</dd>
+                    </div>
+                  ) : null}
+                  {product.dimensions ? (
+                    <div className="grid grid-cols-3 px-4 py-2.5">
+                      <dt className="text-muted font-medium">Dimensions / Sizing</dt>
+                      <dd className="col-span-2 text-ink">{product.dimensions}</dd>
+                    </div>
+                  ) : null}
+                  <div className="grid grid-cols-3 px-4 py-2.5">
+                    <dt className="text-muted font-medium">Artisan / Producer</dt>
+                    <dd className="col-span-2 text-ink">
+                      <Link to={`/makers/${product.sellerSlug}`} className="text-terra font-medium hover:underline">
+                        {product.sellerName}
+                      </Link>
+                    </dd>
+                  </div>
+                  <div className="grid grid-cols-3 px-4 py-2.5">
+                    <dt className="text-muted font-medium">Unit / Net Quantity</dt>
+                    <dd className="col-span-2 text-ink">{product.unit} {product.weightG ? `· Packed weight: ${product.weightG} g` : ''}</dd>
+                  </div>
+                </dl>
               </div>
-              <p>
-                {product.description}
-              </p>
             </div>
           )}
 

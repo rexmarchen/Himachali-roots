@@ -66,6 +66,50 @@ function reconcileLegacySchema(db: Db): void {
   if (tableExists(db, 'orders')) {
     addColumn(db, 'orders', 'is_demo', 'INTEGER NOT NULL DEFAULT 1');
   }
+  if (tableExists(db, 'products')) {
+    addColumn(db, 'products', 'estimated_cost_paise', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'products', 'packaging_cost_paise', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'products', 'variety_grade', 'TEXT');
+    addColumn(db, 'products', 'harvest_info', 'TEXT');
+    addColumn(db, 'products', 'dispatch_conditions', 'TEXT');
+  }
+  if (tableExists(db, 'categories')) {
+    const coreCats = [
+      {
+        id: 'cat_fruits_produce',
+        name: 'Fruits & Fresh Produce',
+        slug: 'fruits-and-fresh-produce',
+        description: 'Orchard-fresh Himachali apples, Kinnaur golden pears, high-altitude plums, wild apricots, and mountain cherries.',
+        imageUrl: '/images/product-apple.jpg',
+        sortOrder: 5,
+      },
+      {
+        id: 'cat_crafts_handicrafts',
+        name: 'Handmade Crafts & Handicrafts',
+        slug: 'crafts-and-handicrafts',
+        description: 'Hand-carved cedar woodcraft, pine needle basketry, traditional metalwork, and Kangra miniature art.',
+        imageUrl: '/images/product-woodcraft.jpg',
+        sortOrder: 25,
+      },
+      {
+        id: 'cat_traditional_goods',
+        name: 'Traditional Himachali Products & Goods',
+        slug: 'traditional-goods-and-essentials',
+        description: 'Natural Himalayan dhoop, hawan samagri, stone-carved utensils, and authentic mountain souvenirs.',
+        imageUrl: '/images/editorial-terrace.jpg',
+        sortOrder: 45,
+      },
+    ];
+    for (const c of coreCats) {
+      const exists = db.prepare('SELECT 1 FROM categories WHERE slug = ?').get(c.slug);
+      if (!exists) {
+        db.prepare(
+          `INSERT INTO categories (id, name, slug, parent_id, description, image_url, sort_order, is_active, created_at)
+           VALUES (?, ?, ?, NULL, ?, ?, ?, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
+        ).run(c.id, c.name, c.slug, c.description, c.imageUrl, c.sortOrder);
+      }
+    }
+  }
 }
 
 /**

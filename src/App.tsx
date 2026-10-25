@@ -175,9 +175,11 @@ export function App() {
         <Route index element={<HomePage />} />
         <Route path="shop" element={<ShopPage />} />
         <Route path="shop/:slug" element={<ProductPage />} />
+        <Route path="products/:slug" element={<ProductPage />} />
         <Route path="cart" element={<CartPage />} />
         <Route path="makers" element={<MakersPage />} />
         <Route path="makers/:slug" element={<MakerDetailPage />} />
+        <Route path="sellers/:slug" element={<MakerDetailPage />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="sourcing" element={<SourcingPage />} />
         <Route path="faq" element={<FaqPage />} />
