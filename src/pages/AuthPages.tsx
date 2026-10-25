@@ -12,9 +12,9 @@ function AuthShell({
   lede,
   children,
   footer,
-  image = '/images/editorial-spinning.jpg',
-  imageAlt = 'Hands spinning wool in a Himachali village',
-  imageCredit = 'Photograph via Wikimedia Commons — see image credits',
+  image = '/images/auth-orchard.jpg',
+  imageAlt = 'Freshly harvested Kinnaur apples and mountain citrus in an alpine orchard',
+  imageCredit = 'Himalayan Orchard Harvest · Pahadi Roots',
 }: {
   eyebrow: string;
   title: string;
@@ -40,9 +40,9 @@ function AuthShell({
         <img src={image} alt={imageAlt} className="h-full w-full object-cover" />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-forest/80 to-transparent p-8 pt-24 text-paper">
           <p className="max-w-sm font-serif text-2xl leading-snug">
-            “The point is not to make the mountains a backdrop. It is to let the work speak from where it is made.”
+            “Grown with glacial snowmelt, ripened by the mountain sun, and harvested with care.”
           </p>
-          <p className="mt-3 text-[10px] uppercase tracking-[0.16em] text-paper/55">{imageCredit}</p>
+          <p className="mt-3 text-[10px] uppercase tracking-[0.16em] text-paper/70">{imageCredit}</p>
         </div>
       </div>
     </div>
@@ -127,16 +127,41 @@ export function LoginPage() {
         </Button>
       </form>
 
-      {config?.devMode ? (
-        <div className="mt-6 border border-line bg-surface p-4 text-[11px] leading-relaxed text-muted">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8e4630]">Development seed accounts</p>
-          <p className="mt-2">
-            Demo seller: <code>kullu@demo.pahadiroots.test</code> · password <code>PahadiDemo!2026</code>. Other demo
-            storefronts use the same password. These are seeded demonstration accounts, not real businesses.
-          </p>
-          <p className="mt-2">Administrators are created with <code>npm run admin:create</code>, not seeded.</p>
+      <div className="mt-6 border border-line bg-surface p-4 text-[11px] leading-relaxed text-muted rounded-sm">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-terra">Demonstration & Admin Accounts</p>
+        <div className="mt-2.5 flex items-center justify-between border-b border-line pb-2">
+          <div>
+            <p className="font-semibold text-forest">Administrator</p>
+            <p className="text-[11px]"><code>anshuar9065@gmail.com</code> · <code>Anshu90#@</code></p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEmail('anshuar9065@gmail.com');
+              setPassword('Anshu90#@');
+            }}
+            className="text-[10px] font-semibold uppercase tracking-wider text-terra hover:underline"
+          >
+            Fill Admin
+          </button>
         </div>
-      ) : null}
+        <div className="mt-2 flex items-center justify-between pt-1">
+          <div>
+            <p className="font-semibold text-forest">Demo Maker</p>
+            <p className="text-[11px]"><code>kullu@demo.pahadiroots.test</code> · <code>PahadiDemo!2026</code></p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEmail('kullu@demo.pahadiroots.test');
+              setPassword('PahadiDemo!2026');
+            }}
+            className="text-[10px] font-semibold uppercase tracking-wider text-terra hover:underline"
+          >
+            Fill Maker
+          </button>
+        </div>
+      </div>
     </AuthShell>
   );
 }

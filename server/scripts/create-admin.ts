@@ -29,7 +29,7 @@ function validateEmail(value: string): string {
 }
 
 function validatePassword(password: string): void {
-  if (password.length < 12) fail('Use at least 12 characters.');
+  if (password.length < 8) fail('Use at least 8 characters.');
   const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((pattern) => pattern.test(password)).length;
   if (classes < 3) fail('Use at least three of: lowercase, uppercase, number, symbol.');
   if (/^(?:password|admin|pahadi|demo)/i.test(password)) fail('Choose a password that is not based on a common word.');
