@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth, useCartCount, useSiteContent } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { Button, Input } from './ui';
+import { SearchModal } from './SearchModal';
 
 const NAV = [
   { label: 'Shop', to: '/shop' },
@@ -170,7 +171,6 @@ function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState('');
   const navigate = useNavigate();
   const content = useSiteContent();
   const announcement = content.data?.content.announcement;
@@ -184,13 +184,16 @@ function Header() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const submitSearch = (event: FormEvent) => {
-    event.preventDefault();
-    const trimmed = query.trim();
-    if (trimmed) navigate(`/shop?q=${encodeURIComponent(trimmed)}`);
-    else navigate('/shop');
-    setSearchOpen(false);
-  };
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const isTransparent = isHome && !scrolled;
 
@@ -248,21 +251,39 @@ function Header() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-4 sm:gap-5">
+        <div className="flex items-center gap-3 sm:gap-4">
+          {/* Elegant Pill Search Trigger */}
           <button
             type="button"
-            onClick={() => setSearchOpen((value) => !value)}
-            className={`flex items-center gap-1.5 text-[12.5px] font-medium transition-colors duration-200 ${
-              isTransparent ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
+            onClick={() => setSearchOpen(true)}
+            className={`group flex items-center gap-2 sm:gap-2.5 rounded-full px-3.5 sm:px-4 py-1.5 sm:py-2 text-[12px] font-medium transition-all duration-200 ${
+              isTransparent
+                ? 'bg-white/15 hover:bg-white/25 text-white border border-white/25 backdrop-blur-md shadow-xs'
+                : 'bg-[#F2ECE1] hover:bg-[#EAE2D4] text-ink/85 border border-[#DDD3C4] shadow-xs'
             }`}
-            aria-expanded={searchOpen}
-            aria-label="Search catalogue"
+            aria-label="Search catalogue (Cmd+K)"
           >
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
-              <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="1.6" />
-              <path d="M12.5 12.5 17 17" strokeWidth="1.6" strokeLinecap="round" />
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:scale-110"
+              aria-hidden
+            >
+              <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="1.8" />
+              <path d="M12.5 12.5 17 17" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
-            <span className="hidden md:inline">Search</span>
+            <span className="hidden md:inline font-sans text-[12px] tracking-[0.01em]">
+              Search crafts, tea, honey…
+            </span>
+            <span className="md:hidden font-sans text-[12px]">Search</span>
+            <kbd
+              className={`hidden rounded px-1.5 py-0.5 text-[9px] font-mono tracking-wider font-semibold uppercase lg:inline-block ${
+                isTransparent ? 'bg-white/20 text-white/90' : 'bg-white/80 text-muted border border-line'
+              }`}
+            >
+              ⌘K
+            </kbd>
           </button>
 
           <Link
@@ -342,76 +363,7 @@ function Header() {
         </div>
       </div>
 
-      {searchOpen ? (
-        <div className="border-t border-line bg-surface shadow-lg fade-in">
-          <form onSubmit={submitSearch} className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 sm:px-6">
-            <Input
-              autoFocus
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search shawls, Kangra tea, honey, rajma, makers…"
-              aria-label="Search the catalogue"
-              className="text-base"
-            />
-            <Button type="submit" size="md">
-              Search
-            </Button>
-            <button
-              type="button"
-              onClick={() => setSearchOpen(false)}
-              className="text-xs uppercase tracking-wider text-muted hover:text-ink px-2 py-1"
-            >
-              Close
-            </button>
-          </form>
-          <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-2 px-4 pb-4 text-xs text-muted">
-            <span>Popular:</span>
-            <button
-              type="button"
-              onClick={() => {
-                navigate('/shop?q=tea');
-                setSearchOpen(false);
-              }}
-              className="underline hover:text-forest"
-            >
-              Kangra Orthodox Tea
-            </button>
-            <span>·</span>
-            <button
-              type="button"
-              onClick={() => {
-                navigate('/shop?q=honey');
-                setSearchOpen(false);
-              }}
-              className="underline hover:text-forest"
-            >
-              Wild Forest Honey
-            </button>
-            <span>·</span>
-            <button
-              type="button"
-              onClick={() => {
-                navigate('/shop?category=shawls-and-weaves');
-                setSearchOpen(false);
-              }}
-              className="underline hover:text-forest"
-            >
-              Handwoven Shawls
-            </button>
-            <span>·</span>
-            <button
-              type="button"
-              onClick={() => {
-                navigate('/shop?category=gifting');
-                setSearchOpen(false);
-              }}
-              className="underline hover:text-forest"
-            >
-              Curated Gift Boxes
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
 
       {mobileOpen ? (
         <div className="fixed inset-0 top-[72px] z-50 flex flex-col bg-surface/98 backdrop-blur-md px-6 py-6 lg:hidden fade-in overflow-y-auto">
