@@ -245,12 +245,27 @@ function CinematicHero() {
             </Link>
           </div>
 
-          <ul className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/20 pt-5 text-xs text-white/80 font-medium">
-            <li className="flex items-center gap-1.5">✓ 100% Named Artisans</li>
+          <ul className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/20 pt-5 text-xs text-white/90 font-medium">
+            <li className="flex items-center gap-2">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="w-3.5 h-3.5 text-terra shrink-0 stroke-[2.2]" aria-hidden>
+                <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>100% Named Artisans</span>
+            </li>
             <li aria-hidden className="hidden h-3 w-px bg-white/25 sm:block" />
-            <li className="flex items-center gap-1.5">✓ Verified Mountain Origin</li>
+            <li className="flex items-center gap-2">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="w-3.5 h-3.5 text-terra shrink-0 stroke-[2.2]" aria-hidden>
+                <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Verified Mountain Origin</span>
+            </li>
             <li aria-hidden className="hidden h-3 w-px bg-white/25 sm:block" />
-            <li className="flex items-center gap-1.5">✓ Direct Dispatches from HP</li>
+            <li className="flex items-center gap-2">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="w-3.5 h-3.5 text-terra shrink-0 stroke-[2.2]" aria-hidden>
+                <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Direct Dispatches from HP</span>
+            </li>
           </ul>
         </div>
       </div>
@@ -258,7 +273,10 @@ function CinematicHero() {
       <div className="relative z-30 border-t border-white/15 bg-black/45 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
           <div className="min-w-0 flex items-center gap-2.5">
-            <span className="text-terra text-sm shrink-0">📍</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4 text-terra shrink-0 stroke-2" aria-hidden>
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" strokeLinejoin="round" />
+              <circle cx="12" cy="9" r="2.5" />
+            </svg>
             <div className="min-w-0">
               <p className="font-serif text-[14px] font-medium text-white/95">{slide.place}</p>
               <p className="truncate text-[11.5px] text-white/75">{slide.caption}</p>
@@ -434,6 +452,7 @@ const CATEGORY_VISUALS: Record<string, { image: string; tag: string }> = {
   'dry-fruit-and-nuts': { image: '/images/product-walnut.jpg', tag: 'Mountain Harvest' },
   'pulses-and-staples': { image: '/images/product-rajma.jpg', tag: 'Natural Farming' },
   'caps-and-headwear': { image: '/images/product-cap.jpg', tag: 'Traditional' },
+  'cold-pressed-oils': { image: '/images/product-oil.jpg', tag: 'Wood-Pressed' },
   gifting: { image: '/images/maker-food.jpg', tag: 'Curated' },
 };
 

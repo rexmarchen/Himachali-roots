@@ -189,7 +189,7 @@ function Header() {
         isHome ? 'fixed top-0 left-0 right-0 z-40' : 'sticky top-0 z-40'
       } transition-all duration-300 ${
         isTransparent
-          ? 'bg-gradient-to-b from-black/60 via-black/25 to-transparent border-b border-transparent'
+          ? 'bg-black/35 backdrop-blur-md border-b border-white/10'
           : 'bg-[#F7F3EB]/95 backdrop-blur-md border-b border-[#E5DED2] shadow-xs'
       }`}
     >
@@ -199,8 +199,8 @@ function Header() {
             isTransparent ? 'bg-black/40 text-paper/90 border-b border-white/10' : 'bg-forest text-paper'
           }`}
         >
-          <div className="mx-auto flex max-w-7xl items-center justify-center gap-2 px-4 py-1.5 text-center text-[10.5px] tracking-[0.04em] sm:text-[11px]">
-            <span className="hidden h-1.5 w-1.5 rounded-full bg-terra sm:block" aria-hidden />
+          <div className="mx-auto flex max-w-7xl items-center justify-center gap-2 px-4 py-2 text-center text-[10.5px] tracking-[0.04em] sm:text-[11.5px] font-medium">
+            <span className="hidden h-1.5 w-1.5 rounded-full bg-terra sm:block animate-pulse" aria-hidden />
             {announcement.href ? (
               <Link to={announcement.href} className="hover:underline underline-offset-2">
                 {announcement.text}
@@ -325,11 +325,15 @@ function Header() {
 
       {/* Flipkart / Amazon Department Category Navigation Ribbon */}
       <div
-        className={`border-t transition-colors duration-200 overflow-x-auto no-scrollbar ${
+        className={`border-t transition-colors duration-200 overflow-x-auto no-scrollbar scroll-smooth ${
           isTransparent
-            ? 'border-white/10 bg-black/30 backdrop-blur-md text-white/90'
+            ? 'border-white/10 bg-black/25 backdrop-blur-md text-white/90'
             : 'border-[#E5DED2] bg-[#EFE9DD]/95 text-ink'
         }`}
+        style={{
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        }}
       >
         <div className="mx-auto flex max-w-7xl items-center gap-1 sm:gap-2 px-4 sm:px-6 lg:px-8 py-2 text-xs font-medium whitespace-nowrap">
           <Link

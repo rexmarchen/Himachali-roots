@@ -166,7 +166,7 @@ export function EcommerceSearchBar({
               setQuery(e.target.value);
               setIsOpen(true);
             }}
-            placeholder="Search shawls, Kangra tea, wildflower honey, rajma, walnuts…"
+            placeholder="Search shawls, Kangra tea, wild honey, rajma, oils…"
             className="w-full bg-transparent text-[13px] sm:text-sm text-ink placeholder-[#8C8275] outline-none"
             aria-label="Search products, makers and categories"
           />
@@ -313,7 +313,13 @@ export function EcommerceSearchBar({
                       }}
                       className="p-2 rounded-lg bg-[#FAF8F5] border border-[#EAE2D6] hover:bg-white hover:border-forest/40 text-left font-medium text-ink transition-colors"
                     >
-                      📍 {r.label}
+                      <span className="flex items-center gap-1.5">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-3.5 h-3.5 text-terra shrink-0 stroke-2" aria-hidden>
+                          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" strokeLinejoin="round" />
+                          <circle cx="12" cy="9" r="2.5" />
+                        </svg>
+                        <span>{r.label}</span>
+                      </span>
                     </button>
                   ))}
                 </div>
