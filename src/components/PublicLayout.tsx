@@ -4,7 +4,7 @@ import { api, errorMessage } from '@/lib/api';
 import { useAuth, useCartCount, useSiteContent } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { Button, Input } from './ui';
-import { SearchModal } from './SearchModal';
+import { EcommerceSearchBar } from './EcommerceSearchBar';
 
 const NAV = [
   { label: 'Shop', to: '/shop' },
@@ -170,7 +170,6 @@ function Header() {
   const isHome = location.pathname === '/';
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const navigate = useNavigate();
   const content = useSiteContent();
   const announcement = content.data?.content.announcement;
@@ -182,17 +181,6 @@ function Header() {
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setSearchOpen((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
   const isTransparent = isHome && !scrolled;
@@ -226,69 +214,31 @@ function Header() {
         </div>
       ) : null}
 
-      <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
-        <Wordmark light={isTransparent} />
+      <div className="mx-auto flex h-[72px] sm:h-[78px] max-w-7xl items-center justify-between gap-3 sm:gap-6 px-4 sm:px-6 lg:px-8">
+        {/* Brand Logo */}
+        <div className="shrink-0">
+          <Wordmark light={isTransparent} />
+        </div>
 
-        <nav className="hidden items-center gap-8 lg:flex" aria-label="Primary">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `text-[13px] font-medium tracking-[0.01em] transition-colors duration-200 ${
-                  isTransparent
-                    ? isActive
-                      ? 'text-white underline underline-offset-8 decoration-terra'
-                      : 'text-white/85 hover:text-white'
-                    : isActive
-                      ? 'text-terra'
-                      : 'text-ink hover:text-terra'
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+        {/* Central Production Ecommerce Search Bar (Amazon / Flipkart Style) */}
+        <div className="hidden md:flex flex-1 max-w-xl lg:max-w-2xl mx-2 lg:mx-6">
+          <EcommerceSearchBar light={isTransparent} />
+        </div>
 
-        <div className="flex items-center gap-3 sm:gap-4">
-          {/* Elegant Pill Search Trigger */}
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            className={`group flex items-center gap-2 sm:gap-2.5 rounded-full px-3.5 sm:px-4 py-1.5 sm:py-2 text-[12px] font-medium transition-all duration-200 ${
-              isTransparent
-                ? 'bg-white/15 hover:bg-white/25 text-white border border-white/25 backdrop-blur-md shadow-xs'
-                : 'bg-[#F2ECE1] hover:bg-[#EAE2D4] text-ink/85 border border-[#DDD3C4] shadow-xs'
+        {/* User Actions & Navigation */}
+        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+          <Link
+            to="/makers"
+            className={`hidden xl:inline-flex text-[13px] font-medium transition-colors ${
+              isTransparent ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
             }`}
-            aria-label="Search catalogue (Cmd+K)"
           >
-            <svg
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:scale-110"
-              aria-hidden
-            >
-              <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="1.8" />
-              <path d="M12.5 12.5 17 17" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-            <span className="hidden md:inline font-sans text-[12px] tracking-[0.01em]">
-              Search crafts, tea, honey…
-            </span>
-            <span className="md:hidden font-sans text-[12px]">Search</span>
-            <kbd
-              className={`hidden rounded px-1.5 py-0.5 text-[9px] font-mono tracking-wider font-semibold uppercase lg:inline-block ${
-                isTransparent ? 'bg-white/20 text-white/90' : 'bg-white/80 text-muted border border-line'
-              }`}
-            >
-              ⌘K
-            </kbd>
-          </button>
+            Makers
+          </Link>
 
           <Link
             to="/account/wishlist"
-            className={`hidden items-center gap-1 text-[12.5px] font-medium transition-colors duration-200 sm:flex ${
+            className={`hidden items-center gap-1.5 text-[12.5px] font-medium transition-colors sm:flex ${
               isTransparent ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
             }`}
             title="Saved items"
@@ -297,11 +247,11 @@ function Header() {
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
               <path
                 d="M10 16.5l-6-6a4.2 4.2 0 0 1 0-6 4.2 4.2 0 0 1 6 0l0 0 0 0a4.2 4.2 0 0 1 6 0 4.2 4.2 0 0 1 0 6l-6 6Z"
-                strokeWidth="1.5"
+                strokeWidth="1.6"
                 strokeLinejoin="round"
               />
             </svg>
-            <span className="hidden xl:inline">Saved</span>
+            <span className="hidden lg:inline">Saved</span>
           </Link>
 
           <span
@@ -330,19 +280,26 @@ function Header() {
 
           <Link
             to="/cart"
-            className={`relative flex items-center gap-1.5 text-[12.5px] font-medium transition-colors duration-200 ${
-              isTransparent ? 'text-white hover:text-sand' : 'text-ink hover:text-terra'
+            className={`relative flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-3.5 py-1.5 text-[12.5px] font-medium transition-all ${
+              isTransparent
+                ? 'bg-white/15 hover:bg-white/25 text-white border border-white/25 shadow-xs'
+                : 'bg-sand/70 hover:bg-sand text-ink border border-line shadow-2xs'
             }`}
             aria-label={`Shopping bag with ${cartCount} items`}
           >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" strokeWidth="1.8" />
+              <line x1="3" y1="6" x2="21" y2="6" strokeWidth="1.8" />
+              <path d="M16 10a4 4 0 0 1-8 0" strokeWidth="1.8" />
+            </svg>
             <span className="hidden sm:inline">Bag</span>
             <span
-              className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold transition-transform duration-200 ${
+              className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold ${
                 cartCount > 0
-                  ? 'bg-terra text-white shadow-xs scale-100'
+                  ? 'bg-terra text-white shadow-xs'
                   : isTransparent
                     ? 'bg-white/20 text-white'
-                    : 'bg-sand/70 text-ink'
+                    : 'bg-sand text-ink'
               }`}
             >
               {cartCount}
@@ -351,7 +308,7 @@ function Header() {
 
           <button
             type="button"
-            className="flex flex-col justify-center gap-1.5 p-1 lg:hidden"
+            className="flex flex-col justify-center gap-1.5 p-1.5 md:hidden"
             onClick={() => setMobileOpen((value) => !value)}
             aria-label="Open menu"
             aria-expanded={mobileOpen}
@@ -363,7 +320,63 @@ function Header() {
         </div>
       </div>
 
-      <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+      {/* Mobile Search Bar Row (like Flipkart / Amazon Mobile) */}
+      <div className="md:hidden px-4 pb-3">
+        <EcommerceSearchBar light={isTransparent} />
+      </div>
+
+      {/* Flipkart / Amazon Department Category Navigation Ribbon */}
+      <div
+        className={`border-t transition-colors duration-200 overflow-x-auto no-scrollbar ${
+          isTransparent
+            ? 'border-white/10 bg-black/30 backdrop-blur-md text-white/90'
+            : 'border-[#E5DED2] bg-[#EFE9DD]/95 text-ink'
+        }`}
+      >
+        <div className="mx-auto flex max-w-7xl items-center gap-1 sm:gap-2 px-4 sm:px-6 lg:px-8 py-2 text-xs font-medium whitespace-nowrap">
+          <Link
+            to="/shop"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors font-semibold"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5" aria-hidden>
+              <path fillRule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10zm0 5.25a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75z" clipRule="evenodd" />
+            </svg>
+            <span>All Products</span>
+          </Link>
+          <span className="opacity-30">|</span>
+          <Link to="/shop?category=shawls-and-weaves" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Shawls & Handlooms
+          </Link>
+          <Link to="/shop?category=tea-and-infusions" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Kangra Orthodox Tea
+          </Link>
+          <Link to="/shop?category=honey-and-preserves" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Wild Forest Honey
+          </Link>
+          <Link to="/shop?category=cold-pressed-oils" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Cold-Pressed Oils
+          </Link>
+          <Link to="/shop?category=spices-and-staples" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Spices & Staples
+          </Link>
+          <Link to="/shop?category=knitwear" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Knitwear
+          </Link>
+          <Link to="/shop?category=gifting" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors font-semibold text-terra">
+            Curated Gifting
+          </Link>
+          <span className="opacity-30 hidden lg:inline">|</span>
+          <Link to="/makers" className="hidden lg:inline-block px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Meet the Makers
+          </Link>
+          <Link to="/sourcing" className="hidden lg:inline-block px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            The Sourcing Standard
+          </Link>
+          <Link to="/about" className="hidden xl:inline-block px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Our Story
+          </Link>
+        </div>
+      </div>
 
       {mobileOpen ? (
         <div className="fixed inset-0 top-[72px] z-50 flex flex-col bg-surface/98 backdrop-blur-md px-6 py-6 lg:hidden fade-in overflow-y-auto">
