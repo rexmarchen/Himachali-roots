@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import type { ProductListResponse, ProductSummary } from '@shared/types';
+import type { Paged, ProductSummary } from '@shared/types';
 import { formatINR } from '@shared/types';
 import { api } from '@/lib/api';
 
@@ -9,19 +9,20 @@ const POPULAR_TAGS = [
   { label: 'Kullu Wool Shawls', q: 'shawl' },
   { label: 'Kangra Orthodox Tea', q: 'tea' },
   { label: 'Wild Forest Honey', q: 'honey' },
-  { label: 'Chamba Chukh', q: 'chukh' },
-  { label: 'Kinnauri Socks', q: 'socks' },
-  { label: 'Cold-Pressed Walnut Oil', q: 'oil' },
-  { label: 'Red Rajma', q: 'rajma' },
+  { label: 'Kinnaur Walnuts', q: 'walnut' },
+  { label: 'Wild Apricot Oil', q: 'oil' },
+  { label: 'Chamba Red Rajma', q: 'rajma' },
 ];
 
 const CATEGORIES = [
-  { name: 'Shawls & Handlooms', slug: 'shawls-and-weaves', icon: '🧣' },
-  { name: 'Tea & Infusions', slug: 'tea-and-infusions', icon: '🍵' },
-  { name: 'Honey & Preserves', slug: 'honey-and-preserves', icon: '🍯' },
-  { name: 'Cold-Pressed Oils', slug: 'cold-pressed-oils', icon: '🫒' },
-  { name: 'Spices & Staples', slug: 'spices-and-staples', icon: '🌶️' },
-  { name: 'Knitwear', slug: 'knitwear', icon: '🧤' },
+  { name: 'Shawls & Handlooms', slug: 'shawls-and-weaves' },
+  { name: 'Kangra Tea', slug: 'tea-and-infusions' },
+  { name: 'Dry Fruit & Nuts', slug: 'dry-fruit-and-nuts' },
+  { name: 'Honey & Preserves', slug: 'pantry-and-preserves' },
+  { name: 'Cold-Pressed Oils', slug: 'cold-pressed-oils' },
+  { name: 'Mountain Pulses', slug: 'pulses-and-staples' },
+  { name: 'Warm Knitwear', slug: 'knitwear' },
+  { name: 'Himachali Caps', slug: 'caps-and-headwear' },
 ];
 
 export function SearchModal({
@@ -38,7 +39,7 @@ export function SearchModal({
   // Load product catalog for instant autocomplete
   const { data: productsData } = useQuery({
     queryKey: ['products-all'],
-    queryFn: () => api<ProductListResponse>('/products'),
+    queryFn: () => api<Paged<ProductSummary>>('/products'),
     staleTime: 5 * 60 * 1000,
     enabled: open,
   });
@@ -73,7 +74,7 @@ export function SearchModal({
     const q = query.trim().toLowerCase();
     if (!q || !productsData?.items) return [];
     return productsData.items
-      .filter((p) => {
+      .filter((p: ProductSummary) => {
         return (
           p.name.toLowerCase().includes(q) ||
           p.shortDescription?.toLowerCase().includes(q) ||
@@ -187,7 +188,7 @@ export function SearchModal({
                       className="group flex w-full items-center gap-4 py-3 px-2 text-left rounded-lg hover:bg-[#F2ECE1]/70 transition-colors"
                     >
                       <img
-                        src={p.imageUrl}
+                        src={p.imageUrl ?? undefined}
                         alt={p.name}
                         className="h-12 w-12 rounded-lg object-cover bg-sand/40 shrink-0 border border-line/60"
                       />
@@ -250,7 +251,7 @@ export function SearchModal({
                       onClick={() => handleSelectCategory(cat.slug)}
                       className="group flex items-center gap-2.5 p-2.5 rounded-xl border border-[#E7DFD3] bg-white/70 hover:bg-white hover:border-forest/40 hover:shadow-xs transition-all text-left"
                     >
-                      <span className="text-xl shrink-0">{cat.icon}</span>
+                      <span className="w-2 h-2 rounded-full bg-terra shrink-0" />
                       <span className="text-xs font-medium text-ink group-hover:text-forest transition-colors truncate">
                         {cat.name}
                       </span>

@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth, useCartCount, useSiteContent } from '@/lib/session';
 import { useToast } from '@/lib/toast';
-import { Button, Input } from './ui';
 import { EcommerceSearchBar } from './EcommerceSearchBar';
 
 const NAV = [
@@ -170,7 +169,6 @@ function Header() {
   const isHome = location.pathname === '/';
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const navigate = useNavigate();
   const content = useSiteContent();
   const announcement = content.data?.content.announcement;
 
@@ -350,17 +348,23 @@ function Header() {
           <Link to="/shop?category=tea-and-infusions" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
             Kangra Orthodox Tea
           </Link>
-          <Link to="/shop?category=honey-and-preserves" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
-            Wild Forest Honey
+          <Link to="/shop?category=dry-fruit-and-nuts" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Dry Fruit & Nuts
+          </Link>
+          <Link to="/shop?category=pantry-and-preserves" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Wild Honey & Preserves
           </Link>
           <Link to="/shop?category=cold-pressed-oils" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
             Cold-Pressed Oils
           </Link>
-          <Link to="/shop?category=spices-and-staples" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
-            Spices & Staples
+          <Link to="/shop?category=pulses-and-staples" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Mountain Pulses & Staples
           </Link>
           <Link to="/shop?category=knitwear" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
-            Knitwear
+            Warm Knitwear
+          </Link>
+          <Link to="/shop?category=caps-and-headwear" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors">
+            Himachali Caps
           </Link>
           <Link to="/shop?category=gifting" className="px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors font-semibold text-terra">
             Curated Gifting

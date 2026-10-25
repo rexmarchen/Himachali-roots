@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, errorFields, errorMessage } from '@/lib/api';
-import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { Alert, Button, Field, Input } from '@/components/ui';
 
@@ -58,7 +57,6 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
-  const { config } = useAuth();
   const toast = useToast();
   const next = params.get('next') || '/account';
 

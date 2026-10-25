@@ -182,7 +182,77 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
     }
     if (cleanPath === '/products') {
       const res = await fetch('/static-products.json');
-      if (res.ok) return (await res.json()) as T;
+      if (res.ok) {
+        const data = await res.json();
+        const queryString = path.includes('?') ? path.slice(path.indexOf('?') + 1) : '';
+        const urlParams = new URLSearchParams(queryString);
+        const categorySlug = urlParams.get('category');
+        const region = urlParams.get('region');
+        const sellerSlug = urlParams.get('seller');
+        const q = urlParams.get('q')?.toLowerCase().trim();
+        const inStock = urlParams.get('inStock') === 'true';
+        const minPrice = urlParams.get('minPrice') ? Number(urlParams.get('minPrice')) : null;
+        const maxPrice = urlParams.get('maxPrice') ? Number(urlParams.get('maxPrice')) : null;
+        const sort = urlParams.get('sort');
+
+        let items = Array.isArray(data.items) ? [...data.items] : [];
+
+        if (categorySlug) {
+          items = items.filter(
+            (p: { categorySlug?: string; categoryName?: string }) =>
+              p.categorySlug === categorySlug ||
+              p.categoryName?.toLowerCase().replace(/[^a-z0-9]+/g, '-').includes(categorySlug.toLowerCase())
+          );
+        }
+        if (region) {
+          items = items.filter((p: { region?: string }) => p.region?.toLowerCase() === region.toLowerCase());
+        }
+        if (sellerSlug) {
+          items = items.filter(
+            (p: { sellerSlug?: string; sellerName?: string }) =>
+              p.sellerSlug === sellerSlug || p.sellerName?.toLowerCase().includes(sellerSlug.toLowerCase())
+          );
+        }
+        if (q) {
+          items = items.filter(
+            (p: { name?: string; shortDescription?: string; categoryName?: string; region?: string }) =>
+              p.name?.toLowerCase().includes(q) ||
+              p.shortDescription?.toLowerCase().includes(q) ||
+              p.categoryName?.toLowerCase().includes(q) ||
+              p.region?.toLowerCase().includes(q)
+          );
+        }
+        if (inStock) {
+          items = items.filter((p: { stock?: number }) => (p.stock ?? 0) > 0);
+        }
+        if (minPrice !== null && !Number.isNaN(minPrice)) {
+          items = items.filter((p: { pricePaise?: number }) => (p.pricePaise ?? 0) >= minPrice);
+        }
+        if (maxPrice !== null && !Number.isNaN(maxPrice)) {
+          items = items.filter((p: { pricePaise?: number }) => (p.pricePaise ?? 0) <= maxPrice);
+        }
+
+        if (sort === 'price_asc') {
+          items.sort((a: { pricePaise?: number }, b: { pricePaise?: number }) => (a.pricePaise ?? 0) - (b.pricePaise ?? 0));
+        } else if (sort === 'price_desc') {
+          items.sort((a: { pricePaise?: number }, b: { pricePaise?: number }) => (b.pricePaise ?? 0) - (a.pricePaise ?? 0));
+        }
+
+        const pageSize = 12;
+        const page = Math.max(1, Number(urlParams.get('page') ?? 1) || 1);
+        const total = items.length;
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        const paginatedItems = items.slice((page - 1) * pageSize, page * pageSize);
+
+        return {
+          ...data,
+          items: paginatedItems,
+          total,
+          page,
+          pageSize,
+          totalPages,
+        } as T;
+      }
     }
     if (cleanPath.startsWith('/products/')) {
       const slug = decodeURIComponent(cleanPath.replace('/products/', ''));

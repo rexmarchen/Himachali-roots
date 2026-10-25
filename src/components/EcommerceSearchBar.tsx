@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import type { ProductListResponse, ProductSummary } from '@shared/types';
+import type { Paged, ProductSummary } from '@shared/types';
 import { formatINR } from '@shared/types';
 import { api } from '@/lib/api';
 
 const CATEGORIES = [
   { label: 'All Himachal', value: '' },
   { label: 'Shawls & Weaves', value: 'shawls-and-weaves' },
-  { label: 'Tea & Infusions', value: 'tea-and-infusions' },
-  { label: 'Honey & Preserves', value: 'honey-and-preserves' },
+  { label: 'Kangra Tea', value: 'tea-and-infusions' },
+  { label: 'Dry Fruit & Nuts', value: 'dry-fruit-and-nuts' },
+  { label: 'Honey & Preserves', value: 'pantry-and-preserves' },
   { label: 'Cold-Pressed Oils', value: 'cold-pressed-oils' },
-  { label: 'Spices & Staples', value: 'spices-and-staples' },
+  { label: 'Mountain Pulses', value: 'pulses-and-staples' },
   { label: 'Knitwear', value: 'knitwear' },
+  { label: 'Himachali Caps', value: 'caps-and-headwear' },
   { label: 'Gifting Boxes', value: 'gifting' },
 ];
 
@@ -20,9 +22,9 @@ const TRENDING_SEARCHES = [
   'Kangra Orthodox Tea',
   'Kullu Handwoven Shawl',
   'Lahaul Wildflower Honey',
-  'Chamba Chukh Chilli Paste',
-  'Kinnauri Patterned Socks',
-  'Cold-Pressed Walnut Oil',
+  'Wild Apricot Kernel Oil',
+  'Kinnaur Walnut Kernels',
+  'Pure Himalayan Shilajit',
   'Chamba Red Rajma',
 ];
 
@@ -43,7 +45,7 @@ export function EcommerceSearchBar({
   // Load products catalog for live autocomplete
   const { data: productsData } = useQuery({
     queryKey: ['products-all'],
-    queryFn: () => api<ProductListResponse>('/products'),
+    queryFn: () => api<Paged<ProductSummary>>('/products'),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -64,7 +66,7 @@ export function EcommerceSearchBar({
     if (!q || !productsData?.items) return [];
 
     return productsData.items
-      .filter((p) => {
+      .filter((p: ProductSummary) => {
         const matchesCategory = !selectedCategory || p.categorySlug === selectedCategory;
         const matchesText =
           p.name.toLowerCase().includes(q) ||
@@ -239,7 +241,7 @@ export function EcommerceSearchBar({
                         className="group flex w-full items-center gap-3.5 p-2 rounded-xl hover:bg-[#F7F3EB] transition-colors text-left"
                       >
                         <img
-                          src={p.imageUrl}
+                          src={p.imageUrl ?? undefined}
                           alt={p.name}
                           className="h-11 w-11 rounded-lg object-cover bg-sand/30 shrink-0 border border-line"
                         />

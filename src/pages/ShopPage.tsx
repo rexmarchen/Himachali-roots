@@ -66,44 +66,112 @@ export function ShopPage() {
   const page = Number(params.get('page') ?? 1) || 1;
   const q = params.get('q') ?? '';
 
+  const activeCategory = useMemo(() => {
+    return filters?.categories.find((item) => item.slug === category);
+  }, [filters, category]);
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Shop' }]} />
       <PageHeader
-        eyebrow={q ? `Search results for “${q}”` : 'The catalogue'}
-        title={q ? 'Search the shelves' : category ? filters?.categories.find((item) => item.slug === category)?.name ?? 'Shop' : 'All products'}
-        lede="Small-batch goods from reviewed Himachali sellers. Prices include GST where applicable; shipping is calculated before payment."
+        eyebrow={q ? `Search results for “${q}”` : activeCategory ? 'Category Collection' : 'The Catalogue'}
+        title={q ? 'Search the shelves' : activeCategory ? activeCategory.name : 'All Products'}
+        lede={
+          activeCategory?.description
+            ? activeCategory.description
+            : 'Directly sourced small-batch treasures from reviewed Himachali cooperatives and family makers. GST included; transparent mountain shipping.'
+        }
       />
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[220px_1fr]">
+      {/* Production Category Quick-Pills Filter Bar */}
+      {filters?.categories?.length ? (
+        <div className="mt-6 -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto no-scrollbar pb-1">
+          <div className="flex items-center gap-2 min-w-max py-1">
+            <button
+              type="button"
+              onClick={() => update('category', null)}
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                !category
+                  ? 'border-forest bg-forest text-paper shadow-xs font-semibold'
+                  : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
+              }`}
+            >
+              <span>All Shelves</span>
+              <span className={`text-[10.5px] px-1.5 py-0.2 rounded-full font-mono ${!category ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
+                {filters.categories.reduce((acc, c) => acc + (c.productCount ?? 0), 0)}
+              </span>
+            </button>
+
+            {filters.categories.map((c) => {
+              const isSelected = category === c.slug;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => update('category', isSelected ? null : c.slug)}
+                  className={`inline-flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                    isSelected
+                      ? 'border-forest bg-forest text-paper shadow-xs font-semibold'
+                      : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
+                  }`}
+                >
+                  {c.imageUrl ? (
+                    <img src={c.imageUrl} alt="" className="w-5 h-5 rounded-full object-cover shrink-0 border border-white/20" />
+                  ) : null}
+                  <span>{c.name}</span>
+                  <span className={`text-[10.5px] px-1.5 py-0.2 rounded-full font-mono ${isSelected ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
+                    {c.productCount ?? 0}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-8 grid gap-10 lg:grid-cols-[230px_1fr]">
         <aside className="hidden lg:block">
           <div className="sticky top-32 space-y-7">
             <div>
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Categories</p>
-              <ul className="space-y-0.5">
+              <ul className="space-y-1">
                 <li>
                   <button
                     type="button"
                     onClick={() => update('category', null)}
-                    className={`w-full py-1.5 text-left text-[13px] ${!category ? 'font-semibold text-forest' : 'text-ink/70 hover:text-forest'}`}
+                    className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-[12.5px] transition-colors ${
+                      !category
+                        ? 'font-semibold text-forest bg-forest/[0.08] border border-forest/20'
+                        : 'text-ink/70 hover:bg-paper hover:text-forest'
+                    }`}
                   >
-                    All shelves
+                    <span>All shelves</span>
+                    <span className="text-[10px] font-mono text-muted">
+                      {filters?.categories ? filters.categories.reduce((acc, c) => acc + (c.productCount ?? 0), 0) : ''}
+                    </span>
                   </button>
                 </li>
-                {filters?.categories.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => update('category', item.slug)}
-                      className={`flex w-full items-baseline justify-between gap-2 py-1.5 text-left text-[13px] ${
-                        category === item.slug ? 'font-semibold text-forest' : 'text-ink/70 hover:text-forest'
-                      }`}
-                    >
-                      <span>{item.name}</span>
-                      <span className="text-[10px] tabular-nums text-muted">{item.productCount ?? 0}</span>
-                    </button>
-                  </li>
-                ))}
+                {filters?.categories.map((item) => {
+                  const isSelected = category === item.slug;
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => update('category', item.slug)}
+                        className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] transition-colors ${
+                          isSelected
+                            ? 'font-semibold text-forest bg-forest/[0.08] border border-forest/20'
+                            : 'text-ink/70 hover:bg-paper hover:text-forest'
+                        }`}
+                      >
+                        <span className="truncate">{item.name}</span>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${isSelected ? 'bg-forest/15 text-forest font-semibold' : 'text-muted'}`}>
+                          {item.productCount ?? 0}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
 
@@ -189,6 +257,58 @@ export function ShopPage() {
         </aside>
 
         <div>
+          {/* Editorial Category Showcase Banner */}
+          {activeCategory && !q ? (
+            <div className="mb-6 overflow-hidden rounded-xl border border-line bg-gradient-to-br from-[#FAF6F0] via-surface to-[#F3EDE2] p-5 sm:p-6 shadow-xs">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+                <div className="max-w-xl">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="inline-flex items-center gap-1 rounded bg-forest/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-forest">
+                      <TagIcon className="h-3 w-3" />
+                      Featured Department
+                    </span>
+                    <span className="text-[11px] text-muted">
+                      {products.data?.total ?? activeCategory.productCount ?? 0} authentic listings
+                    </span>
+                  </div>
+                  <h2 className="font-serif text-2xl sm:text-3xl font-medium text-forest tracking-tight">
+                    {activeCategory.name}
+                  </h2>
+                  {activeCategory.description ? (
+                    <p className="mt-1.5 text-[13px] leading-relaxed text-ink/75 font-sans">
+                      {activeCategory.description}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-3.5 flex flex-wrap items-center gap-2 text-[11px] text-ink/75">
+                    <span className="inline-flex items-center gap-1 rounded-sm border border-line/70 bg-paper px-2 py-0.5 shadow-2xs">
+                      <MountainIcon className="h-3 w-3 text-forest" />
+                      100% Himalayan Origin
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-sm border border-line/70 bg-paper px-2 py-0.5 shadow-2xs">
+                      <CheckCircleIcon className="h-3 w-3 text-terra" />
+                      Artisan Verified
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-sm border border-line/70 bg-paper px-2 py-0.5 shadow-2xs">
+                      <TruckIcon className="h-3 w-3 text-forest" />
+                      Free shipping over ₹1,499
+                    </span>
+                  </div>
+                </div>
+
+                {activeCategory.imageUrl ? (
+                  <div className="hidden sm:block shrink-0">
+                    <img
+                      src={activeCategory.imageUrl}
+                      alt={activeCategory.name}
+                      className="h-24 w-24 sm:h-28 sm:w-28 rounded-lg object-cover border border-line shadow-sm"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
             <p className="text-xs text-muted">
               {products.data ? `${products.data.total} listing${products.data.total === 1 ? '' : 's'}` : 'Loading…'}
@@ -282,5 +402,43 @@ function FilterChip({ label, onClear }: { label: string; onClear: () => void }) 
       <span aria-hidden>✕</span>
       <span className="sr-only">Remove filter</span>
     </button>
+  );
+}
+
+function TagIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
+      <path d="M7 7h.01" />
+    </svg>
+  );
+}
+
+function MountainIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+function TruckIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" />
+      <path d="M15 18H9" />
+      <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14v10Z" />
+      <circle cx="17" cy="18.5" r="2.5" />
+      <circle cx="7" cy="18.5" r="2.5" />
+    </svg>
   );
 }

@@ -6,7 +6,6 @@ import { formatINR } from '@shared/types';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
-import { DemoBadge } from './ui';
 
 export function ProductCard({
   product,
