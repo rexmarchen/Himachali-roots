@@ -108,7 +108,7 @@ export function EcommerceSearchBar({
       {/* Search Input Box */}
       <form
         onSubmit={handleSubmit}
-        className={`group flex items-center h-11 w-full rounded-full transition-all duration-200 ${
+        className={`group flex items-center h-[38px] w-full rounded-full transition-all duration-200 ${
           isOpen
             ? light
               ? 'ring-2 ring-terra bg-[#101918]/95 border-terra/60 shadow-2xl'
@@ -120,7 +120,7 @@ export function EcommerceSearchBar({
       >
         {/* Category Dropdown */}
         <div
-          className={`relative shrink-0 hidden sm:flex items-center h-full rounded-l-full px-3 text-xs transition-colors border-r ${
+          className={`relative shrink-0 hidden sm:flex items-center h-full rounded-l-full pl-3 pr-2 text-xs transition-colors border-r ${
             light
               ? 'bg-white/10 hover:bg-white/15 text-white/90 border-white/20'
               : 'bg-[#EAE2D5] hover:bg-[#E2D8C9] text-forest border-[#D8CEBF]'
@@ -129,7 +129,7 @@ export function EcommerceSearchBar({
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className={`bg-transparent text-xs font-medium outline-none cursor-pointer pr-4 appearance-none ${
+            className={`bg-transparent text-[11px] font-medium outline-none cursor-pointer pr-4 max-w-[105px] truncate appearance-none ${
               light ? 'text-white' : 'text-forest'
             }`}
             aria-label="Filter search by category"
@@ -143,7 +143,7 @@ export function EcommerceSearchBar({
           <svg
             viewBox="0 0 20 20"
             fill="currentColor"
-            className={`w-3.5 h-3.5 pointer-events-none absolute right-2 transition-colors ${
+            className={`w-3 h-3 pointer-events-none absolute right-1.5 transition-colors ${
               light ? 'text-white/70' : 'text-muted'
             }`}
             aria-hidden
@@ -157,12 +157,12 @@ export function EcommerceSearchBar({
         </div>
 
         {/* Search Input Field */}
-        <div className="relative flex-1 flex items-center h-full px-3.5">
+        <div className="relative flex-1 flex items-center h-full px-3">
           <svg
             viewBox="0 0 20 20"
             fill="none"
             stroke="currentColor"
-            className={`h-4 w-4 shrink-0 mr-2.5 sm:hidden ${
+            className={`h-3.5 w-3.5 shrink-0 mr-2 sm:hidden ${
               light ? 'text-white/60' : 'text-[#8C8275]'
             }`}
             aria-hidden
@@ -180,8 +180,8 @@ export function EcommerceSearchBar({
               setQuery(e.target.value);
               setIsOpen(true);
             }}
-            placeholder="Search shawls, Kangra tea, wild honey, rajma, oils…"
-            className={`w-full bg-transparent text-[13px] sm:text-sm outline-none transition-colors ${
+            placeholder="Search shawls, tea, honey…"
+            className={`w-full bg-transparent text-[12.5px] sm:text-[13px] outline-none transition-colors ${
               light
                 ? 'text-[#F7F3EB] placeholder-white/55'
                 : 'text-ink placeholder-[#7A7163]'
@@ -196,7 +196,7 @@ export function EcommerceSearchBar({
                 setQuery('');
                 inputRef.current?.focus();
               }}
-              className={`p-1 mr-1 text-xs rounded-full transition-colors ${
+              className={`p-1 mr-1 text-[10px] rounded-full transition-colors ${
                 light
                   ? 'text-white/60 hover:text-white hover:bg-white/15'
                   : 'text-muted hover:text-ink hover:bg-sand/60'
@@ -211,14 +211,14 @@ export function EcommerceSearchBar({
         {/* Search Submit Button */}
         <button
           type="submit"
-          className="h-full px-4 sm:px-5 flex items-center justify-center bg-terra hover:bg-[#B36347] text-white rounded-r-full font-medium transition-colors shrink-0 shadow-xs border-l border-white/15"
+          className="h-full px-3.5 sm:px-4 flex items-center justify-center bg-terra hover:bg-[#B36347] text-white rounded-r-full font-medium transition-colors shrink-0 shadow-xs border-l border-white/15"
           aria-label="Submit Search"
         >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-3.5 w-3.5" aria-hidden>
             <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="2" />
             <path d="M12.5 12.5 17 17" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          <span className="hidden lg:inline ml-1.5 text-xs font-semibold tracking-wide">Search</span>
+          <span className="hidden sm:inline ml-1.5 text-[11.5px] font-semibold tracking-wide">Search</span>
         </button>
       </form>
 

@@ -14,8 +14,8 @@ const NAV = [
 
 function Wordmark({ compact = false, light = false }: { compact?: boolean; light?: boolean }) {
   return (
-    <Link to="/" className="group flex items-center gap-3" aria-label="PAHADI ROOTS home">
-      <svg viewBox="0 0 48 48" className="h-9 w-9 shrink-0 drop-shadow-xs" aria-hidden>
+    <Link to="/" className="group flex items-center gap-2.5" aria-label="PAHADI ROOTS home">
+      <svg viewBox="0 0 48 48" className="h-8 w-8 shrink-0 drop-shadow-xs" aria-hidden>
         <rect width="48" height="48" rx="2" fill={light ? '#F7F3EB' : '#243D32'} />
         <path d="M9 35 20 15l5 11 4-6 9 15H9Z" fill={light ? '#243D32' : '#F7F3EB'} />
         <path d="M16 35 25 21l6 14H16Z" fill="#C77759" />
@@ -23,7 +23,7 @@ function Wordmark({ compact = false, light = false }: { compact?: boolean; light
       </svg>
       <span className="leading-none">
         <span
-          className={`block font-serif text-[19px] tracking-[0.02em] transition-colors duration-200 ${
+          className={`block font-serif text-[17px] sm:text-[18px] tracking-[0.02em] transition-colors duration-200 ${
             light ? 'text-[#FFFEFA] group-hover:text-sand' : 'text-forest group-hover:text-terra'
           }`}
         >
@@ -31,7 +31,7 @@ function Wordmark({ compact = false, light = false }: { compact?: boolean; light
         </span>
         {!compact ? (
           <span
-            className={`mt-1 block text-[8.5px] font-semibold uppercase tracking-[0.32em] transition-colors duration-200 ${
+            className={`mt-0.5 block text-[7.5px] sm:text-[8px] font-semibold uppercase tracking-[0.3em] transition-colors duration-200 ${
               light ? 'text-white/70' : 'text-muted'
             }`}
           >
@@ -110,21 +110,25 @@ function AccountMenu({ light = false }: { light?: boolean }) {
           <MenuLink to="/account/wishlist" onClick={() => setOpen(false)}>
             Saved items
           </MenuLink>
-          <MenuLink to="/seller" onClick={() => setOpen(false)}>
-            Seller portal (Dashboard)
-          </MenuLink>
-          <MenuLink to="/sell" onClick={() => setOpen(false)}>
-            Apply to sell
-          </MenuLink>
+          {user.roles.includes('seller') && !user.roles.includes('admin') ? (
+            <MenuLink to="/seller" onClick={() => setOpen(false)}>
+              Seller Studio (Dashboard)
+            </MenuLink>
+          ) : null}
+          {!user.roles.includes('seller') && !user.roles.includes('admin') ? (
+            <MenuLink to="/sell" onClick={() => setOpen(false)}>
+              Apply to become a maker
+            </MenuLink>
+          ) : null}
           {user.roles.includes('admin') ? (
             <Link
               to="/admin"
               role="menuitem"
               onClick={() => setOpen(false)}
-              className="flex items-center justify-between border-t border-line bg-forest/[0.05] px-4 py-2.5 text-[12.5px] font-semibold text-forest hover:bg-forest/10"
+              className="flex items-center justify-between border-t border-line bg-forest/[0.05] px-4 py-2 text-[12px] font-semibold text-forest hover:bg-forest/10"
             >
               <span>Administration</span>
-              <span className="rounded bg-forest/20 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-forest">
+              <span className="rounded bg-forest/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-forest">
                 Admin
               </span>
             </Link>
@@ -177,7 +181,7 @@ function HeritageAnnouncementMarquee({ light = false, customText }: { light?: bo
 
   return (
     <div
-      className={`relative h-8 w-full overflow-hidden transition-colors duration-300 ${
+      className={`relative h-7 w-full overflow-hidden transition-colors duration-300 ${
         light
           ? 'bg-black/55 text-[#F7F3EB]/90 border-b border-white/10'
           : 'bg-[#172321] text-[#F7F3EB] border-b border-[#101918]'
@@ -188,16 +192,16 @@ function HeritageAnnouncementMarquee({ light = false, customText }: { light?: bo
       }}
       aria-label="Himachal Pradesh authentic heritage announcements"
     >
-      <div className="animate-marquee flex items-center h-full whitespace-nowrap text-[11px] sm:text-[11.5px] font-medium tracking-[0.03em]">
+      <div className="animate-marquee flex items-center h-full whitespace-nowrap text-[10.5px] sm:text-[11px] font-medium tracking-[0.03em]">
         {items.map((item, index) => (
           <div key={`${item.tag}-${index}`} className="flex items-center shrink-0">
-            <span className="flex items-center gap-2 px-3 sm:px-4 hover:text-white transition-colors cursor-default">
-              <span className="rounded-full bg-terra/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-terra border border-terra/30">
+            <span className="flex items-center gap-1.5 px-3 hover:text-white transition-colors cursor-default">
+              <span className="rounded-full bg-terra/20 px-1.5 py-0.2 text-[8.5px] font-bold uppercase tracking-wider text-terra border border-terra/30">
                 {item.tag}
               </span>
               <span>{item.text}</span>
             </span>
-            <span className="text-terra/70 text-[9px] px-2 select-none" aria-hidden>
+            <span className="text-terra/70 text-[8.5px] px-1.5 select-none" aria-hidden>
               ✦
             </span>
           </div>
@@ -243,22 +247,22 @@ function Header() {
         customText={announcement?.active && announcement.text ? announcement.text : undefined}
       />
 
-      <div className="mx-auto flex h-[72px] sm:h-[78px] max-w-7xl items-center justify-between gap-3 sm:gap-6 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-[58px] sm:h-[62px] max-w-7xl items-center justify-between gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8">
         {/* Brand Logo */}
         <div className="shrink-0">
           <Wordmark light={isTransparent} />
         </div>
 
-        {/* Central Production Ecommerce Search Bar (Amazon / Flipkart Style) */}
-        <div className="hidden md:flex flex-1 max-w-xl lg:max-w-2xl mx-2 lg:mx-6">
+        {/* Central Production Ecommerce Search Bar (Proportional & Compact) */}
+        <div className="hidden md:flex flex-1 max-w-[390px] lg:max-w-[460px] mx-2 lg:mx-4">
           <EcommerceSearchBar light={isTransparent} />
         </div>
 
         {/* User Actions & Navigation */}
-        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 lg:gap-3.5 shrink-0">
           <Link
             to="/makers"
-            className={`hidden xl:inline-flex text-[13px] font-medium transition-colors ${
+            className={`hidden xl:inline-flex text-[12.5px] font-medium transition-colors ${
               isTransparent ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
             }`}
           >
@@ -267,7 +271,7 @@ function Header() {
 
           <Link
             to="/account/wishlist"
-            className={`hidden items-center gap-1.5 text-[12.5px] font-medium transition-colors sm:flex ${
+            className={`hidden items-center gap-1.5 text-[12px] font-medium transition-colors sm:flex ${
               isTransparent ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
             }`}
             title="Saved items"
@@ -284,33 +288,38 @@ function Header() {
           </Link>
 
           <span
-            className={`hidden h-4 w-px transition-colors duration-200 sm:block ${
+            className={`hidden h-3.5 w-px transition-colors duration-200 sm:block ${
               isTransparent ? 'bg-white/20' : 'bg-line'
             }`}
             aria-hidden
           />
 
-          <Link
-            to="/seller"
-            className={`hidden sm:inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11.5px] font-semibold tracking-wide transition-all shadow-xs ${
-              isTransparent
-                ? 'border-terra/60 bg-terra/25 text-white hover:bg-terra/40'
-                : 'border-terra/40 bg-terra/10 text-forest hover:bg-terra/20'
-            }`}
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-terra animate-pulse" />
-            <span>Seller Portal</span>
-          </Link>
+          {/* Seller Studio button: ONLY shown for users who have the seller role and are NOT admin */}
+          {user?.roles.includes('seller') && !user?.roles.includes('admin') ? (
+            <Link
+              to="/seller"
+              className={`hidden sm:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-wide transition-all shadow-xs ${
+                isTransparent
+                  ? 'border-terra/60 bg-terra/25 text-white hover:bg-terra/40'
+                  : 'border-terra/40 bg-terra/10 text-forest hover:bg-terra/20'
+              }`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-terra animate-pulse" />
+              <span>Seller Studio</span>
+            </Link>
+          ) : null}
 
+          {/* Admin Panel button: ONLY shown for users who have the admin role */}
           {user?.roles.includes('admin') ? (
             <Link
               to="/admin"
-              className={`hidden sm:inline-flex items-center gap-1 rounded border px-2.5 py-1 text-[11.5px] font-semibold tracking-wide uppercase transition-all shadow-xs ${
+              className={`hidden sm:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-wide uppercase transition-all shadow-xs ${
                 isTransparent
-                  ? 'border-white/40 bg-white/15 text-white hover:bg-white/25'
+                  ? 'border-white/40 bg-white/20 text-white hover:bg-white/30'
                   : 'border-forest/30 bg-forest/[0.08] text-forest hover:bg-forest/15'
               }`}
             >
+              <span className="h-1.5 w-1.5 rounded-full bg-forest" />
               <span>Admin Panel</span>
             </Link>
           ) : null}
@@ -321,21 +330,21 @@ function Header() {
 
           <Link
             to="/cart"
-            className={`relative flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-3.5 py-1.5 text-[12.5px] font-medium transition-all ${
+            className={`relative flex items-center gap-1.5 rounded-full px-2.5 sm:px-3 py-1 text-[12px] font-medium transition-all ${
               isTransparent
                 ? 'bg-white/15 hover:bg-white/25 text-white border border-white/25 shadow-xs'
                 : 'bg-sand/70 hover:bg-sand text-ink border border-line shadow-2xs'
             }`}
             aria-label={`Shopping bag with ${cartCount} items`}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3.5 w-3.5" aria-hidden>
               <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" strokeWidth="1.8" />
               <line x1="3" y1="6" x2="21" y2="6" strokeWidth="1.8" />
               <path d="M16 10a4 4 0 0 1-8 0" strokeWidth="1.8" />
             </svg>
             <span className="hidden sm:inline">Bag</span>
             <span
-              className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold ${
+              className={`flex h-4.5 min-w-4.5 items-center justify-center rounded-full px-1 text-[9.5px] font-bold ${
                 cartCount > 0
                   ? 'bg-terra text-white shadow-xs'
                   : isTransparent
@@ -378,7 +387,7 @@ function Header() {
           msOverflowStyle: 'none',
         }}
       >
-        <div className="mx-auto flex max-w-7xl items-center gap-1 sm:gap-2 px-4 sm:px-6 lg:px-8 py-2 text-xs font-medium whitespace-nowrap">
+        <div className="mx-auto flex max-w-7xl items-center gap-1 sm:gap-2 px-4 sm:px-6 lg:px-8 py-1.5 text-[11px] sm:text-[11.5px] font-medium whitespace-nowrap">
           <Link
             to="/shop"
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-white/20 transition-colors font-semibold"
@@ -459,24 +468,36 @@ function Header() {
                 <span>Customer Account</span>
                 <span className="text-xs text-muted">Orders & addresses →</span>
               </Link>
+              {user?.roles.includes('seller') && !user?.roles.includes('admin') ? (
+                <Link
+                  to="/seller"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center justify-between text-sm font-semibold text-terra bg-terra/10 rounded px-3 py-2 border border-terra/30"
+                >
+                  <span>Seller Studio</span>
+                  <span className="text-xs text-terra">Dashboard →</span>
+                </Link>
+              ) : null}
               {user?.roles.includes('admin') ? (
                 <Link
                   to="/admin"
                   onClick={() => setMobileOpen(false)}
-                  className="flex items-center justify-between text-sm font-semibold text-forest bg-forest/5 rounded px-3 py-2.5 border border-forest/20"
+                  className="flex items-center justify-between text-sm font-semibold text-forest bg-forest/5 rounded px-3 py-2 border border-forest/20"
                 >
                   <span>Administration Portal</span>
                   <span className="text-xs text-forest">Dashboard →</span>
                 </Link>
               ) : null}
-              <Link
-                to="/sell"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center justify-between text-sm font-medium text-terra py-2"
-              >
-                <span>Sell on PAHADI ROOTS</span>
-                <span className="text-xs text-terra">Apply to join →</span>
-              </Link>
+              {!user?.roles.includes('seller') && !user?.roles.includes('admin') ? (
+                <Link
+                  to="/sell"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center justify-between text-sm font-medium text-terra py-2"
+                >
+                  <span>Sell on PAHADI ROOTS</span>
+                  <span className="text-xs text-terra">Apply to join →</span>
+                </Link>
+              ) : null}
             </div>
             <div className="pt-8 mt-auto border-t border-line text-xs text-muted">
               <p>PAHADI ROOTS — Rooted in Himachal Pradesh</p>
