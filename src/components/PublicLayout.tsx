@@ -110,15 +110,12 @@ function AccountMenu({ light = false }: { light?: boolean }) {
           <MenuLink to="/account/wishlist" onClick={() => setOpen(false)}>
             Saved items
           </MenuLink>
-          {user.roles.includes('seller') ? (
-            <MenuLink to="/seller" onClick={() => setOpen(false)}>
-              Seller portal
-            </MenuLink>
-          ) : (
-            <MenuLink to="/sell" onClick={() => setOpen(false)}>
-              Apply to sell
-            </MenuLink>
-          )}
+          <MenuLink to="/seller" onClick={() => setOpen(false)}>
+            Seller portal (Dashboard)
+          </MenuLink>
+          <MenuLink to="/sell" onClick={() => setOpen(false)}>
+            Apply to sell
+          </MenuLink>
           {user.roles.includes('admin') ? (
             <Link
               to="/admin"
@@ -292,6 +289,18 @@ function Header() {
             }`}
             aria-hidden
           />
+
+          <Link
+            to="/seller"
+            className={`hidden sm:inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11.5px] font-semibold tracking-wide transition-all shadow-xs ${
+              isTransparent
+                ? 'border-terra/60 bg-terra/25 text-white hover:bg-terra/40'
+                : 'border-terra/40 bg-terra/10 text-forest hover:bg-terra/20'
+            }`}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-terra animate-pulse" />
+            <span>Seller Portal</span>
+          </Link>
 
           {user?.roles.includes('admin') ? (
             <Link

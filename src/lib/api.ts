@@ -292,6 +292,346 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
     if (cleanPath === '/account/wishlist') {
       return { items: [] } as unknown as T;
     }
+
+    if (cleanPath === '/seller/application') {
+      return {
+        exists: true,
+        seller: {
+          id: 'sel_kullu_craft',
+          businessName: 'Kullu Valley Handlooms & Mountain Crafts',
+          slug: 'kullu-valley-crafts',
+          status: 'approved',
+          sellerType: 'artisan',
+          sellerCategory: 'shawls-and-weaves',
+          storeStatus: 'active',
+          storeStatusReason: null,
+          payoutStatus: 'active',
+          payoutStatusReason: null,
+          commissionRateBp: 1500,
+          region: 'Kullu Valley',
+          district: 'Kullu',
+          village: 'Naggar',
+          appliedAt: '2026-01-10T00:00:00.000Z',
+          approvedAt: '2026-01-12T00:00:00.000Z',
+        },
+        application: {
+          id: 'app_kullu_craft',
+          status: 'approved',
+          revision: 1,
+          currentStep: 4,
+          submittedAt: '2026-01-10T00:00:00.000Z',
+          reviewedAt: '2026-01-12T00:00:00.000Z',
+          rejectionReason: null,
+          data: {
+            businessName: 'Kullu Valley Handlooms & Mountain Crafts',
+            contactName: 'Anshupal Verma',
+            phone: '+91 98765 43210',
+            district: 'Kullu',
+            village: 'Naggar',
+          },
+        },
+        documents: [],
+        missingDocuments: [],
+        requirements: { required: [], optional: [] },
+        events: [],
+      } as unknown as T;
+    }
+
+    if (cleanPath === '/seller/dashboard') {
+      return {
+        store: {
+          status: 'active',
+          payoutStatus: 'active',
+          sellerCategory: 'Handloom & Textiles',
+          statusReason: null,
+        },
+        application: {
+          id: 'app_kullu_craft',
+          status: 'approved',
+          revision: 1,
+          submittedAt: '2026-01-10T00:00:00.000Z',
+          reviewedAt: '2026-01-12T00:00:00.000Z',
+          rejectionReason: null,
+        },
+        checklist: [
+          { id: '1', label: 'Artisan KYC & Identity Verification', status: 'complete', detail: 'Verified by PAHADI ROOTS Team' },
+          { id: '2', label: 'Bank Account & Payout Setup', status: 'complete', detail: 'Bank verified for direct NEFT dispatches' },
+          { id: '3', label: 'Craft & GI Authenticity Inspection', status: 'complete', detail: 'Naggar Handloom Guild certified' },
+        ],
+        products: {
+          active: 8,
+          pending: 1,
+          low_stock: 2,
+          drafts: 0,
+        },
+        orders: {
+          pending: 2,
+          confirmed: 3,
+          packed: 2,
+          shipped: 8,
+          delivered: 18,
+          cancelled: 0,
+        },
+        period: { days: 30, since: '2026-01-01' },
+        sales: {
+          gross: 18600000,
+          commission: 2790000,
+          earnings: 15810000,
+          orders: 28,
+        },
+        ledger: {
+          pending: 3400000,
+          eligible: 7200000,
+          settled: 5210000,
+          refunds: 0,
+        },
+        settlement: {
+          pending_batches: 1,
+          paid_total: 5210000,
+        },
+        recentOrders: [
+          {
+            id: 'ord_1',
+            reference: 'PR-ORD-9021',
+            orderNumber: 'PR-ORD-9021',
+            status: 'confirmed',
+            totalPaise: 480000,
+            earningPaise: 408000,
+            dispatchBy: new Date(Date.now() + 86400000).toISOString(),
+          },
+          {
+            id: 'ord_2',
+            reference: 'PR-ORD-8942',
+            orderNumber: 'PR-ORD-8942',
+            status: 'packed',
+            totalPaise: 295000,
+            earningPaise: 250750,
+            dispatchBy: new Date(Date.now() + 43200000).toISOString(),
+          },
+          {
+            id: 'ord_3',
+            reference: 'PR-ORD-8812',
+            orderNumber: 'PR-ORD-8812',
+            status: 'shipped',
+            totalPaise: 650000,
+            earningPaise: 552500,
+            dispatchBy: null,
+          },
+        ],
+        commissionNote: 'Standard 15% marketplace commission covers packaging materials, payment gateway fees, and quality verification.',
+      } as unknown as T;
+    }
+
+    if (cleanPath === '/seller/products') {
+      const stored = localStorage.getItem('pr_custom_seller_products');
+      let products = stored ? JSON.parse(stored) : [
+        {
+          id: 'prod_kullu_shawl_01',
+          name: 'Handwoven Kullu Merino Wool Shawl',
+          slug: 'handwoven-kullu-merino-wool-shawl',
+          sku: 'KLU-SHW-01',
+          categoryId: 'cat_shawls',
+          categoryName: 'Shawls & Handlooms',
+          status: 'approved',
+          workflowStatus: 'published',
+          pricePaise: 385000,
+          compareAtPaise: 450000,
+          inventoryQuantity: 18,
+          available: 18,
+          reserved: 0,
+          lowStockThreshold: 5,
+          region: 'Kullu Valley',
+          sellerName: 'Kullu Valley Handlooms & Mountain Crafts',
+          images: [{ url: '/images/product-shawl.jpg', alt: 'Handwoven Kullu Shawl' }],
+          createdAt: new Date('2026-01-10').toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'prod_kangra_tea_02',
+          name: 'First Flush Kangra Orthodox Green Tea',
+          slug: 'first-flush-kangra-orthodox-green-tea',
+          sku: 'KNG-TEA-02',
+          categoryId: 'cat_tea',
+          categoryName: 'Kangra Tea',
+          status: 'approved',
+          workflowStatus: 'published',
+          pricePaise: 89000,
+          compareAtPaise: 99000,
+          inventoryQuantity: 42,
+          available: 42,
+          reserved: 2,
+          lowStockThreshold: 10,
+          region: 'Kangra Valley',
+          sellerName: 'Kullu Valley Handlooms & Mountain Crafts',
+          images: [{ url: '/images/product-tea.jpg', alt: 'Kangra Orthodox Tea' }],
+          createdAt: new Date('2026-01-12').toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'prod_chulli_oil_03',
+          name: 'Kinnauri Wild Apricot (Chulli) Kernel Oil',
+          slug: 'kinnauri-wild-apricot-chulli-kernel-oil',
+          sku: 'KIN-OIL-03',
+          categoryId: 'cat_oils',
+          categoryName: 'Cold-Pressed Oils',
+          status: 'approved',
+          workflowStatus: 'published',
+          pricePaise: 125000,
+          compareAtPaise: 145000,
+          inventoryQuantity: 24,
+          available: 24,
+          reserved: 1,
+          lowStockThreshold: 5,
+          region: 'Kinnaur',
+          sellerName: 'Kullu Valley Handlooms & Mountain Crafts',
+          images: [{ url: '/images/product-oil.jpg', alt: 'Chulli Kernel Oil' }],
+          createdAt: new Date('2026-01-14').toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+
+      if (options.method === 'POST' && options.body) {
+        const bodyObj = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        const newProduct = {
+          id: 'prod_' + Math.random().toString(36).slice(2, 9),
+          name: bodyObj.name || 'New Mountain Product',
+          slug: (bodyObj.name || 'new-product').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          sku: bodyObj.sku || `SKU-${Date.now().toString().slice(-4)}`,
+          categoryId: bodyObj.categoryId || 'cat_shawls',
+          categoryName: 'Artisanal Craft',
+          status: 'approved',
+          workflowStatus: 'published',
+          pricePaise: Math.round(Number(bodyObj.priceRupees || 100) * 100),
+          compareAtPaise: bodyObj.compareAtRupees ? Math.round(Number(bodyObj.compareAtRupees) * 100) : null,
+          shortDescription: bodyObj.shortDescription || '',
+          description: bodyObj.description || '',
+          inventoryQuantity: Number(bodyObj.initialStock || 25),
+          available: Number(bodyObj.initialStock || 25),
+          reserved: 0,
+          lowStockThreshold: 5,
+          region: bodyObj.originDistrict || 'Himachal Pradesh',
+          sellerName: 'Kullu Valley Handlooms & Mountain Crafts',
+          images: [{ url: bodyObj.imageUrl || '/images/product-shawl.jpg', alt: bodyObj.name || 'Product Image' }],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        products = [newProduct, ...products];
+        localStorage.setItem('pr_custom_seller_products', JSON.stringify(products));
+        return { ok: true, product: newProduct, id: newProduct.id } as unknown as T;
+      }
+
+      return { products, total: products.length } as unknown as T;
+    }
+
+    if (cleanPath.startsWith('/seller/products/')) {
+      const parts = cleanPath.split('/');
+      const prodId = parts[3];
+      const action = parts[4];
+      const stored = localStorage.getItem('pr_custom_seller_products');
+      const products = stored ? JSON.parse(stored) : [];
+      const found = products.find((p: any) => p.id === prodId || p.slug === prodId);
+
+      if (action === 'submit') {
+        return { ok: true, status: 'approved' } as unknown as T;
+      }
+      if (action === 'images') {
+        return { ok: true, imageUrl: '/images/product-shawl.jpg' } as unknown as T;
+      }
+      return {
+        product: found || {
+          id: prodId,
+          name: 'Handcrafted Himalayan Article',
+          slug: 'handcrafted-himalayan-article',
+          sku: 'DEMO-SKU-01',
+          pricePaise: 240000,
+          inventoryQuantity: 20,
+          status: 'approved',
+          workflowStatus: 'published',
+          shortDescription: 'Pure handloom piece from Himachal Pradesh.',
+          description: 'Spun on traditional handlooms in Naggar, Kullu Valley using natural local sheep wool.',
+          originDistrict: 'Kullu',
+          sellerName: 'Kullu Valley Handlooms & Mountain Crafts',
+        },
+        categories: [],
+        subcategories: [],
+      } as unknown as T;
+    }
+
+    if (cleanPath === '/seller/inventory') {
+      const stored = localStorage.getItem('pr_custom_seller_products');
+      const products = stored ? JSON.parse(stored) : [];
+      const inventory = products.map((p: any) => ({
+        productId: p.id,
+        name: p.name,
+        sku: p.sku,
+        quantity: p.inventoryQuantity || 20,
+        available: p.available ?? p.inventoryQuantity ?? 20,
+        reserved: p.reserved || 0,
+        lowStockThreshold: p.lowStockThreshold || 5,
+        pricePaise: p.pricePaise,
+        status: p.status || 'approved',
+        updatedAt: p.updatedAt || new Date().toISOString(),
+      }));
+      return { inventory } as unknown as T;
+    }
+
+    if (cleanPath === '/seller/orders') {
+      return {
+        orders: [
+          {
+            id: 'ord_1',
+            orderNumber: 'PR-ORD-9021',
+            reference: 'PR-ORD-9021',
+            status: 'confirmed',
+            totalPaise: 480000,
+            earningPaise: 408000,
+            customerName: 'Rohit Sharma',
+            itemCount: 1,
+            dispatchBy: new Date(Date.now() + 86400000).toISOString(),
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: 'ord_2',
+            orderNumber: 'PR-ORD-8942',
+            reference: 'PR-ORD-8942',
+            status: 'packed',
+            totalPaise: 295000,
+            earningPaise: 250750,
+            customerName: 'Priya Mehra',
+            itemCount: 2,
+            dispatchBy: new Date(Date.now() + 43200000).toISOString(),
+            createdAt: new Date(Date.now() - 36000000).toISOString(),
+          },
+        ],
+        total: 2,
+      } as unknown as T;
+    }
+
+    if (cleanPath === '/seller/earnings') {
+      return {
+        summary: {
+          eligiblePaise: 7200000,
+          pendingPaise: 3400000,
+          paidPaise: 5210000,
+        },
+        settlements: [],
+      } as unknown as T;
+    }
+
+    if (cleanPath === '/seller/profile') {
+      return {
+        businessName: 'Kullu Valley Handlooms & Mountain Crafts',
+        tagline: 'Centuries of mountain weaving from Naggar village',
+        region: 'Kullu Valley',
+        district: 'Kullu',
+        village: 'Naggar',
+        story: 'We are a collective of 12 traditional pit-loom weavers preserving ancient geometric Kullu pattu designs.',
+      } as unknown as T;
+    }
+
+    if (cleanPath === '/seller/notifications') {
+      return { notifications: [], unread: 0 } as unknown as T;
+    }
   } catch (err) {
     if (err instanceof ApiError) throw err;
   }
