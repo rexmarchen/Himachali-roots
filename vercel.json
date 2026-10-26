@@ -2,6 +2,30 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/api/config",
+      "destination": "/static-config.json"
+    },
+    {
+      "source": "/api/home",
+      "destination": "/static-home.json"
+    },
+    {
+      "source": "/api/site",
+      "destination": "/static-site.json"
+    },
+    {
+      "source": "/api/categories",
+      "destination": "/static-categories.json"
+    },
+    {
+      "source": "/api/products",
+      "destination": "/static-products.json"
+    },
+    {
+      "source": "/api/sellers",
+      "destination": "/static-sellers.json"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
