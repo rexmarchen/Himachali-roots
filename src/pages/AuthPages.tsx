@@ -2,8 +2,10 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, errorFields, errorMessage } from '@/lib/api';
+import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { Alert, Button, Field, Input } from '@/components/ui';
+import { GoogleSignIn } from '@/components/GoogleSignIn';
 
 function AuthShell({
   eyebrow,
@@ -48,6 +50,128 @@ function AuthShell({
   );
 }
 
+interface GoogleSignInResult {
+  ok: boolean;
+  user?: unknown;
+  linkingRequired?: boolean;
+  linkToken?: string;
+  email?: string;
+  message?: string;
+}
+
+/**
+ * Shared Google entry point for sign-in and registration. It keeps the
+ * account-linking challenge in the same form so a customer never has to guess
+ * why a Google sign-in asked for a password.
+ */
+function GoogleAuthSection({
+  onAuthenticated,
+  beforeSignIn,
+}: {
+  onAuthenticated: () => Promise<void> | void;
+  beforeSignIn?: () => string | null;
+}) {
+  const { config } = useAuth();
+  const [linking, setLinking] = useState<{ linkToken: string; email: string } | null>(null);
+  const [linkPassword, setLinkPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [linkingBusy, setLinkingBusy] = useState(false);
+
+  const googleClientId = config?.googleClientId || '129835560363-tbk55n76db9qsuu21i6rr2n9uv5oi8f0.apps.googleusercontent.com';
+  const googleEnabled = config?.googleEnabled ?? Boolean(googleClientId);
+
+  if (!googleEnabled || !googleClientId) return null;
+
+  const handleCredential = async (credential: string) => {
+    setError(null);
+    const blocked = beforeSignIn?.() ?? null;
+    if (blocked) {
+      setError(blocked);
+      return;
+    }
+    try {
+      const result = await api<GoogleSignInResult>('/auth/google', { method: 'POST', body: { credential } });
+      if (result.linkingRequired && result.linkToken) {
+        setLinking({ linkToken: result.linkToken, email: result.email ?? '' });
+        return;
+      }
+      await onAuthenticated();
+    } catch (credentialError) {
+      setError(errorMessage(credentialError));
+    }
+  };
+
+  const linkExisting = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!linking) return;
+    setLinkingBusy(true);
+    setError(null);
+    try {
+      await api('/auth/google/link', {
+        method: 'POST',
+        body: { linkToken: linking.linkToken, password: linkPassword },
+      });
+      setLinking(null);
+      setLinkPassword('');
+      await onAuthenticated();
+    } catch (linkError) {
+      setError(errorMessage(linkError));
+    } finally {
+      setLinkingBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-6">
+      <div className="mb-5 flex items-center gap-3" aria-hidden="true">
+        <span className="h-px flex-1 bg-line" />
+        <span className="text-[10px] uppercase tracking-[0.16em] text-muted">or</span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
+      {error ? (
+        <div className="mb-4">
+          <Alert tone="error">{error}</Alert>
+        </div>
+      ) : null}
+      {linking ? (
+        <form onSubmit={linkExisting} className="space-y-3">
+          <Alert tone="info" title="Link your existing account">
+            An account already uses {linking.email}. Enter that account’s password once to link Google sign-in. Accounts are
+            never merged by email automatically.
+          </Alert>
+          <Field label="Existing account password" required>
+            <Input
+              type="password"
+              autoComplete="current-password"
+              required
+              value={linkPassword}
+              onChange={(event) => setLinkPassword(event.target.value)}
+            />
+          </Field>
+          <Button type="submit" size="lg" className="w-full" loading={linkingBusy}>
+            Link Google and sign in
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            disabled={linkingBusy}
+            onClick={() => {
+              setLinking(null);
+              setLinkPassword('');
+              setError(null);
+            }}
+          >
+            Cancel
+          </Button>
+        </form>
+      ) : (
+        <GoogleSignIn clientId={googleClientId} onCredential={handleCredential} />
+      )}
+    </div>
+  );
+}
+
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -60,6 +184,13 @@ export function LoginPage() {
   const toast = useToast();
   const next = params.get('next') || '/account';
 
+  const completeSignIn = async (message = 'Signed in.') => {
+    await queryClient.invalidateQueries({ queryKey: ['session'] });
+    await queryClient.invalidateQueries({ queryKey: ['cart'] });
+    toast.push(message);
+    navigate(next.startsWith('/') ? next : '/account', { replace: true });
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
@@ -67,10 +198,7 @@ export function LoginPage() {
     setFields({});
     try {
       await api('/auth/login', { method: 'POST', body: { email, password } });
-      await queryClient.invalidateQueries({ queryKey: ['session'] });
-      await queryClient.invalidateQueries({ queryKey: ['cart'] });
-      toast.push('Signed in.');
-      navigate(next.startsWith('/') ? next : '/account', { replace: true });
+      await completeSignIn();
     } catch (loginError) {
       setError(errorMessage(loginError));
       setFields(errorFields(loginError));
@@ -125,6 +253,8 @@ export function LoginPage() {
         </Button>
       </form>
 
+      <GoogleAuthSection onAuthenticated={() => completeSignIn('Signed in with Google.')} />
+
       <p className="mt-6 text-center text-[11.5px] text-muted">
         New to PAHADI ROOTS?{' '}
         <Link to="/register" className="text-forest underline underline-offset-4 hover:text-terra">
@@ -148,6 +278,13 @@ export function RegisterPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const next = params.get('next') || '/account';
+
+  const completeRegistration = async (message: string) => {
+    await queryClient.invalidateQueries({ queryKey: ['session'] });
+    await queryClient.invalidateQueries({ queryKey: ['cart'] });
+    toast.push(message);
+    navigate(next.startsWith('/') ? next : '/account', { replace: true });
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -175,8 +312,7 @@ export function RegisterPage() {
         setDevVerifyUrl(result.devVerifyUrl);
         toast.push('Account created. Email delivery is not configured, so a development confirmation link is shown below.');
       } else {
-        toast.push('Account created. Check your email for a confirmation link.');
-        navigate(next.startsWith('/') ? next : '/account', { replace: true });
+        await completeRegistration('Account created. Check your email for a confirmation link.');
       }
     } catch (registerError) {
       setError(errorMessage(registerError));
@@ -274,6 +410,11 @@ export function RegisterPage() {
           Create account
         </Button>
       </form>
+
+      <GoogleAuthSection
+        onAuthenticated={() => completeRegistration('Account created with Google.')}
+        beforeSignIn={() => (terms ? null : 'Please accept the terms and privacy notice before continuing with Google.')}
+      />
     </AuthShell>
   );
 }
