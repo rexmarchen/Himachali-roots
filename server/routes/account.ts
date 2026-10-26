@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { execute, queryAll, queryOne, tx, type Db } from '../db.js';
-import { hashPassword, requireAuth, sessionToken, sha256, verifyPassword } from '../lib/auth.js';
-import { conflict, notFound, parse, unauthorized } from '../lib/http.js';
+import { hasUsablePassword, hashPassword, requireAuth, sessionToken, sha256, verifyPassword } from '../lib/auth.js';
+import { badRequest, conflict, notFound, parse, unauthorized } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { getOrderView, requestCancellation, requestReturn, validateAddress } from '../lib/orders.js';
 import { notify, escapeHtml } from '../lib/email.js';
@@ -99,18 +99,23 @@ export function accountRouter(db: Db): Router {
   router.post('/password', (req, res) => {
     const input = parse(
       z.object({
-        currentPassword: z.string().min(1).max(200),
+        currentPassword: z.string().max(200).optional().default(''),
         newPassword: z
           .string()
           .min(10, 'Use at least 10 characters.')
-          .max(200)
+          .max(200, 'That password is too long.')
           .refine((value) => /[a-zA-Z]/.test(value) && /[0-9]/.test(value), 'Include at least one letter and one number.'),
       }),
       req.body,
     );
     const user = queryOne<{ password_hash: string }>(db, 'SELECT password_hash FROM users WHERE id = ?', req.user!.id);
-    if (!user || !verifyPassword(input.currentPassword, user.password_hash)) {
+    if (!user) throw unauthorized();
+    const hasPassword = hasUsablePassword(user.password_hash);
+    if (hasPassword && !verifyPassword(input.currentPassword, user.password_hash)) {
       throw unauthorized('Your current password is not correct.');
+    }
+    if (!hasPassword && input.currentPassword) {
+      throw badRequest('This account has no password yet. Leave the current password blank to set one.');
     }
     const token = sessionToken(req);
     tx(db, () => {

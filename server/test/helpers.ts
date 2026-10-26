@@ -4,6 +4,7 @@ import request from 'supertest';
 import { createApp } from '../app.js';
 import { execute, initDb, queryAll, queryOne, type Db } from '../db.js';
 import { hashPassword } from '../lib/auth.js';
+import type { AuthRouterDeps } from '../routes/auth.js';
 
 export const TEST_PASSWORD = 'TestPass123!';
 
@@ -29,9 +30,9 @@ export const ADDRESS = {
   pincode: '171001',
 };
 
-export function setupTestApp(): { app: Express; db: Db } {
+export function setupTestApp(deps: Partial<AuthRouterDeps> = {}): { app: Express; db: Db } {
   const db = initDb(':memory:');
-  const app = createApp(db);
+  const app = createApp(db, deps);
   return { app, db };
 }
 

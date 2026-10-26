@@ -16,6 +16,8 @@ export interface SiteConfig {
   supportEmailIsPlaceholder: boolean;
   devMode: boolean;
   devAuthHelpers: boolean;
+  googleClientId?: string | null;
+  googleEnabled?: boolean;
   legalReviewRequired: boolean;
   commissionBasisNote: string;
 }

@@ -8,7 +8,8 @@ Last reviewed: 26 October 2026.
 
 - Storefront, customer account, seller workspace and administrator console render and call real APIs, including admin category management, the ten-step seller application and seasonal campaign management.
 - Seasonal campaign eligibility, fixed promotional pricing, scheduling/expiry, admin-only management and audit logging work through real HTTP routes. Catalogue, cart and checkout read the same database view for live promotional prices, and order lines retain the original unit price.
-- Registration, login, logout, password reset, email verification token flow and session invalidation work against SQLite.
+- Registration, password login, Google Identity Services sign-in, logout, password reset, email verification token flow and session invalidation work against SQLite. Google tokens are verified server-side; an email collision requires an explicit password-confirmed link rather than an automatic merge.
+- Sessions use opaque hashed tokens, rotate on sign-in, expire on both an absolute and an idle window, and are cleared server-side on logout. Disabled accounts are refused. The browser never receives an admin, seller or customer identity from a fabricated local fallback.
 - Server-side RBAC and ownership checks protect customer, seller and admin routes.
 - Seller applications save as drafts, resume at the saved step, enforce category-aware requirements (FSSAI for food), and cannot be submitted incomplete.
 - Application decisions are server-enforced state transitions with reason requirements, self-approval refusal, seller notifications, review history and audit entries.
@@ -20,10 +21,10 @@ Last reviewed: 26 October 2026.
 - Cancellation, return and refund accounting posts proportional ledger deductions and commission reversals.
 - Seller documents are private and protected by magic-byte checks, ownership authorization and `no-store` responses.
 - Manual settlements accept only an explicit bank/UPI reference before marked paid.
-- `npm run check` passes: typecheck, lint, **107/107** tests and production build.
+- `npm run check` passes: typecheck, lint, the full test suite and production build.
 - `npm run smoke` passes 28/28 non-admin live HTTP checks against a running development API (33 with admin credentials).
 - A seller-lifecycle E2E run passed 53/53 checks against a disposable API and database.
-- The legacy-migration test upgrades a pre-onboarding (v1–v2) database to version 5 with rows preserved; `integrity_check` and foreign-key checks are clean in the test database.
+- The legacy-migration test upgrades a pre-onboarding (v1–v2) database to version 6 with rows preserved; `integrity_check` and foreign-key checks are clean in the test database.
 
 Evidence and exact outcomes are in [Verification](VERIFICATION.md).
 
@@ -181,6 +182,24 @@ Evidence and exact outcomes are in [Verification](VERIFICATION.md).
 
 **Unblock:** Agree retention periods with counsel, document them in the privacy notice, then implement scheduled purge and an audited deletion path. Backups must follow the same policy.
 
+### 16. Google sign-in has not been exercised against Google
+
+**State:** The Google Identity Services button, server-side ID-token verification, account creation, returning-user sign-in, explicit linking, unlink and disabled-account refusal are implemented and covered by injected-verifier tests. CSP and config plumbing are in place.
+
+**Missing:** A real Google Cloud OAuth Web client, authorised production JavaScript origins, a consent-screen review if Google requires one, and a browser test with real Google accounts.
+
+**Risk:** Library, consent-screen or CSP behaviour could differ from the fake-verifier tests. A misconfigured origin hides the button or blocks the popup, and users may fall back to password login.
+
+**Unblock:** Follow [Google sign-in go-live](DEPLOYMENT.md#google-sign-in-go-live), test new/returning/collision/disabled cases in a clean browser, then remove the "Google sign-in unavailable" fallback from the launch announcement if it cannot be completed.
+
+### 17. The live `.in` domain still serves the pre-hardening static bundle
+
+**State:** `https://www.dearhills.in` resolves to Vercel and serves an old static build. `/api/config` and the health endpoints return 404. The deployed JavaScript bundle still contains the former hardcoded administrator email/password and fabricated `localStorage` session code that were removed from this branch.
+
+**Risk:** The credentials are public and must be treated as compromised. Visitors can appear signed in to a fake admin/customer UI. No real order or account data is exposed through that static host because it has no API, but the password may be reused elsewhere.
+
+**Unblock:** Change the exposed password everywhere it was used, rotate the Google client secret, then remove `dearhills.in` / `www.dearhills.in` from the Vercel project or redeploy a clean static build. Move the domain to the Express host only after `https://www.dearhills.in/api/health/ready` returns 200.
+
 ## Deliberate non-goals / product decisions
 
 - **Guest checkout is not supported.** Guest carts merge after login.
@@ -192,4 +211,4 @@ Evidence and exact outcomes are in [Verification](VERIFICATION.md).
 
 ## Launch statement
 
-The application can be demonstrated end to end today with development payment simulation and manual dispatch. It cannot honestly be called a live, legally compliant marketplace until at least blockers **1–7** and **14–15** are closed, with **8–11** strongly recommended before accepting material transaction volume.
+The application can be demonstrated end to end today with development payment simulation and manual dispatch. It cannot honestly be called a live, legally compliant marketplace until at least blockers **1–7** and **14–17** are closed, with **8–11** strongly recommended before accepting material transaction volume.

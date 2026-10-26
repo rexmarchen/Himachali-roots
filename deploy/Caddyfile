@@ -1,0 +1,16 @@
+# Host Caddyfile for the Docker deployment.
+# The app container is published on 127.0.0.1:8787 by compose.yaml.
+
+www.dearhills.in {
+	encode zstd gzip
+	request_body {
+		max_size 6MB
+	}
+	reverse_proxy 127.0.0.1:8787 {
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
+
+dearhills.in {
+	redir https://www.dearhills.in{uri} permanent
+}

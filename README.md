@@ -8,19 +8,21 @@ The visual system is deliberately editorial rather than "startup dashboard": war
 >
 > Core commerce and marketplace workflows run against a real server and database. Live payment, email and courier integrations cannot be validated until credentials and merchant approvals exist. Demonstration records are labelled as demonstrations. See [Remaining blockers](docs/REMAINING_BLOCKERS.md) before treating this as production-ready.
 
+**Main hosted link:** [https://www.dearhills.in](https://www.dearhills.in). At the time of writing it is a **static Vercel build only** — `/api/*` returns 404, so sign-in, carts and checkout do not work there. The intended production origin is the same URL served by the Express + SQLite process described in [Deployment](docs/DEPLOYMENT.md). Do not treat the current static deployment as the live shop.
+
 ## What works now
 
 | Area | Implemented and exercised |
 | --- | --- |
 | Storefront | Home, seasonal offer page with poster and eligible-product listing, shop filters/search/sort, product pages, maker directory and profiles, cart, authenticated checkout, editorial pages, policies, image credits, sitemap |
-| Customer account | Registration/login, email verification, password reset, addresses, order history/detail, cancellation and return requests, reviews for delivered purchases, wishlist, notifications, profile and deletion request |
+| Customer account | Registration/login, Google sign-in with explicit password-confirmed linking, email verification, password reset, addresses, order history/detail, cancellation and return requests, reviews for delivered purchases, wishlist, notifications, profile and deletion request |
 | Seller workspace | Ten-step resumable maker application with category-aware questions, private document upload, explicit application/store status and review history; approval gate; dashboard and readiness checklist; product drafts, submission and resubmission after change requests; image upload, inventory, order confirm → pack → ship → deliver, tracking, earnings ledger, settlements, store profile, notifications |
 | Admin console | Seller application review with evidence, checklist, requirements, reason-required decisions, review history and audit trail; product moderation including change requests; seasonal campaign creation, status/window control, poster upload, eligible-product pricing; category management, orders and fulfilment, payments, refunds, returns, cancellations, commission rules, settlement creation/payout recording, customers, review moderation, structured content editors, coupons, support inbox, audit log, integration status |
 | Commerce rules | Integer-paise accounting, GST-inclusive prices, server-side repricing, coupon validation and redemption limits, shipping thresholds, commission snapshots, stock reservation, idempotent checkout, seller-order splitting |
-| Security | scrypt passwords, server-side sessions, RBAC, CSRF header + origin checks, rate limits, Helmet/CSP, parameterised SQL, ownership checks, upload type/signature validation, HMAC payment verification, audit logging |
-| Quality | TypeScript typecheck, ESLint, 101 integration/security/migration/campaign tests, live HTTP smoke, seller-lifecycle E2E, production build |
+| Security | scrypt passwords, server-verified Google ID tokens with explicit account linking, opaque hashed sessions with rotation and idle/absolute expiry, RBAC, CSRF header + origin allowlist checks, rate limits, Helmet/CSP, parameterised SQL, ownership checks, upload type/signature validation, HMAC payment verification, audit logging |
+| Quality | TypeScript typecheck, ESLint, 131 integration/security/migration/campaign tests, live HTTP smoke, seller-lifecycle E2E, production build, dependency audit |
 
-The full route tree is available without an external service. Razorpay and SMTP are the only external integrations wired; courier dispatch is manual. The application reports unconfigured integrations rather than pretending they are live.
+The full route tree is available without an external service. Google Identity Services, Razorpay and SMTP are the external integrations wired; courier dispatch is manual. The application reports unconfigured integrations rather than pretending they are live.
 
 ## Stack
 
@@ -95,10 +97,11 @@ The simulation endpoint explicitly states that no money moved. It is force-disab
 | `npm run reset` | Delete local data and reseed (destructive) |
 | `npm run admin:create -- <email> "<name>"` | Provision an administrator |
 | `npm run db:backup` | Consistent SQLite snapshot into `backups/` |
+| `npm run db:verify -- <file>` | Read-only integrity/schema check of a backup |
 | `npm run smoke` | Live HTTP smoke test against a running development API |
 | `npm run typecheck` | Client, server and test TypeScript checks |
 | `npm run lint` | ESLint |
-| `npm test` | 101 Vitest/Supertest tests |
+| `npm test` | 131 Vitest/Supertest tests |
 | `npm run check` | Typecheck + lint + tests + production build |
 
 ## Project structure
@@ -159,15 +162,16 @@ Last verified on 26 October 2026 with Node 24.21.0:
 
 - `npm run typecheck` — passed
 - `npm run lint` — passed
-- `npm test` — 101 of 101 tests passed across 15 files, including the campaign, seller onboarding, admin products, checkout, refunds and legacy-migration suites
+- `npm test` — 131 of 131 tests passed across 16 files, including Google sign-in/linking, session hardening, campaign, seller onboarding, admin products, checkout, refunds and legacy-migration suites
 - `npm run build` — passed; SPA and `dist-server/server/index.js` generated (Vite reports a >500 kB chunk warning)
 - `npm run smoke` — 28 of 28 non-admin live HTTP checks passed against a running development API (33 checks when `SMOKE_ADMIN_EMAIL` and `SMOKE_ADMIN_PASSWORD` are supplied), including storefront, registration, checkout with the labelled development payment simulation, seller confirm → pack → ship → deliver, and the admin settlement hold guard
 - Seller lifecycle E2E — 53 of 53 live HTTP checks passed against a disposable API and database
-- The legacy-migration test opened a pre-onboarding v1–v2 database and upgraded it to version 5 without losing seeded rows; the development database itself was already upgraded through migration 5
+- `npm audit` — 0 vulnerabilities after upgrading `nodemailer` and `vitest`
+- The legacy-migration test opened a pre-onboarding v1–v2 database and upgraded it to version 6 without losing seeded rows; the development database itself is at migration 6
 - Campaign, cart and order rows were verified through public and admin HTTP endpoints, with the promotional price applied consistently and the original unit price retained on order lines
-- API health endpoint returns `ok` with payments `unconfigured`, shipping `manual-only`, email `unconfigured` in the default development environment
+- `/api/health/ready` returns `ready: true`, `database: up`, `schema: current` in the default development environment; it deliberately omits integration configuration
 
-The tests use an in-memory SQLite database and exercise real HTTP routes. They cover auth/RBAC/CSRF, storefront home/catalogue/sitemap, campaign eligibility, scheduling/expiry, overlap guards and promotional repricing in catalogue/cart/checkout, checkout repricing and idempotency, stock races, coupon use, GST snapshots, seller isolation, fulfilment order, ledger/settlement eligibility, cancellation/refund/return accounting, upload signatures/private documents, admin category rules, Razorpay webhook signature/idempotency/amount mismatch, draft save/resume, category-aware validation (including FSSAI rules for food), duplicate submission, change requests and resubmission revisions, self-approval refusal, cross-seller isolation, product moderation/publish/suspend, and upgrading a pre-onboarding database. They do **not** prove live provider behaviour. See [Verification](docs/VERIFICATION.md).
+The tests use an in-memory SQLite database and exercise real HTTP routes. They cover Google token claims/sign-in/linking and session hardening, auth/RBAC/CSRF, storefront home/catalogue/sitemap, campaign eligibility, scheduling/expiry, overlap guards and promotional repricing in catalogue/cart/checkout, checkout repricing and idempotency, stock races, coupon use, GST snapshots, seller isolation, fulfilment order, ledger/settlement eligibility, cancellation/refund/return accounting, upload signatures/private documents, admin category rules, Razorpay webhook signature/idempotency/amount mismatch, draft save/resume, category-aware validation (including FSSAI rules for food), duplicate submission, change requests and resubmission revisions, self-approval refusal, cross-seller isolation, product moderation/publish/suspend, and upgrading a pre-onboarding database. They do **not** prove live provider behaviour. See [Verification](docs/VERIFICATION.md).
 
 ## Documentation
 

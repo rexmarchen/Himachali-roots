@@ -883,6 +883,8 @@ export function ProfilePage() {
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [passwordFields, setPasswordFields] = useState<Record<string, string>>({});
   const [savingPassword, setSavingPassword] = useState(false);
+  const [unlinkPassword, setUnlinkPassword] = useState('');
+  const [unlinkingGoogle, setUnlinkingGoogle] = useState(false);
   const [deletionReason, setDeletionReason] = useState('');
   const [showDeletion, setShowDeletion] = useState(false);
   const [prefilledFor, setPrefilledFor] = useState<string | null>(null);
@@ -929,15 +931,33 @@ export function ProfilePage() {
     try {
       await api('/account/password', {
         method: 'POST',
-        body: { currentPassword: passwords.currentPassword, newPassword: passwords.newPassword },
+        body: { currentPassword: user?.hasPassword === false ? '' : passwords.currentPassword, newPassword: passwords.newPassword },
       });
       setPasswords({ currentPassword: '', newPassword: '', confirm: '' });
-      toast.push('Password updated. Other sessions were signed out.');
+      await queryClient.invalidateQueries({ queryKey: ['session'] });
+      await refresh();
+      toast.push(user?.hasPassword === false ? 'Password set. You can now sign in without Google.' : 'Password updated. Other sessions were signed out.');
     } catch (error) {
       setPasswordFields(errorFields(error));
       toast.push(errorMessage(error), 'error');
     } finally {
       setSavingPassword(false);
+    }
+  };
+
+  const unlinkGoogle = async (event: FormEvent) => {
+    event.preventDefault();
+    setUnlinkingGoogle(true);
+    try {
+      await api('/auth/google/unlink', { method: 'POST', body: { password: unlinkPassword } });
+      setUnlinkPassword('');
+      await queryClient.invalidateQueries({ queryKey: ['session'] });
+      await refresh();
+      toast.push('Google sign-in removed from this account.');
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setUnlinkingGoogle(false);
     }
   };
 
@@ -954,6 +974,9 @@ export function ProfilePage() {
 
   if (account.isLoading) return <LoadingBlock rows={3} />;
   if (account.isError || !account.data) return <ErrorState onRetry={() => void account.refetch()} />;
+
+  const hasPassword = user?.hasPassword !== false;
+  const googleLinked = user?.authProviders?.includes('google') ?? false;
 
   return (
     <div className="space-y-8">
@@ -981,22 +1004,71 @@ export function ProfilePage() {
         </form>
       </section>
       <section className="border border-line bg-surface p-5 sm:p-6">
-        <h2 className="text-xl">Change password</h2>
-        <p className="mt-1 text-xs text-muted">Changing your password signs out every other session.</p>
+        <h2 className="text-xl">{hasPassword ? 'Change password' : 'Set a password'}</h2>
+        <p className="mt-1 text-xs text-muted">
+          {hasPassword
+            ? 'Changing your password signs out every other session.'
+            : 'This account currently signs in with Google only. Add a password so you can still reach it if Google is unavailable.'}
+        </p>
         <form onSubmit={savePassword} className="mt-5 space-y-4">
-          <Field label="Current password" required error={passwordFields.currentPassword}>
-            <Input type="password" required autoComplete="current-password" value={passwords.currentPassword} onChange={(event) => setPasswords({ ...passwords, currentPassword: event.target.value })} />
-          </Field>
+          {hasPassword ? (
+            <Field label="Current password" required error={passwordFields.currentPassword}>
+              <Input type="password" required autoComplete="current-password" value={passwords.currentPassword} onChange={(event) => setPasswords({ ...passwords, currentPassword: event.target.value })} />
+            </Field>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="New password" required hint="10+ characters, letters and numbers" error={passwordFields.newPassword}>
+            <Field label={hasPassword ? 'New password' : 'Password'} required hint="10+ characters, letters and numbers" error={passwordFields.newPassword}>
               <Input type="password" required minLength={10} autoComplete="new-password" value={passwords.newPassword} onChange={(event) => setPasswords({ ...passwords, newPassword: event.target.value })} />
             </Field>
-            <Field label="Repeat new password" required>
+            <Field label={hasPassword ? 'Repeat new password' : 'Repeat password'} required>
               <Input type="password" required autoComplete="new-password" value={passwords.confirm} onChange={(event) => setPasswords({ ...passwords, confirm: event.target.value })} />
             </Field>
           </div>
-          <Button type="submit" variant="secondary" loading={savingPassword}>Update password</Button>
+          <Button type="submit" variant="secondary" loading={savingPassword}>{hasPassword ? 'Update password' : 'Set password'}</Button>
         </form>
+      </section>
+      <section className="border border-line bg-surface p-5 sm:p-6">
+        <h2 className="text-xl">Sign-in methods</h2>
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border border-line px-4 py-3">
+            <div>
+              <p className="text-[13px] font-medium text-ink">Email and password</p>
+              <p className="text-[11.5px] text-muted">{account.data.profile.email}</p>
+            </div>
+            <Badge tone={hasPassword ? 'forest' : 'terra'}>{hasPassword ? 'Connected' : 'Not set'}</Badge>
+          </div>
+          <div className="border border-line px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[13px] font-medium text-ink">Google</p>
+                <p className="text-[11.5px] text-muted">
+                  {googleLinked ? 'Sign in to this account with Google.' : 'Not connected. Link it from the sign-in page; you will confirm your password first.'}
+                </p>
+              </div>
+              <Badge tone={googleLinked ? 'forest' : 'neutral'}>{googleLinked ? 'Connected' : 'Not connected'}</Badge>
+            </div>
+            {googleLinked ? (
+              hasPassword ? (
+                <form onSubmit={unlinkGoogle} className="mt-4 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-end">
+                  <Field label="Confirm your password" required className="flex-1">
+                    <Input
+                      type="password"
+                      required
+                      autoComplete="current-password"
+                      value={unlinkPassword}
+                      onChange={(event) => setUnlinkPassword(event.target.value)}
+                    />
+                  </Field>
+                  <Button type="submit" variant="secondary" loading={unlinkingGoogle}>Remove Google sign-in</Button>
+                </form>
+              ) : (
+                <p className="mt-3 border-t border-line pt-3 text-[12px] text-muted">
+                  Set a password above before removing Google sign-in, so you cannot lose access to this account.
+                </p>
+              )
+            ) : null}
+          </div>
+        </div>
       </section>
       <section className="border border-terra/30 bg-[#fff8f4] p-5 sm:p-6">
         <h2 className="text-xl text-[#7d3d28]">Account deletion</h2>

@@ -17,6 +17,18 @@ Caddy or Nginx  ──►  127.0.0.1:8787  Node/Express
 
 Run **one** Node instance against a given SQLite database. SQLite uses WAL and serialised write transactions, but it is not designed for multiple application servers writing the same file over shared storage.
 
+### Vercel is not an API host in this repository
+
+`vercel.json` rewrites every path to `/index.html`. There is no serverless function, no Express handler and no proxy to the API. A Vercel deployment is therefore a static SPA preview only:
+
+- public catalogue pages can use the checked-in static JSON fallback;
+- registration, login, Google sign-in, carts, checkout, seller and admin screens cannot work;
+- browser calls to `/api/*` return 404 (or the SPA HTML, depending on rewrites) and fail rather than creating a fake local session.
+
+**Current status (26 October 2026):** `https://www.dearhills.in` points at a static Vercel deployment. `/api/config`, `/api/health/live` and `/api/health/ready` all return 404, and the deployed JavaScript bundle is older than this branch. Treat it as a preview, not the shop.
+
+To run the real application, deploy the Express process and SQLite volume as described above, or build a separate API host and follow the split-origin configuration. Do not advertise a Vercel-only deployment as a working shop.
+
 ## Prerequisites
 
 - Linux server (Ubuntu 24.04 LTS or similar) with a non-root service user
@@ -40,7 +52,7 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
    ```bash
    cd /opt/pahadi-roots
    npm ci
-   npm run check          # typecheck, lint, 101 tests, production build
+   npm run check          # typecheck, lint, full test suite, production build
    ```
 
    Tests are optional on a production host but the build is not. `npm run build` produces `dist/` and `dist-server/`.
@@ -50,8 +62,9 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
    ```dotenv
    NODE_ENV=production
    PORT=8787
-   APP_URL=https://shop.example.com
+   APP_URL=https://www.dearhills.in
    TRUST_PROXY=1
+   ALLOWED_ORIGINS=
 
    DATABASE_PATH=/var/lib/pahadi-roots/data/pahadi-roots.db
    UPLOAD_DIR=/var/lib/pahadi-roots/storage/uploads
@@ -61,6 +74,12 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
    ALLOW_DEV_PAYMENTS=false
    ALLOW_DEV_AUTH_HELPERS=false
 
+   SESSION_DAYS=30
+   SESSION_IDLE_DAYS=7
+   SESSION_COOKIE_SAMESITE=lax
+
+   GOOGLE_CLIENT_ID=
+
    RAZORPAY_KEY_ID=
    RAZORPAY_KEY_SECRET=
    RAZORPAY_WEBHOOK_SECRET=
@@ -69,17 +88,17 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
    SMTP_PORT=587
    SMTP_USER=
    SMTP_PASS=
-   EMAIL_FROM=PAHADI ROOTS <no-reply@shop.example.com>
-   SUPPORT_EMAIL=support@shop.example.com
+   EMAIL_FROM=PAHADI ROOTS <no-reply@dearhills.in>
+   SUPPORT_EMAIL=support@dearhills.in
    ```
 
-   Use real values before accepting orders. `APP_URL` **must** be the HTTPS origin; it controls secure cookies and links.
+   Use real values before accepting orders. `APP_URL` **must** be the HTTPS origin; it controls secure cookies and links. `dearhills.in` must be a mailbox you actually monitor; otherwise set `SUPPORT_EMAIL` to the real support inbox.
 
 3. Provision the first administrator. This initialises the schema if the database is new:
 
    ```bash
    cd /opt/pahadi-roots
-   npm run admin:create -- owner@shop.example.com "Owner Name"
+   npm run admin:create -- owner@dearhills.in "Owner Name"
    ```
 
    The password is prompted without echo. For automated provisioning, set `ADMIN_PASSWORD` for that single command and unset it afterwards. Never seed demo products into production.
@@ -96,14 +115,14 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
    ```json
    {
      "status": "ok",
+     "ready": true,
      "database": "up",
-     "payments": "unconfigured",
-     "shipping": "manual-only",
-     "email": "unconfigured"
+     "schema": "current",
+     "timestamp": "2026-10-26T17:00:00.000Z"
    }
    ```
 
-   `payments` and `email` become `configured` only when valid server credentials are present.
+   `/api/health` and `/api/health/ready` are readiness checks and return `503` when the database is unreachable or the schema is older than version 6. `/api/health/live` checks only that the process is alive. Readiness intentionally does not disclose payment or email configuration; confirm those from startup warnings or the admin console.
 
 5. Configure the reverse proxy and systemd (below).
 
@@ -160,7 +179,7 @@ Logs are structured JSON on stdout/stderr. The process handles `SIGTERM` by clos
 `/etc/caddy/Caddyfile`:
 
 ```caddyfile
-shop.example.com {
+www.dearhills.in {
     encode zstd gzip
     request_body {
         max_size 6MB
@@ -169,19 +188,23 @@ shop.example.com {
         header_up X-Forwarded-Proto {scheme}
     }
 }
+
+dearhills.in {
+    redir https://www.dearhills.in{uri} permanent
+}
 ```
 
-Reload with `sudo systemctl reload caddy`. Caddy obtains and renews TLS automatically.
+Reload with `sudo systemctl reload caddy`. Caddy obtains and renews TLS automatically for both names.
 
 ## Nginx alternative
 
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name shop.example.com;
+    server_name www.dearhills.in;
 
-    ssl_certificate     /etc/letsencrypt/live/shop.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/shop.example.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/www.dearhills.in/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/www.dearhills.in/privkey.pem;
 
     client_max_body_size 6m;
 
@@ -197,18 +220,67 @@ server {
 
 server {
     listen 80;
-    server_name shop.example.com;
-    return 301 https://$host$request_uri;
+    server_name www.dearhills.in dearhills.in;
+    return 301 https://www.dearhills.in$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name dearhills.in;
+    ssl_certificate     /etc/letsencrypt/live/www.dearhills.in/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/www.dearhills.in/privkey.pem;
+    return 301 https://www.dearhills.in$request_uri;
 }
 ```
 
 Set `TRUST_PROXY=1` when behind either proxy. Without it, rate limiting sees the proxy address and secure-cookie detection may be wrong.
 
+## Google sign-in go-live
+
+Google sign-in uses the Google Identity Services ID-token flow. The browser receives a signed credential and the server verifies it with Google's library. **No client secret is used or needed** for this flow.
+
+1. In Google Cloud Console, create or select the production project.
+2. Configure the OAuth consent screen. Use the real application name, support email, privacy-policy URL and terms URL. Complete verification if Google requires it for the scopes you request.
+3. Create an **OAuth 2.0 Client ID → Web application**.
+4. Add **Authorised JavaScript origins**:
+   - `https://www.dearhills.in` (canonical production origin)
+   - `http://localhost:5173` for local development only
+5. Add **Authorised redirect URIs** only if another flow requires them. The GIS popup flow in this build does not need a redirect URI.
+6. Put the generated client ID in the production environment as `GOOGLE_CLIENT_ID`. It is public and is served to the browser through `GET /api/config`.
+7. Restart the service. Confirm `GET /api/config` reports `googleEnabled: true` and the sign-in page renders the Google button.
+8. Test with a real Google account:
+   - a new Google user creates exactly one customer account;
+   - a returning Google user signs in to the same account;
+   - a Google email that matches an existing password account is asked for that password before linking;
+   - a disabled account is refused;
+   - logging out clears the session server-side.
+
+Do not put a Google client secret in the browser bundle or repository. If a future flow needs offline access or a server-side token exchange, add the secret only to the server environment and document the change.
+
+The production CSP already allows `https://accounts.google.com` for scripts, frames and connections. If the consent screen or GIS is blocked by a browser extension or corporate proxy, test in a clean browser profile before changing the CSP.
+
+### DNS and TLS
+
+The canonical origin is **`https://www.dearhills.in`**. The apex `dearhills.in` should redirect permanently to the `www` host so cookies, canonical links and OAuth origins stay on one origin.
+
+At the time of writing, `www.dearhills.in` resolves to Vercel and serves a **static** build; `/api/*` returns 404. Before the Express host can take over:
+
+1. Deploy this repository to the Node host and start it behind Caddy/Nginx.
+2. Remove `dearhills.in` / `www.dearhills.in` from the Vercel project (or delete that project's custom domain) to avoid DNS and TLS conflicts.
+3. At the DNS provider, replace the existing records with:
+   - `www` → `A` (or `AAAA`) record pointing at the Express host, or a `CNAME` if the provider supports it;
+   - apex `dearhills.in` → `A`/`AAAA` at the same host, with the proxy redirecting to `https://www.dearhills.in`.
+4. Wait for DNS propagation, then confirm `https://www.dearhills.in/api/health/ready` returns `200` with `"ready": true`.
+5. Add `https://www.dearhills.in` to the Google OAuth authorised JavaScript origins.
+6. Set `APP_URL=https://www.dearhills.in` and `TRUST_PROXY=1`.
+
+Terminate TLS at Caddy/Nginx and redirect HTTP to HTTPS. `APP_URL` must exactly match the HTTPS origin used by the browser; a mismatch causes cookie and Origin/CSRF failures. If the SPA and API are split across hosts, follow the split-origin section in [Environment](ENVIRONMENT.md#split-spa-and-api) instead of guessing at CORS settings.
+
 ## Razorpay go-live
 
 1. Complete Razorpay merchant onboarding and obtain production keys.
 2. Put `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET` in the production environment. Do not put the secret in the browser bundle or repository.
-3. In the Razorpay dashboard, create a webhook to `https://shop.example.com/api/webhooks/razorpay` and subscribe to `payment.captured`, `order.paid`, `payment.failed`, `refund.processed` and `refund.created`.
+3. In the Razorpay dashboard, create a webhook to `https://www.dearhills.in/api/webhooks/razorpay` and subscribe to `payment.captured`, `order.paid`, `payment.failed`, `refund.processed` and `refund.created`.
 4. Run a small live transaction end to end, including a refund. Verify:
    - the order becomes `paid` once, not twice;
    - the webhook event is stored in `payment_events`;
@@ -268,11 +340,11 @@ Every create, edit, status change, pricing change and deletion is written to `au
 
 ## Release procedure
 
-1. Take a database backup and a storage snapshot.
+1. Take a database backup and a storage snapshot. Verify the backup file with `npm run db:verify -- <backup.db>`.
 2. Deploy code to a new release directory; run `npm ci && npm run build`.
 3. Apply schema migrations by starting the new process (the app is additive and applies schema/migrations on open). **Back up first**; there are no down migrations.
-4. Restart the service and check `/api/health`.
-5. Smoke-test login, catalogue, cart, checkout (or deliberate failure path), seller order visibility and admin login.
+4. Restart the service and check `/api/health/live` and `/api/health/ready`.
+5. Smoke-test password login, Google sign-in (if configured), catalogue, cart, checkout (or deliberate failure path), seller order visibility and admin login.
 6. Keep the previous release until the new one is stable.
 
 Because schema changes are applied automatically, do not point an older binary at a newer database without a tested rollback plan.
@@ -309,6 +381,25 @@ Before deploying:
 
 There are no down migrations. Restoring the pre-upgrade backup is the rollback path.
 
+### Authentication hardening migration (schema version 6)
+
+Version 6 is additive:
+
+- `auth_identities` stores a verified provider subject (`provider`, `provider_user_id`, email, display name, avatar, last sign-in);
+- `auth_link_challenges` stores hashed, single-use, 10-minute linking challenges;
+- `sessions.last_seen_at` supports idle expiry and is backfilled from `created_at` for existing sessions.
+
+Existing password hashes, users, orders and carts are not rewritten. Google-only accounts use a non-verifying `password_hash` marker so password login cannot succeed; a password can be set later from **Profile & security**.
+
+Before deploying:
+
+1. Back up with `npm run db:backup` while the service is stopped, or copy the database and its `-wal`/`-shm` sidecars.
+2. Open the copy with the new build and run `npm run db:verify -- <backup.db>`. Confirm `schema_migrations` is `[1,2,3,4,5,6]`, `integrity_check` is `ok`, and there are no foreign-key violations.
+3. Confirm row counts for users, orders and products are unchanged and that existing sessions still resolve (or accept that they will expire on the new idle window).
+4. Start the new build, then check `/api/health/ready`.
+
+Rollback is restoring the version 5 backup; an older binary must not be pointed at the version 6 database.
+
 ## Backup
 
 ### What must be backed up
@@ -335,7 +426,15 @@ The server may remain running. The output file is named `pahadi-roots-<timestamp
 15 2 * * * cd /opt/pahadi-roots && /usr/bin/npm run db:backup -- /var/lib/pahadi-roots/data/pahadi-roots.db /var/lib/pahadi-roots/backups >> /var/log/pahadi-backup.log 2>&1
 ```
 
-Retain daily snapshots for at least 14 days, plus weekly/monthly copies off-host. Encrypt backups at rest and restrict access: they contain personal data, password hashes and order history.
+After each snapshot, verify it read-only:
+
+```bash
+npm run db:verify -- /var/lib/pahadi-roots/backups/pahadi-roots-<timestamp>.db
+```
+
+The verifier checks `PRAGMA integrity_check`, foreign keys, required tables, migration versions and row counts. It exits non-zero on failure. A passing verification is not a restore test.
+
+Retain daily snapshots for at least 14 days, plus weekly/monthly copies off-host. Encrypt backups at rest and restrict access: they contain personal data, password hashes and order history. Keep at least one backup that predates each schema migration until the new release has been stable for a full business cycle. The repository's `db:backup` command does not copy `UPLOAD_DIR` or `PRIVATE_DOCS_DIR`; snapshot those separately.
 
 ### File backup
 
@@ -365,29 +464,36 @@ Practice this on a staging host before an incident.
    rm -f pahadi-roots.db-wal pahadi-roots.db-shm
    ```
 
-3. Copy the chosen backup into place and set ownership:
+3. Verify the chosen backup before copying it:
 
    ```bash
-   cp /var/lib/pahadi-roots/backups/pahadi-roots-2026-10-23T...db /var/lib/pahadi-roots/data/pahadi-roots.db
+   cd /opt/pahadi-roots
+   npm run db:verify -- /var/lib/pahadi-roots/backups/pahadi-roots-2026-10-26T...db
+   ```
+
+4. Copy the verified backup into place and set ownership:
+
+   ```bash
+   cp /var/lib/pahadi-roots/backups/pahadi-roots-2026-10-26T...db /var/lib/pahadi-roots/data/pahadi-roots.db
    chown pahadi:pahadi /var/lib/pahadi-roots/data/pahadi-roots.db
    chmod 600 /var/lib/pahadi-roots/data/pahadi-roots.db
    ```
 
-4. Restore the matching storage snapshot. If the database is from before a file upload, restoring only the database leaves some image/document references broken.
+5. Restore the matching storage snapshot. If the database is from before a file upload, restoring only the database leaves some image/document references broken.
 
-5. Start the service and check health:
+6. Start the service and check readiness:
 
    ```bash
    sudo systemctl start pahadi-roots
-   curl -fsS http://127.0.0.1:8787/api/health
+   curl -fsS http://127.0.0.1:8787/api/health/ready
    ```
 
-6. Verify an administrator login, a recent order, a seller ledger balance and a private document as the owner. Do not announce recovery until these checks pass.
+7. Verify an administrator login, a recent order, a seller ledger balance and a private document as the owner. Do not announce recovery until these checks pass.
 
 ## Monitoring
 
-- Health: `GET /api/health` every minute from an external monitor; alert on non-200 or `database != up`.
-- Logs: ship JSON logs to a log service. Watch `unhandled_request_error`, `payment_provider_error`, `razorpay_webhook_failed`, `startup_failed`, `expiry_sweep_failed`.
+- Health: `GET /api/health/live` frequently and `GET /api/health/ready` every minute from an external monitor; alert on non-200, `ready != true` or `schema != current`.
+- Logs: ship JSON logs to a log service. Watch `unhandled_request_error`, `payment_provider_error`, `razorpay_webhook_failed`, `startup_failed`, `expiry_sweep_failed`. Authentication and account-linking actions are recorded in `audit_logs`; review failed sign-in patterns and linking decisions.
 - Disk: alert at 80% for database, uploads and backups. WAL growth can indicate long-running readers or a stuck writer.
 - Payments: reconcile Razorpay settlements against `payments` and `refund` records daily; the admin payments screen is not a substitute for provider reconciliation.
 - Backups: verify restore quarterly, not merely that a file exists.

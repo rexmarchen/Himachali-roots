@@ -19,8 +19,19 @@ function int(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function list(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((entry) => entry.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+}
+
 const nodeEnv = process.env.NODE_ENV ?? 'development';
 const isProduction = nodeEnv === 'production';
+
+const sameSiteRaw = (process.env.SESSION_COOKIE_SAMESITE ?? 'lax').toLowerCase();
+const sessionSameSite: 'lax' | 'strict' | 'none' =
+  sameSiteRaw === 'strict' || sameSiteRaw === 'none' ? sameSiteRaw : 'lax';
 
 export const env = {
   nodeEnv,
@@ -33,6 +44,11 @@ export const env = {
   privateDocsDir: process.env.PRIVATE_DOCS_DIR ?? path.resolve(process.cwd(), 'storage', 'private', 'seller-docs'),
   trustProxy: bool(process.env.TRUST_PROXY, false),
   sessionDays: int(process.env.SESSION_DAYS, 30),
+  sessionIdleDays: int(process.env.SESSION_IDLE_DAYS, 7),
+  sessionSameSite,
+  /** Extra browser origins allowed to call the API with credentials (split frontend/API deployments). */
+  allowedOrigins: list(process.env.ALLOWED_ORIGINS),
+  googleClientId: (process.env.GOOGLE_CLIENT_ID ?? '').trim(),
   defaultCommissionBp: int(process.env.DEFAULT_COMMISSION_BP, 1500),
   freeShippingThresholdPaise: int(process.env.FREE_SHIPPING_THRESHOLD_PAISE, 149900),
   flatShippingPaise: int(process.env.FLAT_SHIPPING_PAISE, 7900),
@@ -82,6 +98,21 @@ export function assertProductionConfig(): string[] {
     if (!env.razorpay.configured) problems.push('Razorpay keys are not configured — live checkout will be disabled.');
     if (!env.smtp.configured) problems.push('SMTP is not configured — transactional email will be skipped.');
     if (!fs.existsSync(env.databasePath)) problems.push('Database file does not exist; run migrations/seed before starting.');
+    if (!env.googleClientId) problems.push('GOOGLE_CLIENT_ID is not configured — Google sign-in will be hidden.');
+    if (env.googleClientId && !env.googleClientId.endsWith('.apps.googleusercontent.com')) {
+      problems.push('GOOGLE_CLIENT_ID does not look like a Google Web Client ID.');
+    }
+    if (env.sessionIdleDays < 1 || env.sessionIdleDays > env.sessionDays) {
+      problems.push('SESSION_IDLE_DAYS must be between 1 and SESSION_DAYS.');
+    }
+    if (env.sessionSameSite === 'none' && !env.appUrl.startsWith('https://')) {
+      problems.push('SESSION_COOKIE_SAMESITE=none requires APP_URL to use https://.');
+    }
+    for (const origin of env.allowedOrigins) {
+      if (!origin.startsWith('https://')) {
+        problems.push(`ALLOWED_ORIGINS entry must use https:// in production: ${origin}`);
+      }
+    }
   }
   return problems;
 }

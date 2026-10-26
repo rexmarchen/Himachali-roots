@@ -64,6 +64,7 @@ export function errorMiddleware(error: unknown, req: Request, res: Response, _ne
     JSON.stringify({
       level: 'error',
       msg: 'unhandled_request_error',
+      requestId: res.locals.requestId,
       method: req.method,
       path: req.path,
       error: error instanceof Error ? error.message : String(error),
@@ -73,40 +74,86 @@ export function errorMiddleware(error: unknown, req: Request, res: Response, _ne
   res.status(500).json({ error: { code: 'internal_error', message: 'Something went wrong on our side. Please try again.' } });
 }
 
-function isSameOrigin(req: Request): boolean {
-  const origin = req.get('origin');
-  if (!origin) return true; // same-origin fetch may omit Origin; cookies are SameSite=Lax.
+function normalizeOrigin(value: string): string {
   try {
-    const originUrl = new URL(origin);
-    const host = req.get('host');
-    if (Boolean(host) && originUrl.host === host) return true;
+    return new URL(value).origin;
+  } catch {
+    return '';
+  }
+}
 
-    // Allow requests originating from the configured application URL (e.g. Vite frontend)
-    const appUrl = new URL(env.appUrl);
-    if (originUrl.host === appUrl.host) return true;
+const configuredOrigins = new Set(
+  [env.appUrl, ...env.allowedOrigins].map(normalizeOrigin).filter(Boolean),
+);
 
-    // In local development/testing, permit localhost/127.0.0.1 loopback variations
-    if (!env.isProduction) {
-      const isLoopback = (hostname: string) => hostname === 'localhost' || hostname === '127.0.0.1';
-      const hostNameOnly = host ? host.split(':')[0] : '';
-      if (
-        isLoopback(originUrl.hostname) &&
-        (isLoopback(appUrl.hostname) || isLoopback(hostNameOnly))
-      ) {
-        return true;
-      }
-    }
+function isLoopback(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+}
 
-    return false;
+/**
+ * Browser requests carrying an Origin are trusted only when they match the
+ * request host, the configured APP_URL or an explicit ALLOWED_ORIGINS entry.
+ * Requests without Origin are non-browser clients or same-origin GETs.
+ */
+export function isTrustedOrigin(req: Request, origin?: string | null): boolean {
+  if (!origin) return true;
+  let originUrl: URL;
+  try {
+    originUrl = new URL(origin);
   } catch {
     return false;
   }
+  const host = req.get('host');
+  if (host && originUrl.host === host) {
+    // In production a TLS origin must not be downgraded to http on the same host.
+    if (!env.isProduction || originUrl.protocol === 'https:' || req.protocol === 'https') return true;
+  }
+  if (configuredOrigins.has(originUrl.origin)) return true;
+  if (!env.isProduction && isLoopback(originUrl.hostname)) {
+    const hostName = (host ?? '').split(':')[0];
+    if (isLoopback(hostName)) return true;
+    try {
+      if (isLoopback(new URL(env.appUrl).hostname)) return true;
+    } catch {
+      // Ignore an unparseable APP_URL; production validation reports it.
+    }
+  }
+  return false;
+}
+
+/** Explicit allowlist CORS for a split frontend/API deployment. Same-origin needs no header. */
+export function corsMiddleware(req: Request, res: Response, next: NextFunction): void {
+  const origin = req.get('origin');
+  if (!origin) {
+    next();
+    return;
+  }
+  if (!isTrustedOrigin(req, origin)) {
+    if (req.method === 'OPTIONS') {
+      res.status(403).json({ error: { code: 'cors', message: 'Origin not allowed.' } });
+      return;
+    }
+    // No CORS headers: the browser blocks the response, and csrfGuard blocks mutations.
+    next();
+    return;
+  }
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With, X-Request-Id');
+    res.setHeader('Access-Control-Max-Age', '600');
+    res.status(204).end();
+    return;
+  }
+  next();
 }
 
 /**
  * Lightweight CSRF defence for the cookie-session API:
- *  - SameSite=Lax session cookie
- *  - Origin must match Host for browser mutations
+ *  - SameSite session cookie
+ *  - Origin must match Host, APP_URL or ALLOWED_ORIGINS for browser mutations
  *  - Mutations must send the custom header required by the API client
  * Webhooks are exempt because they are authenticated by provider signatures.
  */
@@ -115,7 +162,7 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
     next();
     return;
   }
-  if (!isSameOrigin(req)) {
+  if (!isTrustedOrigin(req, req.get('origin'))) {
     res.status(403).json({ error: { code: 'csrf', message: 'Cross-origin request rejected.' } });
     return;
   }

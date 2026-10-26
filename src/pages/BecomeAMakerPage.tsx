@@ -2632,8 +2632,8 @@ export function BecomeAMakerPage() {
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-muted">
               If something is unclear, write to{' '}
-              <a href={`mailto:${siteConfig?.supportEmail ?? 'support@pahadiroots.in'}`} className="underline underline-offset-2">
-                {siteConfig?.supportEmail ?? 'support@pahadiroots.in'}
+              <a href={`mailto:${siteConfig?.supportEmail ?? 'support@dearhills.in'}`} className="underline underline-offset-2">
+                {siteConfig?.supportEmail ?? 'support@dearhills.in'}
               </a>
               . The address may be a placeholder in this environment; check the site footer for the current contact.
             </p>

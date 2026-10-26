@@ -16,9 +16,13 @@ Copy-Item .env.example .env
 | --- | --- | --- |
 | `NODE_ENV` | `development` | Set `production` for a production build. Production enables HSTS/CSP, serves `dist/`, and force-disables development helpers. |
 | `PORT` | `8787` | API and production SPA port. |
-| `APP_URL` | `http://localhost:5173` | Public origin, no trailing slash. Must be the HTTPS origin in production; it controls secure cookies and links in email. |
+| `APP_URL` | `http://localhost:5173` | Public origin, no trailing slash. Production for this project is `https://www.dearhills.in`; it controls secure cookies, trusted origins and links in email. |
 | `TRUST_PROXY` | `0` | Set `1` behind Caddy/Nginx/Cloudflare so secure-cookie detection and rate limiting see the real client IP. |
-| `SESSION_DAYS` | `30` | Session and cookie lifetime in days. |
+| `ALLOWED_ORIGINS` | empty | Comma-separated extra browser origins permitted to call the API with credentials. Only for a split SPA/API deployment; same-origin needs none. Each entry must be HTTPS in production. |
+| `VITE_API_BASE_URL` | empty | Build-time client setting. The API origin used by the browser (for example `https://api.shop.example`). Leave unset to call same-origin `/api`. |
+| `SESSION_DAYS` | `30` | Absolute session lifetime and cookie lifetime in days. |
+| `SESSION_IDLE_DAYS` | `7` | Session expires after this many days without activity. Must be between 1 and `SESSION_DAYS`. |
+| `SESSION_COOKIE_SAMESITE` | `lax` | `lax`, `strict`, or `none`. `none` is only for a cross-site SPA/API split, requires HTTPS, and must be paired with an explicit `ALLOWED_ORIGINS` allowlist. |
 | `LOG_LEVEL` | `info` | Parsed and exposed for future use; the current logger writes structured JSON without level filtering. |
 
 ### Data and storage
@@ -44,6 +48,27 @@ Private seller documents are stored under `PRIVATE_DOCS_DIR` (default `storage/p
 | `RESERVATION_MINUTES` | `30` | Unpaid orders expire and release reserved stock after this period. A sweep runs at startup and every minute. |
 
 Tax rates are deliberately **not** configured globally. `tax_rate_bp` defaults to `0` and GST-inclusive prices snapshot a zero tax component until rates are confirmed and set per product/category. Tax invoices are not generated. Both are launch blockers (see [Remaining blockers](REMAINING_BLOCKERS.md)).
+
+### Google sign-in
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `GOOGLE_CLIENT_ID` | empty | OAuth 2.0 **Web application** client ID from Google Cloud Console. The client ID is public; it is expected in the browser. |
+| `GOOGLE_CLIENT_SECRET` | not used | This build uses Google Identity Services ID tokens verified server-side, so no client secret is read, stored or required. Do not add one unless the flow changes. |
+
+Google sign-in is hidden until `GOOGLE_CLIENT_ID` is set. The browser receives a signed ID token from Google Identity Services and posts it to `POST /api/auth/google`. The server verifies the signature, issuer, audience, expiry and `email_verified` claim with `google-auth-library` before creating a session.
+
+Authorise these JavaScript origins on the OAuth client:
+
+- `https://www.dearhills.in` (the canonical `www` origin)
+- `https://dearhills.in` only if the apex domain is served directly instead of redirecting to `www`
+- `http://localhost:5173` while developing
+
+Never authorise a domain you do not control. A Google sign-in whose email already belongs to a password account is **not** merged automatically: the API returns a 10-minute single-use linking challenge, and the customer must enter the existing password at `POST /api/auth/google/link` before the identity is attached. The stable Google `sub` is the account key; email is descriptive only.
+
+A Google-only account can add a password from **Account → Profile & security** and then remove Google sign-in. The API refuses to remove the last usable sign-in method.
+
+Google CSP entries are already allowed for `accounts.google.com` in production. If you add a different identity provider, update the CSP explicitly.
 
 ### Development helpers
 
@@ -105,9 +130,21 @@ With `NODE_ENV=production`, the server:
 - serves the built SPA from `dist/` and falls back to `index.html` for client-side routes;
 - enables HSTS, a strict CSP and secure cookies when `APP_URL` is HTTPS;
 - refuses to start if development payment or auth helpers are enabled;
-- warns if `APP_URL` is not HTTPS, Razorpay is not configured, SMTP is not configured, or the database file is missing.
+- refuses a `SESSION_IDLE_DAYS` outside `1..SESSION_DAYS`, a non-HTTPS `APP_URL`, an HTTP entry in `ALLOWED_ORIGINS`, or `SESSION_COOKIE_SAMESITE=none` without HTTPS;
+- warns if Razorpay is not configured, SMTP is not configured, or the database file is missing;
+- warns if `GOOGLE_CLIENT_ID` is absent or does not look like a Google Web Client ID. Google sign-in is then hidden; password login still works.
 
-Warnings are not hard failures for missing payment/email credentials: this permits an intentionally catalogue-only deployment. A storefront that accepts checkout without a payment provider is not a live-commerce configuration.
+Warnings are not hard failures for missing payment/email credentials: this permits an intentionally catalogue-only deployment. A storefront that accepts checkout without a payment provider is not a live-commerce configuration. Google sign-in should be configured before launch if it is advertised.
+
+Health endpoints:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/health/live` | Process liveness only. Does not touch the database. |
+| `GET /api/health/ready` | Readiness: database reachable and schema at least version 6. Returns `503` when not ready. |
+| `GET /api/health` | Alias of readiness, kept for existing monitors. |
+
+Readiness deliberately does not disclose payment, SMTP or storage configuration. Check those through startup warnings and the admin console, not a public endpoint.
 
 Run a production build before starting:
 
@@ -121,11 +158,25 @@ npm start
 
 - Vite: `http://localhost:5173`
 - API: `http://localhost:8787`
-- Session cookie: `pr_session`
+- Session cookie: `pr_session` (`HttpOnly`, `SameSite=Lax` by default, `Secure` on HTTPS)
 - Cart cookie: `pr_cart`
 - CSRF header required on API mutations: `X-Requested-With: pahadi-roots`
 
 The Vite proxy forwards `/api`, `/uploads`, `/sitemap.xml` and `/robots.txt`. In production, both SPA and API are served by the same Express process, so no proxy path configuration is needed beyond forwarding all requests to the Node port.
+
+Browser mutations are also checked against `Origin`. A request whose `Origin` is neither the request host, `APP_URL`, nor an explicit `ALLOWED_ORIGINS` entry is rejected with `403` and code `csrf`. Requests without `Origin` (server-to-server calls, same-origin GETs) pass this check but still need the header for mutations.
+
+### Split SPA and API
+
+A same-origin deployment is strongly recommended. If the SPA must be served from a different site than the API:
+
+1. Set `VITE_API_BASE_URL` to the API origin at build time.
+2. Set `ALLOWED_ORIGINS` to the SPA origin on the API.
+3. Serve both over HTTPS and set `SESSION_COOKIE_SAMESITE=none`.
+4. Keep `credentials: 'include'` on API calls and keep the `X-Requested-With` header.
+5. Re-test login, logout, cart merge, Google sign-in and webhooks after the split. Cookies with `SameSite=None` are third-party cookies and may be blocked by browser privacy settings; a first-party API on a subdomain of the same site is safer.
+
+The Vercel configuration in this repository is a static SPA rewrite only. It does not host the Express API, so a Vercel-only deployment can browse the static catalogue fallback but cannot register, sign in, keep a cart or place an order.
 
 ## Secret handling
 

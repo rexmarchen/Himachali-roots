@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../env.js';
@@ -300,6 +300,8 @@ export function publicRouter(db: Db): Router {
       supportEmailIsPlaceholder: env.smtp.supportEmail.endsWith('.example'),
       devMode: !env.isProduction,
       devAuthHelpers: env.allowDevAuthHelpers,
+      googleClientId: env.googleClientId || null,
+      googleEnabled: Boolean(env.googleClientId),
       legalReviewRequired: true,
       commissionBasisNote:
         'Commission is calculated on product value after discounts, excluding shipping and taxes.',
@@ -414,24 +416,31 @@ export function publicRouter(db: Db): Router {
     },
   );
 
-  router.get('/health', (_req, res) => {
+  // Liveness must not touch dependencies: it only answers "is this process up?".
+  router.get('/health/live', (_req, res) => {
+    res.json({ status: 'ok', uptimeSeconds: Math.round(process.uptime()), timestamp: new Date().toISOString() });
+  });
+
+  // Readiness checks the only essential dependency: SQLite and its schema level.
+  const readiness = (_req: Request, res: Response) => {
     let databaseOk = true;
+    let migration = 0;
     try {
       queryOne(db, 'SELECT 1 AS ok');
+      migration = queryOne<{ version: number }>(db, 'SELECT MAX(version) AS version FROM schema_migrations')?.version ?? 0;
     } catch {
       databaseOk = false;
     }
-    const payments = paymentProviderStatus();
-    res.status(databaseOk ? 200 : 503).json({
-      status: databaseOk ? 'ok' : 'degraded',
+    const ready = databaseOk && migration >= 6;
+    res.status(ready ? 200 : 503).json({
+      status: ready ? 'ok' : 'degraded',
+      ready,
       database: databaseOk ? 'up' : 'down',
-      payments: payments.configured ? 'configured' : 'unconfigured',
-      shipping: env.shiprocket.configured ? 'configured' : 'manual-only',
-      email: env.smtp.configured ? 'configured' : 'unconfigured',
-      uptimeSeconds: Math.round(process.uptime()),
+      schema: migration >= 6 ? 'current' : 'outdated',
       timestamp: new Date().toISOString(),
     });
-  });
+  };
+  router.get(['/health', '/health/ready'], readiness);
 
   return router;
 }

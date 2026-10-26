@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../env.js';
@@ -8,15 +8,21 @@ import {
   clearSessionCookie,
   createSession,
   destroySession,
+  getSessionUser,
+  hasUsablePassword,
   hashPassword,
+  NO_PASSWORD_MARKER,
   normalizeEmail,
   requireAuth,
+  rotateSession,
   sessionToken,
   setSessionCookie,
   sha256,
   verifyPassword,
 } from '../lib/auth.js';
-import { parse, unauthorized, badRequest, conflict } from '../lib/http.js';
+import { verifyGoogleIdToken as verifyGoogleIdTokenWithGoogle, type GoogleProfile } from '../lib/google.js';
+import { audit } from '../lib/audit.js';
+import { parse, unauthorized, badRequest, conflict, forbidden } from '../lib/http.js';
 import { newId, randomToken } from '../lib/ids.js';
 import { ensureCart, CART_COOKIE, setCartCookie } from '../lib/cart.js';
 import { notify } from '../lib/email.js';
@@ -40,6 +46,143 @@ const loginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1, 'Enter your password.').max(200),
 });
+
+const googleSchema = z.object({
+  credential: z.string().min(20, 'Google did not return a usable credential.').max(8192),
+});
+
+const googleLinkSchema = z.object({
+  linkToken: z.string().min(20, 'Start Google sign-in again.').max(200),
+  password: z.string().min(1, 'Enter your account password.').max(200),
+});
+
+const LINK_CHALLENGE_MINUTES = 10;
+// A real scrypt comparison runs even when the email is unknown, so response
+// timing does not reveal whether an account exists.
+const DUMMY_PASSWORD_HASH = hashPassword('not-a-real-account-password-0');
+
+interface AuthUserRow {
+  id: string;
+  email: string;
+  password_hash: string;
+  is_disabled: number;
+  email_verified: number;
+  full_name: string;
+}
+
+interface IdentityRow {
+  id: string;
+  user_id: string;
+  provider_user_id: string;
+}
+
+interface LinkChallengeRow {
+  provider_user_id: string;
+  provider_email: string;
+  email_verified: number;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+export interface AuthRouterDeps {
+  /** Injected so the verification boundary can be tested without network calls. */
+  verifyGoogleIdToken: (credential: string) => Promise<GoogleProfile>;
+}
+
+function findUserByEmail(db: Db, email: string): AuthUserRow | undefined {
+  return queryOne<AuthUserRow>(
+    db,
+    `SELECT u.id, u.email, u.password_hash, u.is_disabled, u.email_verified,
+            COALESCE(p.full_name, '') AS full_name
+       FROM users u LEFT JOIN profiles p ON p.id = u.id
+      WHERE u.email = ?`,
+    email,
+  );
+}
+
+function findIdentity(db: Db, providerUserId: string): IdentityRow | undefined {
+  return queryOne<IdentityRow>(
+    db,
+    "SELECT id, user_id, provider_user_id FROM auth_identities WHERE provider = 'google' AND provider_user_id = ?",
+    providerUserId,
+  );
+}
+
+function issueLinkChallenge(db: Db, profile: GoogleProfile): string {
+  const token = randomToken(32);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + LINK_CHALLENGE_MINUTES * 60_000).toISOString();
+  execute(db, 'DELETE FROM auth_link_challenges WHERE expires_at <= ? OR used_at IS NOT NULL', now.toISOString());
+  execute(
+    db,
+    "DELETE FROM auth_link_challenges WHERE provider = 'google' AND provider_user_id = ? AND used_at IS NULL",
+    profile.sub,
+  );
+  execute(
+    db,
+    `INSERT INTO auth_link_challenges
+       (token_hash, provider, provider_user_id, provider_email, email_verified, display_name, avatar_url, expires_at)
+     VALUES (?, 'google', ?, ?, ?, ?, ?, ?)`,
+    sha256(token),
+    profile.sub,
+    profile.email,
+    profile.emailVerified ? 1 : 0,
+    profile.name,
+    profile.picture,
+    expiresAt,
+  );
+  return token;
+}
+
+function recordGoogleIdentity(db: Db, userId: string, profile: GoogleProfile): void {
+  const now = new Date().toISOString();
+  execute(
+    db,
+    `INSERT INTO auth_identities
+       (id, user_id, provider, provider_user_id, provider_email, email_verified, display_name, avatar_url, last_sign_in_at)
+     VALUES (?, ?, 'google', ?, ?, ?, ?, ?, ?)`,
+    newId('aid_'),
+    userId,
+    profile.sub,
+    profile.email,
+    profile.emailVerified ? 1 : 0,
+    profile.name,
+    profile.picture,
+    now,
+  );
+}
+
+function touchGoogleIdentity(db: Db, userId: string, profile: GoogleProfile): void {
+  execute(
+    db,
+    `UPDATE auth_identities
+        SET provider_email = ?, email_verified = ?, display_name = ?, avatar_url = ?,
+            last_sign_in_at = ?, updated_at = ?
+      WHERE provider = 'google' AND user_id = ?`,
+    profile.email,
+    profile.emailVerified ? 1 : 0,
+    profile.name,
+    profile.picture,
+    new Date().toISOString(),
+    new Date().toISOString(),
+    userId,
+  );
+}
+
+function attachCart(db: Db, req: Request, res: Response, userId: string): void {
+  const cart = ensureCart(db, userId, (req.cookies as Record<string, string> | undefined)?.[CART_COOKIE] ?? null);
+  setCartCookie(res, cart.token);
+}
+
+function signInResponse(db: Db, req: Request, res: Response, userId: string) {
+  rotateSession(db, req, res, userId);
+  attachCart(db, req, res, userId);
+  return { ok: true, user: getSessionUser(db, userId) };
+}
+
+function disabledError() {
+  return forbidden('This account is disabled. Contact support if you believe this is a mistake.');
+}
 
 function authLimiter(max: number) {
   return rateLimit({
@@ -74,8 +217,9 @@ async function issueVerification(db: Db, user: { id: string; email: string; full
   return env.allowDevAuthHelpers && !env.smtp.configured ? link : null;
 }
 
-export function authRouter(db: Db): Router {
+export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
   const router = Router();
+  const verifyGoogle = deps.verifyGoogleIdToken ?? verifyGoogleIdTokenWithGoogle;
 
   router.post('/register', authLimiter(20), async (req, res) => {
     const input = parse(registerSchema, req.body);
@@ -113,15 +257,7 @@ export function authRouter(db: Db): Router {
     setCartCookie(res, cart.token);
     const devVerifyUrl = await issueVerification(db, { id: userId, email, fullName: input.fullName });
     res.status(201).json({
-      user: {
-        id: userId,
-        email,
-        fullName: input.fullName,
-        roles: ['customer'],
-        sellerId: null,
-        sellerStatus: null,
-        emailVerified: false,
-      },
+      user: getSessionUser(db, userId),
       devVerifyUrl,
     });
   });
@@ -132,27 +268,214 @@ export function authRouter(db: Db): Router {
 
   router.post('/login', authLimiter(15), (req, res) => {
     const input = parse(loginSchema, req.body);
-    const user = queryOne<{ id: string; email: string; password_hash: string; is_disabled: number; full_name: string }>(
-      db,
-      `SELECT u.id, u.email, u.password_hash, u.is_disabled, p.full_name
-         FROM users u LEFT JOIN profiles p ON p.id = u.id WHERE u.email = ?`,
-      normalizeEmail(input.email),
-    );
-    const valid = user ? verifyPassword(input.password, user.password_hash) : false;
-    if (!user || !valid || user.is_disabled) {
+    const user = findUserByEmail(db, normalizeEmail(input.email));
+    // Provider-only accounts have no usable password; compare against a dummy
+    // hash so their response timing matches an unknown email.
+    const storedHash = user && hasUsablePassword(user.password_hash) ? user.password_hash : DUMMY_PASSWORD_HASH;
+    const valid = verifyPassword(input.password, storedHash) && Boolean(user && hasUsablePassword(user.password_hash));
+    if (!user || !valid) {
       throw unauthorized('That email and password combination is not recognised.');
     }
-    const token = createSession(db, user.id);
-    setSessionCookie(req, res, token);
-    const cart = ensureCart(db, user.id, (req.cookies as Record<string, string> | undefined)?.[CART_COOKIE] ?? null);
-    setCartCookie(res, cart.token);
-    res.json({ ok: true });
+    if (user.is_disabled) throw disabledError();
+    const body = signInResponse(db, req, res, user.id);
+    res.json(body);
   });
 
-  router.post('/logout', requireAuth, (req, res) => {
+  router.post('/logout', (req, res) => {
+    // Clear the cookie even when the session is already expired so a browser
+    // cannot keep sending a dead identifier.
     destroySession(db, sessionToken(req));
     clearSessionCookie(req, res);
     res.json({ ok: true });
+  });
+
+  /**
+   * Google Identity Services sign-in.
+   *
+   * The credential is a signed ID token verified server-side. A matching
+   * provider subject logs the user in. A matching email with no linked subject
+   * does NOT merge accounts: it returns a short-lived challenge and the client
+   * must prove ownership of the existing password before linking.
+   */
+  router.post('/google', authLimiter(20), async (req, res) => {
+    const input = parse(googleSchema, req.body);
+    const profile = await verifyGoogle(input.credential);
+
+    const identity = findIdentity(db, profile.sub);
+    if (identity) {
+      const user = queryOne<AuthUserRow>(
+        db,
+        `SELECT u.id, u.email, u.password_hash, u.is_disabled, u.email_verified,
+                COALESCE(p.full_name, '') AS full_name
+           FROM users u LEFT JOIN profiles p ON p.id = u.id WHERE u.id = ?`,
+        identity.user_id,
+      );
+      if (!user) throw unauthorized();
+      if (user.is_disabled) throw disabledError();
+      touchGoogleIdentity(db, user.id, profile);
+      const body = signInResponse(db, req, res, user.id);
+      audit(db, { id: user.id, email: user.email }, 'auth.google.signin', 'user', user.id);
+      res.json(body);
+      return;
+    }
+
+    const existing = findUserByEmail(db, profile.email);
+    if (existing) {
+      const linkToken = issueLinkChallenge(db, profile);
+      res.json({
+        ok: false,
+        linkingRequired: true,
+        linkToken,
+        email: profile.email,
+        message: 'An account already uses this email address. Confirm your existing password to link Google sign-in.',
+      });
+      return;
+    }
+
+    const userId = newId('usr_');
+    const fullName = profile.name || profile.email.split('@')[0];
+    let token: string;
+    try {
+      token = tx(db, () => {
+        execute(
+          db,
+          'INSERT INTO users (id, email, password_hash, email_verified) VALUES (?, ?, ?, ?)',
+          userId,
+          profile.email,
+          NO_PASSWORD_MARKER,
+          profile.emailVerified ? 1 : 0,
+        );
+        execute(db, 'INSERT INTO profiles (id, full_name) VALUES (?, ?)', userId, fullName.slice(0, 120));
+        execute(db, "INSERT INTO user_roles (user_id, role) VALUES (?, 'customer')", userId);
+        recordGoogleIdentity(db, userId, profile);
+        return createSession(db, userId);
+      });
+    } catch (error) {
+      // Concurrent first sign-ins can race on the email or subject uniqueness.
+      // Re-read the winner and issue a session for the same user.
+      const raced = findIdentity(db, profile.sub);
+      if (raced) {
+        const racedUser = queryOne<AuthUserRow>(
+          db,
+          `SELECT u.id, u.email, u.password_hash, u.is_disabled, u.email_verified,
+                  COALESCE(p.full_name, '') AS full_name
+             FROM users u LEFT JOIN profiles p ON p.id = u.id WHERE u.id = ?`,
+          raced.user_id,
+        );
+        if (!racedUser) throw error;
+        if (racedUser.is_disabled) throw disabledError();
+        const body = signInResponse(db, req, res, racedUser.id);
+        res.json(body);
+        return;
+      }
+      const racedUser = findUserByEmail(db, profile.email);
+      if (racedUser) {
+        const linkToken = issueLinkChallenge(db, profile);
+        res.json({
+          ok: false,
+          linkingRequired: true,
+          linkToken,
+          email: profile.email,
+          message: 'An account already uses this email address. Confirm your existing password to link Google sign-in.',
+        });
+        return;
+      }
+      throw error;
+    }
+
+    destroySession(db, sessionToken(req));
+    setSessionCookie(req, res, token);
+    attachCart(db, req, res, userId);
+    audit(db, { id: userId, email: profile.email }, 'auth.google.register', 'user', userId);
+    res.status(201).json({ ok: true, user: getSessionUser(db, userId), linkingRequired: false });
+  });
+
+  /** Complete explicit linking by proving ownership of the existing password. */
+  router.post('/google/link', authLimiter(10), (req, res) => {
+    const input = parse(googleLinkSchema, req.body);
+    const now = new Date().toISOString();
+    const challenge = queryOne<LinkChallengeRow>(
+      db,
+      `SELECT provider_user_id, provider_email, email_verified, display_name, avatar_url
+         FROM auth_link_challenges
+        WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?`,
+      sha256(input.linkToken),
+      now,
+    );
+    if (!challenge) {
+      throw badRequest('That linking request has expired. Start Google sign-in again.');
+    }
+
+    const user = findUserByEmail(db, challenge.provider_email);
+    if (!user || user.is_disabled) {
+      throw badRequest('That linking request is no longer valid. Start again.');
+    }
+    if (!verifyPassword(input.password, user.password_hash)) {
+      throw unauthorized('That password is not correct. Linking was not completed.');
+    }
+
+    const linkedSubject = findIdentity(db, challenge.provider_user_id);
+    if (linkedSubject && linkedSubject.user_id !== user.id) {
+      throw conflict('That Google account is already linked to a different account.', 'google_already_linked');
+    }
+    const linkedUser = queryOne<{ id: string }>(
+      db,
+      "SELECT id FROM auth_identities WHERE provider = 'google' AND user_id = ?",
+      user.id,
+    );
+    if (linkedUser) {
+      throw conflict('A different Google account is already linked to this account.', 'google_account_has_identity');
+    }
+
+    const profile: GoogleProfile = {
+      sub: challenge.provider_user_id,
+      email: challenge.provider_email,
+      emailVerified: challenge.email_verified === 1,
+      name: challenge.display_name,
+      picture: challenge.avatar_url,
+    };
+    const token = tx(db, () => {
+      execute(
+        db,
+        'UPDATE auth_link_challenges SET used_at = ? WHERE token_hash = ?',
+        now,
+        sha256(input.linkToken),
+      );
+      recordGoogleIdentity(db, user.id, profile);
+      execute(
+        db,
+        'UPDATE users SET email_verified = 1, updated_at = ? WHERE id = ?',
+        now,
+        user.id,
+      );
+      return createSession(db, user.id);
+    });
+    destroySession(db, sessionToken(req));
+    setSessionCookie(req, res, token);
+    attachCart(db, req, res, user.id);
+    audit(db, { id: user.id, email: user.email }, 'auth.google.link', 'user', user.id);
+    res.json({ ok: true, user: getSessionUser(db, user.id), linkingRequired: false });
+  });
+
+  /** Remove Google sign-in. A usable password must remain as a fallback. */
+  router.post('/google/unlink', authLimiter(10), requireAuth, (req, res) => {
+    const input = parse(z.object({ password: z.string().min(1).max(200) }), req.body);
+    const user = queryOne<{ password_hash: string }>(db, 'SELECT password_hash FROM users WHERE id = ?', req.user!.id);
+    if (!user || !hasUsablePassword(user.password_hash)) {
+      throw badRequest('Set a password before removing Google sign-in, so you cannot lose access to the account.');
+    }
+    if (!verifyPassword(input.password, user.password_hash)) {
+      throw unauthorized('That password is not correct.');
+    }
+    const identity = queryOne<{ id: string }>(
+      db,
+      "SELECT id FROM auth_identities WHERE provider = 'google' AND user_id = ?",
+      req.user!.id,
+    );
+    if (!identity) throw badRequest('Google sign-in is not linked to this account.');
+    execute(db, 'DELETE FROM auth_identities WHERE id = ?', identity.id);
+    audit(db, { id: req.user!.id, email: req.user!.email }, 'auth.google.unlink', 'user', req.user!.id);
+    res.json({ ok: true, user: getSessionUser(db, req.user!.id) });
   });
 
   router.post('/verify-email', authLimiter(20), (req, res) => {

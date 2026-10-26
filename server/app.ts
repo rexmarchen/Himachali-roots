@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
@@ -7,18 +8,27 @@ import rateLimit from 'express-rate-limit';
 import { env } from './env.js';
 import type { Db } from './db.js';
 import { attachUser } from './lib/auth.js';
-import { csrfGuard, errorMiddleware } from './lib/http.js';
-import { authRouter } from './routes/auth.js';
+import { corsMiddleware, csrfGuard, errorMiddleware } from './lib/http.js';
+import { authRouter, type AuthRouterDeps } from './routes/auth.js';
 import { publicRouter, sitemapRouter } from './routes/public.js';
 import { shopRouter } from './routes/shop.js';
 import { accountRouter } from './routes/account.js';
 import { sellerRouter } from './routes/seller.js';
 import { adminRouter } from './routes/admin.js';
 
-export function createApp(db: Db): express.Express {
+export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.Express {
   const app = express();
   app.disable('x-powered-by');
   if (env.trustProxy) app.set('trust proxy', 1);
+
+  app.use((req, res, next) => {
+    const supplied = req.get('x-request-id');
+    const requestId =
+      supplied && /^[A-Za-z0-9._-]{8,64}$/.test(supplied) ? supplied : crypto.randomUUID();
+    res.locals.requestId = requestId;
+    res.setHeader('X-Request-Id', requestId);
+    next();
+  });
 
   app.use(
     helmet({
@@ -27,17 +37,26 @@ export function createApp(db: Db): express.Express {
             useDefaults: true,
             directives: {
               'default-src': ["'self'"],
-              'script-src': ["'self'", 'https://checkout.razorpay.com'],
+              'script-src': [
+                "'self'",
+                'https://accounts.google.com',
+                'https://checkout.razorpay.com',
+              ],
               'style-src': ["'self'", "'unsafe-inline'"],
               'img-src': ["'self'", 'data:', 'https:'],
               'font-src': ["'self'", 'data:'],
               'connect-src': [
                 "'self'",
+                'https://accounts.google.com',
                 'https://api.razorpay.com',
                 'https://lumberjack.razorpay.com',
                 'https://checkout.razorpay.com',
               ],
-              'frame-src': ['https://api.razorpay.com', 'https://checkout.razorpay.com'],
+              'frame-src': [
+                'https://accounts.google.com',
+                'https://api.razorpay.com',
+                'https://checkout.razorpay.com',
+              ],
               'object-src': ["'none'"],
               'base-uri': ["'self'"],
               'form-action': ["'self'"],
@@ -46,10 +65,13 @@ export function createApp(db: Db): express.Express {
           }
         : false,
       crossOriginEmbedderPolicy: false,
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
       referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
       hsts: env.isProduction ? { maxAge: 31536000, includeSubDomains: true } : false,
     }),
   );
+
+  app.use('/api', corsMiddleware);
 
   app.use(
     express.json({
@@ -77,7 +99,11 @@ export function createApp(db: Db): express.Express {
     }),
   );
 
-  app.use('/api/auth', authRouter(db));
+  app.use('/api/auth', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+  app.use('/api/auth', authRouter(db, deps));
   app.use('/api', publicRouter(db));
   app.use('/api', shopRouter(db));
   app.use('/api/account', accountRouter(db));

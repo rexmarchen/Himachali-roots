@@ -65,9 +65,11 @@ interface GoogleSignInResult {
  * why a Google sign-in asked for a password.
  */
 function GoogleAuthSection({
+  text = 'continue_with',
   onAuthenticated,
   beforeSignIn,
 }: {
+  text?: 'signin_with' | 'signup_with' | 'continue_with';
   onAuthenticated: () => Promise<void> | void;
   beforeSignIn?: () => string | null;
 }) {
@@ -166,7 +168,7 @@ function GoogleAuthSection({
           </Button>
         </form>
       ) : (
-        <GoogleSignIn clientId={googleClientId} onCredential={handleCredential} />
+        <GoogleSignIn clientId={googleClientId} text={text} onCredential={handleCredential} />
       )}
     </div>
   );
@@ -253,7 +255,7 @@ export function LoginPage() {
         </Button>
       </form>
 
-      <GoogleAuthSection onAuthenticated={() => completeSignIn('Signed in with Google.')} />
+      <GoogleAuthSection text="signin_with" onAuthenticated={() => completeSignIn('Signed in with Google.')} />
 
       <p className="mt-6 text-center text-[11.5px] text-muted">
         New to PAHADI ROOTS?{' '}
@@ -412,6 +414,7 @@ export function RegisterPage() {
       </form>
 
       <GoogleAuthSection
+        text="signup_with"
         onAuthenticated={() => completeRegistration('Account created with Google.')}
         beforeSignIn={() => (terms ? null : 'Please accept the terms and privacy notice before continuing with Google.')}
       />

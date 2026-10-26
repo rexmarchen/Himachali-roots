@@ -39,6 +39,10 @@ export interface SessionUser {
   sellerId: string | null;
   sellerStatus: SellerStatus | null;
   emailVerified: boolean;
+  /** False for accounts created through a provider until a password is set. */
+  hasPassword?: boolean;
+  /** Linked sign-in providers, e.g. ["google"]. */
+  authProviders?: string[];
 }
 
 export interface Category {

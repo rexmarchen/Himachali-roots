@@ -1,0 +1,38 @@
+name: pahadi-roots
+
+services:
+  app:
+    build:
+      context: .
+    image: pahadi-roots:latest
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: "8787"
+      DATABASE_PATH: /data/pahadi-roots.db
+      UPLOAD_DIR: /storage/uploads
+      PRIVATE_DOCS_DIR: /storage/private/seller-docs
+    ports:
+      # Bound to loopback only. Terminate TLS with Caddy/Nginx on the host.
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - pahadi-data:/data
+      - pahadi-storage:/storage
+      - pahadi-backups:/backups
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+volumes:
+  pahadi-data:
+  pahadi-storage:
+  pahadi-backups:

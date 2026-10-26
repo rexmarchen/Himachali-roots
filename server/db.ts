@@ -266,7 +266,29 @@ export function openDatabase(filename: string): Db {
   // order history can show the saving without recomputing it from live data.
   addColumn(db, 'order_items', 'original_unit_price_paise', 'INTEGER');
   markMigration(db, 5);
+
+  migrateProviderAuth(db);
+  markMigration(db, 6);
   return db;
+}
+
+/**
+ * Migration 6 is additive: provider identities, one-time linking challenges and
+ * the idle-expiry column on sessions. Existing users and orders are untouched.
+ * schema.sql creates the new tables when they are absent; this function also
+ * upgrades databases created before the columns existed.
+ */
+function migrateProviderAuth(db: Db): void {
+  addColumn(db, 'sessions', 'last_seen_at', 'TEXT');
+  db.exec(`
+    UPDATE sessions
+       SET last_seen_at = COALESCE(last_seen_at, created_at, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     WHERE last_seen_at IS NULL;
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_auth_identities_user ON auth_identities(user_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_auth_identities_email ON auth_identities(provider_email)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_auth_link_expires ON auth_link_challenges(expires_at)');
 }
 
 function migrateDemoOrders(db: Db): void {

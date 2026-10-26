@@ -28,6 +28,7 @@ Nothing below should be assumed complete merely because the software supports it
 
 - [ ] Production domain and TLS active.
 - [ ] Razorpay live keys and webhook secret in the production secret store.
+- [ ] Google OAuth Web client created with only the real production JavaScript origin (and localhost for development); `GOOGLE_CLIENT_ID` set in production. No client secret is used by this flow.
 - [ ] Razorpay webhook configured to `https://<domain>/api/webhooks/razorpay` with payment and refund events enabled.
 - [ ] SMTP/transactional email provider configured with SPF, DKIM and DMARC; `EMAIL_FROM` is an authorised identity.
 - [ ] Courier accounts and pickup addresses operational. Understand that shipping is manual; no Shiprocket adapter exists.
@@ -58,10 +59,14 @@ Nothing below should be assumed complete merely because the software supports it
 
 - [ ] `npm run check` passes on the exact release commit.
 - [ ] Production build starts with `NODE_ENV=production` and no development helper flags.
-- [ ] `APP_URL` is the HTTPS origin and `TRUST_PROXY=1` is set behind the reverse proxy.
-- [ ] `/api/health` reports `database: up` and the expected integration modes.
-- [ ] CSP permits Razorpay Checkout but nothing unnecessary; browser console is clean.
-- [ ] Secure session cookie observed over HTTPS; logout invalidates the server session.
+- [ ] `APP_URL` is `https://www.dearhills.in` and `TRUST_PROXY=1` is set behind the reverse proxy.
+- [ ] DNS points `www.dearhills.in` at the Express host (not Vercel), the apex redirects to `https://www.dearhills.in`, and the old static Vercel domain has been detached.
+- [ ] `/api/health/live` and `/api/health/ready` return 200 at `https://www.dearhills.in`; readiness reports `database: up` and `schema: current`.
+- [ ] Session cookie observed over HTTPS with `HttpOnly`, `Secure`, the intended `SameSite`, and an idle/absolute expiry. Logout invalidates the server session.
+- [ ] Password login, Google sign-in, explicit Google linking and unlink were tested with real accounts. No account merged on email alone.
+- [ ] `GOOGLE_CLIENT_ID` has `https://www.dearhills.in` in its authorised JavaScript origins. No client secret is present in the browser bundle.
+- [ ] `ALLOWED_ORIGINS` is empty for the recommended same-origin deployment; if split, HTTPS and `SESSION_COOKIE_SAMESITE=none` were deliberately configured and tested.
+- [ ] CSP permits Razorpay Checkout and Google Identity Services but nothing unnecessary; browser console is clean.
 - [ ] Production database path and upload paths are persistent and owned by the service user.
 - [ ] Private seller documents are not reachable under `/uploads` or any static route.
 - [ ] Upload limits and magic-byte validation remain enabled.
@@ -102,7 +107,7 @@ Nothing below should be assumed complete merely because the software supports it
 
 Run this against staging with real provider test credentials:
 
-1. Register a new customer; verify email; log out and back in.
+1. Register a new customer; verify email; log out and back in. Sign in with Google as a new user; sign out and sign in again; confirm an existing password account is not merged without its password.
 2. Browse/search/filter; view a seller and product; add to cart; apply a valid and invalid coupon.
 3. Complete checkout; confirm server-calculated totals and stock reservation.
 4. With an active campaign: confirm the offer page and homepage banner, add an eligible product to the cart, and verify that cart and checkout show the promotional unit price plus the original price. Change or archive the campaign and confirm the open cart reprices.

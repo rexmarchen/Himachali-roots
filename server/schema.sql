@@ -36,9 +36,47 @@ CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   expires_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+-- External identity providers. The provider's stable subject identifier is the
+-- key; email is only descriptive and is never used to merge accounts.
+CREATE TABLE IF NOT EXISTS auth_identities (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL CHECK (provider IN ('google')),
+  provider_user_id TEXT NOT NULL,
+  provider_email TEXT,
+  email_verified INTEGER NOT NULL DEFAULT 0,
+  display_name TEXT,
+  avatar_url TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  last_sign_in_at TEXT,
+  UNIQUE (provider, provider_user_id),
+  UNIQUE (provider, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_auth_identities_user ON auth_identities(user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_identities_email ON auth_identities(provider_email);
+
+-- A short-lived, single-use proof that the owner of an existing password
+-- account agreed to attach a provider identity. Only the hash is stored.
+CREATE TABLE IF NOT EXISTS auth_link_challenges (
+  token_hash TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  provider_user_id TEXT NOT NULL,
+  provider_email TEXT NOT NULL,
+  email_verified INTEGER NOT NULL DEFAULT 0,
+  display_name TEXT,
+  avatar_url TEXT,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_auth_link_expires ON auth_link_challenges(expires_at);
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   token_hash TEXT PRIMARY KEY,

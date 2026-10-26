@@ -114,7 +114,8 @@ describe('registration and sessions', () => {
       email: 'customer@test.local',
       password: TEST_PASSWORD,
     });
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('forbidden');
   });
 
   it('destroys the session on logout', async () => {
