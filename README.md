@@ -12,13 +12,13 @@ The visual system is deliberately editorial rather than "startup dashboard": war
 
 | Area | Implemented and exercised |
 | --- | --- |
-| Storefront | Home, shop filters/search/sort, product pages, maker directory and profiles, cart, authenticated checkout, editorial pages, policies, image credits, sitemap |
+| Storefront | Home, seasonal offer page with poster and eligible-product listing, shop filters/search/sort, product pages, maker directory and profiles, cart, authenticated checkout, editorial pages, policies, image credits, sitemap |
 | Customer account | Registration/login, email verification, password reset, addresses, order history/detail, cancellation and return requests, reviews for delivered purchases, wishlist, notifications, profile and deletion request |
 | Seller workspace | Ten-step resumable maker application with category-aware questions, private document upload, explicit application/store status and review history; approval gate; dashboard and readiness checklist; product drafts, submission and resubmission after change requests; image upload, inventory, order confirm → pack → ship → deliver, tracking, earnings ledger, settlements, store profile, notifications |
-| Admin console | Seller application review with evidence, checklist, requirements, reason-required decisions, review history and audit trail; product moderation including change requests; category management, orders and fulfilment, payments, refunds, returns, cancellations, commission rules, settlement creation/payout recording, customers, review moderation, structured content editors, coupons, support inbox, audit log, integration status |
+| Admin console | Seller application review with evidence, checklist, requirements, reason-required decisions, review history and audit trail; product moderation including change requests; seasonal campaign creation, status/window control, poster upload, eligible-product pricing; category management, orders and fulfilment, payments, refunds, returns, cancellations, commission rules, settlement creation/payout recording, customers, review moderation, structured content editors, coupons, support inbox, audit log, integration status |
 | Commerce rules | Integer-paise accounting, GST-inclusive prices, server-side repricing, coupon validation and redemption limits, shipping thresholds, commission snapshots, stock reservation, idempotent checkout, seller-order splitting |
 | Security | scrypt passwords, server-side sessions, RBAC, CSRF header + origin checks, rate limits, Helmet/CSP, parameterised SQL, ownership checks, upload type/signature validation, HMAC payment verification, audit logging |
-| Quality | TypeScript typecheck, ESLint, 87 integration/security/migration tests, 33-check live HTTP smoke, production build |
+| Quality | TypeScript typecheck, ESLint, 101 integration/security/migration/campaign tests, live HTTP smoke, seller-lifecycle E2E, production build |
 
 The full route tree is available without an external service. Razorpay and SMTP are the only external integrations wired; courier dispatch is manual. The application reports unconfigured integrations rather than pretending they are live.
 
@@ -98,7 +98,7 @@ The simulation endpoint explicitly states that no money moved. It is force-disab
 | `npm run smoke` | Live HTTP smoke test against a running development API |
 | `npm run typecheck` | Client, server and test TypeScript checks |
 | `npm run lint` | ESLint |
-| `npm test` | 87 Vitest/Supertest tests |
+| `npm test` | 101 Vitest/Supertest tests |
 | `npm run check` | Typecheck + lint + tests + production build |
 
 ## Project structure
@@ -136,6 +136,7 @@ docs/                   environment, deployment, seller, launch and status docs
 - **Payouts are manual.** An administrator reviews a seller statement, records a mandatory bank/UPI reference, and only then is the settlement marked paid. No live payout API is claimed.
 - **Seller onboarding is explicit.** Applications move through `draft → submitted → under_review → changes_requested / approved / rejected` with `suspended` and re-verification paths. Store status is separate (`setup_incomplete`, `pending_activation`, `active`, `suspended`). Every administrator decision requires the configured reason and is recorded in the application event log and `audit_logs`. Applicants cannot submit unwritten categories, and administrators cannot decide on their own application.
 - **Product moderation is separate from seller approval.** Listing workflow statuses are `draft`, `submitted`, `changes_requested`, `approved/published`, `rejected`. A product is publicly visible only when the product and its seller are both approved; seller suspension pauses live listings.
+- **Seasonal campaigns are server-authoritative.** An administrator selects explicitly eligible products and a fixed promotional price for each. A promotion must be lower than the current base price and within the campaign's maximum discount, and one product can belong to only one live or scheduled campaign. The database view `active_campaign_prices` is the only source of a live promo price, so catalogue, cart and checkout can never disagree. Scheduled and expired states are derived from the configured window; draft and archived campaigns are not public. Campaign pages show only real eligible products and do not invent dates or discounts.
 - **Order splitting:** a cart containing multiple sellers becomes one customer order with separate seller orders, shipments and tracking.
 - **Guest checkout is intentionally unsupported.** Guest carts are kept in a signed random cookie and merge into the account cart after login.
 
@@ -154,17 +155,19 @@ Detailed state machines and money rules live in `server/lib/orders.ts`, `server/
 
 ## Verification
 
-Last verified on 24 October 2026 with Node 24.21.0:
+Last verified on 26 October 2026 with Node 24.21.0:
 
 - `npm run typecheck` — passed
 - `npm run lint` — passed
-- `npm test` — 87 of 87 tests passed across 13 files, including seller onboarding, admin products, checkout, refunds and the legacy-migration suites
+- `npm test` — 101 of 101 tests passed across 15 files, including the campaign, seller onboarding, admin products, checkout, refunds and legacy-migration suites
 - `npm run build` — passed; SPA and `dist-server/server/index.js` generated (Vite reports a >500 kB chunk warning)
-- `npm run smoke` — 33 of 33 live HTTP checks passed against a running development API, including storefront, registration, checkout with the labelled development payment simulation, seller confirm → pack → ship → deliver, and the admin settlement hold guard
-- A copy of the existing `data/pahadi-roots.db` (schema versions 1–2) was migrated to version 3 with row counts preserved, `PRAGMA integrity_check` returning `ok` and no foreign-key violations
+- `npm run smoke` — 28 of 28 non-admin live HTTP checks passed against a running development API (33 checks when `SMOKE_ADMIN_EMAIL` and `SMOKE_ADMIN_PASSWORD` are supplied), including storefront, registration, checkout with the labelled development payment simulation, seller confirm → pack → ship → deliver, and the admin settlement hold guard
+- Seller lifecycle E2E — 53 of 53 live HTTP checks passed against a disposable API and database
+- The legacy-migration test opened a pre-onboarding v1–v2 database and upgraded it to version 5 without losing seeded rows; the development database itself was already upgraded through migration 5
+- Campaign, cart and order rows were verified through public and admin HTTP endpoints, with the promotional price applied consistently and the original unit price retained on order lines
 - API health endpoint returns `ok` with payments `unconfigured`, shipping `manual-only`, email `unconfigured` in the default development environment
 
-The tests use an in-memory SQLite database and exercise real HTTP routes. They cover auth/RBAC/CSRF, storefront home/catalogue/sitemap, checkout repricing and idempotency, stock races, coupon use, GST snapshots, seller isolation, fulfilment order, ledger/settlement eligibility, cancellation/refund/return accounting, upload signatures/private documents, admin category rules, Razorpay webhook signature/idempotency/amount mismatch, draft save/resume, category-aware validation (including FSSAI rules for food), duplicate submission, change requests and resubmission revisions, self-approval refusal, cross-seller isolation, product moderation/publish/suspend, and upgrading a pre-onboarding database. They do **not** prove live provider behaviour. See [Verification](docs/VERIFICATION.md).
+The tests use an in-memory SQLite database and exercise real HTTP routes. They cover auth/RBAC/CSRF, storefront home/catalogue/sitemap, campaign eligibility, scheduling/expiry, overlap guards and promotional repricing in catalogue/cart/checkout, checkout repricing and idempotency, stock races, coupon use, GST snapshots, seller isolation, fulfilment order, ledger/settlement eligibility, cancellation/refund/return accounting, upload signatures/private documents, admin category rules, Razorpay webhook signature/idempotency/amount mismatch, draft save/resume, category-aware validation (including FSSAI rules for food), duplicate submission, change requests and resubmission revisions, self-approval refusal, cross-seller isolation, product moderation/publish/suspend, and upgrading a pre-onboarding database. They do **not** prove live provider behaviour. See [Verification](docs/VERIFICATION.md).
 
 ## Documentation
 

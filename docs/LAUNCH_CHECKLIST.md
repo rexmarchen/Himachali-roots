@@ -47,6 +47,8 @@ Nothing below should be assumed complete merely because the software supports it
 - [ ] Shipping thresholds, flat fee and remote-PIN handling confirmed against actual courier costs.
 - [ ] Product photography is original or properly licensed; `/credits` updated and placeholder Wikimedia images removed.
 - [ ] Descriptions contain no invented reviews, statistics, certifications, awards, sales counts or "best-seller" claims.
+- [ ] Seasonal campaign(s) reviewed: real start/end dates, approved eligible products only, each promotional price below its current base price, savings within the campaign cap, and a poster that is owned or licensed. Confirm the advertised "up to X%" matches the eligible products.
+- [ ] Campaign status checked on launch day. Draft and archived campaigns must not be publicly reachable; a live campaign must not share a product with another live or scheduled campaign.
 - [ ] Announcement bar, homepage, about, sourcing and FAQ edited for the real business; bracketed placeholders removed.
 - [ ] Contact details and support hours are monitored.
 - [ ] Legal pages no longer say "Draft — legal review pending" and contain the real entity, address, GSTIN and grievance officer.
@@ -103,15 +105,16 @@ Run this against staging with real provider test credentials:
 1. Register a new customer; verify email; log out and back in.
 2. Browse/search/filter; view a seller and product; add to cart; apply a valid and invalid coupon.
 3. Complete checkout; confirm server-calculated totals and stock reservation.
-4. Pay successfully; confirm one payment record, one set of ledger entries and correct seller order.
-5. As seller: confirm, pack, ship with tracking, add an in-transit event, deliver.
-6. As customer: request a return with a reason; as admin: approve; as admin: refund and record the provider reference.
-7. As admin: create a settlement, verify the arithmetic, record a bank/UPI reference and mark paid.
-8. Test cancellation before dispatch and confirm stock release.
-9. Upload a disguised non-image and confirm rejection; upload a valid image and confirm display.
-10. Confirm a customer cannot open another customer's order or a seller document; confirm a seller cannot touch another seller's order.
-11. Confirm admin pages are inaccessible to customer/seller roles at the API level, not just the UI.
-12. Restore a database backup on a clean host and verify login, catalogue and an order.
+4. With an active campaign: confirm the offer page and homepage banner, add an eligible product to the cart, and verify that cart and checkout show the promotional unit price plus the original price. Change or archive the campaign and confirm the open cart reprices.
+5. Pay successfully; confirm one payment record, one set of ledger entries and correct seller order.
+6. As seller: confirm, pack, ship with tracking, add an in-transit event, deliver.
+7. As customer: request a return with a reason; as admin: approve; as admin: refund and record the provider reference.
+8. As admin: create a settlement, verify the arithmetic, record a bank/UPI reference and mark paid.
+9. Test cancellation before dispatch and confirm stock release.
+10. Upload a disguised non-image and confirm rejection; upload a valid image and confirm display.
+11. Confirm a customer cannot open another customer's order or a seller document; confirm a seller cannot touch another seller's order.
+12. Confirm admin pages are inaccessible to customer/seller roles at the API level, not just the UI.
+13. Restore a database backup on a clean host and verify login, catalogue and an order.
 
 ## H. Launch day and after
 

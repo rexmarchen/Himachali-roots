@@ -27,11 +27,12 @@ Copy-Item .env.example .env
 | --- | --- | --- |
 | `DATABASE_PATH` | `./data/pahadi-roots.db` (resolved from the process working directory) | SQLite database. Use an absolute path on a persistent volume in production. WAL sidecar files are created alongside it. |
 | `UPLOAD_DIR` | `./storage/uploads` | Public product images, served at `/uploads/*`. Use an absolute path on persistent storage. |
+| `PRIVATE_DOCS_DIR` | `./storage/private/seller-docs` | Private seller/KYC documents. Never served publicly; back it up with the database. |
 | `SEED_ON_START` | unset/false | In non-production only, seeds if the product table is empty. Ignored in production. |
 | `DEMO_SEED_PASSWORD` | `PahadiDemo!2026` | Password for seeded demo sellers. Change it if a development instance is shared. |
 | `ALLOW_DEMO_SEED_IN_PRODUCTION` | unset/false | Emergency escape hatch for a deliberate staging exercise. Never use for a live marketplace. |
 
-Private seller documents are stored in `storage/private/seller-docs` relative to the process working directory. This directory is **not** publicly served and must be backed up alongside the database. Keep the service's working directory stable across releases, or move both storage paths with the deployment.
+Private seller documents are stored under `PRIVATE_DOCS_DIR` (default `storage/private/seller-docs`, relative to the process working directory). This directory is **not** publicly served and must be backed up alongside the database. Keep the service's working directory stable across releases, or set both storage paths to absolute locations on persistent volumes.
 
 ### Commerce
 

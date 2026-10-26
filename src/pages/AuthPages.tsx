@@ -125,41 +125,12 @@ export function LoginPage() {
         </Button>
       </form>
 
-      <div className="mt-6 border border-line bg-surface p-4 text-[11px] leading-relaxed text-muted rounded-sm">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-terra">Demonstration & Admin Accounts</p>
-        <div className="mt-2.5 flex items-center justify-between border-b border-line pb-2">
-          <div>
-            <p className="font-semibold text-forest">Administrator</p>
-            <p className="text-[11px]"><code>anshuar9065@gmail.com</code> · <code>Anshu90#@</code></p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEmail('anshuar9065@gmail.com');
-              setPassword('Anshu90#@');
-            }}
-            className="text-[10px] font-semibold uppercase tracking-wider text-terra hover:underline"
-          >
-            Fill Admin
-          </button>
-        </div>
-        <div className="mt-2 flex items-center justify-between pt-1">
-          <div>
-            <p className="font-semibold text-forest">Demo Maker</p>
-            <p className="text-[11px]"><code>kullu@demo.pahadiroots.test</code> · <code>PahadiDemo!2026</code></p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEmail('kullu@demo.pahadiroots.test');
-              setPassword('PahadiDemo!2026');
-            }}
-            className="text-[10px] font-semibold uppercase tracking-wider text-terra hover:underline"
-          >
-            Fill Maker
-          </button>
-        </div>
-      </div>
+      <p className="mt-6 text-center text-[11.5px] text-muted">
+        New to PAHADI ROOTS?{' '}
+        <Link to="/register" className="text-forest underline underline-offset-4 hover:text-terra">
+          Create an account
+        </Link>
+      </p>
     </AuthShell>
   );
 }

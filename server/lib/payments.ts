@@ -114,6 +114,7 @@ export function paymentProviderStatus(): {
     configured,
     webhookConfigured: Boolean(env.razorpay.webhookSecret),
     mode: configured ? (testKey ? 'test' : 'live') : 'unconfigured',
-    devPaymentsEnabled: env.allowDevPayments,
+    // Surface the same development capability that the checkout route uses.
+    devPaymentsEnabled: env.allowDevPayments || env.simulatedCheckoutEnabled,
   };
 }

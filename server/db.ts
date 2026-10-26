@@ -53,6 +53,8 @@ function reconcileLegacySchema(db: Db): void {
     addColumn(db, 'seller_profiles', 'store_status', "TEXT NOT NULL DEFAULT 'setup_incomplete'");
     addColumn(db, 'seller_profiles', 'store_status_reason', 'TEXT');
     addColumn(db, 'seller_profiles', 'payout_status', "TEXT NOT NULL DEFAULT 'not_started'");
+    addColumn(db, 'seller_profiles', 'logo_url', 'TEXT');
+    addColumn(db, 'seller_profiles', 'cover_url', 'TEXT');
   }
   if (tableExists(db, 'seller_applications')) {
     addColumn(db, 'seller_applications', 'created_at', 'TEXT');
@@ -259,6 +261,11 @@ export function openDatabase(filename: string): Db {
 
   migrateDemoOrders(db);
   markMigration(db, 4);
+
+  // Migration 5: promotional order lines record the pre-campaign price so an
+  // order history can show the saving without recomputing it from live data.
+  addColumn(db, 'order_items', 'original_unit_price_paise', 'INTEGER');
+  markMigration(db, 5);
   return db;
 }
 

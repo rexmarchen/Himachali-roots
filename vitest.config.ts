@@ -12,6 +12,7 @@ export default defineConfig({
       NODE_ENV: 'test',
       DATABASE_PATH: ':memory:',
       UPLOAD_DIR: uploadDir,
+      PRIVATE_DOCS_DIR: path.join(uploadDir, 'private-docs'),
       APP_URL: 'http://localhost:5173',
       SEED_ON_START: 'false',
       ALLOW_DEV_PAYMENTS: 'true',

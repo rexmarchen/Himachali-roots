@@ -40,7 +40,7 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
    ```bash
    cd /opt/pahadi-roots
    npm ci
-   npm run check          # typecheck, lint, 51 tests, production build
+   npm run check          # typecheck, lint, 101 tests, production build
    ```
 
    Tests are optional on a production host but the build is not. `npm run build` produces `dist/` and `dist-server/`.
@@ -55,6 +55,7 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
 
    DATABASE_PATH=/var/lib/pahadi-roots/data/pahadi-roots.db
    UPLOAD_DIR=/var/lib/pahadi-roots/storage/uploads
+   PRIVATE_DOCS_DIR=/var/lib/pahadi-roots/storage/private/seller-docs
 
    SEED_ON_START=false
    ALLOW_DEV_PAYMENTS=false
@@ -235,6 +236,36 @@ There is no Shiprocket adapter. Live dispatch is manual:
 
 Use a carrier account separately. Do not configure `SHIPROCKET_*` expecting integration — those variables are reserved and currently inert.
 
+## Seasonal campaigns
+
+Campaigns are administered in **Admin → Campaigns**. They are not edited through environment variables or seed files, and there is no public campaign-creation API.
+
+### Create and publish an offer
+
+1. Create a campaign with a name, slug (for example `pahadi-festive-glow`), description and maximum discount percentage. It starts as `draft` and is not publicly readable.
+2. Upload the poster in the admin form, or paste an HTTPS URL / `/images` or `/uploads` path. The storefront renders posters in a fixed 1672:941 frame with `object-contain`, so a different ratio is letterboxed rather than cropped or stretched. For the cleanest result, supply a 1672×941 image. Without a poster the homepage banner is suppressed; the campaign page still works.
+3. Add each eligible product and a fixed promotional price in paise. The server requires `promo < current base price` and a discount no greater than the campaign cap. Products must be approved and belong to an approved seller.
+4. Optionally set a start and end time. An omitted date is not invented by the server: an active campaign without an end date remains live until an administrator changes it. Set both dates for a real seasonal offer.
+5. Activate the campaign. Activation validates every configured price and window and refuses to share a product with another live or scheduled campaign. Draft campaigns can be deleted; an active campaign must be archived instead.
+
+A product may belong to only one live or scheduled campaign. Scheduled campaigns go live automatically, so they reserve their products as soon as they are activated, not when the window opens.
+
+### Public behaviour
+
+- `/offers/<slug>` shows the poster, the real status, and only explicitly eligible products with server-computed savings.
+- The homepage banner appears only for a live campaign with a poster and at least one eligible product.
+- Draft and archived campaigns return `404`; scheduled and expired campaigns are publicly readable but expose no purchasable promotional price.
+- The campaign is included in `sitemap.xml` only while it is live.
+- The advertised "up to X% off" is derived from the current configured products and their valid promotional prices, not from the campaign cap alone.
+
+### Pricing and withdrawal
+
+`active_campaign_prices` is the only source of a live promotional price. Catalogue listing, product detail, cart lines and checkout all read it, so totals agree and client-submitted prices are ignored. Order lines store both the paid unit price and `original_unit_price_paise` for the customer's record.
+
+To end an offer, set it to `archived` (or let the end date pass). The promo price disappears from the catalogue immediately and open carts are repriced on their next read. If a product's base price is later edited below its promotional price, or the campaign cap is reduced below a configured saving, the view stops applying that invalid promotion rather than selling at a misleading discount. Check the campaign's admin product list after bulk price changes.
+
+Every create, edit, status change, pricing change and deletion is written to `audit_logs` with the acting administrator.
+
 ## Release procedure
 
 1. Take a database backup and a storage snapshot.
@@ -259,13 +290,32 @@ Before deploying to a database you care about:
 
 The development database in this repository was upgraded on a copy only; the checked-in `data/pahadi-roots.db` was not modified by verification.
 
+### Seasonal-campaign migration (schema version 5)
+
+Version 4 added demo-order tracking; version 5 adds:
+
+- `campaigns` and `campaign_products`;
+- the `active_campaign_prices` SQL view;
+- `order_items.original_unit_price_paise`, nullable for historical rows.
+
+The migration is additive and runs inside the normal startup path. Existing orders, carts and catalogue prices are unchanged: a historical order item has no recorded original price, and no promotion is applied until an administrator creates and activates a campaign.
+
+Before deploying:
+
+1. Back up the database with `npm run db:backup` while the service is stopped, or copy the database and its `-wal`/`-shm` sidecars.
+2. Start the new build against a copy and confirm `schema_migrations` contains `1, 2, 3, 4, 5`, `PRAGMA integrity_check` returns `ok`, and `PRAGMA foreign_key_check` is empty.
+3. Confirm the existing product count, approved-seller count and order count are unchanged.
+4. Deploy, open `/api/health`, then create campaigns as drafts before activating one.
+
+There are no down migrations. Restoring the pre-upgrade backup is the rollback path.
+
 ## Backup
 
 ### What must be backed up
 
 - SQLite database and its WAL state
 - public product images (`UPLOAD_DIR`)
-- private seller documents (`storage/private/seller-docs`)
+- private seller documents (`PRIVATE_DOCS_DIR`, default `storage/private/seller-docs`)
 - the production `.env` (in a secret manager, not alongside public backups)
 - release artefact/commit reference
 

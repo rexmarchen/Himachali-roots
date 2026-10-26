@@ -75,7 +75,7 @@ export async function openRazorpay(options: {
       contact: options.customer.phone,
     },
     notes: { order_number: options.orderNumber },
-    theme: { color: '#243D32' },
+    theme: { color: '#234638' },
     handler: options.onSuccess,
     modal: { ondismiss: options.onDismiss },
   });

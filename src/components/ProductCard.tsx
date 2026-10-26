@@ -10,9 +10,11 @@ import { useToast } from '@/lib/toast';
 export function ProductCard({
   product,
   priority = false,
+  showAddToCart = false,
 }: {
   product: ProductSummary;
   priority?: boolean;
+  showAddToCart?: boolean;
 }) {
   const { user } = useAuth();
   const toast = useToast();
@@ -46,10 +48,29 @@ export function ProductCard({
   });
 
   const soldOut = product.stock <= 0;
+  // A live campaign price is the authoritative selling price supplied by the
+  // server. The pre-campaign price is only shown when the server confirms a
+  // valid promotion, never inferred in the browser.
+  const campaignOriginal =
+    product.originalPricePaise && product.originalPricePaise > product.pricePaise ? product.originalPricePaise : null;
+  const compareOriginal =
+    product.compareAtPricePaise && product.compareAtPricePaise > product.pricePaise ? product.compareAtPricePaise : null;
+  const strikePrice = campaignOriginal ?? compareOriginal;
   const discountPercent =
-    product.compareAtPricePaise && product.compareAtPricePaise > product.pricePaise
-      ? Math.round(((product.compareAtPricePaise - product.pricePaise) / product.compareAtPricePaise) * 100)
-      : null;
+    campaignOriginal && product.discountPercent
+      ? product.discountPercent
+      : compareOriginal
+        ? Math.round(((compareOriginal - product.pricePaise) / compareOriginal) * 100)
+        : null;
+
+  const addToCart = useMutation({
+    mutationFn: () => api('/cart/items', { method: 'POST', body: { productId: product.id, quantity: 1 } }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['cart'] });
+      toast.push(`${product.name} added to your bag.`);
+    },
+    onError: (err) => toast.push(errorMessage(err), 'error'),
+  });
 
   return (
     <article className="group relative flex flex-col justify-between transition-all duration-300">
@@ -71,7 +92,7 @@ export function ProductCard({
                   <circle cx="8.5" cy="8.5" r="1.5" strokeWidth="1.5" />
                   <path d="M21 15l-5-5L5 21" strokeWidth="1.5" />
                 </svg>
-                <span>Himalayan Craft</span>
+                <span>No photograph</span>
               </div>
             )}
           </Link>
@@ -85,7 +106,7 @@ export function ProductCard({
             ) : null}
             {discountPercent ? (
               <span className="border border-terra/30 bg-terra px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-white shadow-xs">
-                {discountPercent}% less
+                {campaignOriginal ? `${discountPercent}% off` : `${discountPercent}% less`}
               </span>
             ) : null}
           </div>
@@ -128,16 +149,17 @@ export function ProductCard({
             </Link>
           </h3>
 
-          <p className="mt-0.5 text-xs text-muted/90 truncate">{product.categoryName}</p>
+          <p className="mt-0.5 text-xs text-muted/90 truncate">
+            {product.categoryName}
+            {product.campaignName ? <span className="text-terra"> · {product.campaignName}</span> : null}
+          </p>
         </div>
       </div>
 
       <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 border-t border-line/50 pt-2.5">
         <div className="flex items-baseline gap-2">
           <span className="text-[14px] font-medium text-ink">{formatINR(product.pricePaise)}</span>
-          {product.compareAtPricePaise && product.compareAtPricePaise > product.pricePaise ? (
-            <span className="text-xs text-muted/80 line-through">{formatINR(product.compareAtPricePaise)}</span>
-          ) : null}
+          {strikePrice ? <span className="text-xs text-muted/80 line-through">{formatINR(strikePrice)}</span> : null}
         </div>
 
         {product.ratingCount > 0 && product.ratingAverage ? (
@@ -146,19 +168,28 @@ export function ProductCard({
             <span className="font-medium text-ink">{product.ratingAverage.toFixed(1)}</span>
             <span className="text-muted/60">({product.ratingCount})</span>
           </div>
-        ) : (
-          <span className="hidden text-[10.5px] italic text-muted/70 sm:inline">Verified source</span>
-        )}
+        ) : null}
       </div>
+
+      {showAddToCart ? (
+        <button
+          type="button"
+          onClick={() => addToCart.mutate()}
+          disabled={soldOut || addToCart.isPending}
+          className="mt-3 w-full border border-forest bg-forest px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-paper transition-colors hover:bg-forest/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terra disabled:cursor-not-allowed disabled:border-line disabled:bg-sand/40 disabled:text-muted"
+        >
+          {soldOut ? 'Sold out' : addToCart.isPending ? 'Adding…' : 'Add to bag'}
+        </button>
+      ) : null}
     </article>
   );
 }
 
-export function ProductGrid({ products }: { products: ProductSummary[] }) {
+export function ProductGrid({ products, showAddToCart = false }: { products: ProductSummary[]; showAddToCart?: boolean }) {
   return (
     <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-7 sm:gap-y-12 lg:grid-cols-4">
       {products.map((product, index) => (
-        <ProductCard key={product.id} product={product} priority={index < 4} />
+        <ProductCard key={product.id} product={product} priority={index < 4} showAddToCart={showAddToCart} />
       ))}
     </div>
   );

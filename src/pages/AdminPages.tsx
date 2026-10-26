@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ApplicationStatus, Category, OrderView, Paged, ProductStatus } from '@shared/types';
+import type { ApplicationStatus, CampaignSummary, Category, OrderView, Paged, ProductStatus } from '@shared/types';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
 import { api, errorMessage } from '@/lib/api';
@@ -158,6 +158,13 @@ function NavIcon({ type, className = 'h-4 w-4' }: { type: string; className?: st
           <path d="M22 20H2" />
         </svg>
       );
+    case 'campaigns':
+      return (
+        <svg {...common}>
+          <path d="m3 11 18-7-7 18-2.5-7.5z" />
+          <path d="M11.5 10.5 21 4" />
+        </svg>
+      );
     case 'coupons':
       return (
         <svg {...common}>
@@ -276,6 +283,7 @@ const ADMIN_NAV: {
     items: [
       { label: 'Commissions', to: '/admin/commissions', icon: 'commissions' },
       { label: 'Coupons', to: '/admin/coupons', icon: 'coupons' },
+      { label: 'Campaigns', to: '/admin/campaigns', icon: 'campaigns' },
       { label: 'Site content', to: '/admin/content', icon: 'content' },
     ],
   },
@@ -5620,6 +5628,726 @@ export function AdminCouponsPage() {
           <button type="submit" className="hidden" aria-hidden />
         </form>
       </Modal>
+    </div>
+  );
+}
+
+/* -------------------------------- Campaigns ------------------------------- */
+
+interface AdminCampaignRow extends CampaignSummary {
+  storedStatus: 'draft' | 'active' | 'archived';
+  isLive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface AdminCampaignProduct {
+  productId: string;
+  slug: string;
+  name: string;
+  imageUrl: string | null;
+  basePricePaise: number;
+  promoPricePaise: number;
+  discountPercent: number;
+  stock: number;
+  status: string;
+  sellerName: string;
+  isValid: boolean;
+}
+
+interface CampaignCandidate {
+  id: string;
+  slug: string;
+  name: string;
+  basePricePaise: number;
+  stock: number;
+  sellerName: string;
+  categoryName: string;
+  imageUrl: string | null;
+  maxPromoPricePaise: number;
+}
+
+const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  scheduled: 'Scheduled',
+  active: 'Active',
+  expired: 'Expired',
+  archived: 'Archived',
+};
+
+const emptyCampaignForm = {
+  name: '',
+  slug: '',
+  description: '',
+  posterUrl: '',
+  posterAlt: '',
+  startsAt: '',
+  endsAt: '',
+  maxDiscountPercent: '30',
+  status: 'draft' as AdminCampaignRow['storedStatus'],
+};
+
+const rupeesToPaise = (value: string): number | null => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed * 100);
+};
+
+function CampaignPriceField({
+  initialPaise,
+  ariaLabel,
+  actionLabel,
+  onAction,
+  busy,
+}: {
+  initialPaise: number;
+  ariaLabel: string;
+  actionLabel: string;
+  onAction: (value: string) => void;
+  busy: boolean;
+}) {
+  const [value, setValue] = useState((initialPaise / 100).toFixed(2));
+  return (
+    <div className="flex items-center gap-1.5">
+      <Input
+        inputMode="decimal"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        className="h-8 w-24 px-2 text-xs"
+        aria-label={ariaLabel}
+      />
+      <Button size="sm" variant="secondary" loading={busy} onClick={() => onAction(value)}>
+        {actionLabel}
+      </Button>
+    </div>
+  );
+}
+
+export function AdminCampaignsPage() {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<AdminCampaignRow | null>(null);
+  const [managing, setManaging] = useState<AdminCampaignRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminCampaignRow | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState(emptyCampaignForm);
+  const [candidateQuery, setCandidateQuery] = useState('');
+  const deferredCandidateQuery = useDeferredValue(candidateQuery);
+
+  const campaigns = useQuery({
+    queryKey: ['admin-campaigns'],
+    queryFn: () => api<{ campaigns: AdminCampaignRow[] }>('/admin/campaigns'),
+  });
+
+  const campaignProducts = useQuery({
+    queryKey: ['admin-campaign-products', managing?.id],
+    queryFn: () =>
+      api<{ campaign: AdminCampaignRow; products: AdminCampaignProduct[] }>(
+        `/admin/campaigns/${managing!.id}/products`,
+      ),
+    enabled: Boolean(managing),
+  });
+
+  const candidates = useQuery({
+    queryKey: ['admin-campaign-candidates', managing?.id, deferredCandidateQuery],
+    queryFn: () =>
+      api<{ candidates: CampaignCandidate[] }>(
+        `/admin/campaigns/${managing!.id}/candidates?q=${encodeURIComponent(deferredCandidateQuery)}`,
+      ),
+    enabled: Boolean(managing),
+  });
+
+  const refreshCampaignData = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['admin-campaigns'] });
+    await queryClient.invalidateQueries({ queryKey: ['admin-campaign-products'] });
+    await queryClient.invalidateQueries({ queryKey: ['admin-campaign-candidates'] });
+    await queryClient.invalidateQueries({ queryKey: ['campaign'] });
+    await queryClient.invalidateQueries({ queryKey: ['home'] });
+    await queryClient.invalidateQueries({ queryKey: ['products'] });
+  };
+
+  const payloadFromForm = () => {
+    const maxPercent = Number(form.maxDiscountPercent);
+    if (!Number.isFinite(maxPercent) || maxPercent < 0 || maxPercent > 100) {
+      throw new Error('Enter a maximum discount between 0 and 100%.');
+    }
+    return {
+      name: form.name.trim(),
+      slug: form.slug.trim() || undefined,
+      description: form.description.trim(),
+      posterUrl: form.posterUrl.trim() || undefined,
+      posterAlt: form.posterAlt.trim() || undefined,
+      startsAt: form.startsAt ? dateInputToIso(form.startsAt) : null,
+      endsAt: form.endsAt ? dateInputToIso(form.endsAt, true) : null,
+      maxDiscountBp: Math.round(maxPercent * 100),
+    };
+  };
+
+  const createCampaign = async (event?: FormEvent) => {
+    event?.preventDefault();
+    setBusy(true);
+    try {
+      const payload = payloadFromForm();
+      if (!payload.name || payload.name.length < 3) throw new Error('Enter a campaign name.');
+      await api('/admin/campaigns', { method: 'POST', body: { ...payload, status: form.status } });
+      toast.push('Campaign created. Add eligible products before activating it.');
+      setCreateOpen(false);
+      setForm(emptyCampaignForm);
+      await refreshCampaignData();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openEdit = (campaign: AdminCampaignRow) => {
+    setEditing(campaign);
+    setForm({
+      name: campaign.name,
+      slug: campaign.slug,
+      description: campaign.description,
+      posterUrl: campaign.posterUrl ?? '',
+      posterAlt: campaign.posterAlt ?? '',
+      startsAt: campaign.startsAt ? campaign.startsAt.slice(0, 10) : '',
+      endsAt: campaign.endsAt ? campaign.endsAt.slice(0, 10) : '',
+      maxDiscountPercent: String(campaign.maxDiscountBp / 100),
+      status: campaign.storedStatus,
+    });
+  };
+
+  const uploadPoster = async (file: File | null) => {
+    if (!file || !editing) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.push('Upload a JPEG, PNG, or WebP poster.', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      const body = new FormData();
+      body.append('image', file);
+      const result = await api<{ posterUrl: string }>(`/admin/campaigns/${editing.id}/poster`, {
+        method: 'POST',
+        body,
+      });
+      setForm((previous) => ({ ...previous, posterUrl: result.posterUrl }));
+      toast.push('Poster uploaded.');
+      await refreshCampaignData();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveCampaign = async () => {
+    if (!editing) return;
+    setBusy(true);
+    try {
+      const payload = payloadFromForm();
+      await api(`/admin/campaigns/${editing.id}`, {
+        method: 'PATCH',
+        body: {
+          ...payload,
+          posterUrl: form.posterUrl.trim() || null,
+          posterAlt: form.posterAlt.trim() || null,
+          status: form.status,
+        },
+      });
+      toast.push('Campaign updated.');
+      setEditing(null);
+      await refreshCampaignData();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setStatus = async (campaign: AdminCampaignRow, status: AdminCampaignRow['storedStatus']) => {
+    setBusy(true);
+    try {
+      await api(`/admin/campaigns/${campaign.id}`, { method: 'PATCH', body: { status } });
+      toast.push(
+        status === 'active'
+          ? 'Campaign activated. Prices are now live wherever the window allows.'
+          : status === 'archived'
+            ? 'Campaign archived. Promotional prices have been withdrawn.'
+            : 'Campaign moved back to draft.',
+      );
+      await refreshCampaignData();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteCampaign = async () => {
+    if (!deleteTarget) return;
+    setBusy(true);
+    try {
+      await api(`/admin/campaigns/${deleteTarget.id}`, { method: 'DELETE' });
+      toast.push('Draft campaign deleted.');
+      setDeleteTarget(null);
+      await refreshCampaignData();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const savePromo = async (product: AdminCampaignProduct, value: string) => {
+    if (!managing) return;
+    const paise = rupeesToPaise(value);
+    if (paise === null) {
+      toast.push('Enter a promotional price in rupees.', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api(`/admin/campaigns/${managing.id}/products/${product.productId}`, {
+        method: 'PATCH',
+        body: { promoPricePaise: paise },
+      });
+      toast.push(`Price updated for ${product.name}.`);
+      await refreshCampaignData();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removePromo = async (product: AdminCampaignProduct) => {
+    if (!managing) return;
+    setBusy(true);
+    try {
+      await api(`/admin/campaigns/${managing.id}/products/${product.productId}`, { method: 'DELETE' });
+      toast.push(`${product.name} removed from the campaign.`);
+      await refreshCampaignData();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addCandidate = async (candidate: CampaignCandidate, value: string) => {
+    if (!managing) return;
+    const paise = rupeesToPaise(value);
+    if (paise === null) {
+      toast.push('Enter a promotional price in rupees.', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api(`/admin/campaigns/${managing.id}/products`, {
+        method: 'POST',
+        body: { productId: candidate.id, promoPricePaise: paise },
+      });
+      toast.push(`${candidate.name} added to the campaign.`);
+      setCandidateQuery('');
+      await refreshCampaignData();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const managingView = campaignProducts.data?.campaign ?? managing;
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Promotions"
+        title="Seasonal campaigns"
+        lede="Campaigns give explicitly selected products a fixed promotional price. Prices are validated against the current selling price and the campaign cap, and are re-checked by the server for every cart and checkout request."
+        actions={
+          <Button
+            size="sm"
+            onClick={() => {
+              setForm(emptyCampaignForm);
+              setCreateOpen(true);
+            }}
+          >
+            Create campaign
+          </Button>
+        }
+      />
+
+      <div className="mt-5">
+        {campaigns.isLoading ? <LoadingBlock rows={4} /> : null}
+        {campaigns.isError ? <ErrorState onRetry={() => void campaigns.refetch()} /> : null}
+        {campaigns.data?.campaigns.length ? (
+          <div className="overflow-x-auto border border-line bg-surface">
+            <table className="min-w-full text-left text-[12.5px]">
+              <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
+                <tr>
+                  <th className="px-4 py-3">Campaign</th>
+                  <th className="px-4 py-3">Offer</th>
+                  <th className="px-4 py-3">Products</th>
+                  <th className="px-4 py-3">Window</th>
+                  <th className="px-4 py-3">State</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {campaigns.data.campaigns.map((campaign) => {
+                  const status = campaign.isLive ? 'active' : campaign.status;
+                  return (
+                    <tr key={campaign.id}>
+                      <td className="px-4 py-4">
+                        <span className="font-medium text-ink">{campaign.name}</span>
+                        <p className="text-[10.5px] text-muted">/offers/{campaign.slug}</p>
+                        {campaign.posterUrl ? (
+                          <p className="text-[10.5px] text-muted">Poster configured</p>
+                        ) : (
+                          <p className="text-[10.5px] text-terra">No poster — the homepage banner stays hidden</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-4">
+                        {campaign.maxDiscountPercent > 0 ? `Up to ${campaign.maxDiscountPercent}%` : 'No live saving'}
+                        <p className="text-[10.5px] text-muted">Cap {Math.floor(campaign.maxDiscountBp / 100)}%</p>
+                      </td>
+                      <td className="px-4 py-4">{campaign.productCount} eligible</td>
+                      <td className="px-4 py-4 text-muted">
+                        {campaign.startsAt ? formatDate(campaign.startsAt) : 'No start'}
+                        <p className="text-[10.5px]">{campaign.endsAt ? `to ${formatDate(campaign.endsAt)}` : 'No end'}</p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <StatusBadge status={status} label={CAMPAIGN_STATUS_LABELS[status] ?? status} />
+                        {campaign.storedStatus === 'active' && campaign.status === 'scheduled' ? (
+                          <p className="mt-1 text-[10.5px] text-muted">Activates automatically</p>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(campaign)}>
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setManaging(campaign);
+                              setCandidateQuery('');
+                            }}
+                          >
+                            Products
+                          </Button>
+                          {campaign.isLive ? (
+                            <LinkButton to={`/offers/${campaign.slug}`} variant="ghost" size="sm">
+                              View
+                            </LinkButton>
+                          ) : null}
+                          {campaign.storedStatus === 'active' ? (
+                            <Button size="sm" variant="ghost" onClick={() => void setStatus(campaign, 'archived')}>
+                              Archive
+                            </Button>
+                          ) : campaign.storedStatus === 'archived' ? (
+                            <Button size="sm" variant="ghost" onClick={() => void setStatus(campaign, 'draft')}>
+                              Restore draft
+                            </Button>
+                          ) : (
+                            <Button size="sm" onClick={() => void setStatus(campaign, 'active')}>
+                              Activate
+                            </Button>
+                          )}
+                          {campaign.storedStatus === 'draft' ? (
+                            <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(campaign)}>
+                              Delete
+                            </Button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            title="No campaigns"
+            body="Create a campaign, then add the products that are genuinely part of the offer. Campaigns never change ordinary product prices."
+            action={<Button size="sm" onClick={() => setCreateOpen(true)}>Create campaign</Button>}
+          />
+        )}
+      </div>
+
+      <Modal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Create campaign"
+        wide
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button loading={busy} onClick={() => void createCampaign()}>Create draft</Button>
+          </>
+        }
+      >
+        <form onSubmit={createCampaign} className="grid gap-3 sm:grid-cols-2">
+          <Field label="Campaign name" required className="sm:col-span-2">
+            <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+          </Field>
+          <Field label="URL slug" hint="Leave blank to derive from the name">
+            <Input value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} placeholder="pahadi-festive-glow" />
+          </Field>
+          <Field label="Maximum discount (%)" required>
+            <Input
+              inputMode="decimal"
+              value={form.maxDiscountPercent}
+              onChange={(event) => setForm({ ...form, maxDiscountPercent: event.target.value })}
+              required
+            />
+          </Field>
+          <Field label="Starts" hint="Optional; the campaign is scheduled until then">
+            <Input type="date" value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} />
+          </Field>
+          <Field label="Ends" hint="Optional; stops selling at the end of this day">
+            <Input type="date" value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} />
+          </Field>
+          <Field label="Poster URL" hint="Optional; an uploaded /uploads path or https URL" className="sm:col-span-2">
+            <Input value={form.posterUrl} onChange={(event) => setForm({ ...form, posterUrl: event.target.value })} />
+          </Field>
+          <Field label="Poster alt text" hint="Describe the artwork for screen readers" className="sm:col-span-2">
+            <Input value={form.posterAlt} onChange={(event) => setForm({ ...form, posterAlt: event.target.value })} />
+          </Field>
+          <Field label="Description" className="sm:col-span-2">
+            <Textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+          </Field>
+          <p className="text-[11px] leading-relaxed text-muted sm:col-span-2">
+            New campaigns start as drafts. Add eligible products and their promotional prices, then activate. The homepage
+            banner appears only while an active campaign has a poster and eligible products.
+          </p>
+          <button type="submit" className="hidden" aria-hidden />
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(editing)}
+        onClose={() => setEditing(null)}
+        title="Edit campaign"
+        wide
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button loading={busy} onClick={() => void saveCampaign()}>Save changes</Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Campaign name" required className="sm:col-span-2">
+            <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          </Field>
+          <Field label="URL slug">
+            <Input value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} />
+          </Field>
+          <Field label="Maximum discount (%)" required>
+            <Input
+              inputMode="decimal"
+              value={form.maxDiscountPercent}
+              onChange={(event) => setForm({ ...form, maxDiscountPercent: event.target.value })}
+            />
+          </Field>
+          <Field label="Starts" hint="Optional">
+            <Input type="date" value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} />
+          </Field>
+          <Field label="Ends" hint="Optional">
+            <Input type="date" value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} />
+          </Field>
+          <Field label="Editorial status">
+            <Select
+              value={form.status}
+              onChange={(event) =>
+                setForm({ ...form, status: event.target.value as AdminCampaignRow['storedStatus'] })
+              }
+            >
+              <option value="draft">Draft</option>
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+            </Select>
+          </Field>
+          <Field label="Poster URL">
+            <Input value={form.posterUrl} onChange={(event) => setForm({ ...form, posterUrl: event.target.value })} />
+          </Field>
+          <Field label="Poster alt text" className="sm:col-span-2">
+            <Input value={form.posterAlt} onChange={(event) => setForm({ ...form, posterAlt: event.target.value })} />
+          </Field>
+          <Field label="Upload poster" hint="JPEG, PNG, or WebP up to 5 MB" className="sm:col-span-2">
+            <Input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                void uploadPoster(file);
+              }}
+            />
+          </Field>
+          <Field label="Description" className="sm:col-span-2">
+            <Textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+          </Field>
+          {editing ? (
+            <p className="text-[11px] leading-relaxed text-muted sm:col-span-2">
+              Stored status: {CAMPAIGN_STATUS_LABELS[editing.storedStatus]}. The public state is derived from the window:
+              scheduled before the start, expired after the end. Archived campaigns withdraw all promotional prices
+              immediately.
+            </p>
+          ) : null}
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(managing)}
+        onClose={() => setManaging(null)}
+        title={managingView ? `Products · ${managingView.name}` : 'Campaign products'}
+        wide
+        footer={<Button variant="ghost" onClick={() => setManaging(null)}>Close</Button>}
+      >
+        {managingView ? (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border border-line bg-paper px-3 py-2 text-[11.5px] text-muted">
+              <span>
+                Cap {Math.floor(managingView.maxDiscountBp / 100)}% · {managingView.productCount} eligible ·{' '}
+                {CAMPAIGN_STATUS_LABELS[managingView.status] ?? managingView.status}
+              </span>
+              {managingView.status !== 'draft' && managingView.status !== 'archived' ? (
+                <Link to={`/offers/${managingView.slug}`} className="underline underline-offset-4 hover:text-forest">
+                  Open public offer
+                </Link>
+              ) : null}
+            </div>
+
+            {campaignProducts.isLoading ? <LoadingBlock rows={3} /> : null}
+            {campaignProducts.isError ? <ErrorState onRetry={() => void campaignProducts.refetch()} /> : null}
+
+            {campaignProducts.data?.products.length ? (
+              <div className="overflow-x-auto border border-line">
+                <table className="min-w-full text-left text-[12px]">
+                  <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
+                    <tr>
+                      <th className="px-3 py-2">Product</th>
+                      <th className="px-3 py-2">Selling price</th>
+                      <th className="px-3 py-2">Promo price (₹)</th>
+                      <th className="px-3 py-2">Saving</th>
+                      <th className="px-3 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {campaignProducts.data.products.map((product) => (
+                      <tr key={product.productId}>
+                        <td className="px-3 py-3">
+                          <p className="font-medium text-ink">{product.name}</p>
+                          <p className="text-[10.5px] text-muted">
+                            {product.sellerName} · stock {product.stock}
+                          </p>
+                          {!product.isValid ? (
+                            <p className="text-[10.5px] text-terra">Outside the current cap or selling price</p>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-3">{formatINR(product.basePricePaise)}</td>
+                        <td className="px-3 py-3">
+                          <CampaignPriceField
+                            key={`${product.productId}:${product.promoPricePaise}`}
+                            initialPaise={product.promoPricePaise}
+                            ariaLabel={`Promotional price for ${product.name}`}
+                            actionLabel="Save"
+                            busy={busy}
+                            onAction={(value) => void savePromo(product, value)}
+                          />
+                        </td>
+                        <td className="px-3 py-3">
+                          {product.discountPercent}%<p className="text-[10.5px] text-muted">{formatINR(product.promoPricePaise)}</p>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex justify-end gap-1.5">
+                            <Button size="sm" variant="ghost" onClick={() => void removePromo(product)}>
+                              Remove
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState
+                title="No eligible products yet"
+                body="Search the approved catalogue below and set a promotional price for each product that belongs in this offer."
+              />
+            )}
+
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Add an eligible product</p>
+              <div className="mt-2">
+                <Input
+                  value={candidateQuery}
+                  onChange={(event) => setCandidateQuery(event.target.value)}
+                  placeholder="Search approved products by name, SKU, or maker"
+                  aria-label="Search approved products"
+                />
+              </div>
+              <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
+                {candidates.isLoading ? <LoadingBlock rows={3} /> : null}
+                {candidates.isError ? <ErrorState onRetry={() => void candidates.refetch()} /> : null}
+                {candidates.data?.candidates.length ? (
+                  candidates.data.candidates.map((candidate) => (
+                    <div
+                      key={candidate.id}
+                      className="flex flex-col gap-2 border border-line bg-surface px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[12.5px] font-medium text-ink">{candidate.name}</p>
+                        <p className="text-[10.5px] text-muted">
+                          {candidate.sellerName} · {candidate.categoryName} · {formatINR(candidate.basePricePaise)} · stock{' '}
+                          {candidate.stock}
+                        </p>
+                        <p className="text-[10.5px] text-muted">
+                          Lowest allowed price {formatINR(candidate.maxPromoPricePaise)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <CampaignPriceField
+                          key={`${candidate.id}:${candidate.maxPromoPricePaise}`}
+                          initialPaise={candidate.maxPromoPricePaise}
+                          ariaLabel={`Promotional price for ${candidate.name}`}
+                          actionLabel="Add"
+                          busy={busy}
+                          onAction={(value) => void addCandidate(candidate, value)}
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : !candidates.isLoading ? (
+                  <p className="border border-dashed border-sand bg-surface/60 px-3 py-6 text-center text-xs text-muted">
+                    No matching approved products are left to add.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete draft campaign"
+        confirmLabel="Delete draft"
+        loading={busy}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => void deleteCampaign()}
+      >
+        <p>
+          Delete “{deleteTarget?.name}” and its product list? Draft campaigns have never been public. Archived campaigns
+          are kept for history and cannot be deleted.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

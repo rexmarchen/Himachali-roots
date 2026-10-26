@@ -12,6 +12,17 @@ import { escapeHtml, notify, notificationQueueSummary } from '../lib/email.js';
 import { getOrderView, decideRefund, createRefundForReturn, generateSettlement, markSettlementPaid, sellerOrderAction, refreshOrderStatus } from '../lib/orders.js';
 import { isInsidePrivateDocs, imageUpload, hasValidFileSignature } from '../lib/uploads.js';
 import { getSiteContent, setSiteContent } from '../lib/site.js';
+import {
+  assertProductNotInAnotherCampaign,
+  campaignStats,
+  discountPercentFor,
+  effectiveCampaignStatus,
+  getCampaignById,
+  mapCampaign,
+  validateCampaignWindow,
+  validatePromoPrice,
+  type CampaignRow,
+} from '../lib/campaigns.js';
 import { POLICY_KEYS } from '../../shared/content.js';
 import { assertProductionConfig } from '../env.js';
 import { paymentProviderStatus } from '../lib/payments.js';
@@ -1482,7 +1493,7 @@ export function adminRouter(db: Db): Router {
     res.json({ cancellations: rows });
   });
 
-  router.post('/cancellations/:id/decision', (req, res) => {
+  router.post('/cancellations/:id/decision', async (req, res) => {
     const input = parse(
       z.object({ decision: z.enum(['approve', 'reject']), note: z.string().trim().min(3).max(500) }),
       req.body,
@@ -1527,6 +1538,25 @@ export function adminRouter(db: Db): Router {
     audit(db, req.user!, `cancellation.${input.decision}`, 'cancellation_request', request.id, { status: request.status }, {
       status: input.decision === 'approve' ? 'completed' : 'rejected',
     });
+    const order = queryOne<{ email: string; user_id: string; order_number: string }>(
+      db,
+      'SELECT email, user_id, order_number FROM orders WHERE id = ?',
+      request.order_id,
+    );
+    if (order) {
+      await notify(db, {
+        userId: order.user_id,
+        email: order.email,
+        type: input.decision === 'approve' ? 'cancellation_approved' : 'cancellation_rejected',
+        subject: `Cancellation request ${input.decision === 'approve' ? 'approved' : 'declined'} — ${order.order_number}`,
+        body: `<p>${
+          input.decision === 'approve'
+            ? 'Your cancellation request was approved and any refund due is queued for processing.'
+            : 'After review, your cancellation request could not be approved.'
+        }</p>${input.note ? `<p><strong>Note:</strong> ${escapeHtml(input.note)}</p>` : ''}`,
+        dedupeKey: `cancellation-decision:${request.id}:${input.decision}`,
+      });
+    }
     res.json({ ok: true });
   });
 
@@ -2123,6 +2153,398 @@ export function adminRouter(db: Db): Router {
     if (!coupon) throw notFound('Coupon not found.');
     execute(db, 'UPDATE coupons SET is_active = ? WHERE id = ?', input.isActive ? 1 : 0, coupon.id);
     audit(db, req.user!, 'coupon.status_changed', 'coupon', coupon.id, { isActive: coupon.is_active === 1 }, { isActive: input.isActive });
+    res.json({ ok: true });
+  });
+
+  /* ------------------------------- Campaigns --------------------------- */
+
+  const campaignAdminView = (row: CampaignRow) => {
+    const stats = campaignStats(db, row.id);
+    return {
+      ...mapCampaign(row, stats.productCount, stats.maxDiscountPercent),
+      storedStatus: row.status,
+      isLive: effectiveCampaignStatus(row) === 'active',
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  };
+
+  const assertPosterUrl = (url: string | null) => {
+    if (!url) return;
+    if (!/^(https?:\/\/|\/(?:images|uploads)\/)/.test(url) || /\s/.test(url)) {
+      throw badRequest('Use an https image URL or an uploaded /images or /uploads path.', {
+        posterUrl: 'Use a valid image URL.',
+      });
+    }
+  };
+
+  const assertCampaignUsableForPricing = (
+    campaign: Pick<CampaignRow, 'id' | 'status' | 'starts_at' | 'ends_at' | 'max_discount_bp'>,
+  ) => {
+    validateCampaignWindow(campaign.starts_at, campaign.ends_at);
+    const status = effectiveCampaignStatus(campaign);
+    const rows = queryAll<{ product_id: string; promo_price_paise: number; price_paise: number; name: string }>(
+      db,
+      `SELECT cp.product_id, cp.promo_price_paise, p.price_paise, p.name
+         FROM campaign_products cp JOIN products p ON p.id = cp.product_id
+        WHERE cp.campaign_id = ?`,
+      campaign.id,
+    );
+    for (const row of rows) {
+      // A promotional price is never stored outside the campaign's own cap,
+      // whichever editorial state the campaign is in.
+      validatePromoPrice(row.price_paise, row.promo_price_paise, campaign.max_discount_bp);
+      // Scheduled campaigns go live without further review, so they must not
+      // share a product with another live or scheduled campaign.
+      if (status === 'active' || status === 'scheduled') {
+        assertProductNotInAnotherCampaign(db, campaign.id, row.product_id);
+      }
+    }
+  };
+
+  router.get('/campaigns', (_req, res) => {
+    const rows = queryAll<CampaignRow>(db, 'SELECT * FROM campaigns ORDER BY created_at DESC');
+    res.json({ campaigns: rows.map(campaignAdminView) });
+  });
+
+  router.post('/campaigns', (req, res) => {
+    const input = parse(
+      z.object({
+        name: z.string().trim().min(3).max(120),
+        slug: z
+          .string()
+          .trim()
+          .max(80)
+          .regex(/^[a-z0-9-]+$/, 'Use lowercase letters, numbers, and dashes.')
+          .optional(),
+        description: z.string().trim().max(4000).optional(),
+        posterUrl: z.string().trim().max(600).nullish(),
+        posterAlt: z.string().trim().max(300).nullish(),
+        status: z.enum(['draft', 'active', 'archived']).optional(),
+        startsAt: z.string().datetime().nullish(),
+        endsAt: z.string().datetime().nullish(),
+        maxDiscountBp: z.number().int().min(0).max(10000).optional(),
+      }),
+      req.body,
+    );
+    validateCampaignWindow(input.startsAt ?? null, input.endsAt ?? null);
+    assertPosterUrl(input.posterUrl?.trim() || null);
+    const slug =
+      input.slug ||
+      uniqueSlug(input.name, (candidate) => Boolean(queryOne(db, 'SELECT 1 FROM campaigns WHERE slug = ?', candidate)));
+    if (queryOne(db, 'SELECT 1 FROM campaigns WHERE slug = ?', slug)) {
+      throw conflict('That campaign URL is already in use.');
+    }
+    const id = newId('cmp_');
+    execute(
+      db,
+      `INSERT INTO campaigns (id, name, slug, description, poster_url, poster_alt, status, starts_at, ends_at,
+                              max_discount_bp, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id,
+      input.name,
+      slug,
+      input.description ?? '',
+      input.posterUrl?.trim() || null,
+      input.posterAlt?.trim() || null,
+      input.status ?? 'draft',
+      input.startsAt ?? null,
+      input.endsAt ?? null,
+      input.maxDiscountBp ?? 3000,
+      req.user!.id,
+    );
+    const row = getCampaignById(db, id)!;
+    audit(db, req.user!, 'campaign.created', 'campaign', id, null, campaignAdminView(row));
+    res.status(201).json({ campaign: campaignAdminView(row) });
+  });
+
+  router.patch('/campaigns/:id', (req, res) => {
+    const input = parse(
+      z.object({
+        name: z.string().trim().min(3).max(120).optional(),
+        slug: z
+          .string()
+          .trim()
+          .max(80)
+          .regex(/^[a-z0-9-]+$/, 'Use lowercase letters, numbers, and dashes.')
+          .optional(),
+        description: z.string().trim().max(4000).optional(),
+        posterUrl: z.string().trim().max(600).nullable().optional(),
+        posterAlt: z.string().trim().max(300).nullable().optional(),
+        status: z.enum(['draft', 'active', 'archived']).optional(),
+        startsAt: z.string().datetime().nullable().optional(),
+        endsAt: z.string().datetime().nullable().optional(),
+        maxDiscountBp: z.number().int().min(0).max(10000).optional(),
+      }),
+      req.body,
+    );
+    const existing = getCampaignById(db, String(req.params.id));
+    if (!existing) throw notFound('Campaign not found.');
+
+    const next = {
+      name: input.name ?? existing.name,
+      slug: input.slug ?? existing.slug,
+      description: input.description ?? existing.description,
+      poster_url: input.posterUrl === undefined ? existing.poster_url : input.posterUrl,
+      poster_alt: input.posterAlt === undefined ? existing.poster_alt : input.posterAlt,
+      status: input.status ?? existing.status,
+      starts_at: input.startsAt === undefined ? existing.starts_at : input.startsAt,
+      ends_at: input.endsAt === undefined ? existing.ends_at : input.endsAt,
+      max_discount_bp: input.maxDiscountBp ?? existing.max_discount_bp,
+    };
+
+    if (next.slug !== existing.slug && queryOne(db, 'SELECT 1 FROM campaigns WHERE slug = ? AND id != ?', next.slug, existing.id)) {
+      throw conflict('That campaign URL is already in use.');
+    }
+    validateCampaignWindow(next.starts_at, next.ends_at);
+    assertPosterUrl(next.poster_url);
+    // Validate before writing. An activation or cap reduction that conflicts
+    // with another live campaign (or with an existing price) must leave the
+    // stored campaign exactly as it was.
+    assertCampaignUsableForPricing({ ...existing, ...next });
+    execute(
+      db,
+      `UPDATE campaigns SET name = ?, slug = ?, description = ?, poster_url = ?, poster_alt = ?, status = ?,
+                            starts_at = ?, ends_at = ?, max_discount_bp = ?, updated_at = ?
+        WHERE id = ?`,
+      next.name,
+      next.slug,
+      next.description,
+      next.poster_url,
+      next.poster_alt,
+      next.status,
+      next.starts_at,
+      next.ends_at,
+      next.max_discount_bp,
+      new Date().toISOString(),
+      existing.id,
+    );
+    const row = getCampaignById(db, existing.id)!;
+    audit(db, req.user!, 'campaign.updated', 'campaign', existing.id, campaignAdminView(existing), campaignAdminView(row));
+    res.json({ campaign: campaignAdminView(row) });
+  });
+
+  router.delete('/campaigns/:id', (req, res) => {
+    const campaign = getCampaignById(db, String(req.params.id));
+    if (!campaign) throw notFound('Campaign not found.');
+    if (campaign.status !== 'draft') {
+      throw conflict('Only draft campaigns can be deleted. Archive it instead to keep the record.');
+    }
+    execute(db, 'DELETE FROM campaigns WHERE id = ?', campaign.id);
+    audit(db, req.user!, 'campaign.deleted', 'campaign', campaign.id, campaignAdminView(campaign), null);
+    res.json({ ok: true });
+  });
+
+  router.post('/campaigns/:id/poster', imageUpload().single('image'), (req, res) => {
+    const campaign = getCampaignById(db, String(req.params.id));
+    if (!campaign) throw notFound('Campaign not found.');
+    if (!req.file) throw badRequest('Choose an image file.');
+    if (!hasValidFileSignature(req.file.path, 'image')) {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      throw badRequest('That file does not look like a valid JPEG, PNG, or WebP image.');
+    }
+    const url = `/uploads/${path.basename(req.file.filename)}`;
+    execute(
+      db,
+      'UPDATE campaigns SET poster_url = ?, updated_at = ? WHERE id = ?',
+      url,
+      new Date().toISOString(),
+      campaign.id,
+    );
+    audit(db, req.user!, 'campaign.poster_updated', 'campaign', campaign.id, { posterUrl: campaign.poster_url }, { posterUrl: url });
+    res.status(201).json({ posterUrl: url });
+  });
+
+  router.get('/campaigns/:id/products', (req, res) => {
+    const campaign = getCampaignById(db, String(req.params.id));
+    if (!campaign) throw notFound('Campaign not found.');
+    const products = queryAll<{
+      product_id: string;
+      slug: string;
+      name: string;
+      image_url: string | null;
+      price_paise: number;
+      promo_price_paise: number;
+      stock: number;
+      product_status: string;
+      seller_name: string;
+    }>(
+      db,
+      `SELECT cp.product_id, p.slug, p.name, p.price_paise, cp.promo_price_paise, p.status AS product_status,
+              i.quantity - i.reserved_quantity AS stock, s.business_name AS seller_name,
+              (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url
+         FROM campaign_products cp
+         JOIN products p ON p.id = cp.product_id
+         JOIN seller_profiles s ON s.id = p.seller_id
+         JOIN inventory i ON i.product_id = p.id
+        WHERE cp.campaign_id = ?
+        ORDER BY p.name`,
+      campaign.id,
+    );
+    const priced = products.map((product) => ({
+      productId: product.product_id,
+      slug: product.slug,
+      name: product.name,
+      imageUrl: product.image_url,
+      basePricePaise: product.price_paise,
+      promoPricePaise: product.promo_price_paise,
+      discountPercent: discountPercentFor(product.price_paise, product.promo_price_paise),
+      stock: product.stock,
+      status: product.product_status,
+      sellerName: product.seller_name,
+      isValid:
+        product.promo_price_paise < product.price_paise &&
+        (product.price_paise - product.promo_price_paise) * 10000 <= campaign.max_discount_bp * product.price_paise,
+    }));
+    res.json({ campaign: campaignAdminView(campaign), products: priced });
+  });
+
+  router.get('/campaigns/:id/candidates', (req, res) => {
+    const campaign = getCampaignById(db, String(req.params.id));
+    if (!campaign) throw notFound('Campaign not found.');
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const like = `%${q}%`;
+    const rows = queryAll<{
+      id: string;
+      slug: string;
+      name: string;
+      price_paise: number;
+      stock: number;
+      seller_name: string;
+      category_name: string;
+      image_url: string | null;
+    }>(
+      db,
+      `SELECT p.id, p.slug, p.name, p.price_paise, i.quantity - i.reserved_quantity AS stock,
+              s.business_name AS seller_name, c.name AS category_name,
+              (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url
+         FROM products p
+         JOIN seller_profiles s ON s.id = p.seller_id
+         JOIN categories c ON c.id = p.category_id
+         JOIN inventory i ON i.product_id = p.id
+        WHERE p.status = 'approved'
+          ${q ? 'AND (p.name LIKE ? OR p.sku LIKE ? OR s.business_name LIKE ?)' : ''}
+          AND p.id NOT IN (SELECT product_id FROM campaign_products WHERE campaign_id = ?)
+        ORDER BY p.name
+        LIMIT 20`,
+      ...(q ? [like, like, like] : []),
+      campaign.id,
+    );
+    res.json({
+      candidates: rows.map((row) => ({
+        id: row.id,
+        slug: row.slug,
+        name: row.name,
+        basePricePaise: row.price_paise,
+        stock: row.stock,
+        sellerName: row.seller_name,
+        categoryName: row.category_name,
+        imageUrl: row.image_url,
+        maxPromoPricePaise: Math.ceil((row.price_paise * (10000 - campaign.max_discount_bp)) / 10000),
+      })),
+    });
+  });
+
+  router.post('/campaigns/:id/products', (req, res) => {
+    const input = parse(
+      z.object({ productId: z.string().min(1), promoPricePaise: z.number().int().positive() }),
+      req.body,
+    );
+    const campaign = getCampaignById(db, String(req.params.id));
+    if (!campaign) throw notFound('Campaign not found.');
+    const product = queryOne<{ id: string; name: string; price_paise: number; status: string; seller_status: string }>(
+      db,
+      `SELECT p.id, p.name, p.price_paise, p.status, s.status AS seller_status
+         FROM products p JOIN seller_profiles s ON s.id = p.seller_id
+        WHERE p.id = ?`,
+      input.productId,
+    );
+    if (!product) throw notFound('Product not found.');
+    if (product.status !== 'approved' || product.seller_status !== 'approved') {
+      throw badRequest('Only products that are currently public can join a campaign.');
+    }
+    if (queryOne(db, 'SELECT 1 FROM campaign_products WHERE campaign_id = ? AND product_id = ?', campaign.id, product.id)) {
+      throw conflict('That product is already in this campaign.');
+    }
+    const discountBp = validatePromoPrice(product.price_paise, input.promoPricePaise, campaign.max_discount_bp);
+    // A scheduled campaign will become live without further review, so it must
+    // not be promised the same product as another live or scheduled campaign.
+    const campaignStatus = effectiveCampaignStatus(campaign);
+    if (campaignStatus === 'active' || campaignStatus === 'scheduled') {
+      assertProductNotInAnotherCampaign(db, campaign.id, product.id);
+    }
+    execute(
+      db,
+      'INSERT INTO campaign_products (campaign_id, product_id, promo_price_paise) VALUES (?, ?, ?)',
+      campaign.id,
+      product.id,
+      input.promoPricePaise,
+    );
+    audit(
+      db,
+      req.user!,
+      'campaign.product_added',
+      'campaign',
+      campaign.id,
+      null,
+      { productId: product.id, name: product.name, promoPricePaise: input.promoPricePaise, discountBp },
+    );
+    res.status(201).json({ ok: true });
+  });
+
+  router.patch('/campaigns/:id/products/:productId', (req, res) => {
+    const input = parse(z.object({ promoPricePaise: z.number().int().positive() }), req.body);
+    const campaign = getCampaignById(db, String(req.params.id));
+    if (!campaign) throw notFound('Campaign not found.');
+    const product = queryOne<{ id: string; name: string; price_paise: number }>(
+      db,
+      `SELECT cp.product_id AS id, p.name, p.price_paise
+         FROM campaign_products cp JOIN products p ON p.id = cp.product_id
+        WHERE cp.campaign_id = ? AND cp.product_id = ?`,
+      campaign.id,
+      String(req.params.productId),
+    );
+    if (!product) throw notFound('That product is not part of this campaign.');
+    const discountBp = validatePromoPrice(product.price_paise, input.promoPricePaise, campaign.max_discount_bp);
+    const before = queryOne<{ promo_price_paise: number }>(
+      db,
+      'SELECT promo_price_paise FROM campaign_products WHERE campaign_id = ? AND product_id = ?',
+      campaign.id,
+      product.id,
+    );
+    execute(
+      db,
+      'UPDATE campaign_products SET promo_price_paise = ? WHERE campaign_id = ? AND product_id = ?',
+      input.promoPricePaise,
+      campaign.id,
+      product.id,
+    );
+    audit(
+      db,
+      req.user!,
+      'campaign.product_price_changed',
+      'campaign',
+      campaign.id,
+      { productId: product.id, promoPricePaise: before?.promo_price_paise },
+      { productId: product.id, name: product.name, promoPricePaise: input.promoPricePaise, discountBp },
+    );
+    res.json({ ok: true });
+  });
+
+  router.delete('/campaigns/:id/products/:productId', (req, res) => {
+    const campaign = getCampaignById(db, String(req.params.id));
+    if (!campaign) throw notFound('Campaign not found.');
+    const result = execute(
+      db,
+      'DELETE FROM campaign_products WHERE campaign_id = ? AND product_id = ?',
+      campaign.id,
+      String(req.params.productId),
+    );
+    if (result.changes === 0) throw notFound('That product is not part of this campaign.');
+    audit(db, req.user!, 'campaign.product_removed', 'campaign', campaign.id, null, {
+      productId: req.params.productId,
+    });
     res.json({ ok: true });
   });
 

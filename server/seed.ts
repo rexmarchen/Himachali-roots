@@ -5,7 +5,6 @@ import { env } from './env.js';
 import { execute, initDb, queryAll, queryOne, tx, type Db } from './db.js';
 import { hashPassword } from './lib/auth.js';
 import { newId } from './lib/ids.js';
-import { getProduct, getRegions, listCategories, listProducts, listPublicSellers } from './lib/catalog.js';
 import type { CreditsContent } from '../shared/content.js';
 
 /**
@@ -962,6 +961,7 @@ export async function seed(db: Db, options: { reset?: boolean } = {}): Promise<v
   const categoryIds = new Map<string, string>();
   const sellerIds = new Map<string, string>();
   const sellerUserIds = new Map<string, string>();
+  const seededProducts = new Map<string, { id: string; pricePaise: number }>();
   const passwordHash = hashPassword(DEMO_PASSWORD);
 
   tx(db, () => {
@@ -1124,6 +1124,46 @@ export async function seed(db: Db, options: { reset?: boolean } = {}): Promise<v
         `seed:${product.sku}`,
         now,
       );
+      seededProducts.set(product.slug, { id: productId, pricePaise: product.price });
+    }
+
+    // Development-only seasonal campaign. This applies promotional prices to
+    // real seeded demonstration products (is_demo=1). It deliberately sets no
+    // start or end date: the window is an operational decision for the store
+    // owner, not something the seed should invent.
+    const campaignPicks: { slug: string; percent: number }[] = [
+      { slug: 'kullu-handwoven-wool-shawl', percent: 30 },
+      { slug: 'chamba-rumal-embroidered-stole', percent: 20 },
+      { slug: 'kangra-valley-green-tea', percent: 15 },
+      { slug: 'kinnaur-walnut-kernels', percent: 25 },
+      { slug: 'lahaul-wildflower-honey', percent: 20 },
+    ];
+    const campaignId = newId('cmp_');
+    execute(
+      db,
+      `INSERT INTO campaigns
+         (id, name, slug, description, poster_url, poster_alt, status, starts_at, ends_at, max_discount_bp, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'active', NULL, NULL, 3000, NULL, ?, ?)`,
+      campaignId,
+      'Pahadi Festive Glow',
+      'pahadi-festive-glow',
+      'A Diwali collection from Himachali makers: handwoven wool, Kangra tea, orchard walnuts, wildflower honey and Chamba embroidery. Only the products listed in this offer carry a promotional price.',
+      '/images/campaigns/pahadi-festive-glow-diwali-1672.webp',
+      'Pahadi Festive Glow — Diwali in Himachal: a festive poster with diya lights, mountain silhouettes and the Pahadi Roots wordmark.',
+      now,
+      now,
+    );
+    for (const pick of campaignPicks) {
+      const seeded = seededProducts.get(pick.slug);
+      if (!seeded) continue;
+      const promoPricePaise = Math.round(seeded.pricePaise * (1 - pick.percent / 100));
+      execute(
+        db,
+        'INSERT INTO campaign_products (campaign_id, product_id, promo_price_paise) VALUES (?, ?, ?)',
+        campaignId,
+        seeded.id,
+        promoPricePaise,
+      );
     }
 
     execute(
@@ -1208,33 +1248,43 @@ export async function seed(db: Db, options: { reset?: boolean } = {}): Promise<v
     now,
   );
 
-  // Auto-provision administrator account so it persists across database resets
-  const existingAdmin = queryOne<{ id: string }>(db, "SELECT id FROM users WHERE email = 'anshuar9065@gmail.com'");
-  if (!existingAdmin) {
-    const adminId = newId('usr_');
-    const adminHash = hashPassword('Anshu90#@');
-    execute(
-      db,
-      `INSERT INTO users (id, email, password_hash, email_verified, is_disabled, created_at, updated_at)
-       VALUES (?, 'anshuar9065@gmail.com', ?, 1, 0, ?, ?)`,
-      adminId,
-      adminHash,
-      now,
-      now,
-    );
-    execute(
-      db,
-      `INSERT INTO profiles (id, full_name, phone, marketing_consent, updated_at)
-       VALUES (?, 'Anshu Admin', '+919065000000', 1, ?)`,
-      adminId,
-      now,
-    );
-    execute(db, "INSERT INTO user_roles (user_id, role) VALUES (?, 'customer')", adminId);
-    execute(db, "INSERT INTO user_roles (user_id, role) VALUES (?, 'admin')", adminId);
+  // Provision an administrator only when credentials are explicitly supplied.
+  // Never ship a default administrator password in the seed.
+  const seedAdminEmail = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+  const seedAdminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (seedAdminEmail && seedAdminPassword) {
+    if (seedAdminPassword.length < 8) {
+      throw new Error('SEED_ADMIN_PASSWORD must be at least 8 characters.');
+    }
+    const existingAdmin = queryOne<{ id: string }>(db, 'SELECT id FROM users WHERE email = ?', seedAdminEmail);
+    if (!existingAdmin) {
+      const adminId = newId('usr_');
+      const adminHash = hashPassword(seedAdminPassword);
+      execute(
+        db,
+        `INSERT INTO users (id, email, password_hash, email_verified, is_disabled, created_at, updated_at)
+         VALUES (?, ?, ?, 1, 0, ?, ?)`,
+        adminId,
+        seedAdminEmail,
+        adminHash,
+        now,
+        now,
+      );
+      execute(
+        db,
+        `INSERT INTO profiles (id, full_name, phone, marketing_consent, updated_at)
+         VALUES (?, ?, NULL, 0, ?)`,
+        adminId,
+        'Administrator',
+        now,
+      );
+      execute(db, "INSERT INTO user_roles (user_id, role) VALUES (?, 'customer')", adminId);
+      execute(db, "INSERT INTO user_roles (user_id, role) VALUES (?, 'admin')", adminId);
+      console.log(`  Administrator provisioned from SEED_ADMIN_EMAIL: ${seedAdminEmail}`);
+    }
+  } else {
+    console.log('  No administrator seeded. Use `npm run admin:create` to provision one.');
   }
-
-  // Export static fallbacks for Vercel static deployment
-  exportStaticFallbackFiles(db);
 
   console.log(
     [
@@ -1244,52 +1294,8 @@ export async function seed(db: Db, options: { reset?: boolean } = {}): Promise<v
       `  Demo products: ${PRODUCTS.length}`,
       `  Demo seller logins: ${SELLERS.map((s) => s.email).join(', ')}`,
       `  Demo seller password: ${DEMO_PASSWORD}`,
-      '  Admin login: anshuar9065@gmail.com (provisioned)',
-      '  Static JSON fallback files exported to public/ directory.',
     ].join('\n'),
   );
-}
-
-function exportStaticFallbackFiles(db: Db): void {
-  const publicDir = path.resolve(process.cwd(), 'public');
-  if (!fs.existsSync(publicDir)) return;
-
-  // 1. static-categories.json
-  const categories = listCategories(db);
-  const categoriesJson = {
-    categories: categories.filter((c) => !c.parentId),
-    subcategories: categories.filter((c) => c.parentId),
-  };
-  fs.writeFileSync(path.join(publicDir, 'static-categories.json'), JSON.stringify(categoriesJson, null, 2), 'utf8');
-
-  // 2. static-products.json
-  const productList = listProducts(db, { pageSize: 100 });
-  const minMax = queryOne<{ min: number | null; max: number | null }>(
-    db,
-    "SELECT MIN(price_paise) AS min, MAX(price_paise) AS max FROM products WHERE status = 'approved'",
-  );
-  const productsJson = {
-    ...productList,
-    filters: {
-      categories: listCategories(db),
-      sellers: listPublicSellers(db).map((s) => ({ name: s.name, slug: s.slug })),
-      regions: getRegions(db),
-      priceRangePaise: minMax ?? { min: 28000, max: 1450000 },
-    },
-  };
-  fs.writeFileSync(path.join(publicDir, 'static-products.json'), JSON.stringify(productsJson, null, 2), 'utf8');
-
-  // 3. static-product-details.json
-  const detailsMap: Record<string, unknown> = {};
-  for (const item of productList.items) {
-    const detail = getProduct(db, item.slug);
-    if (detail) {
-      detailsMap[item.slug] = {
-        product: detail,
-      };
-    }
-  }
-  fs.writeFileSync(path.join(publicDir, 'static-product-details.json'), JSON.stringify(detailsMap, null, 2), 'utf8');
 }
 
 async function main(): Promise<void> {

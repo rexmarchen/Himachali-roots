@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS seller_profiles (
       ('farmer_grower','artisan_craftsperson','food_producer','home_business','local_brand','retailer')),
   tagline TEXT,
   story TEXT,
+  logo_url TEXT,
+  cover_url TEXT,
   region TEXT,
   village TEXT,
   operating_address TEXT,
@@ -366,6 +368,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   sku TEXT NOT NULL,
   image_url TEXT,
   unit_price_paise INTEGER NOT NULL,
+  original_unit_price_paise INTEGER,
   quantity INTEGER NOT NULL,
   line_subtotal_paise INTEGER NOT NULL,
   discount_paise INTEGER NOT NULL DEFAULT 0,
@@ -586,6 +589,52 @@ CREATE TABLE IF NOT EXISTS coupon_redemptions (
   discount_paise INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- Seasonal campaigns. The stored status is the editorial state (draft/active/
+-- archived); scheduled and expired are derived from the time window so a
+-- campaign cannot keep selling after its end date because nobody edited it.
+CREATE TABLE IF NOT EXISTS campaigns (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  poster_url TEXT,
+  poster_alt TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','active','archived')),
+  starts_at TEXT,
+  ends_at TEXT,
+  max_discount_bp INTEGER NOT NULL DEFAULT 3000
+    CHECK (max_discount_bp >= 0 AND max_discount_bp <= 10000),
+  created_by TEXT REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
+
+CREATE TABLE IF NOT EXISTS campaign_products (
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  promo_price_paise INTEGER NOT NULL CHECK (promo_price_paise > 0),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (campaign_id, product_id)
+);
+CREATE INDEX IF NOT EXISTS idx_campaign_products_product ON campaign_products(product_id);
+
+-- One authoritative promotional price per product: the lowest valid price from
+-- a live campaign. Validity is re-checked against the product's current base
+-- price and the campaign's maximum discount, so a later price edit cannot leave
+-- a stale or misleading badge in place.
+CREATE VIEW IF NOT EXISTS active_campaign_prices AS
+  SELECT cp.product_id, MIN(cp.promo_price_paise) AS promo_price_paise
+    FROM campaign_products cp
+    JOIN campaigns c ON c.id = cp.campaign_id
+    JOIN products p ON p.id = cp.product_id
+   WHERE c.status = 'active'
+     AND (c.starts_at IS NULL OR c.starts_at <= strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     AND (c.ends_at IS NULL OR c.ends_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     AND cp.promo_price_paise < p.price_paise
+     AND (p.price_paise - cp.promo_price_paise) * 10000 <= c.max_discount_bp * p.price_paise
+   GROUP BY cp.product_id;
 
 CREATE TABLE IF NOT EXISTS notifications (
   id TEXT PRIMARY KEY,

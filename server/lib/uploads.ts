@@ -42,7 +42,7 @@ export function imageUpload() {
   });
 }
 
-export const privateDocsDir = path.resolve(process.cwd(), 'storage', 'private', 'seller-docs');
+export const privateDocsDir = env.privateDocsDir;
 
 export function documentUpload() {
   return multer({

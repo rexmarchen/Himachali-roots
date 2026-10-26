@@ -586,8 +586,8 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
       const prodId = parts[3];
       const action = parts[4];
       const stored = localStorage.getItem('pr_custom_seller_products');
-      let products = stored ? JSON.parse(stored) : [];
-      let found = products.find((p: any) => p.id === prodId || p.slug === prodId);
+      const products = stored ? JSON.parse(stored) : [];
+      const found = products.find((p: any) => p.id === prodId || p.slug === prodId);
 
       if (action === 'submit') {
         if (found) {
@@ -739,7 +739,7 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
 
     if (cleanPath === '/seller/orders') {
       const storedOrders = localStorage.getItem('pr_custom_seller_orders');
-      let orders = storedOrders ? JSON.parse(storedOrders) : [
+      const orders = storedOrders ? JSON.parse(storedOrders) : [
         {
           id: 'ord_1',
           orderNumber: 'PR-ORD-9021',
@@ -778,7 +778,7 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
       const action = parts[4];
 
       const storedOrders = localStorage.getItem('pr_custom_seller_orders');
-      let orders = storedOrders ? JSON.parse(storedOrders) : [
+      const orders = storedOrders ? JSON.parse(storedOrders) : [
         {
           id: 'ord_1',
           reference: 'PR-ORD-9021',
@@ -875,7 +875,7 @@ async function getStaticFallback<T>(path: string, options: ApiOptions = {}): Pro
         },
       ];
 
-      let order = orders.find((o: any) => o.id === orderId || o.reference === orderId) || orders[0];
+      const order = orders.find((o: any) => o.id === orderId || o.reference === orderId) || orders[0];
 
       if (action === 'action' && options.method === 'POST') {
         const bodyObj = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
@@ -988,7 +988,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
       },
       body: isForm ? body : body === undefined ? undefined : JSON.stringify(body),
     });
-  } catch (networkError) {
+  } catch {
     const fallback = await getStaticFallback<T>(path, options);
     if (fallback !== null) return fallback;
 

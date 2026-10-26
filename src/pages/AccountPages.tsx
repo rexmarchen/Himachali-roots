@@ -403,7 +403,12 @@ export function OrderDetailPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-ink">{item.name}</p>
-                      <p className="text-[11px] text-muted">SKU {item.sku} · Qty {item.quantity} · {formatINR(item.unitPricePaise)} each</p>
+                      <p className="text-[11px] text-muted">
+                        SKU {item.sku} · Qty {item.quantity} · {formatINR(item.unitPricePaise)} each
+                        {item.originalUnitPricePaise ? (
+                          <span className="ml-1.5 line-through">{formatINR(item.originalUnitPricePaise)}</span>
+                        ) : null}
+                      </p>
                       <p className="mt-1 text-xs">{formatINR(item.lineSubtotalPaise)}</p>
                     </div>
                     <div className="shrink-0">

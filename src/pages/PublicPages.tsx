@@ -32,6 +32,8 @@ interface PublicSeller {
   region: string | null;
   productCount: number;
   imageUrl: string | null;
+  logoUrl: string | null;
+  coverUrl: string | null;
 }
 
 export function MakersPage() {
@@ -63,10 +65,10 @@ export function MakersPage() {
             <article key={seller.id}>
               <Link to={`/makers/${seller.slug}`} className="group block">
                 <div className="aspect-[4/3] overflow-hidden bg-sand/40">
-                  {seller.imageUrl ? (
+                  {seller.coverUrl || seller.imageUrl ? (
                     <img
-                      src={seller.imageUrl}
-                      alt={`Illustrative product photograph from ${seller.name}`}
+                      src={seller.coverUrl || seller.imageUrl || ''}
+                      alt={`${seller.name} storefront`}
                       loading="lazy"
                       className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
                     />
@@ -129,7 +131,7 @@ export function MakerDetailPage() {
     queryKey: ['maker', slug],
     queryFn: () =>
       api<{
-        seller: PublicSeller & { village: string | null; approvedAt: string | null; coverUrl?: string; sellerCategory?: string };
+        seller: PublicSeller & { village: string | null; approvedAt: string | null; sellerCategory?: string | null };
         products: { items: ProductSummary[] };
       }>(`/sellers/${encodeURIComponent(slug)}`),
     enabled: Boolean(slug),
@@ -184,17 +186,20 @@ export function MakerDetailPage() {
     return matchesCat && matchesQuery;
   });
 
-  const coverImage = seller.imageUrl || '/images/editorial-terrace.jpg';
+  const coverImage = seller.coverUrl;
+  const sellerCategoryLabel = seller.sellerCategory ? seller.sellerCategory.replaceAll('_', ' ') : null;
 
   return (
     <div className="bg-[#FAF7F2]">
       {/* Hero Cover Banner */}
       <div className="relative h-64 sm:h-80 md:h-96 w-full overflow-hidden bg-[#172321]">
-        <img
-          src={coverImage}
-          alt={`Himachal workshop and landscape of ${seller.name}`}
-          className="h-full w-full object-cover opacity-50 filter saturate-[0.85]"
-        />
+        {coverImage ? (
+          <img
+            src={coverImage}
+            alt={`${seller.name} storefront cover`}
+            className="h-full w-full object-cover opacity-50 filter saturate-[0.85]"
+          />
+        ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-[#172321] via-[#172321]/40 to-transparent" />
         <div className="absolute top-4 left-4 sm:top-6 sm:left-8">
           <Breadcrumbs
@@ -214,14 +219,14 @@ export function MakerDetailPage() {
             <div className="flex flex-col sm:flex-row items-start gap-5">
               {/* Workshop Crest / Portrait */}
               <div className="relative h-24 w-24 sm:h-28 sm:w-28 shrink-0 overflow-hidden rounded-xl border-2 border-white bg-[#172321] shadow-md">
-                {seller.imageUrl ? (
-                  <img src={seller.imageUrl} alt={seller.name} className="h-full w-full object-cover" />
+                {seller.logoUrl ? (
+                  <img src={seller.logoUrl} alt={`${seller.name} logo`} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center font-serif text-2xl text-[#F7F1E7]">
                     {seller.name.slice(0, 2).toUpperCase()}
                   </div>
                 )}
-                <div className="absolute bottom-1 right-1 rounded-full bg-[#66745A] p-1 text-white shadow" title="Verified Producer">
+                <div className="absolute bottom-1 right-1 rounded-full bg-[#66745A] p-1 text-white shadow" title="Approved seller">
                   <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
@@ -232,7 +237,7 @@ export function MakerDetailPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-[#66745A]/30 bg-[#66745A]/10 px-2.5 py-0.5 text-[11px] font-medium tracking-wide text-[#66745A]">
                     <span className="h-1.5 w-1.5 rounded-full bg-[#66745A]" />
-                    Verified Himachal Maker
+                    Reviewed seller
                   </span>
                   {seller.approvedAt ? (
                     <span className="text-[11px] text-muted">
@@ -244,7 +249,8 @@ export function MakerDetailPage() {
                 <h1 className="mt-2 font-serif text-3xl sm:text-4xl lg:text-5xl text-[#172321]">{seller.name}</h1>
 
                 <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#66745A] font-medium">
-                  {seller.village ? `${seller.village}, ` : ''}{seller.region ?? 'Himachal Pradesh'} · Himalayan Craft Collective
+                  {seller.village ? `${seller.village}, ` : ''}{seller.region ?? 'Himachal Pradesh'}
+                  {sellerCategoryLabel ? ` · ${sellerCategoryLabel}` : ''}
                 </p>
 
                 {seller.tagline ? (
@@ -282,15 +288,25 @@ export function MakerDetailPage() {
             </div>
           </div>
 
-          {/* Specialties / Badges */}
+          {/* Real storefront facts */}
           <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-[#E4DACE]/70 pt-5 text-[11.5px]">
-            <span className="font-medium text-[#172321]">Artisan Specialties:</span>
-            <span className="rounded-md bg-white/70 px-2.5 py-1 text-[#172321] border border-[#E4DACE]/60">100% Himalayan Provenance</span>
-            <span className="rounded-md bg-white/70 px-2.5 py-1 text-[#172321] border border-[#E4DACE]/60">Direct Artisan Dispatch</span>
-            <span className="rounded-md bg-white/70 px-2.5 py-1 text-[#172321] border border-[#E4DACE]/60">Fair Producer Compensation</span>
-            <span className="rounded-md bg-[#66745A]/10 px-2.5 py-1 text-[#66745A] font-medium border border-[#66745A]/30">
-              {seller.productCount} Handcrafted Listing{seller.productCount === 1 ? '' : 's'}
+            <span className="font-medium text-[#172321]">Storefront facts:</span>
+            <span className="rounded-md border border-[#E4DACE]/60 bg-white/70 px-2.5 py-1 text-[#172321]">
+              {seller.village ? `${seller.village}, ` : ''}{seller.region ?? 'Himachal Pradesh'}
             </span>
+            {seller.sellerCategory ? (
+              <span className="rounded-md border border-[#E4DACE]/60 bg-white/70 px-2.5 py-1 text-[#172321]">
+                {seller.sellerCategory}
+              </span>
+            ) : null}
+            <span className="rounded-md border border-[#66745A]/30 bg-[#66745A]/10 px-2.5 py-1 font-medium text-[#66745A]">
+              {seller.productCount} approved listing{seller.productCount === 1 ? '' : 's'}
+            </span>
+            {seller.approvedAt ? (
+              <span className="rounded-md border border-[#E4DACE]/60 bg-white/70 px-2.5 py-1 text-[#172321]">
+                Seller since {new Date(seller.approvedAt).getFullYear()}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -300,65 +316,64 @@ export function MakerDetailPage() {
         <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
           <div className="rounded-xl border border-[#E4DACE] bg-white p-6 sm:p-8">
             <p className="eyebrow">The Maker's Story</p>
-            <h2 className="mt-2 text-2xl sm:text-3xl text-[#172321]">Centuries of Mountain Living & Craft</h2>
+            <h2 className="mt-2 text-2xl sm:text-3xl text-[#172321]">In the maker's own words</h2>
             <div className="mt-4 space-y-4 text-[14.5px] leading-relaxed text-[#172321]/80">
-              <p>
-                {seller.story ||
-                  'Rooted in the high terraced valleys of Himachal Pradesh, this workshop works strictly according to traditional regional methods. From cold-weather pit looms to solar-dried orchard harvests, each batch represents the rhythm of the Himalayan seasons.'}
-              </p>
-              <p>
-                Every piece is prepared locally in small quantities, preserving native techniques passed down across generations. By ordering directly from this storefront, you ensure fair compensation reaches the artisan family without middlemen.
-              </p>
+              {seller.story ? (
+                <p className="whitespace-pre-line">{seller.story}</p>
+              ) : (
+                <p className="text-muted">This maker has not published a store story yet.</p>
+              )}
             </div>
 
             <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3 border-t border-[#E4DACE]/70 pt-5 text-center text-xs">
               <div className="rounded-lg bg-[#F7F1E7] p-3">
-                <p className="font-serif text-lg font-bold text-[#172321]">2-3 Days</p>
-                <p className="text-[10px] uppercase tracking-wider text-muted">Mountain Dispatch</p>
+                <p className="font-serif text-lg font-bold text-[#172321]">{seller.productCount}</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted">Approved listings</p>
               </div>
               <div className="rounded-lg bg-[#F7F1E7] p-3">
-                <p className="font-serif text-lg font-bold text-[#66745A]">100%</p>
-                <p className="text-[10px] uppercase tracking-wider text-muted">Himachali Origin</p>
+                <p className="font-serif text-lg font-bold text-[#66745A]">{seller.region ?? 'Himachal'}</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted">Seller region</p>
               </div>
               <div className="rounded-lg bg-[#F7F1E7] p-3 col-span-2 sm:col-span-1">
-                <p className="font-serif text-lg font-bold text-[#D98263]">Direct</p>
-                <p className="text-[10px] uppercase tracking-wider text-muted">Producer Payout</p>
+                <p className="font-serif text-lg font-bold text-[#D98263]">Reviewed</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted">Seller status</p>
               </div>
             </div>
           </div>
 
-          {/* Sourcing & Trust Box */}
+          {/* What the marketplace actually checks */}
           <div className="rounded-xl border border-[#66745A]/30 bg-[#172321] p-6 sm:p-8 text-white">
             <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#D98263]">
-              Pahadi Roots Sourcing Guarantee
+              How this storefront is reviewed
             </span>
-            <h3 className="mt-2 font-serif text-2xl text-white">Authenticity Verified in Himachal</h3>
+            <h3 className="mt-2 font-serif text-2xl text-white">Seller and listing checks</h3>
             <p className="mt-3 text-sm leading-relaxed text-white/80">
-              Each producer listed on PAHADI ROOTS undergoes physical and community verification. We audit origin claims, materials, and workshop locations to ensure you receive genuine mountain heritage.
+              A storefront becomes public only after the seller application is approved. Each product then passes its own
+              moderation step before it can be listed, searched or added to a cart.
             </p>
             <ul className="mt-5 space-y-2.5 text-xs text-white/90">
               <li className="flex items-center gap-2">
                 <svg className="h-4 w-4 text-[#D98263]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Tracked parcel dispatches via reliable regional carriers
+                Seller identity and business details reviewed by an administrator
               </li>
               <li className="flex items-center gap-2">
                 <svg className="h-4 w-4 text-[#D98263]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Eco-conscious mountain protective packaging
+                Product details and claims moderated before publication
               </li>
               <li className="flex items-center gap-2">
                 <svg className="h-4 w-4 text-[#D98263]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Dedicated resolution support for any transit concerns
+                Private documents and contact details are never shown publicly
               </li>
             </ul>
             <div className="mt-6 pt-5 border-t border-white/15 flex items-center justify-between text-xs">
-              <span className="text-white/60">Workshop Location:</span>
-              <span className="font-medium text-[#F7F1E7]">{seller.region ?? 'Himachal Pradesh'}</span>
+              <span className="text-white/60">Workshop location:</span>
+              <span className="font-medium text-[#F7F1E7]">{seller.village ? `${seller.village}, ` : ''}{seller.region ?? 'Himachal Pradesh'}</span>
             </div>
           </div>
         </div>
@@ -370,7 +385,7 @@ export function MakerDetailPage() {
           <div>
             <p className="eyebrow">From this workshop</p>
             <h2 className="mt-1 font-serif text-3xl text-[#172321]">Available Listings</h2>
-            <p className="mt-1 text-xs text-muted">Freshly crafted or harvested items ready for immediate dispatch.</p>
+            <p className="mt-1 text-xs text-muted">Approved listings from this seller.</p>
           </div>
 
           {/* Search within Store */}

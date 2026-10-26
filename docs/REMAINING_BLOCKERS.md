@@ -2,25 +2,28 @@
 
 This document separates what has been built and verified from what still requires external approvals, credentials, legal work or further engineering. It is intentionally conservative: a feature is not "done" because code exists, and an integration is not "configured" because environment variables have names.
 
-Last reviewed: 24 October 2026.
+Last reviewed: 26 October 2026.
 
 ## Verified in this build
 
-- Storefront, customer account, seller workspace and administrator console render and call real APIs, including admin category management and the ten-step seller application.
+- Storefront, customer account, seller workspace and administrator console render and call real APIs, including admin category management, the ten-step seller application and seasonal campaign management.
+- Seasonal campaign eligibility, fixed promotional pricing, scheduling/expiry, admin-only management and audit logging work through real HTTP routes. Catalogue, cart and checkout read the same database view for live promotional prices, and order lines retain the original unit price.
 - Registration, login, logout, password reset, email verification token flow and session invalidation work against SQLite.
 - Server-side RBAC and ownership checks protect customer, seller and admin routes.
 - Seller applications save as drafts, resume at the saved step, enforce category-aware requirements (FSSAI for food), and cannot be submitted incomplete.
 - Application decisions are server-enforced state transitions with reason requirements, self-approval refusal, seller notifications, review history and audit entries.
 - Checkout reprices the cart on the server, reserves stock atomically, enforces idempotency and splits multi-seller orders.
+- The redesigned checkout presents three accessible stages, real cart totals, saved-address editing, coupon revalidation, configured-payment-only cards, server-confirmed payment states and resume-payment handling. New server tests cover empty bags, invalid addresses and coupons, post-discount shipping and duplicate-safe payment resume. No browser-level visual test exists.
 - Coupon redemption, shipping thresholds, GST-inclusive snapshotting and commission snapshots are tested.
 - Seller fulfilment enforces confirm → pack → ship → deliver and isolates sellers.
 - Payment verification creates ledger entries; duplicate webhook events do not double-apply.
 - Cancellation, return and refund accounting posts proportional ledger deductions and commission reversals.
 - Seller documents are private and protected by magic-byte checks, ownership authorization and `no-store` responses.
 - Manual settlements accept only an explicit bank/UPI reference before marked paid.
-- `npm run check` passes: typecheck, lint, **87/87** tests and production build.
-- `npm run smoke` passes 33/33 live HTTP checks against a running development API.
-- A copy of the existing development database (schema versions 1–2) migrated to version 3 with row counts preserved, `integrity_check = ok` and no foreign-key violations. The live file was not modified.
+- `npm run check` passes: typecheck, lint, **107/107** tests and production build.
+- `npm run smoke` passes 28/28 non-admin live HTTP checks against a running development API (33 with admin credentials).
+- A seller-lifecycle E2E run passed 53/53 checks against a disposable API and database.
+- The legacy-migration test upgrades a pre-onboarding (v1–v2) database to version 5 with rows preserved; `integrity_check` and foreign-key checks are clean in the test database.
 
 Evidence and exact outcomes are in [Verification](VERIFICATION.md).
 

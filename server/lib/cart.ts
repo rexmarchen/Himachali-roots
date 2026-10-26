@@ -22,6 +22,7 @@ interface CartLineRow {
   image_url: string | null;
   image_alt: string | null;
   price_paise: number;
+  promo_price_paise: number | null;
   quantity: number;
   stock: number;
   reserved: number;
@@ -113,7 +114,8 @@ export function setCartCookie(res: Response, token: string): void {
 export function cartLines(db: Db, cartId: string): CartLine[] {
   const rows = queryAll<CartLineRow>(
     db,
-    `SELECT ci.product_id, p.slug, p.name, p.price_paise, ci.quantity, p.status AS product_status,
+    `SELECT ci.product_id, p.slug, p.name, p.price_paise, acp.promo_price_paise, ci.quantity,
+            p.status AS product_status,
             i.quantity AS stock, i.reserved_quantity AS reserved,
             s.id AS seller_id, s.business_name AS seller_name, s.status AS seller_status,
             (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url,
@@ -122,6 +124,7 @@ export function cartLines(db: Db, cartId: string): CartLine[] {
        JOIN products p ON p.id = ci.product_id
        JOIN inventory i ON i.product_id = p.id
        JOIN seller_profiles s ON s.id = p.seller_id
+       LEFT JOIN active_campaign_prices acp ON acp.product_id = p.id
       WHERE ci.cart_id = ?
       ORDER BY ci.created_at`,
     cartId,
@@ -129,15 +132,21 @@ export function cartLines(db: Db, cartId: string): CartLine[] {
   return rows.map((row) => {
     const available = Math.max(0, row.stock - row.reserved);
     const sellable = available > 0 && row.product_status === 'approved' && row.seller_status === 'approved';
+    // The cart shows the live promotional price. It is re-read on every request
+    // so an expired or withdrawn campaign can never keep an old price in place.
+    const campaignPrice =
+      row.promo_price_paise !== null && row.promo_price_paise < row.price_paise ? row.promo_price_paise : null;
+    const unitPrice = campaignPrice ?? row.price_paise;
     return {
       productId: row.product_id,
       slug: row.slug,
       name: row.name,
       imageUrl: row.image_url,
       imageAlt: row.image_alt,
-      unitPricePaise: row.price_paise,
+      unitPricePaise: unitPrice,
+      originalUnitPricePaise: campaignPrice === null ? null : row.price_paise,
       quantity: row.quantity,
-      lineTotalPaise: sellable ? row.price_paise * row.quantity : 0,
+      lineTotalPaise: sellable ? unitPrice * row.quantity : 0,
       stock: available,
       maxQuantity: Math.min(99, available),
       sellerId: row.seller_id,

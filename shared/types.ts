@@ -77,6 +77,12 @@ export interface ProductSummary {
   isFeatured: boolean;
   ratingAverage: number | null;
   ratingCount: number;
+  /** Pre-campaign selling price, present only while a valid campaign price applies. */
+  originalPricePaise?: number | null;
+  /** Rounded discount percentage derived from originalPricePaise and pricePaise. */
+  discountPercent?: number | null;
+  campaignSlug?: string | null;
+  campaignName?: string | null;
 }
 
 export interface ProductDetail extends ProductSummary {
@@ -96,7 +102,16 @@ export interface ProductDetail extends ProductSummary {
   attributes: Record<string, string> | null;
   taxRateBp: number;
   images: ProductImage[];
-  seller: { id: string; name: string; slug: string; tagline: string | null; story: string | null; region: string | null };
+  seller: {
+    id: string;
+    name: string;
+    slug: string;
+    tagline: string | null;
+    story: string | null;
+    region: string | null;
+    logoUrl: string | null;
+    coverUrl: string | null;
+  };
   category: { id: string; name: string; slug: string };
   reviews: Review[];
   reviewSummary: { average: number | null; count: number; distribution: Record<string, number> };
@@ -122,6 +137,7 @@ export interface CartLine {
   imageUrl: string | null;
   imageAlt: string | null;
   unitPricePaise: number;
+  originalUnitPricePaise?: number | null;
   quantity: number;
   lineTotalPaise: number;
   stock: number;
@@ -129,6 +145,24 @@ export interface CartLine {
   sellerName: string;
   status: ProductStatus;
   maxQuantity: number;
+}
+
+export type CampaignStatus = 'draft' | 'scheduled' | 'active' | 'expired' | 'archived';
+
+export interface CampaignSummary {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  posterUrl: string | null;
+  posterAlt: string | null;
+  status: CampaignStatus;
+  startsAt: string | null;
+  endsAt: string | null;
+  maxDiscountBp: number;
+  productCount: number;
+  /** Deepest saving actually available in this campaign today, rounded. */
+  maxDiscountPercent: number;
 }
 
 export interface CartView {
@@ -157,6 +191,7 @@ export interface OrderItemSummary {
   imageUrl: string | null;
   quantity: number;
   unitPricePaise: number;
+  originalUnitPricePaise: number | null;
   lineSubtotalPaise: number;
   status: string;
   sellerName: string;

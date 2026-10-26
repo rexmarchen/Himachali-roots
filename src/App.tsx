@@ -6,6 +6,7 @@ import { RequireAdmin, RequireAuth, RequireSellerAccount } from '@/components/gu
 const HomePage = lazy(() => import('@/pages/HomePage').then((module) => ({ default: module.HomePage })));
 const ShopPage = lazy(() => import('@/pages/ShopPage').then((module) => ({ default: module.ShopPage })));
 const ProductPage = lazy(() => import('@/pages/ProductPage').then((module) => ({ default: module.ProductPage })));
+const OfferPage = lazy(() => import('@/pages/OfferPage').then((module) => ({ default: module.OfferPage })));
 const CartPage = lazy(() => import('@/pages/CartPage').then((module) => ({ default: module.CartPage })));
 const CheckoutPage = lazy(() => import('@/pages/CheckoutPage').then((module) => ({ default: module.CheckoutPage })));
 
@@ -146,6 +147,9 @@ const AdminContentPage = lazy(() =>
 const AdminCouponsPage = lazy(() =>
   import('@/pages/AdminPages').then((module) => ({ default: module.AdminCouponsPage })),
 );
+const AdminCampaignsPage = lazy(() =>
+  import('@/pages/AdminPages').then((module) => ({ default: module.AdminCampaignsPage })),
+);
 const AdminSupportPage = lazy(() =>
   import('@/pages/AdminPages').then((module) => ({ default: module.AdminSupportPage })),
 );
@@ -175,6 +179,7 @@ export function App() {
         <Route index element={<HomePage />} />
         <Route path="shop" element={<ShopPage />} />
         <Route path="shop/:slug" element={<ProductPage />} />
+        <Route path="offers/:slug" element={<OfferPage />} />
         <Route path="products/:slug" element={<ProductPage />} />
         <Route path="cart" element={<CartPage />} />
         <Route path="makers" element={<MakersPage />} />
@@ -251,6 +256,7 @@ export function App() {
             <Route path="reviews" element={<AdminReviewsPage />} />
             <Route path="content" element={<AdminContentPage />} />
             <Route path="coupons" element={<AdminCouponsPage />} />
+            <Route path="campaigns" element={<AdminCampaignsPage />} />
             <Route path="support" element={<AdminSupportPage />} />
             <Route path="audit" element={<AdminAuditPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />

@@ -10,7 +10,7 @@ import { badRequest, conflict, notFound, parse } from '../lib/http.js';
 import { newId, uniqueSlug } from '../lib/ids.js';
 import { documentUpload, hasValidFileSignature, imageUpload, isInsidePrivateDocs } from '../lib/uploads.js';
 import { notify, escapeHtml } from '../lib/email.js';
-import { COMMISSION_BASIS_NOTE } from '../lib/pricing.js';
+import { COMMISSION_BASIS_NOTE, resolveCommissionBp } from '../lib/pricing.js';
 import { sellerOrderAction, type SellerAction } from '../lib/orders.js';
 import {
   assertCompleteSubmission,
@@ -73,6 +73,8 @@ interface SellerRow {
   village: string | null;
   tagline: string | null;
   story: string | null;
+  logo_url: string | null;
+  cover_url: string | null;
   operating_address: string | null;
   pickup_address: string | null;
   gstin: string | null;
@@ -185,7 +187,15 @@ export function sellerRouter(db: Db): Router {
   const router = Router();
   router.use(requireAuth);
 
-  router.get('/config', (_req, res) => {
+  router.get('/config', (req, res) => {
+    const seller = sellerForUser(db, req.user!.id);
+    const categoryRows = queryAll<{ id: string }>(db, 'SELECT id FROM categories WHERE is_active = 1');
+    const categoryRates: Record<string, number> = {};
+    for (const category of categoryRows) {
+      categoryRates[category.id] = seller
+        ? resolveCommissionBp(db, seller.id, category.id)
+        : env.defaultCommissionBp;
+    }
     res.json({
       sellerCategories: SELLER_CATEGORY_IDS.map((id) => ({
         id,
@@ -193,7 +203,11 @@ export function sellerRouter(db: Db): Router {
       })),
       sellerTypes: SELLER_TYPES,
       documentTypes: DOCUMENT_TYPES.map((id) => ({ id, label: DOCUMENT_LABELS[id] })),
-      commission: { defaultBp: 1500, note: COMMISSION_BASIS_NOTE },
+      commission: {
+        defaultBp: seller ? resolveCommissionBp(db, seller.id, categoryRows[0]?.id ?? '') : env.defaultCommissionBp,
+        categoryRates,
+        note: COMMISSION_BASIS_NOTE,
+      },
       payoutProvider: {
         configured: false,
         provider: 'not_configured',
@@ -252,6 +266,8 @@ export function sellerRouter(db: Db): Router {
         village: seller.village,
         tagline: seller.tagline,
         story: seller.story,
+        logoUrl: seller.logo_url,
+        coverUrl: seller.cover_url,
         operatingAddress: seller.operating_address ? parseJson<Record<string, unknown>>(seller.operating_address, {}) : null,
         pickupAddress: seller.pickup_address ? parseJson<Record<string, unknown>>(seller.pickup_address, {}) : null,
         gstin: seller.gstin,
@@ -919,11 +935,26 @@ export function sellerRouter(db: Db): Router {
       id,
     );
     const profile = queryOne<{
+      business_name: string;
+      slug: string;
+      region: string | null;
+      village: string | null;
+      tagline: string | null;
+      story: string | null;
+      logo_url: string | null;
+      cover_url: string | null;
       seller_category: string | null;
       store_status: string;
       payout_status: string;
       store_status_reason: string | null;
-    }>(db, 'SELECT seller_category, store_status, payout_status, store_status_reason FROM seller_profiles WHERE id = ?', id);
+      commission_rate_bp: number | null;
+    }>(
+      db,
+      `SELECT business_name, slug, region, village, tagline, story, logo_url, cover_url, seller_category,
+              store_status, payout_status, store_status_reason, commission_rate_bp
+         FROM seller_profiles WHERE id = ?`,
+      id,
+    );
     const application = latestApplication(db, id);
 
     // Compute continuous daily series for interactive area chart
@@ -1012,6 +1043,17 @@ export function sellerRouter(db: Db): Router {
         payoutStatus: profile?.payout_status ?? 'not_started',
         sellerCategory: profile?.seller_category ?? null,
         statusReason: profile?.store_status_reason ?? null,
+      },
+      identity: {
+        businessName: profile?.business_name ?? null,
+        slug: profile?.slug ?? null,
+        region: profile?.region ?? null,
+        village: profile?.village ?? null,
+        tagline: profile?.tagline ?? null,
+        story: profile?.story ?? null,
+        logoUrl: profile?.logo_url ?? null,
+        coverUrl: profile?.cover_url ?? null,
+        commissionRateBp: profile?.commission_rate_bp ?? null,
       },
       application: application
         ? {
@@ -1256,8 +1298,8 @@ export function sellerRouter(db: Db): Router {
       sku = `${sku}-${Math.floor(100 + Math.random() * 900)}`;
     }
 
-    const shortDescription = input.shortDescription?.trim() || `${input.name} — Authentic handpicked Himachali creation.`;
-    const description = input.description?.trim() || `${input.name}. Crafted with authentic Himalayan heritage and traditional methods from the mountains of Himachal Pradesh.`;
+    const shortDescription = input.shortDescription?.trim() || '';
+    const description = input.description?.trim() || '';
 
     const productId = newId('prd_');
     const slug = uniqueSlug(input.name, (candidate) => Boolean(queryOne(db, 'SELECT 1 FROM products WHERE slug = ?', candidate)));
@@ -1337,8 +1379,8 @@ export function sellerRouter(db: Db): Router {
     ) {
       throw badRequest('That SKU is already used in your catalogue.', { sku: 'SKU must be unique.' });
     }
-    const shortDesc: string = input.shortDescription?.trim() || existing.short_description || `${input.name} — Authentic handpicked Himachali creation.`;
-    const desc: string = input.description?.trim() || existing.description || `${input.name}. Crafted with authentic Himalayan heritage and traditional methods from the mountains of Himachal Pradesh.`;
+    const shortDesc: string = input.shortDescription?.trim() || existing.short_description;
+    const desc: string = input.description?.trim() || existing.description;
     const materialChange =
       input.name !== existing.name ||
       input.pricePaise !== existing.price_paise ||
@@ -1716,6 +1758,12 @@ export function sellerRouter(db: Db): Router {
       id,
     );
     if (!row) throw notFound('Seller order not found.');
+    const sellerProfile = queryOne<{
+      business_name: string;
+      logo_url: string | null;
+      region: string | null;
+      village: string | null;
+    }>(db, 'SELECT business_name, logo_url, region, village FROM seller_profiles WHERE id = ?', id);
     const items = queryAll<{
       id: string;
       name: string;
@@ -1774,6 +1822,12 @@ export function sellerRouter(db: Db): Router {
         commissionRateBp: row.commission_rate_bp,
         earningPaise: row.seller_earning_paise,
         customerNote: row.customer_note,
+        seller: {
+          businessName: sellerProfile?.business_name ?? null,
+          logoUrl: sellerProfile?.logo_url ?? null,
+          region: sellerProfile?.region ?? null,
+          village: sellerProfile?.village ?? null,
+        },
         address,
         items: items.map((item) => ({
           id: item.id,
@@ -2059,6 +2113,95 @@ export function sellerRouter(db: Db): Router {
       pagination: { page, pageSize, total: totalEntries, totalPages: Math.ceil(totalEntries / pageSize) },
       commissionNote: COMMISSION_BASIS_NOTE,
     });
+  });
+
+  router.get('/profile', (req, res) => {
+    const id = sellerId(req);
+    const seller = queryOne<SellerRow>(db, 'SELECT * FROM seller_profiles WHERE id = ?', id);
+    if (!seller) throw notFound('Seller profile not found.');
+    res.json({
+      profile: {
+        id: seller.id,
+        businessName: seller.business_name,
+        slug: seller.slug,
+        tagline: seller.tagline,
+        story: seller.story,
+        logoUrl: seller.logo_url,
+        coverUrl: seller.cover_url,
+        region: seller.region,
+        village: seller.village,
+        sellerCategory: seller.seller_category,
+        operatingAddress: seller.operating_address
+          ? parseJson<Record<string, unknown>>(seller.operating_address, {})
+          : null,
+        storeStatus: seller.store_status,
+        status: seller.status,
+      },
+    });
+  });
+
+  router.post('/profile/image/:kind', imageUpload().single('image'), (req, res) => {
+    const id = sellerId(req);
+    const kind = String(req.params.kind);
+    if (kind !== 'logo' && kind !== 'cover') throw badRequest('Choose logo or cover.');
+    if (!req.file) throw badRequest('Choose an image.');
+    if (!hasValidFileSignature(req.file.path, 'image')) {
+      fs.unlinkSync(req.file.path);
+      throw badRequest('That file does not look like a valid JPEG, PNG, or WebP image.');
+    }
+    const column = kind === 'logo' ? 'logo_url' : 'cover_url';
+    const previous = queryOne<{ logo_url: string | null; cover_url: string | null }>(
+      db,
+      'SELECT logo_url, cover_url FROM seller_profiles WHERE id = ?',
+      id,
+    );
+    if (!previous) {
+      fs.unlinkSync(req.file.path);
+      throw notFound('Seller profile not found.');
+    }
+    const url = `/uploads/${path.basename(req.file.filename)}`;
+    execute(
+      db,
+      `UPDATE seller_profiles SET ${column} = ?, updated_at = ? WHERE id = ?`,
+      url,
+      new Date().toISOString(),
+      id,
+    );
+    const oldUrl = kind === 'logo' ? previous.logo_url : previous.cover_url;
+    if (oldUrl?.startsWith('/uploads/')) {
+      const oldPath = path.join(env.uploadDir, path.basename(oldUrl));
+      try {
+        fs.unlinkSync(oldPath);
+      } catch {
+        // The old file may already have been removed.
+      }
+    }
+    audit(db, req.user!, `seller.profile_${kind}_updated`, 'seller', id, oldUrl ? { url: oldUrl } : null, { url });
+    res.status(201).json({ ok: true, url });
+  });
+
+  router.delete('/profile/image/:kind', (req, res) => {
+    const id = sellerId(req);
+    const kind = String(req.params.kind);
+    if (kind !== 'logo' && kind !== 'cover') throw badRequest('Choose logo or cover.');
+    const column = kind === 'logo' ? 'logo_url' : 'cover_url';
+    const previous = queryOne<{ logo_url: string | null; cover_url: string | null }>(
+      db,
+      'SELECT logo_url, cover_url FROM seller_profiles WHERE id = ?',
+      id,
+    );
+    if (!previous) throw notFound('Seller profile not found.');
+    const oldUrl = kind === 'logo' ? previous.logo_url : previous.cover_url;
+    execute(db, `UPDATE seller_profiles SET ${column} = NULL, updated_at = ? WHERE id = ?`, new Date().toISOString(), id);
+    if (oldUrl?.startsWith('/uploads/')) {
+      try {
+        fs.unlinkSync(path.join(env.uploadDir, path.basename(oldUrl)));
+      } catch {
+        // The old file may already have been removed.
+      }
+    }
+    audit(db, req.user!, `seller.profile_${kind}_removed`, 'seller', id, { url: oldUrl }, null);
+    res.json({ ok: true });
   });
 
   router.patch('/profile', (req, res) => {

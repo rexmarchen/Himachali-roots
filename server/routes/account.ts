@@ -318,14 +318,14 @@ export function accountRouter(db: Db): Router {
     res.json({ order: getOrderView(db, order.id) });
   });
 
-  router.post('/orders/:orderNumber/cancel', (req, res) => {
+  router.post('/orders/:orderNumber/cancel', async (req, res) => {
     const input = parse(
       z.object({ sellerOrderId: z.string().min(3).max(80), reason: z.string().trim().min(10, 'Tell us briefly why.').max(1000) }),
       req.body,
     );
-    const order = queryOne<{ id: string; user_id: string }>(
+    const order = queryOne<{ id: string; user_id: string; email: string; order_number: string }>(
       db,
-      'SELECT id, user_id FROM orders WHERE order_number = ?',
+      'SELECT id, user_id, email, order_number FROM orders WHERE order_number = ?',
       req.params.orderNumber,
     );
     if (!order || order.user_id !== req.user!.id) throw notFound('Order not found.');
@@ -335,6 +335,21 @@ export function accountRouter(db: Db): Router {
       userId: req.user!.id,
       actor: req.user!,
       reason: input.reason,
+    });
+    await notify(db, {
+      userId: order.user_id,
+      email: order.email,
+      type: result.status === 'completed' ? 'order_cancelled' : 'cancellation_requested',
+      subject:
+        result.status === 'completed'
+          ? `Order ${order.order_number} cancelled`
+          : `Cancellation requested for order ${order.order_number}`,
+      body: `<p>${
+        result.status === 'completed'
+          ? 'Your cancellation request was processed successfully. Any refund due is being processed.'
+          : 'Your cancellation request has been received by our support team and is being reviewed.'
+      }</p><p><strong>Reason:</strong> ${escapeHtml(input.reason)}</p>`,
+      dedupeKey: `cust-cancel:${order.id}:${input.sellerOrderId}`,
     });
     res.json(result);
   });

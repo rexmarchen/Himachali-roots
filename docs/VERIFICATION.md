@@ -1,7 +1,7 @@
 # Verification report
 
-Last verified: **25 October 2026**  
-Environment: Windows, Node.js **24.21.0**, npm **11.19.0**, local SQLite development database (`data/pahadi-roots.db`, WAL).
+Last verified: **26 October 2026**
+Environment: Windows, Node.js **24.21.0**, npm **11.19.0**, disposable SQLite databases (`data/pahadi-roots.db` for the dev server; temporary databases for tests, smoke and E2E).
 
 This report records what was actually executed. It separates automated coverage from manual checks and from integrations that could not be exercised without external accounts. Nothing below claims a live payment, email, courier or payout success.
 
@@ -10,20 +10,21 @@ This report records what was actually executed. It separates automated coverage 
 | Command | Result |
 | --- | --- |
 | `npm run typecheck` | Passed — client, server and test TypeScript projects |
-| `npm run lint` | Passed — ESLint with no warnings or errors |
-| `npm test` | Passed — **87 of 87** tests across **13** files |
+| `npm run lint` | Passed — 0 errors; 4 pre-existing `@typescript-eslint/no-explicit-any` warnings in `src/lib/api.ts` |
+| `npm test` | Passed — **107 of 107** tests across **15** files |
 | `npm run build` | Passed — SPA in `dist/`, server in `dist-server/`, schema copied; Vite reports a >500 kB chunk warning |
-| `npm run smoke` | Passed — **33 of 33** live HTTP checks against a running development API |
+| `npm run smoke` | Passed — **28 of 28** non-admin live HTTP checks against the development API; admin checks were skipped without credentials (the full run with an administrator is 33 checks) |
+| `node scripts/e2e-seller-flow.mjs` | Passed — **53 of 53** live HTTP checks of the full seller lifecycle against the same disposable API |
 | `GET /api/health` | `200` — `{"status":"ok","database":"up","payments":"unconfigured","shipping":"manual-only","email":"unconfigured",…}` |
 
-The smoke run used an explicitly labelled development payment simulation (`ALLOW_DEV_PAYMENTS=true`, `NODE_ENV` not production) against a disposable database created with `DATABASE_PATH` and `UPLOAD_DIR` pointing at a temporary directory. No real money moved and no real customer data was used. Admin checks were enabled with a locally provisioned administrator (`SMOKE_ADMIN_EMAIL` / `SMOKE_ADMIN_PASSWORD`).
+The seller-lifecycle E2E run used an explicitly labelled development payment simulation (`ALLOW_DEV_PAYMENTS=true`, `NODE_ENV` not production) against a disposable database and disposable storage directories (`DATABASE_PATH`, `UPLOAD_DIR`, `PRIVATE_DOCS_DIR`). Admin checks were enabled with a locally provisioned throwaway administrator (`E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD`); the temporary database and uploaded test files were removed afterwards. The 28-check smoke run reported above ran against the development API and created ordinary test records there; it skipped the five admin checks because no smoke administrator credentials were supplied. No real money moved and no real customer data was used.
 
 ## Automated test inventory
 
 | File | Tests | Area |
 | --- | ---: | --- |
 | `server/test/auth.test.ts` | 13 | Health, CSRF/origin checks, registration, login/logout, disabled accounts, RBAC |
-| `server/test/checkout.test.ts` | 10 | Authentication gate, server repricing, stock reservation and races, idempotency, multi-seller split, coupons, GST snapshot, ownership, ledger creation |
+| `server/test/checkout.test.ts` | 16 | Authentication gate, server repricing, stock reservation and races, idempotency, multi-seller split, coupons, GST snapshot, ownership, ledger creation, public payment capability, empty bag, address validation, invalid coupon, post-discount shipping, resume payment without a duplicate order |
 | `server/test/seller-onboarding.test.ts` | 10 | Draft save/resume, incomplete submission reasons, category-aware FSSAI rules, duplicate submission, change requests and resubmission revision, approval/store activation/audit, self-approval refusal, invalid transitions, private documents, RBAC/isolation, product moderation and suspension |
 | `server/test/storefront.test.ts` | 6 | Home payload and approved-only counts, catalogue filters, product/maker pages, 404, sitemap/robots |
 | `server/test/fulfilment.test.ts` | 4 | Confirm → pack → ship → deliver, seller isolation, admin fulfilment, ledger eligibility and settlement |
@@ -32,10 +33,12 @@ The smoke run used an explicitly labelled development payment simulation (`ALLOW
 | `server/test/pricing.test.ts` | 4 | Commission basis, shipping thresholds, GST-inclusive arithmetic, integer-paise totals |
 | `server/test/uploads.test.ts` | 3 | Seller-only image upload, magic-byte rejection, private seller documents |
 | `server/test/webhook.test.ts` | 3 | Razorpay HMAC rejection, idempotent payment, amount-mismatch manual reconciliation |
-| `server/test/migrations.test.ts` | 2 | Opening a pre-onboarding (v1–v2) database, preserving rows, backfilling store status, re-opening without duplicate migrations |
+| `server/test/migrations.test.ts` | 2 | Opening a pre-onboarding (v1–v2) database, preserving rows, backfilling store status, re-opening without duplicate migrations, and applying schema version 5 (`campaigns`, `campaign_products`, `active_campaign_prices`, `order_items.original_unit_price_paise`) |
+| `server/test/campaigns.test.ts` | 11 | Campaign pricing on eligible products only, homepage banner guard, discount-cap and price validation, draft privacy and admin RBAC, scheduled preview without selling, expiry consistency, cart/checkout repricing and client-price rejection, activation overlap guard, poster/window validation and audit trail, product removal lifecycle |
 | `server/test/admin-products.test.ts` | 18 | Admin product creation and validation, publish/unpublish/archive lifecycle, stock set/adjust/reserved guard, low-stock threshold and published-only filter, PATCH validation, customer denied |
 | `server/test/demo-checkout-and-orders.test.ts` | 6 | Admin-created demo product to checkout, oversell race, server repricing, demo/real GMV isolation, customer order privacy, customer denied status updates |
-| **Total** | **87** | |
+| `server/test/himachali-seller-order-profit.test.ts` | 3 | Seller order revenue, commission and cost-derived profit figures, and seller isolation of financial detail |
+| **Total** | **107** | |
 
 Tests open a fresh in-memory SQLite database, seed deterministic fixtures and call the real Express routes through Supertest. They do not mock the database or the route layer. The migration test uses a temporary on-disk database shaped like the legacy schema.
 
@@ -71,6 +74,45 @@ The operations console was rebuilt and audited screen by screen. Every displayed
 
 Not implemented in the console: multi-factor authentication, server-side saved table preferences, bulk actions across records, role management beyond the existing `admin` role, and export/download of audit or settlement data.
 
+## Seasonal campaign coverage
+
+The campaign suite exercises the real public and admin HTTP surfaces against a fresh SQLite database:
+
+- A validated promotional price appears on exactly the configured eligible product, in listing, detail, campaign and homepage payloads; a second eligible product outside the campaign keeps its base price.
+- The homepage campaign is returned only when the campaign is live, has a poster and has at least one eligible product.
+- Prices at or above the base price, and discounts above the campaign cap, are rejected by the admin API.
+- Draft and archived campaigns return `404` publicly and are absent from the homepage; all campaign administration endpoints reject non-administrators.
+- A scheduled campaign exposes its eligible products and real status but no purchasable promo price or discount.
+- An expired campaign withdraws the promo price from the campaign page and the catalogue consistently.
+- Adding an eligible product to the cart uses the promotional unit price, reports the original unit price separately, and checkout recomputes that price on the server. Client-supplied money fields are ignored.
+- Activating a campaign that would share an already-live product is refused before any write; a failed status change leaves the stored campaign unchanged.
+- Poster URLs and campaign windows are validated, activation is audit-logged, and product removal is refused while the campaign is live.
+- `server/seed.ts --reset` was run against a temporary database and produced one live `Pahadi Festive Glow` campaign with five real demonstration products at 15–30% off, a poster, no invented dates and five rows in `active_campaign_prices`.
+
+## Checkout redesign coverage
+
+The `/checkout` page was rebuilt as a three-stage flow — Delivery, Payment, Review and place order — inside the existing authenticated route. No parallel cart, order or payment service was introduced.
+
+- **Layout and navigation.** Desktop uses a two-column layout with a sticky real-cart summary; mobile stacks the stages and carries a persistent order action showing the server-priced total. The checkout header is reduced to the wordmark, account menu and bag count; the announcement ribbon, search and category navigation are removed on this route. A compact footer links only to shipping, returns, privacy and help.
+- **State and progress.** The progress indicator marks completed, current and upcoming stages, exposes `aria-current="step"` and lets the customer return to an earlier completed stage. Stage transitions preserve the entered address, delivery note, coupon and payment choice.
+- **Delivery.** Saved addresses can be selected and edited in an accessible modal. A new address uses labelled fields for full name, +91 mobile, address lines, city, state, six-digit PIN, optional label and optional delivery instructions. Required markers, placeholders, input modes, autocomplete hints, inline errors and `aria-invalid` are present. Saving a new address to the account is opt-in; a failed save falls back to using the address for this order only. Server validation errors are mapped back to the corresponding fields.
+- **Summary.** Items come from `/api/cart` with thumbnails, maker name, unit price, quantity and line total. Subtotal, coupon discount, post-discount shipping, GST-inclusive note, final payable and savings are derived from the server-returned cart and shipping configuration. The coupon is validated against the authenticated account and live bag, and is revalidated before Review. Editing the bag returns the customer to `/cart`.
+- **Payment availability.** The Razorpay card appears only when `/api/config` reports `payments.configured`. Per-method enablement (specific cards, UPI, net banking or wallets) is deliberately not enumerated because the backend cannot verify merchant-level enablement. Razorpay test keys are labelled test mode. The development simulation appears only when Razorpay is unconfigured, the deployment is non-production and simulation is enabled; it is visually separated and labelled as a demo. If neither path exists, Review cannot proceed and the page explains the missing `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` configuration instead of creating an unpayable order. Cash on delivery is not offered.
+- **Payment lifecycle.** Placing an order posts the address, optional coupon, note and idempotency key to the existing `/api/checkout`. Razorpay is opened through the existing loader; successful callbacks are sent to `/api/payments/verify`, and the confirmation screen appears only when the server response marks the payment `paid`. A browser callback, verification failure or network failure never produces a confirmation. Dismissal, verification failure, unavailable provider and manual status re-check states are shown separately. Raw card and CVV data are never collected or stored by this application.
+- **Resume.** `/checkout?resume=ORDER_NUMBER` loads the order, shows the confirmation if it is already paid, reinitialises payment through `/api/orders/:orderNumber/payment` when it is pending, and explains expired, cancelled or otherwise unpayable orders. Payment initialisation is idempotent on the server.
+- **Failure handling.** Empty bags, unavailable stock, expired reservations, invalid or exhausted coupons, failed address saves, session expiry (redirect to sign-in), cart fetch errors and payment/network failures have explicit states. Stock and cart conflicts invalidate the cart query so the summary refreshes.
+
+Automated coverage added to `server/test/checkout.test.ts`:
+
+- `/api/config` reports the same development-payment capability used by checkout.
+- An empty bag cannot create an order.
+- An invalid PIN is rejected with a field error and reserves no stock.
+- An unknown coupon is rejected with a field error and reserves no stock.
+- Shipping is recalculated after the coupon: a ₹1,500 bag discounted to ₹1,350 is charged the flat ₹79 rather than free shipping.
+- A pending order can reinitialise payment without creating a second order; a paid order refuses reinitialisation.
+
+Not executed: no browser automation or viewport-level visual test exists in this repository, and no live Razorpay, SMTP, courier or payout credentials are present. The payment UI was verified by typecheck, lint, production build and review of the server contracts; it has not been exercised against a real provider.
+
 ## Legacy database migration check
 
 A copy of the existing development database (with its WAL files) was migrated separately; the live file was not modified.
@@ -90,7 +132,7 @@ This check caught a startup defect: `schema.sql` creates indexes on columns adde
 
 ## Live HTTP smoke coverage
 
-`npm run smoke` against a disposable development API passed all 33 checks:
+`npm run smoke` against the development API passed all 28 checks available without administrator credentials. With `SMOKE_ADMIN_EMAIL` and `SMOKE_ADMIN_PASSWORD` supplied, the same script runs five additional admin checks (33 total). The run covers:
 
 - Health and database status.
 - Storefront home, categories and approved catalogue totals.
@@ -107,19 +149,39 @@ This check caught a startup defect: `schema.sql` creates indexes on columns adde
 
 The smoke test writes real rows and reduces stock. Run it against disposable data; use `npm run reset` and recreate the administrator if a clean demonstration database is required.
 
+## Live seller lifecycle E2E
+
+`node scripts/e2e-seller-flow.mjs` against the same disposable API passed all 53 checks, exercising the complete maker journey through public HTTP only:
+
+- Seller registration, session creation and email verification.
+- Seller application draft save, step persistence and resume.
+- Private document upload, followed by a check that the document is not publicly readable.
+- Application submission, status transition to `submitted`, and an idempotent repeat submission that returns `deduplicated: true`.
+- Admin login, seller review queue membership, application detail, and a refusal when the private document is requested without admin authentication.
+- Admin approval; the seller profile becomes active and the maker storefront becomes publicly visible.
+- Product draft creation, product image upload, stock update and submission for moderation; the draft and pending product stay out of the public catalogue.
+- Admin product review and approval; a second moderation decision on the same record is refused.
+- Public product detail, search and maker storefront expose the approved product and real seller logo fields, with no private seller fields.
+- Buyer registration, cart add and cart retrieval for the approved product.
+- Seller notifications recorded for both the seller approval and the product approval.
+
+The script lives in `scripts/e2e-seller-flow.mjs` and requires `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` plus `ALLOW_DEV_AUTH_HELPERS=true`; it refuses to run without an administrator and is documented as creating real records, so it must be pointed at a disposable database.
+
 ## Build output
 
 | Asset | Size |
 | --- | ---: |
-| `index-*.js` (router/bootstrap) | 504.94 kB |
-| `AdminPages-*.js` | 427.05 kB |
-| `PublicPages-*.js` | 182.00 kB |
-| `SellerPages-*.js` | 172.46 kB |
-| `AccountPages-*.js` | 87.59 kB |
+| `index-*.js` (router/bootstrap) | 533.29 kB |
+| `AdminPages-*.js` | 465.27 kB |
+| `SellerPages-*.js` | 280.91 kB |
+| `PublicPages-*.js` | 198.43 kB |
+| `AccountPages-*.js` | 87.84 kB |
+| `ProductPage-*.js` | 71.32 kB |
 | `vendor-react-*.js` | 70.00 kB |
-| `HomePage-*.js` | 57.68 kB |
+| `HomePage-*.js` | 65.46 kB |
 | `vendor-query-*.js` | 42.69 kB |
-| `index-*.css` | 92.51 kB |
+| `OfferPage-*.js` | 20.33 kB |
+| `index-*.css` | 120.82 kB |
 
 The SPA uses route-level lazy loading; storefront, account, seller and admin areas load as separate chunks. Vite warns that the bootstrap chunk exceeds 500 kB; this is a size warning, not a build failure.
 
@@ -135,6 +197,11 @@ The SPA uses route-level lazy loading; storefront, account, seller and admin are
 8. **Destructive actions used browser dialogs.** Document rejection, archive, image deletion and review removal now use in-app dialogs with required reasons where applicable; `window.confirm`, `prompt` and `alert` are gone from the admin console.
 9. **The low-stock product filter could fail on its count query.** The list query joined `inventory`, but the pagination count query did not, so `?lowStock=true` could fail with a missing alias. The count query now joins inventory, the low-stock filter is limited to published listings when no status is supplied, and `/admin/products` returns `reserved` and `low_stock_threshold`. Covered by the new low-stock test in `server/test/admin-products.test.ts`.
 10. **The catalogue composition omitted rejected and paused listings** while claiming to show every stored listing. `/admin/overview` now reports both counts, and the chart labels the full moderation state set.
+11. **The browser API client silently fell back to local demo data.** `src/lib/api.ts` served bundled/local JSON when an HTTP request failed and carried demo credentials, which could present fabricated catalogue entries or false success states. It now surfaces real HTTP and network errors only, and route guards use the live session, role and seller-approval state.
+12. **The seed created an administrator with a default password.** A development-only seed account used a cleartext, documented password. The seed now provisions an administrator only when `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` are supplied; existing accounts can be reset with `npm run admin:create -- <email> "<name>" --reset-password`.
+13. **Public pages carried unverifiable trust claims and fabricated seller metrics.** Copy such as “100% verified origin”, cash-on-delivery, fixed dispatch days and invented earnings was removed or replaced with values read from the API. Product, maker and policy pages now render only stored product, seller, review and policy data, and label estimates as estimates.
+14. **Private seller documents ignored storage configuration.** `privateDocsDir` was hardcoded relative to the working directory, so automated tests wrote identity documents into the application's real private storage and deployments could not relocate the private volume independently. It now reads `PRIVATE_DOCS_DIR`, and Vitest points both public and private upload paths at a temporary directory.
+15. **Stale static catalogue JSON was still shipped publicly.** The seed wrote `static-products.json`, `static-product-details.json`, `static-categories.json` and several other `static-*.json` snapshots into `public/`, even though nothing read them after the fallback client was removed. They contained demo records and stale prices and were copied into every build. The export was removed from the seed and the files were deleted; the production bundle no longer contains them.
 
 ## What this verification proves
 
@@ -146,6 +213,8 @@ The SPA uses route-level lazy loading; storefront, account, seller and admin are
 - Money arithmetic, commission snapshots, ledger timing and refund reversals behave as specified in deterministic tests.
 - The admin console reads real authenticated data, bases queue counts and catalogue metrics on server responses, and enforces server-side authorization for every decision it offers.
 - The server reports unconfigured providers honestly instead of simulating them.
+- The complete seller lifecycle — registration, private evidence, application approval, product moderation, public visibility, cart access and notifications — works end to end over public HTTP, as exercised by the 53-check E2E run.
+- The public storefront and seller workspace display stored records and derived financial figures rather than demo fallbacks, and revenue is never labelled as profit without cost inputs.
 
 ## What remains unverified
 
@@ -174,6 +243,26 @@ $env:SMOKE_ADMIN_EMAIL = "admin@pahadiroots.test"
 $env:SMOKE_ADMIN_PASSWORD = "<your local admin password>"
 npm run smoke
 ```
+
+For an isolated run that does not touch development data:
+
+```powershell
+$env:DATABASE_PATH = "data/verify-temp.db"
+$env:UPLOAD_DIR = "storage/verify-temp"
+$env:PRIVATE_DOCS_DIR = "storage/verify-temp/private"
+$env:SEED_ADMIN_EMAIL = "verify-admin@pahadiroots.test"
+$env:SEED_ADMIN_PASSWORD = "<a local throwaway password>"
+npx tsx server/seed.ts --reset
+# start the API with the same paths plus PORT=8790, ALLOW_DEV_PAYMENTS=true,
+# SIMULATED_CHECKOUT_ENABLED=true and ALLOW_DEV_AUTH_HELPERS=true, then:
+$env:SMOKE_BASE_URL = "http://localhost:8790"
+$env:E2E_ADMIN_EMAIL = $env:SEED_ADMIN_EMAIL
+$env:E2E_ADMIN_PASSWORD = $env:SEED_ADMIN_PASSWORD
+npm run smoke
+node scripts/e2e-seller-flow.mjs
+```
+
+Delete the temporary database, its `-wal`/`-shm` files and the temporary storage directory afterwards.
 
 To return to clean demonstration data afterwards:
 

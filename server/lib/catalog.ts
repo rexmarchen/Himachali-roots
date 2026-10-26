@@ -1,6 +1,7 @@
 import { queryAll, queryOne, type Db } from '../db.js';
 import type { Category, Paged, ProductDetail, ProductSummary, Review } from '../../shared/types.js';
 import { notFound } from './http.js';
+import { attachCampaignMeta } from './campaigns.js';
 
 const PUBLIC_CONDITION = "p.status = 'approved' AND s.status = 'approved'";
 
@@ -10,6 +11,7 @@ interface SummaryRow {
   name: string;
   short_description: string;
   price_paise: number;
+  promo_price_paise: number | null;
   compare_at_price_paise: number | null;
   image_url: string | null;
   image_alt: string | null;
@@ -26,13 +28,21 @@ interface SummaryRow {
 }
 
 function mapSummary(row: SummaryRow): ProductSummary {
+  const campaignPrice =
+    row.promo_price_paise !== null && row.promo_price_paise < row.price_paise ? row.promo_price_paise : null;
+  const pricePaise = campaignPrice ?? row.price_paise;
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
     shortDescription: row.short_description,
-    pricePaise: row.price_paise,
+    pricePaise,
     compareAtPricePaise: row.compare_at_price_paise,
+    originalPricePaise: campaignPrice === null ? null : row.price_paise,
+    discountPercent:
+      campaignPrice === null ? null : Math.round(((row.price_paise - campaignPrice) / row.price_paise) * 100),
+    campaignSlug: null,
+    campaignName: null,
     imageUrl: row.image_url,
     imageAlt: row.image_alt,
     sellerName: row.seller_name,
@@ -50,7 +60,7 @@ function mapSummary(row: SummaryRow): ProductSummary {
 
 const SUMMARY_SELECT = `
   SELECT p.id, p.slug, p.name, p.short_description, p.price_paise, p.compare_at_price_paise,
-         p.region, p.is_featured, p.is_demo,
+         p.region, p.is_featured, p.is_demo, acp.promo_price_paise,
          i.quantity - i.reserved_quantity AS stock,
          s.business_name AS seller_name, s.slug AS seller_slug,
          c.name AS category_name, c.slug AS category_slug,
@@ -62,6 +72,7 @@ const SUMMARY_SELECT = `
     JOIN seller_profiles s ON s.id = p.seller_id
     JOIN categories c ON c.id = p.category_id
     JOIN inventory i ON i.product_id = p.id
+    LEFT JOIN active_campaign_prices acp ON acp.product_id = p.id
 `;
 
 export interface ProductQuery {
@@ -73,6 +84,7 @@ export interface ProductQuery {
   maxPricePaise?: number;
   inStock?: boolean;
   featured?: boolean;
+  campaignId?: string;
   sort?: 'relevance' | 'newest' | 'price_asc' | 'price_desc' | 'popular';
   page?: number;
   pageSize?: number;
@@ -122,11 +134,11 @@ export function listProducts(db: Db, query: ProductQuery): Paged<ProductSummary>
     params.push(query.region);
   }
   if (query.minPricePaise !== undefined) {
-    conditions.push('p.price_paise >= ?');
+    conditions.push('COALESCE(acp.promo_price_paise, p.price_paise) >= ?');
     params.push(query.minPricePaise);
   }
   if (query.maxPricePaise !== undefined) {
-    conditions.push('p.price_paise <= ?');
+    conditions.push('COALESCE(acp.promo_price_paise, p.price_paise) <= ?');
     params.push(query.maxPricePaise);
   }
   if (query.inStock) {
@@ -134,6 +146,13 @@ export function listProducts(db: Db, query: ProductQuery): Paged<ProductSummary>
   }
   if (query.featured) {
     conditions.push('p.is_featured = 1');
+  }
+  if (query.campaignId) {
+    conditions.push(
+      `acp.product_id IS NOT NULL
+       AND EXISTS (SELECT 1 FROM campaign_products cp WHERE cp.campaign_id = ? AND cp.product_id = p.id)`,
+    );
+    params.push(query.campaignId);
   }
   if (query.excludeId) {
     conditions.push('p.id != ?');
@@ -147,6 +166,7 @@ export function listProducts(db: Db, query: ProductQuery): Paged<ProductSummary>
        JOIN seller_profiles s ON s.id = p.seller_id
        JOIN categories c ON c.id = p.category_id
        JOIN inventory i ON i.product_id = p.id
+       LEFT JOIN active_campaign_prices acp ON acp.product_id = p.id
       WHERE ${where}`,
     ...params,
   );
@@ -154,8 +174,8 @@ export function listProducts(db: Db, query: ProductQuery): Paged<ProductSummary>
 
   let orderBy = 'p.is_featured DESC, p.created_at DESC';
   if (query.sort === 'newest') orderBy = 'p.created_at DESC';
-  else if (query.sort === 'price_asc') orderBy = 'p.price_paise ASC';
-  else if (query.sort === 'price_desc') orderBy = 'p.price_paise DESC';
+  else if (query.sort === 'price_asc') orderBy = 'COALESCE(acp.promo_price_paise, p.price_paise) ASC';
+  else if (query.sort === 'price_desc') orderBy = 'COALESCE(acp.promo_price_paise, p.price_paise) DESC';
   else if (query.sort === 'popular') {
     orderBy = `(SELECT COALESCE(SUM(oi.quantity),0) FROM order_items oi
                  JOIN orders o ON o.id = oi.order_id
@@ -174,7 +194,7 @@ export function listProducts(db: Db, query: ProductQuery): Paged<ProductSummary>
   );
 
   return {
-    items: rows.map(mapSummary),
+    items: attachCampaignMeta(db, rows.map(mapSummary)),
     page,
     pageSize,
     total,
@@ -201,14 +221,17 @@ export function getProduct(db: Db, slug: string): ProductDetail {
       seller_tagline: string | null;
       seller_story: string | null;
       seller_region: string | null;
+      seller_logo_url: string | null;
+      seller_cover_url: string | null;
       category_id: string;
       created_at: string;
     }
   >(
     db,
-    `SELECT p.*, i.quantity - i.reserved_quantity AS stock,
+    `SELECT p.*, i.quantity - i.reserved_quantity AS stock, acp.promo_price_paise,
             s.business_name AS seller_name, s.slug AS seller_slug, s.id AS seller_id,
             s.tagline AS seller_tagline, s.story AS seller_story, s.region AS seller_region,
+            s.logo_url AS seller_logo_url, s.cover_url AS seller_cover_url,
             c.name AS category_name, c.slug AS category_slug,
             (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url,
             (SELECT alt FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_alt,
@@ -218,10 +241,13 @@ export function getProduct(db: Db, slug: string): ProductDetail {
        JOIN seller_profiles s ON s.id = p.seller_id
        JOIN categories c ON c.id = p.category_id
        JOIN inventory i ON i.product_id = p.id
+       LEFT JOIN active_campaign_prices acp ON acp.product_id = p.id
       WHERE p.slug = ? AND p.status = 'approved' AND s.status = 'approved'`,
     slug,
   );
   if (!row) throw notFound('That product is not available.');
+
+  const summary = attachCampaignMeta(db, [mapSummary(row)])[0];
 
   const images = queryAll<{ id: string; url: string; alt: string; credit: string | null }>(
     db,
@@ -275,7 +301,7 @@ export function getProduct(db: Db, slug: string): ProductDetail {
   }));
 
   return {
-    ...mapSummary(row),
+    ...summary,
     description: row.description,
     sku: row.sku,
     unit: row.unit,
@@ -299,6 +325,8 @@ export function getProduct(db: Db, slug: string): ProductDetail {
       tagline: row.seller_tagline,
       story: row.seller_story,
       region: row.seller_region,
+      logoUrl: row.seller_logo_url,
+      coverUrl: row.seller_cover_url,
     },
     category: { id: row.category_id, name: row.category_name, slug: row.category_slug },
     reviews: mappedReviews,
@@ -352,6 +380,8 @@ export function listPublicSellers(db: Db): {
   region: string | null;
   productCount: number;
   imageUrl: string | null;
+  logoUrl: string | null;
+  coverUrl: string | null;
 }[] {
   return queryAll<{
     id: string;
@@ -360,11 +390,13 @@ export function listPublicSellers(db: Db): {
     tagline: string | null;
     story: string | null;
     region: string | null;
+    logo_url: string | null;
+    cover_url: string | null;
     product_count: number;
     image_url: string | null;
   }>(
     db,
-    `SELECT s.id, s.business_name AS name, s.slug, s.tagline, s.story, s.region,
+    `SELECT s.id, s.business_name AS name, s.slug, s.tagline, s.story, s.region, s.logo_url, s.cover_url,
             (SELECT COUNT(*) FROM products p WHERE p.seller_id = s.id AND p.status = 'approved') AS product_count,
             (SELECT pi.url FROM products p JOIN product_images pi ON pi.product_id = p.id
               WHERE p.seller_id = s.id AND p.status = 'approved' ORDER BY p.is_featured DESC, pi.sort_order LIMIT 1) AS image_url
@@ -380,6 +412,8 @@ export function listPublicSellers(db: Db): {
     region: row.region,
     productCount: row.product_count,
     imageUrl: row.image_url,
+    logoUrl: row.logo_url,
+    coverUrl: row.cover_url,
   }));
 }
 
@@ -391,6 +425,9 @@ export function getSellerStorefront(db: Db, slug: string): {
   story: string | null;
   region: string | null;
   village: string | null;
+  logoUrl: string | null;
+  coverUrl: string | null;
+  sellerCategory: string | null;
   approvedAt: string | null;
   productCount: number;
 } {
@@ -402,10 +439,14 @@ export function getSellerStorefront(db: Db, slug: string): {
     story: string | null;
     region: string | null;
     village: string | null;
+    logo_url: string | null;
+    cover_url: string | null;
+    seller_category: string | null;
     approved_at: string | null;
   }>(
     db,
-    `SELECT id, business_name AS name, slug, tagline, story, region, village, approved_at
+    `SELECT id, business_name AS name, slug, tagline, story, region, village, logo_url, cover_url,
+            seller_category, approved_at
        FROM seller_profiles WHERE slug = ? AND status = 'approved'`,
     slug,
   );
@@ -415,7 +456,14 @@ export function getSellerStorefront(db: Db, slug: string): {
     "SELECT COUNT(*) AS count FROM products WHERE seller_id = ? AND status = 'approved'",
     seller.id,
   );
-  return { ...seller, approvedAt: seller.approved_at, productCount: count?.count ?? 0 };
+  return {
+    ...seller,
+    logoUrl: seller.logo_url,
+    coverUrl: seller.cover_url,
+    sellerCategory: seller.seller_category,
+    approvedAt: seller.approved_at,
+    productCount: count?.count ?? 0,
+  };
 }
 
 export function getRegions(db: Db): { region: string; productCount: number }[] {

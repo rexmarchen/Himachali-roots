@@ -353,7 +353,7 @@ export function EcommerceSearchBar({
           <div className="flex items-center justify-between px-4 py-2.5 bg-[#FAF8F5] text-[11px] text-muted">
             <span className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-forest" />
-              100% verified authentic mountain produce & handlooms
+              Seller-reviewed mountain goods — every product is moderated before listing
             </span>
             <button
               type="button"

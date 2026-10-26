@@ -88,8 +88,14 @@ export function CartPage() {
                       </h2>
                       <p className="mt-1 text-xs text-muted">
                         {formatINR(line.unitPricePaise)} each
+                        {line.originalUnitPricePaise ? (
+                          <span className="ml-1.5 line-through">{formatINR(line.originalUnitPricePaise)}</span>
+                        ) : null}
                         {line.stock <= 3 ? ` · only ${line.stock} left` : ''}
                       </p>
+                      {line.originalUnitPricePaise ? (
+                        <p className="mt-1 text-[11px] text-terra">Festive promotional price applied.</p>
+                      ) : null}
                       {line.status !== 'approved' ? (
                         <p className="mt-2 text-[11px] text-terra">This listing is no longer published.</p>
                       ) : line.quantity > line.stock ? (

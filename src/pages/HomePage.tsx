@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import type { Category, ProductSummary } from '@shared/types';
+import type { Category, CampaignSummary, ProductSummary } from '@shared/types';
 import type { SiteContent } from '@shared/content';
 import { api } from '@/lib/api';
 import { ProductCard } from '@/components/ProductCard';
+import { CampaignBanner } from '@/components/CampaignBanner';
 import {
   Badge,
   DemoBadge,
@@ -30,6 +31,7 @@ interface HomeResponse {
   content: SiteContent;
   categories: Category[];
   makers: MakerSummary[];
+  campaign: CampaignSummary | null;
   bestsellers: {
     slug: string;
     name: string;
@@ -222,7 +224,7 @@ function CinematicHero() {
           </h1>
 
           <p className="mt-5 max-w-xl text-base sm:text-lg leading-relaxed text-white/90 drop-shadow-xs font-light">
-            Pure mountain honey, handloom Kullu wool, high-altitude orthodox Kangra tea, and cedar woodcraft — directly from reviewed artisans and orchardists across the mountain valleys.
+            Mountain honey, handloom wool, Kangra tea, and woodcraft — listed by reviewed sellers and dispatched from their own workshops and orchards.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3.5 sm:gap-4">
@@ -250,21 +252,21 @@ function CinematicHero() {
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="w-3.5 h-3.5 text-terra shrink-0 stroke-[2.2]" aria-hidden>
                 <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span>100% Named Artisans</span>
+              <span>Every listing names its seller</span>
             </li>
             <li aria-hidden className="hidden h-3 w-px bg-white/25 sm:block" />
             <li className="flex items-center gap-2">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="w-3.5 h-3.5 text-terra shrink-0 stroke-[2.2]" aria-hidden>
                 <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span>Verified Mountain Origin</span>
+              <span>Origin badges only after review</span>
             </li>
             <li aria-hidden className="hidden h-3 w-px bg-white/25 sm:block" />
             <li className="flex items-center gap-2">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="w-3.5 h-3.5 text-terra shrink-0 stroke-[2.2]" aria-hidden>
                 <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span>Direct Dispatches from HP</span>
+              <span>Dispatched by the maker</span>
             </li>
           </ul>
         </div>
@@ -759,6 +761,134 @@ function ClosingMomentSection() {
   );
 }
 
+function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    const offset = direction === 'left' ? -320 : 320;
+    scrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+  };
+
+  return (
+    <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10 border-b border-line/40">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">
+        <div>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted">
+              Featured Products
+            </span>
+            <span className="h-px w-8 bg-line" aria-hidden />
+          </div>
+          <h2 className="mt-2 font-serif text-2xl sm:text-3xl lg:text-[2rem] font-medium text-forest">
+            Handpicked from the Himalayas
+          </h2>
+          <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
+            Discover authentic Himachali products crafted by local artisans, from cozy handlooms to pure mountain honey.
+          </p>
+        </div>
+
+        {/* 4 Value Badges & Carousel Controls matching reference screenshot */}
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0">
+          <div className="hidden sm:flex items-center gap-3 xl:gap-4">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+                  <path d="m8 3 4 8 5-5 5 15H2L8 3z" strokeWidth="1.6" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div className="text-[11px] font-medium leading-tight text-ink/80">
+                <span className="block font-semibold text-forest">Authentic</span>
+                <span>Himachal</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+                  <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12A10 10 0 0 1 12 2Z" strokeWidth="1.6" />
+                  <path d="M12 6c-3.314 0-6 2.686-6 6 0 2.21 1.79 4 4 4 1.5 0 2.5-1 3-2" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div className="text-[11px] font-medium leading-tight text-ink/80">
+                <span className="block font-semibold text-forest">Supports</span>
+                <span>Local Artisans</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeWidth="1.6" />
+                </svg>
+              </div>
+              <div className="text-[11px] font-medium leading-tight text-ink/80">
+                <span className="block font-semibold text-forest">Pure &</span>
+                <span>Natural</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" strokeWidth="1.6" />
+                </svg>
+              </div>
+              <div className="text-[11px] font-medium leading-tight text-ink/80">
+                <span className="block font-semibold text-forest">Sustainable</span>
+                <span>Choices</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Carousel Arrows */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => scroll('left')}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 hover:bg-paper hover:text-forest transition-colors shadow-2xs"
+              aria-label="Scroll featured products left"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+                <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => scroll('right')}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 hover:bg-paper hover:text-forest transition-colors shadow-2xs"
+              aria-label="Scroll featured products right"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+                <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {products.length ? (
+        <div
+          ref={scrollRef}
+          className="flex gap-4 sm:gap-6 overflow-x-auto no-scrollbar scroll-smooth pb-4 pt-1"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {products.map((product, index) => (
+            <div key={product.id} className="w-[230px] sm:w-[260px] shrink-0">
+              <ProductCard product={product} priority={index < 4} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title="No featured listings yet"
+          body="Products will appear here once approved by administrators."
+        />
+      )}
+    </section>
+  );
+}
+
 export function HomePage() {
   const home = useQuery({
     queryKey: ['home'],
@@ -794,40 +924,24 @@ export function HomePage() {
 
   return (
     <div className="w-full">
-      {/* Cinematic Hero with 6 Himalayan Landscape Slides */}
+      {/* 1. Cinematic Hero section */}
       <CinematicHero />
+
+      {/* 2. Seasonal Campaign Offer Banner */}
+      {data.campaign?.posterUrl ? (
+        <div className="py-4 sm:py-6 bg-sand/30 border-b border-line/40">
+          <CampaignBanner campaign={data.campaign} />
+        </div>
+      ) : null}
+
+      {/* 3. Featured Products: Handpicked from the Himalayas */}
+      <FeaturedProductsSection products={data.featured} />
 
       {/* Section A: Discover the Mountains */}
       <MountainStorySection />
 
       {/* Section B: Shop by Collection */}
       <CategoryCollectionSection categories={data.categories} />
-
-      {/* Section D: Featured Products (The Current Edit) */}
-      <section className="mx-auto max-w-[86rem] px-5 py-20 sm:px-8 lg:px-12 lg:py-24">
-        <SectionHeading
-          eyebrow="The Current Edit"
-          title="Things worth keeping"
-          lede="A seasonal selection from reviewed workshops. Prices include GST; shipping calculated before final checkout."
-          action={
-            <LinkButton to="/shop" variant="secondary" size="md">
-              Shop All ({data.counts.products})
-            </LinkButton>
-          }
-        />
-        {data.featured.length ? (
-          <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-7 sm:gap-y-12 lg:grid-cols-4">
-            {data.featured.map((product, index) => (
-              <ProductCard key={product.id} product={product} priority={index < 4} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            title="No featured listings yet"
-            body="Products will appear here once approved by administrators."
-          />
-        )}
-      </section>
 
       {/* Section E: The Feeling of Himachal (Atmospheric Interlude) */}
       <MountainInterludeSection />

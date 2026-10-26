@@ -204,4 +204,84 @@ describe('checkout', () => {
       queryOne<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM commission_entries WHERE seller_id = ?', IDS.seller)?.count,
     ).toBe(1);
   });
+
+  it('reports the development payment capability through the public config', async () => {
+    const response = await request(app).get('/api/config');
+    expect(response.status).toBe(200);
+    expect(response.body.payments.provider).toBe('razorpay');
+    expect(response.body.payments.mode).toBe('unconfigured');
+    expect(response.body.payments.devPaymentsEnabled).toBe(true);
+  });
+
+  it('refuses to create an order from an empty bag', async () => {
+    const customer = await login(app, 'customer@test.local');
+    const response = await checkout(app, customer);
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toContain('empty');
+  });
+
+  it('rejects an invalid delivery address before reserving stock', async () => {
+    const customer = await login(app, 'customer@test.local');
+    await addToCart(app, customer, IDS.product, 1);
+    const response = await checkout(app, customer, {
+      address: { ...ADDRESS, pincode: '12345' },
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.fields['address.pincode']).toBeTruthy();
+    expect(inventory(IDS.product)?.reserved_quantity).toBe(0);
+  });
+
+  it('rejects an unknown coupon without reserving stock', async () => {
+    const customer = await login(app, 'customer@test.local');
+    await addToCart(app, customer, IDS.product, 1);
+    const response = await checkout(app, customer, { couponCode: 'NOT-A-COUPON' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.fields.coupon).toBeTruthy();
+    expect(inventory(IDS.product)?.reserved_quantity).toBe(0);
+  });
+
+  it('calculates shipping after the coupon discount, not before it', async () => {
+    execute(
+      db,
+      `INSERT INTO coupons (id, code, description, type, value, min_order_paise, per_user_limit)
+       VALUES ('cpn_shipping', 'SHIP10', 'Ten percent off', 'percent', 10, 0, 1)`,
+    );
+    execute(db, 'UPDATE products SET price_paise = 150_000 WHERE id = ?', IDS.product);
+    const customer = await login(app, 'customer@test.local');
+    await addToCart(app, customer, IDS.product, 1);
+    const response = await checkout(app, customer, { couponCode: 'SHIP10' });
+
+    expect(response.status).toBe(201);
+    expect(response.body.order.subtotalPaise).toBe(150_000);
+    expect(response.body.order.discountPaise).toBe(15_000);
+    // ₹1,500 pre-discount would qualify for free shipping, but ₹1,350 after
+    // the discount does not. The server must charge the flat rate.
+    expect(response.body.order.shippingPaise).toBe(7_900);
+    expect(response.body.order.totalPaise).toBe(142_900);
+  });
+
+  it('reinitializes payment for a pending order without creating a duplicate order', async () => {
+    const customer = await login(app, 'customer@test.local');
+    await addToCart(app, customer, IDS.product, 1);
+    const created = await checkout(app, customer);
+    const orderNumber = created.body.order.orderNumber as string;
+
+    const resumed = await mutate(customer.post(`/api/orders/${orderNumber}/payment`)).send({});
+    expect(resumed.status).toBe(200);
+    expect(resumed.body.order.orderNumber).toBe(orderNumber);
+    expect(resumed.body.payment.provider).toBe('unconfigured');
+    expect(resumed.body.payment.devPaymentsEnabled).toBe(true);
+    expect(
+      queryOne<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM orders WHERE user_id = ?', IDS.customer)?.count,
+    ).toBe(1);
+
+    const paid = await mutate(customer.post(`/api/dev/orders/${orderNumber}/pay`)).send({});
+    expect(paid.status).toBe(200);
+    expect(paid.body.order.status).toBe('paid');
+
+    const afterPaid = await mutate(customer.post(`/api/orders/${orderNumber}/payment`)).send({});
+    expect(afterPaid.status).toBe(409);
+  });
 });

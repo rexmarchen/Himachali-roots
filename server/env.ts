@@ -30,6 +30,7 @@ export const env = {
   appUrl: (process.env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
   databasePath: process.env.DATABASE_PATH ?? path.resolve(process.cwd(), 'data', 'pahadi-roots.db'),
   uploadDir: process.env.UPLOAD_DIR ?? path.resolve(process.cwd(), 'storage', 'uploads'),
+  privateDocsDir: process.env.PRIVATE_DOCS_DIR ?? path.resolve(process.cwd(), 'storage', 'private', 'seller-docs'),
   trustProxy: bool(process.env.TRUST_PROXY, false),
   sessionDays: int(process.env.SESSION_DAYS, 30),
   defaultCommissionBp: int(process.env.DEFAULT_COMMISSION_BP, 1500),

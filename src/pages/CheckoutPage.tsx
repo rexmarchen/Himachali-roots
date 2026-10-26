@@ -1,556 +1,823 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Address, OrderAddress, OrderView } from '@shared/types';
-import { formatINR } from '@shared/types';
-import { api, errorFields, errorMessage, ApiError } from '@/lib/api';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Address, OrderView } from '@shared/types';
+import { FLAT_SHIPPING_PAISE, formatINR } from '@shared/types';
+import { api, ApiError, errorFields, errorMessage } from '@/lib/api';
 import { useAuth, useCartQuery } from '@/lib/session';
 import { useToast } from '@/lib/toast';
-import { openRazorpay, type RazorpaySuccess } from '@/lib/razorpay';
+import { usePageMeta } from '@/lib/usePageMeta';
+import { Alert, ErrorState, LoadingBlock, Modal } from '@/components/ui';
+import { CheckoutAction, CheckoutProgress } from './checkout/CheckoutParts';
+import { DeliveryStep, AddressFields } from './checkout/DeliveryStep';
+import { OrderSummary } from './checkout/OrderSummary';
+import { PaymentStep } from './checkout/PaymentStep';
+import { ReviewStep } from './checkout/ReviewStep';
+import { CheckoutPaymentPanel, OrderConfirmation } from './checkout/CheckoutPaymentPanel';
 import {
-  Alert,
-  Breadcrumbs,
-  Button,
-  ErrorState,
-  Field,
-  Input,
-  LoadingBlock,
-  PageHeader,
-  Textarea,
-} from '@/components/ui';
+  computeTotals,
+  draftFromAddress,
+  draftToAddressBody,
+  EMPTY_ADDRESS_DRAFT,
+  isOrderPaid,
+  paymentOptions,
+  toOrderAddress,
+  validateAddressDraft,
+  type AddressDraft,
+  type AppliedCoupon,
+  type CheckoutStage,
+  type FieldErrors,
+  type PaymentInit,
+  type PaymentMethod,
+} from './checkout/checkoutUtils';
 
-interface PaymentInit {
-  provider: 'razorpay' | 'unconfigured';
-  keyId?: string;
-  providerOrderId?: string;
-  amountPaise: number;
-  orderNumber: string;
-  message?: string;
-  devPaymentsEnabled: boolean;
+const ADDRESS_FIELD_NAMES = new Set(['fullName', 'phone', 'line1', 'line2', 'city', 'state', 'pincode', 'label']);
+
+function normalizeAddressFields(fields: Record<string, string>): FieldErrors {
+  const next: FieldErrors = {};
+  for (const [key, value] of Object.entries(fields)) {
+    const name = key.startsWith('address.') ? key.slice('address.'.length) : key;
+    if (ADDRESS_FIELD_NAMES.has(name)) next[name] = value;
+  }
+  return next;
 }
 
-const EMPTY_ADDRESS: OrderAddress = {
-  fullName: '',
-  phone: '',
-  line1: '',
-  line2: '',
-  city: '',
-  state: 'Himachal Pradesh',
-  pincode: '',
-};
+function CheckoutShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-screen bg-[#F6F0E6]">
+      <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:py-14">{children}</div>
+    </div>
+  );
+}
 
 export function CheckoutPage() {
-  const cartQuery = useCartQuery();
-  const addresses = useQuery({
-    queryKey: ['addresses'],
-    queryFn: () => api<{ addresses: Address[] }>('/account/addresses'),
+  usePageMeta({
+    title: 'Checkout — PAHADI ROOTS',
+    description: 'A secure checkout for authentic Himachali goods, shipped across India by the makers themselves.',
+    canonicalPath: '/checkout',
   });
-  const { user } = useAuth();
+
+  const { config } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const idempotencyKey = useRef(crypto.randomUUID());
-  const [selectedAddressId, setSelectedAddressId] = useState<string | 'new' | null>(null);
-  const [address, setAddress] = useState<OrderAddress>(EMPTY_ADDRESS);
-  const [note, setNote] = useState('');
-  const [couponInput, setCouponInput] = useState('');
-  const [coupon, setCoupon] = useState<{ code: string; discountPaise: number; description: string | null } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<{ order: OrderView; payment: PaymentInit } | null>(null);
-  const [paying, setPaying] = useState(false);
+  const [searchParams] = useSearchParams();
+  const resumeOrderNumber = searchParams.get('resume');
 
-  const cart = cartQuery.data?.cart;
-  const addressList = useMemo(() => addresses.data?.addresses ?? [], [addresses.data]);
-  // Until the customer chooses, prefer their default saved address. This is
-  // derived rather than copied into state so a late address fetch is safe.
-  const preferredAddressId = addressList.find((item) => item.isDefault)?.id ?? addressList[0]?.id;
-  const effectiveAddressId: string | 'new' = selectedAddressId ?? preferredAddressId ?? 'new';
-
-  const chosenAddress = useMemo<OrderAddress>(() => {
-    if (effectiveAddressId !== 'new') {
-      const match = addressList.find((item) => item.id === effectiveAddressId);
-      if (match) {
-        return {
-          fullName: match.fullName,
-          phone: match.phone,
-          line1: match.line1,
-          line2: match.line2 ?? '',
-          city: match.city,
-          state: match.state,
-          pincode: match.pincode,
-        };
-      }
-    }
-    return address;
-  }, [effectiveAddressId, addressList, address]);
-
-  const couponMutation = useMutation({
-    mutationFn: () =>
-      api<{ code: string; description: string | null; discountPaise: number }>('/coupons/validate', {
-        method: 'POST',
-        body: { code: couponInput },
-      }),
-    onSuccess: (result) => {
-      setCoupon(result);
-      toast.push(`Coupon ${result.code} applied: ${formatINR(result.discountPaise)} off.`);
-    },
-    onError: (mutationError) => {
-      setCoupon(null);
-      toast.push(errorMessage(mutationError), 'error');
-    },
+  const cartQuery = useCartQuery();
+  const addressesQuery = useQuery({
+    queryKey: ['addresses'],
+    queryFn: () => api<{ addresses: Address[] }>('/account/addresses'),
   });
 
-  const submitOrder = async (event: FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    setFieldErrors({});
+  const resumeOrderQuery = useQuery({
+    queryKey: ['order', resumeOrderNumber],
+    queryFn: () => api<{ order: OrderView }>(`/orders/${encodeURIComponent(resumeOrderNumber!)}`),
+    enabled: Boolean(resumeOrderNumber),
+    retry: false,
+  });
+  const resumeStatus = resumeOrderQuery.data?.order.status;
+  const resumePaymentQuery = useQuery({
+    queryKey: ['checkout-payment', resumeOrderNumber],
+    queryFn: () =>
+      api<{ payment: PaymentInit; order: OrderView }>(
+        `/orders/${encodeURIComponent(resumeOrderNumber!)}/payment`,
+        { method: 'POST' },
+      ),
+    enabled: Boolean(resumeOrderNumber) && resumeStatus === 'pending_payment',
+    retry: false,
+    staleTime: Infinity,
+  });
+
+  const [stage, setStage] = useState<CheckoutStage>(1);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | 'new' | null>(null);
+  const [draft, setDraft] = useState<AddressDraft>(EMPTY_ADDRESS_DRAFT);
+  const [saveNewAddress, setSaveNewAddress] = useState(true);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [note, setNote] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [couponInput, setCouponInput] = useState('');
+  const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponChecking, setCouponChecking] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [created, setCreated] = useState<{ order: OrderView; payment: PaymentInit } | null>(null);
+  const [confirmedOrder, setConfirmedOrder] = useState<OrderView | null>(null);
+  const [editingAddress, setEditingAddress] = useState<Address | null>(null);
+  const [editDraft, setEditDraft] = useState<AddressDraft>(EMPTY_ADDRESS_DRAFT);
+  const [editErrors, setEditErrors] = useState<FieldErrors>({});
+  const [savingEdit, setSavingEdit] = useState(false);
+  const idempotencyKey = useRef(crypto.randomUUID());
+
+  const cart = cartQuery.data?.cart;
+  const addressList = useMemo(() => addressesQuery.data?.addresses ?? [], [addressesQuery.data]);
+  const preferredAddressId = addressList.find((address) => address.isDefault)?.id ?? addressList[0]?.id;
+  const selectedAddress = addressList.find((address) => address.id === selectedAddressId);
+  // A selected address can disappear in another tab. Fall back to the
+  // new-address form rather than silently using a different saved address.
+  const effectiveAddressId: string | 'new' = selectedAddressId
+    ? (selectedAddress?.id ?? 'new')
+    : (preferredAddressId ?? 'new');
+
+  const orderAddress = useMemo(() => {
+    if (effectiveAddressId !== 'new') {
+      const match = addressList.find((address) => address.id === effectiveAddressId);
+      if (match) return toOrderAddress(match);
+    }
+    return toOrderAddress(draft);
+  }, [effectiveAddressId, addressList, draft]);
+
+  const totals = cart
+    ? computeTotals(cart, coupon?.discountPaise ?? 0, config?.shipping.flatRatePaise ?? FLAT_SHIPPING_PAISE)
+    : null;
+  const options = paymentOptions(config);
+  const effectiveMethod: PaymentMethod | null =
+    paymentMethod === 'razorpay' && options.razorpay
+      ? 'razorpay'
+      : paymentMethod === 'development' && options.development
+        ? 'development'
+        : options.razorpay
+          ? 'razorpay'
+          : options.development
+            ? 'development'
+            : null;
+
+  const resumeOrder = resumeOrderQuery.data?.order;
+  const resumePaidOrder =
+    resumeOrder &&
+    isOrderPaid(resumeOrder) &&
+    !['refunded', 'partially_refunded', 'cancelled'].includes(resumeOrder.status)
+      ? resumeOrder
+      : null;
+  const resumePendingOrder =
+    resumeOrderQuery.data?.order.status === 'pending_payment' ? resumeOrderQuery.data.order : null;
+  const resumeUnauthorized = resumeOrderQuery.error instanceof ApiError && resumeOrderQuery.error.status === 401;
+  const resumePaymentUnauthorized =
+    resumePaymentQuery.error instanceof ApiError && resumePaymentQuery.error.status === 401;
+
+  const goToStage = (next: CheckoutStage) => {
+    setStage(next);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+  };
+
+  const handleConfirmed = (order: OrderView) => {
+    setCreated(null);
+    setOrderError(null);
+    setConfirmedOrder(order);
+    queryClient.setQueryData(['order', order.orderNumber], { order });
+    void queryClient.invalidateQueries({ queryKey: ['orders'] });
+    void queryClient.invalidateQueries({ queryKey: ['cart'] });
+  };
+
+  const updateDraft = (patch: Partial<AddressDraft>) => {
+    setDraft((current) => ({ ...current, ...patch }));
+    setFieldErrors((current) => {
+      if (!Object.keys(patch).some((key) => key in current)) return current;
+      const next = { ...current };
+      for (const key of Object.keys(patch)) delete next[key];
+      return next;
+    });
+  };
+
+  const continueFromDelivery = async () => {
+    setOrderError(null);
+    if (addressesQuery.isLoading) return;
     if (!cart || cart.lines.length === 0) {
-      setError('Your bag is empty.');
+      setOrderError('Your bag is empty. Add something from the catalogue before checking out.');
       return;
     }
     if (cart.hasUnavailable) {
-      setError('Update your bag before checking out — one item is no longer available.');
+      setOrderError('One or more items in your bag are no longer available. Edit your bag before continuing.');
       return;
     }
     if (effectiveAddressId === 'new') {
-      const missing: Record<string, string> = {};
-      if (chosenAddress.fullName.trim().length < 2) missing.fullName = 'Enter the recipient’s name.';
-      if (!/^[6-9]\d{9}$/.test(chosenAddress.phone)) missing.phone = 'Enter a 10-digit Indian mobile number.';
-      if (chosenAddress.line1.trim().length < 4) missing.line1 = 'Enter the street address.';
-      if (chosenAddress.city.trim().length < 2) missing.city = 'Enter the city or town.';
-      if (chosenAddress.state.trim().length < 2) missing.state = 'Enter the state.';
-      if (!/^\d{6}$/.test(chosenAddress.pincode)) missing.pincode = 'Enter a 6-digit PIN code.';
-      if (Object.keys(missing).length) {
-        setFieldErrors(missing);
-        setError('Complete the delivery address to continue.');
+      const errors = validateAddressDraft(draft);
+      setFieldErrors(errors);
+      if (Object.keys(errors).length > 0) {
+        setOrderError('Complete the delivery address to continue.');
         return;
       }
     }
 
+    if (effectiveAddressId === 'new' && saveNewAddress) {
+      setSavingAddress(true);
+      try {
+        const result = await api<{ id: string }>('/account/addresses', {
+          method: 'POST',
+          body: draftToAddressBody({ ...draft, isDefault: addressList.length === 0 }),
+        });
+        setSelectedAddressId(result.id);
+        await queryClient.invalidateQueries({ queryKey: ['addresses'] });
+      } catch (error) {
+        const errors = normalizeAddressFields(errorFields(error));
+        if (Object.keys(errors).length > 0) {
+          setFieldErrors(errors);
+          setOrderError(errorMessage(error));
+          setSavingAddress(false);
+          return;
+        }
+        toast.push(`This address will be used for this order, but it could not be saved. ${errorMessage(error)}`, 'error');
+      } finally {
+        setSavingAddress(false);
+      }
+    }
+
+    goToStage(2);
+  };
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim();
+    if (code.length < 2) {
+      setCouponError('Enter a coupon code.');
+      return;
+    }
+    setCouponChecking(true);
+    setCouponError(null);
+    try {
+      const result = await api<AppliedCoupon>('/coupons/validate', { method: 'POST', body: { code } });
+      setCoupon(result);
+      setCouponInput(result.code);
+      setOrderError(null);
+      toast.push(`Coupon ${result.code} applied.`);
+    } catch (error) {
+      setCoupon(null);
+      setCouponError(errorMessage(error));
+    } finally {
+      setCouponChecking(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setCoupon(null);
+    setCouponInput('');
+    setCouponError(null);
+  };
+
+  const continueToReview = async () => {
+    setOrderError(null);
+    if (!cart || cart.lines.length === 0) {
+      setOrderError('Your bag is empty. Add something from the catalogue before checking out.');
+      return;
+    }
+    if (cart.hasUnavailable) {
+      setOrderError('One or more items in your bag are no longer available. Edit your bag before continuing.');
+      return;
+    }
+    if (!effectiveMethod) {
+      setOrderError('Choose an available payment method before continuing.');
+      return;
+    }
+    if (coupon) {
+      setCouponChecking(true);
+      try {
+        const result = await api<AppliedCoupon>('/coupons/validate', {
+          method: 'POST',
+          body: { code: coupon.code },
+        });
+        setCoupon(result);
+      } catch (error) {
+        setCoupon(null);
+        setCouponError(errorMessage(error));
+        setOrderError(
+          `The coupon ${coupon.code} is no longer valid for this bag. Remove or change it, then continue.`,
+        );
+        setCouponChecking(false);
+        return;
+      } finally {
+        setCouponChecking(false);
+      }
+    }
+    goToStage(3);
+  };
+
+  const placeOrder = async () => {
+    if (!cart || !effectiveMethod) return;
     setSubmitting(true);
+    setOrderError(null);
+    setFieldErrors({});
     try {
       const result = await api<{ order: OrderView; payment: PaymentInit }>('/checkout', {
         method: 'POST',
         body: {
           address: {
-            ...chosenAddress,
-            line2: chosenAddress.line2 || undefined,
+            ...orderAddress,
+            line2: orderAddress.line2 || undefined,
           },
           couponCode: coupon?.code,
-          customerNote: note || undefined,
+          customerNote: note.trim() || undefined,
           idempotencyKey: idempotencyKey.current,
         },
       });
       setCreated(result);
       await queryClient.invalidateQueries({ queryKey: ['cart'] });
-      if (result.payment.provider === 'razorpay' && result.payment.keyId && result.payment.providerOrderId) {
-        void startRazorpay(result.order, result.payment);
-      } else {
-        toast.push('Order placed. Stock is reserved while payment is completed.', 'info');
+      await queryClient.invalidateQueries({ queryKey: ['orders'] });
+    } catch (error) {
+      const message = errorMessage(error);
+      setOrderError(message);
+      const rawFields = errorFields(error);
+      const addressErrors = normalizeAddressFields(rawFields);
+      if (Object.keys(addressErrors).length > 0) {
+        setFieldErrors(addressErrors);
+        goToStage(1);
       }
-    } catch (submitError) {
-      setError(errorMessage(submitError));
-      setFieldErrors(errorFields(submitError));
-      if (submitError instanceof ApiError && submitError.code === 'reservation_expired') {
+      if (rawFields.coupon) {
+        setCoupon(null);
+        setCouponError(rawFields.coupon);
+      }
+      if (
+        error instanceof ApiError &&
+        ['reservation_expired', 'insufficient_stock', 'item_unavailable'].includes(error.code)
+      ) {
         await queryClient.invalidateQueries({ queryKey: ['cart'] });
+      }
+      if (error instanceof ApiError && error.status === 401) {
+        navigate(`/login?next=${encodeURIComponent('/checkout')}`, { replace: true });
       }
     } finally {
       setSubmitting(false);
     }
   };
 
-  const startRazorpay = async (order: OrderView, payment: PaymentInit) => {
-    if (!payment.keyId || !payment.providerOrderId) return;
-    setPaying(true);
+  const openAddressEditor = (address: Address) => {
+    setEditingAddress(address);
+    setEditDraft(draftFromAddress(address));
+    setEditErrors({});
+  };
+
+  const saveAddressEdit = async () => {
+    if (!editingAddress) return;
+    const errors = validateAddressDraft(editDraft);
+    setEditErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    setSavingEdit(true);
     try {
-      await openRazorpay({
-        keyId: payment.keyId,
-        providerOrderId: payment.providerOrderId,
-        amountPaise: payment.amountPaise,
-        orderNumber: order.orderNumber,
-        customer: { name: chosenAddress.fullName, email: user?.email, phone: chosenAddress.phone },
-        onSuccess: async (response: RazorpaySuccess) => {
-          try {
-            await api('/payments/verify', {
-              method: 'POST',
-              body: {
-                razorpayOrderId: response.razorpay_order_id,
-                razorpayPaymentId: response.razorpay_payment_id,
-                razorpaySignature: response.razorpay_signature,
-              },
-            });
-            toast.push('Payment verified. Your order is confirmed.');
-            navigate(`/account/orders/${order.orderNumber}`);
-          } catch (verifyError) {
-            toast.push(errorMessage(verifyError), 'error');
-            navigate(`/account/orders/${order.orderNumber}`);
-          } finally {
-            setPaying(false);
-          }
-        },
-        onDismiss: () => {
-          setPaying(false);
-          toast.push('Payment window closed. The order is saved and stock is reserved until the timer expires.', 'info');
-        },
+      await api(`/account/addresses/${encodeURIComponent(editingAddress.id)}`, {
+        method: 'PATCH',
+        body: draftToAddressBody(editDraft),
       });
-    } catch (razorpayError) {
-      setPaying(false);
-      toast.push(errorMessage(razorpayError), 'error');
-    }
-  };
-
-  const simulatePayment = async () => {
-    if (!created) return;
-    setPaying(true);
-    try {
-      await api(`/dev/orders/${encodeURIComponent(created.order.orderNumber)}/pay`, { method: 'POST' });
-      toast.push('Development payment simulated. No money moved.');
-      await queryClient.invalidateQueries({ queryKey: ['order', created.order.orderNumber] });
-      navigate(`/account/orders/${created.order.orderNumber}`);
-    } catch (paymentError) {
-      toast.push(errorMessage(paymentError), 'error');
+      setSelectedAddressId(editingAddress.id);
+      setEditingAddress(null);
+      await queryClient.invalidateQueries({ queryKey: ['addresses'] });
+      toast.push('Delivery address updated.');
+    } catch (error) {
+      setEditErrors(normalizeAddressFields(errorFields(error)));
+      toast.push(errorMessage(error), 'error');
     } finally {
-      setPaying(false);
+      setSavingEdit(false);
     }
   };
 
-  if (cartQuery.isLoading) {
-    return <div className="mx-auto max-w-5xl px-4 py-20"><LoadingBlock rows={4} /></div>;
-  }
-
-  if (cartQuery.isError || !cart) {
-    return <div className="mx-auto max-w-3xl px-4 py-20"><ErrorState onRetry={() => void cartQuery.refetch()} /></div>;
-  }
-
-  if (cart.lines.length === 0 && !created) {
+  if (confirmedOrder) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-20 text-center">
-        <h1 className="text-3xl">Nothing to check out</h1>
-        <p className="mt-3 text-sm text-muted">Your bag is empty. Add something from the catalogue first.</p>
-        <Link to="/shop" className="mt-6 inline-block text-sm underline underline-offset-4">Browse the catalogue</Link>
-      </div>
+      <CheckoutShell>
+        <OrderConfirmation order={confirmedOrder} />
+      </CheckoutShell>
     );
   }
 
   if (created) {
-    const { order, payment } = created;
     return (
-      <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:py-16">
-        <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Checkout' }, { label: 'Payment' }]} />
-        <PageHeader
-          eyebrow="Order saved"
-          title={payment.provider === 'razorpay' ? 'Complete payment' : 'Payment is not configured'}
-          lede={`Order ${order.orderNumber} has been recorded. Stock is reserved for a limited window; it is not a paid order until the payment provider confirms.`}
+      <CheckoutShell>
+        <CheckoutPaymentPanel
+          order={created.order}
+          payment={created.payment}
+          customer={{
+            name: created.order.shippingAddress.fullName,
+            email: created.order.email,
+            phone: created.order.shippingAddress.phone,
+          }}
+          developmentAllowed={Boolean(config?.devMode)}
+          onConfirmed={handleConfirmed}
         />
-
-        <div className="mt-8 space-y-5">
-          <div className="border border-line bg-surface p-5">
-            <div className="flex items-baseline justify-between gap-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.14em] text-muted">Amount due</p>
-                <p className="mt-1 font-serif text-3xl text-forest">{formatINR(order.totalPaise)}</p>
-              </div>
-              <div className="text-right text-[11px] text-muted">
-                <p>{order.email}</p>
-                <p>{order.shippingAddress.city}, {order.shippingAddress.state}</p>
-              </div>
-            </div>
-            {order.reservationExpiresAt ? (
-              <p className="mt-4 border-t border-line pt-3 text-[11px] text-muted">
-                Stock reservation expires {new Date(order.reservationExpiresAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}.
-              </p>
-            ) : null}
-          </div>
-
-          {payment.provider === 'razorpay' ? (
-            <div className="space-y-4">
-              <Alert tone="info">
-                Payment is handled by Razorpay. The order is confirmed only after the server verifies the checkout
-                signature — a browser callback alone is not treated as payment.
-              </Alert>
-              <Button
-                size="lg"
-                loading={paying}
-                onClick={() => void startRazorpay(order, payment)}
-                className="w-full sm:w-auto"
-              >
-                Open Razorpay Checkout
-              </Button>
-              <p className="text-[11px] text-muted">
-                If the window closed, you can reopen it here. Do not pay twice; if money was deducted and the order still
-                shows unpaid, contact support with the order number.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <Alert tone="warning" title="Online payment is not configured on this deployment">
-                {payment.message ?? 'The order is saved with stock reserved, but no payment can be taken.'}
-              </Alert>
-              {payment.devPaymentsEnabled ? (
-                <div className="border border-terra/30 bg-[#fff8f4] p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8e4630]">Development only</p>
-                  <p className="mt-2 text-sm leading-relaxed text-[#7d3d28]">
-                    This will mark the order paid through the development simulation endpoint. <strong>No money moves</strong>,
-                    no payment provider is contacted, and this order must never be treated as a real sale.
-                  </p>
-                  <Button variant="danger" size="sm" className="mt-4" loading={paying} onClick={() => void simulatePayment()}>
-                    Simulate successful payment
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-sm leading-relaxed text-muted">
-                  The order will remain awaiting payment and its reservation will expire. Configure Razorpay keys
-                  (<code className="text-xs">RAZORPAY_KEY_ID</code>, <code className="text-xs">RAZORPAY_KEY_SECRET</code>) to
-                  enable live checkout, or contact the store owner.
-                </p>
-              )}
-              <Button variant="secondary" onClick={() => navigate(`/account/orders/${order.orderNumber}`)}>
-                View the saved order
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
+      </CheckoutShell>
     );
   }
 
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
-      <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Bag', to: '/cart' }, { label: 'Checkout' }]} />
-      <PageHeader eyebrow="Checkout" title="Delivery and payment" lede="Review the address and total. The server recalculates stock, discounts and shipping when the order is placed." />
-
-      <div className="mt-4 border border-sand bg-paper p-3 text-xs text-muted">
-        <span className="font-semibold uppercase tracking-wider text-terra">DEMO ORDER — NOT A REAL PURCHASE</span>
-        <span className="mx-2">·</span>
-        Simulated checkout is enabled for local development. Demo orders are persisted safely without processing real payments.
-      </div>
-
-      <form onSubmit={submitOrder} className="mt-10 grid gap-10 lg:grid-cols-[1.25fr_0.75fr] lg:gap-14">
-        <div className="space-y-8">
-          <section>
-            <div className="mb-4 flex items-baseline justify-between">
-              <h2 className="text-xl">1 · Delivery address</h2>
-              <Link to="/account/addresses" className="text-[11px] text-muted underline underline-offset-4 hover:text-forest">Manage addresses</Link>
+  if (resumeOrderNumber) {
+    if (resumeOrderQuery.isLoading) {
+      return (
+        <CheckoutShell>
+          <div className="mx-auto max-w-2xl">
+            <h1 className="font-serif text-3xl text-[#234638]">Loading your order</h1>
+            <p className="mt-2 text-[12.5px] text-[#6B7269]">Checking the payment status of order {resumeOrderNumber}…</p>
+            <div className="mt-6">
+              <LoadingBlock rows={3} label="Loading order" />
             </div>
+          </div>
+        </CheckoutShell>
+      );
+    }
 
-            {addressList.length ? (
-              <div className="mb-4 grid gap-2 sm:grid-cols-2">
-                {addressList.map((item) => (
-                  <label
-                    key={item.id}
-                    className={`cursor-pointer border p-3.5 text-[12.5px] leading-relaxed ${
-                      effectiveAddressId === item.id ? 'border-forest bg-forest/[0.04]' : 'border-line bg-surface hover:border-forest/30'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="address"
-                      className="sr-only"
-                      checked={effectiveAddressId === item.id}
-                      onChange={() => setSelectedAddressId(item.id)}
-                    />
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-ink">{item.label}</span>
-                      {item.isDefault ? <span className="text-[9px] uppercase tracking-[0.1em] text-muted">Default</span> : null}
-                    </span>
-                    <span className="mt-1 block text-muted">{item.fullName}</span>
-                    <span className="block text-muted">{item.line1}{item.line2 ? `, ${item.line2}` : ''}</span>
-                    <span className="block text-muted">{item.city}, {item.state} {item.pincode}</span>
-                    <span className="mt-1 block text-muted">{item.phone}</span>
-                  </label>
-                ))}
-                <label
-                  className={`cursor-pointer border p-3.5 text-[12.5px] ${
-                    effectiveAddressId === 'new' ? 'border-forest bg-forest/[0.04]' : 'border-line bg-surface hover:border-forest/30'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="address"
-                    className="sr-only"
-                    checked={effectiveAddressId === 'new'}
-                    onChange={() => setSelectedAddressId('new')}
-                  />
-                  <span className="font-medium text-ink">Use a new address</span>
-                  <span className="mt-1 block text-muted">Enter it below for this order.</span>
-                </label>
-              </div>
-            ) : null}
-
-            {effectiveAddressId === 'new' || addressList.length === 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Full name" required error={fieldErrors.fullName}>
-                  <Input
-                    value={address.fullName}
-                    onChange={(event) => setAddress({ ...address, fullName: event.target.value })}
-                    autoComplete="name"
-                    invalid={Boolean(fieldErrors.fullName)}
-                  />
-                </Field>
-                <Field label="Mobile number" required error={fieldErrors.phone} hint="10 digits">
-                  <Input
-                    value={address.phone}
-                    onChange={(event) => setAddress({ ...address, phone: event.target.value.replace(/\D/g, '').slice(0, 10) })}
-                    inputMode="numeric"
-                    autoComplete="tel"
-                    invalid={Boolean(fieldErrors.phone)}
-                  />
-                </Field>
-                <Field label="Address line 1" required error={fieldErrors.line1} className="sm:col-span-2">
-                  <Input
-                    value={address.line1}
-                    onChange={(event) => setAddress({ ...address, line1: event.target.value })}
-                    autoComplete="address-line1"
-                    placeholder="House or building, street, locality"
-                    invalid={Boolean(fieldErrors.line1)}
-                  />
-                </Field>
-                <Field label="Address line 2" hint="Optional" className="sm:col-span-2">
-                  <Input
-                    value={address.line2 ?? ''}
-                    onChange={(event) => setAddress({ ...address, line2: event.target.value })}
-                    autoComplete="address-line2"
-                    placeholder="Landmark, apartment, floor"
-                  />
-                </Field>
-                <Field label="City or town" required error={fieldErrors.city}>
-                  <Input
-                    value={address.city}
-                    onChange={(event) => setAddress({ ...address, city: event.target.value })}
-                    autoComplete="address-level2"
-                    invalid={Boolean(fieldErrors.city)}
-                  />
-                </Field>
-                <Field label="State" required error={fieldErrors.state}>
-                  <Input
-                    value={address.state}
-                    onChange={(event) => setAddress({ ...address, state: event.target.value })}
-                    autoComplete="address-level1"
-                    invalid={Boolean(fieldErrors.state)}
-                  />
-                </Field>
-                <Field label="PIN code" required error={fieldErrors.pincode} hint="6 digits">
-                  <Input
-                    value={address.pincode}
-                    onChange={(event) => setAddress({ ...address, pincode: event.target.value.replace(/\D/g, '').slice(0, 6) })}
-                    inputMode="numeric"
-                    autoComplete="postal-code"
-                    invalid={Boolean(fieldErrors.pincode)}
-                  />
-                </Field>
-              </div>
-            ) : null}
-          </section>
-
-          <section className="border-t border-line pt-7">
-            <h2 className="text-xl">2 · Order note</h2>
-            <p className="mt-1 text-xs text-muted">Visible to the seller. Do not include payment details.</p>
-            <Textarea
-              className="mt-3"
-              maxLength={500}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Delivery instructions, a gift note, or anything the maker should know."
+    if (resumeOrderQuery.isError) {
+      return (
+        <CheckoutShell>
+          <div className="mx-auto max-w-2xl">
+            <ErrorState
+              title="We could not load that order"
+              body={`${errorMessage(resumeOrderQuery.error)} Check your account orders, or return to your bag and start again.`}
+              onRetry={() => void resumeOrderQuery.refetch()}
             />
-          </section>
-
-          <section className="border-t border-line pt-7">
-            <h2 className="text-xl">3 · Payment</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted">
-              Payment is taken after the order is saved. When Razorpay is configured you will be taken to its secure
-              checkout; otherwise the order remains unpaid and no money is collected. Cash on delivery is not offered in
-              this build.
-            </p>
-          </section>
-        </div>
-
-        <aside>
-          <div className="sticky top-32 border border-line bg-surface p-5">
-            <h2 className="font-serif text-xl text-forest">Your order</h2>
-            <ul className="mt-4 space-y-3 border-b border-line pb-4">
-              {cart.lines.map((line) => (
-                <li key={line.productId} className="flex items-start justify-between gap-3 text-[12.5px]">
-                  <span className="min-w-0">
-                    <span className="block truncate text-ink">{line.name}</span>
-                    <span className="text-[10.5px] text-muted">{line.sellerName} · qty {line.quantity}</span>
-                  </span>
-                  <span className="shrink-0 tabular-nums">{formatINR(line.lineTotalPaise)}</span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-4">
-              <label className="text-[11px] font-medium text-ink" htmlFor="coupon">Coupon code</label>
-              <div className="mt-1.5 flex gap-2">
-                <Input
-                  id="coupon"
-                  value={couponInput}
-                  onChange={(event) => setCouponInput(event.target.value.toUpperCase())}
-                  placeholder="WELCOME10"
-                  className="h-9 text-xs"
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  loading={couponMutation.isPending}
-                  onClick={() => couponMutation.mutate()}
-                  disabled={couponInput.trim().length < 2}
+            <div className="mt-4 flex flex-wrap justify-center gap-4 text-[12px]">
+              {resumeUnauthorized ? (
+                <Link
+                  to={`/login?next=${encodeURIComponent(`/checkout?resume=${resumeOrderNumber}`)}`}
+                  className="text-[#234638] underline underline-offset-4"
                 >
-                  Apply
-                </Button>
-              </div>
-              {coupon ? (
-                <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-forest">
-                  <span>{coupon.code} applied{coupon.description ? ` — ${coupon.description}` : ''}</span>
-                  <button type="button" className="text-muted underline underline-offset-2" onClick={() => { setCoupon(null); setCouponInput(''); }}>
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <p className="mt-1.5 text-[10.5px] text-muted">Coupons are validated against your account and the live bag.</p>
-              )}
-            </div>
-
-            <dl className="mt-4 space-y-2 border-t border-line pt-4 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted">Subtotal</dt>
-                <dd>{formatINR(cart.subtotalPaise)}</dd>
-              </div>
-              {coupon ? (
-                <div className="flex justify-between gap-4 text-forest">
-                  <dt>Coupon {coupon.code}</dt>
-                  <dd>−{formatINR(coupon.discountPaise)}</dd>
-                </div>
+                  Sign in again
+                </Link>
               ) : null}
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted">Shipping</dt>
-                <dd>{cart.shippingEstimatePaise === 0 ? 'Complimentary' : formatINR(cart.shippingEstimatePaise)}</dd>
-              </div>
-              <div className="flex justify-between gap-4 border-t border-line pt-3 text-base font-medium">
-                <dt>Estimated total</dt>
-                <dd>{formatINR(Math.max(0, cart.subtotalPaise - (coupon?.discountPaise ?? 0)) + cart.shippingEstimatePaise)}</dd>
-              </div>
-            </dl>
-            <p className="mt-2 text-[10px] leading-relaxed text-muted">
-              Final totals are recalculated on the server, including commission and tax snapshots. If the amount differs,
-              the order summary you receive is authoritative.
-            </p>
+              <Link to="/account/orders" className="text-[#234638] underline underline-offset-4">
+                Your orders
+              </Link>
+              <Link to="/cart" className="text-[#234638] underline underline-offset-4">
+                Your bag
+              </Link>
+            </div>
+          </div>
+        </CheckoutShell>
+      );
+    }
 
-            {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
+    if (resumePaidOrder) {
+      return (
+        <CheckoutShell>
+          <OrderConfirmation order={resumePaidOrder} />
+        </CheckoutShell>
+      );
+    }
 
-            <Button type="submit" size="lg" className="mt-5 w-full" loading={submitting}>
-              Place order
-            </Button>
-            <p className="mt-3 text-center text-[10px] leading-relaxed text-muted">
-              By placing the order you accept the draft <Link to="/policies/terms" className="underline underline-offset-2">terms</Link> and{' '}
-              <Link to="/policies/returns" className="underline underline-offset-2">returns policy</Link>.
+    if (resumePendingOrder) {
+      if (resumePaymentQuery.isLoading) {
+        return (
+          <CheckoutShell>
+            <div className="mx-auto max-w-2xl">
+              <h1 className="font-serif text-3xl text-[#234638]">Preparing secure payment</h1>
+              <p className="mt-2 text-[12.5px] text-[#6B7269]">Reopening payment for order {resumePendingOrder.orderNumber}…</p>
+              <div className="mt-6">
+                <LoadingBlock rows={2} label="Preparing payment" />
+              </div>
+            </div>
+          </CheckoutShell>
+        );
+      }
+
+      if (resumePaymentQuery.data) {
+        return (
+          <CheckoutShell>
+            <CheckoutPaymentPanel
+              order={resumePaymentQuery.data.order}
+              payment={resumePaymentQuery.data.payment}
+              customer={{
+                name: resumePaymentQuery.data.order.shippingAddress.fullName,
+                email: resumePaymentQuery.data.order.email,
+                phone: resumePaymentQuery.data.order.shippingAddress.phone,
+              }}
+              developmentAllowed={Boolean(config?.devMode)}
+              onConfirmed={handleConfirmed}
+            />
+          </CheckoutShell>
+        );
+      }
+
+      return (
+        <CheckoutShell>
+          <div className="mx-auto max-w-2xl">
+            <Alert tone="error" title="Payment could not be restarted">
+              {resumePaymentQuery.error
+                ? errorMessage(resumePaymentQuery.error)
+                : 'The server did not return payment details for this order.'}{' '}
+              The order may still be awaiting payment; do not pay twice. Check the order page before trying again.
+            </Alert>
+            <div className="mt-4 flex flex-wrap items-center gap-4">
+              <CheckoutAction
+                variant="secondary"
+                onClick={() => void resumePaymentQuery.refetch()}
+                loading={resumePaymentQuery.isFetching}
+              >
+                Try again
+              </CheckoutAction>
+              {resumePaymentUnauthorized ? (
+                <Link
+                  to={`/login?next=${encodeURIComponent(`/checkout?resume=${resumeOrderNumber}`)}`}
+                  className="text-[12px] text-[#234638] underline underline-offset-4"
+                >
+                  Sign in again
+                </Link>
+              ) : null}
+              <Link
+                to={`/account/orders/${encodeURIComponent(resumePendingOrder.orderNumber)}`}
+                className="text-[12px] text-[#234638] underline underline-offset-4"
+              >
+                View the saved order
+              </Link>
+            </div>
+          </div>
+        </CheckoutShell>
+      );
+    }
+
+    const statusOrder = resumeOrderQuery.data?.order;
+    if (!statusOrder) {
+      return (
+        <CheckoutShell>
+          <ErrorState
+            title="We could not load that order"
+            body="The server did not return this order. Check your account orders, or return to your bag and start again."
+            onRetry={() => void resumeOrderQuery.refetch()}
+          />
+        </CheckoutShell>
+      );
+    }
+
+    return (
+      <CheckoutShell>
+        <div className="mx-auto max-w-2xl">
+          <Alert
+            tone={statusOrder.status === 'cancelled' ? 'warning' : 'error'}
+            title={statusOrder.status === 'expired' ? 'This payment window expired' : 'This order cannot take a payment'}
+          >
+            {statusOrder.status === 'expired'
+              ? 'Stock was released when the reservation expired. Return to your bag and place the order again.'
+              : `Order ${statusOrder.orderNumber} is currently marked “${statusOrder.status.replaceAll('_', ' ')}”, so there is no payment to complete.`}
+          </Alert>
+          <div className="mt-4 flex flex-wrap gap-4 text-[12px]">
+            <Link to="/cart" className="text-[#234638] underline underline-offset-4">
+              Return to your bag
+            </Link>
+            <Link
+              to={`/account/orders/${encodeURIComponent(statusOrder.orderNumber)}`}
+              className="text-[#234638] underline underline-offset-4"
+            >
+              View order details
+            </Link>
+          </div>
+        </div>
+      </CheckoutShell>
+    );
+  }
+
+  if (cartQuery.isLoading) {
+    return (
+      <CheckoutShell>
+        <div className="mx-auto max-w-4xl">
+          <LoadingBlock rows={4} label="Loading your bag" />
+        </div>
+      </CheckoutShell>
+    );
+  }
+
+  if (cartQuery.isError || !cart) {
+    return (
+      <CheckoutShell>
+        <div className="mx-auto max-w-3xl">
+          <ErrorState onRetry={() => void cartQuery.refetch()} />
+        </div>
+      </CheckoutShell>
+    );
+  }
+
+  if (cart.lines.length === 0) {
+    return (
+      <CheckoutShell>
+        <div className="mx-auto max-w-xl border border-[#E3D9C9] bg-white p-8 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D98060]">Checkout</p>
+          <h1 className="mt-2 font-serif text-[34px] text-[#234638]">Your bag is empty</h1>
+          <p className="mx-auto mt-2 max-w-sm text-[12.5px] leading-relaxed text-[#6B7269]">
+            Add something from the catalogue before checking out. Saved addresses and your account stay exactly as they are.
+          </p>
+          <Link
+            to="/shop"
+            className="mt-6 inline-flex h-11 items-center justify-center border border-[#234638] bg-[#234638] px-5 text-[13px] font-medium text-[#FDFBF7] transition-colors hover:bg-[#1B382D]"
+          >
+            Browse the catalogue
+          </Link>
+        </div>
+      </CheckoutShell>
+    );
+  }
+
+  const unavailable = cart.hasUnavailable;
+  const activeAddressId = effectiveAddressId;
+  const cartEmpty = cart.lines.length === 0;
+
+  return (
+    <div className="min-h-screen bg-[#F6F0E6]">
+      <div className="mx-auto w-full max-w-[1200px] px-4 pb-28 pt-7 sm:px-6 lg:px-8 lg:pb-16 lg:pt-10">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D98060]">Secure checkout</p>
+            <h1 className="mt-1 font-serif text-[34px] leading-none text-[#234638] sm:text-[42px]">Checkout</h1>
+            <p className="mt-2 max-w-xl text-[12px] leading-relaxed text-[#6B7269]">
+              Three short steps. The maker dispatches directly, and every total is checked again by the server before your
+              order is created.
             </p>
           </div>
-        </aside>
-      </form>
+          <div className="flex items-center gap-2 text-[10.5px] text-[#6B7269]">
+            <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#234638]" fill="none" aria-hidden>
+              <rect x="4" y="8.5" width="12" height="8.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M7 8.5V6.4a3 3 0 0 1 6 0v2.1" stroke="currentColor" strokeWidth="1.4" />
+            </svg>
+            Payment confirmed only after server verification
+          </div>
+        </header>
+
+        <div className="mt-5">
+          <CheckoutProgress
+            stage={stage}
+            onNavigate={(next) => {
+              if (next < stage) goToStage(next);
+            }}
+          />
+        </div>
+
+        {ordersNote(unavailable, cartEmpty)}
+
+        <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start lg:gap-10">
+          <div className="min-w-0 space-y-4">
+            {orderError && stage !== 3 ? <Alert tone="error">{orderError}</Alert> : null}
+
+            {stage === 1 ? (
+              <DeliveryStep
+                addresses={addressList}
+                addressesLoading={addressesQuery.isLoading}
+                addressesError={addressesQuery.isError ? errorMessage(addressesQuery.error) : null}
+                selectedId={activeAddressId}
+                onSelect={(id) => {
+                  setSelectedAddressId(id);
+                  setFieldErrors({});
+                  setOrderError(null);
+                }}
+                draft={draft}
+                onChangeDraft={updateDraft}
+                errors={fieldErrors}
+                note={note}
+                onNoteChange={setNote}
+                saveNewAddress={saveNewAddress}
+                onSaveNewAddressChange={setSaveNewAddress}
+                onEditAddress={openAddressEditor}
+                onContinue={() => void continueFromDelivery()}
+                saving={savingAddress}
+              />
+            ) : null}
+
+            {stage === 2 ? (
+              <PaymentStep
+                config={config}
+                method={effectiveMethod}
+                onSelect={setPaymentMethod}
+                amountPaise={totals?.totalPaise ?? 0}
+                onBack={() => goToStage(1)}
+                onContinue={() => void continueToReview()}
+                checkingCoupon={couponChecking}
+                cartUnavailable={unavailable}
+              />
+            ) : null}
+
+            {stage === 3 && totals ? (
+              <ReviewStep
+                cart={cart}
+                address={orderAddress}
+                method={effectiveMethod ?? 'razorpay'}
+                config={config}
+                coupon={coupon}
+                note={note.trim()}
+                totals={totals}
+                cartUnavailable={unavailable}
+                onEditDelivery={() => goToStage(1)}
+                onEditPayment={() => goToStage(2)}
+                onPlaceOrder={() => void placeOrder()}
+                submitting={submitting}
+                error={orderError}
+              />
+            ) : null}
+          </div>
+
+          {totals ? (
+            <aside className="lg:sticky lg:top-[96px]">
+              <OrderSummary
+                cart={cart}
+                totals={totals}
+                coupon={coupon}
+                couponInput={couponInput}
+                couponError={couponError}
+                applyingCoupon={couponChecking}
+                onCouponInput={setCouponInput}
+                onApplyCoupon={() => void applyCoupon()}
+                onRemoveCoupon={removeCoupon}
+              />
+            </aside>
+          ) : null}
+        </div>
+      </div>
+
+      {totals ? (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#DCD1C0] bg-[#F6F0E6]/97 px-4 py-3 backdrop-blur lg:hidden">
+          <div className="mx-auto flex max-w-[1200px] items-center gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-[9.5px] uppercase tracking-[0.14em] text-[#7A8179]">Total payable</p>
+              <p className="font-serif text-[21px] leading-tight text-[#234638]">{formatINR(totals.totalPaise)}</p>
+            </div>
+            {stage === 1 ? (
+              <CheckoutAction
+                type="button"
+                onClick={() => void continueFromDelivery()}
+                loading={savingAddress || addressesQuery.isLoading}
+                className="shrink-0"
+              >
+                Continue
+              </CheckoutAction>
+            ) : stage === 2 ? (
+              <CheckoutAction
+                type="button"
+                onClick={() => void continueToReview()}
+                loading={couponChecking}
+                disabled={!effectiveMethod || unavailable}
+                className="shrink-0"
+              >
+                Review order
+              </CheckoutAction>
+            ) : (
+              <CheckoutAction
+                type="button"
+                onClick={() => void placeOrder()}
+                loading={submitting}
+                disabled={unavailable}
+                className="shrink-0"
+              >
+                Place order
+              </CheckoutAction>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      <Modal
+        open={Boolean(editingAddress)}
+        onClose={() => {
+          if (!savingEdit) setEditingAddress(null);
+        }}
+        title="Edit delivery address"
+        wide
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <CheckoutAction
+              type="button"
+              variant="quiet"
+              onClick={() => setEditingAddress(null)}
+              disabled={savingEdit}
+            >
+              Cancel
+            </CheckoutAction>
+            <CheckoutAction type="button" onClick={() => void saveAddressEdit()} loading={savingEdit}>
+              Save address
+            </CheckoutAction>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <AddressFields
+            draft={editDraft}
+            errors={editErrors}
+            onChange={(patch) => {
+              setEditDraft((current) => ({ ...current, ...patch }));
+              setEditErrors((current) => {
+                const next = { ...current };
+                for (const key of Object.keys(patch)) delete next[key];
+                return next;
+              });
+            }}
+            idPrefix="edit-address"
+          />
+          <label className="flex cursor-pointer items-start gap-2.5 text-[11.5px] leading-relaxed text-[#5E675F]">
+            <input
+              type="checkbox"
+              checked={editDraft.isDefault}
+              onChange={(event) => setEditDraft((current) => ({ ...current, isDefault: event.target.checked }))}
+              className="mt-0.5 h-4 w-4 accent-[#234638]"
+            />
+            Make this my default delivery address.
+          </label>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+function ordersNote(unavailable: boolean, empty: boolean) {
+  if (empty) return null;
+  if (!unavailable) return null;
+  return (
+    <div className="mt-4">
+      <Alert tone="error" title="Some items in your bag are unavailable">
+        Remove or replace the unavailable items in your{' '}
+        <Link to="/cart" className="underline underline-offset-2">
+          bag
+        </Link>{' '}
+        before continuing. Stock and prices are checked again when the order is placed.
+      </Alert>
     </div>
   );
 }

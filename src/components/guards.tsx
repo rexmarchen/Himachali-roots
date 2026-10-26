@@ -51,29 +51,27 @@ export function RequireAdmin() {
 
 export function RequireSellerAccount() {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   useEffect(() => {
     document.title = 'Seller portal — PAHADI ROOTS';
   }, []);
 
   if (loading) return <FullPageLoader label="Opening your seller workspace…" />;
-  
-  // If not logged in, auto-initialize a verified maker session so user can immediately view & use all features
+
   if (!user) {
-    const demoSeller = {
-      id: 'usr_seller_demo',
-      email: 'maker@pahadiroots.test',
-      fullName: 'Kullu Artisan Workshop',
-      roles: ['customer', 'seller'],
-      sellerId: 'sel_kullu_craft',
-      sellerStatus: 'approved',
-      emailVerified: true,
-    };
-    try {
-      localStorage.setItem('pr_session_user', JSON.stringify(demoSeller));
-    } catch {
-      // ignore
-    }
+    const next = `${location.pathname}${location.search}`;
+    return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
+  }
+
+  // The application/verification screen is the onboarding destination for a
+  // signed-in user who is not an approved seller yet. Every other seller view
+  // requires an approved seller account, enforced again by the API.
+  const isOnboarding = location.pathname === '/seller/application';
+  const isApprovedSeller = Boolean(user.sellerId) && user.sellerStatus === 'approved';
+
+  if (!isOnboarding && !isApprovedSeller) {
+    return <Navigate to="/seller/application" replace />;
   }
 
   return <Outlet />;

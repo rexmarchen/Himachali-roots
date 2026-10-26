@@ -2,7 +2,9 @@ import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Category, Paged, ProductSummary } from '@shared/types';
+import { formatINR } from '@shared/types';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/session';
 import { ProductGrid } from '@/components/ProductCard';
 import {
   Badge,
@@ -37,6 +39,8 @@ const SORTS = [
 ];
 
 export function ShopPage() {
+  const { config } = useAuth();
+  const freeShippingThreshold = config?.shipping.freeThresholdPaise ?? 0;
   const [params, setParams] = useSearchParams();
   const queryString = params.toString();
   const products = useQuery({
@@ -79,7 +83,7 @@ export function ShopPage() {
         lede={
           activeCategory?.description
             ? activeCategory.description
-            : 'Directly sourced small-batch treasures from reviewed Himachali cooperatives and family makers. GST included; transparent mountain shipping.'
+            : 'Small-batch goods from reviewed Himachali sellers. Prices include applicable taxes; shipping is calculated before checkout.'
         }
       />
 
@@ -268,7 +272,7 @@ export function ShopPage() {
                       Featured Department
                     </span>
                     <span className="text-[11px] text-muted">
-                      {products.data?.total ?? activeCategory.productCount ?? 0} authentic listings
+                      {products.data?.total ?? activeCategory.productCount ?? 0} approved listings
                     </span>
                   </div>
                   <h2 className="font-serif text-2xl sm:text-3xl font-medium text-forest tracking-tight">
@@ -283,16 +287,18 @@ export function ShopPage() {
                   <div className="mt-3.5 flex flex-wrap items-center gap-2 text-[11px] text-ink/75">
                     <span className="inline-flex items-center gap-1 rounded-sm border border-line/70 bg-paper px-2 py-0.5 shadow-2xs">
                       <MountainIcon className="h-3 w-3 text-forest" />
-                      100% Himalayan Origin
+                      Approved listings only
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-sm border border-line/70 bg-paper px-2 py-0.5 shadow-2xs">
                       <CheckCircleIcon className="h-3 w-3 text-terra" />
-                      Artisan Verified
+                      Seller reviewed
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-sm border border-line/70 bg-paper px-2 py-0.5 shadow-2xs">
-                      <TruckIcon className="h-3 w-3 text-forest" />
-                      Free shipping over ₹1,499
-                    </span>
+                    {freeShippingThreshold > 0 ? (
+                      <span className="inline-flex items-center gap-1 rounded-sm border border-line/70 bg-paper px-2 py-0.5 shadow-2xs">
+                        <TruckIcon className="h-3 w-3 text-forest" />
+                        Free shipping over {formatINR(freeShippingThreshold)}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 

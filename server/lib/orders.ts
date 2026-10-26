@@ -30,6 +30,7 @@ interface RawLine {
   sku: string;
   slug: string;
   unit_price_paise: number;
+  base_price_paise: number;
   quantity: number;
   tax_rate_bp: number;
   category_id: string;
@@ -69,7 +70,9 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
 
   const lines = queryAll<RawLine>(
     db,
-    `SELECT ci.product_id, p.name, p.sku, p.slug, p.price_paise AS unit_price_paise, ci.quantity,
+    `SELECT ci.product_id, p.name, p.sku, p.slug,
+            COALESCE(acp.promo_price_paise, p.price_paise) AS unit_price_paise,
+            p.price_paise AS base_price_paise, ci.quantity,
             p.tax_rate_bp, p.category_id, p.status AS product_status, p.is_demo,
             s.id AS seller_id, s.business_name AS seller_name, s.status AS seller_status,
             i.quantity - i.reserved_quantity AS quantity_available,
@@ -78,6 +81,7 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
        JOIN products p ON p.id = ci.product_id
        JOIN inventory i ON i.product_id = p.id
        JOIN seller_profiles s ON s.id = p.seller_id
+       LEFT JOIN active_campaign_prices acp ON acp.product_id = p.id
       WHERE ci.cart_id = ?
       ORDER BY ci.created_at`,
     input.cartId,
@@ -261,9 +265,10 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
         execute(
           db,
           `INSERT INTO order_items (id, order_id, seller_order_id, product_id, seller_id, name, sku, image_url,
-                                    unit_price_paise, quantity, line_subtotal_paise, discount_paise, tax_rate_bp,
-                                    tax_paise, commission_rate_bp, commission_paise, seller_earning_paise)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                    unit_price_paise, original_unit_price_paise, quantity, line_subtotal_paise,
+                                    discount_paise, tax_rate_bp, tax_paise, commission_rate_bp, commission_paise,
+                                    seller_earning_paise)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           newId('oit_'),
           id,
           sellerOrderId,
@@ -273,6 +278,7 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
           item.line.sku,
           item.line.image_url,
           item.line.unit_price_paise,
+          item.line.base_price_paise > item.line.unit_price_paise ? item.line.base_price_paise : null,
           item.line.quantity,
           item.lineSubtotal,
           item.discount,
@@ -343,7 +349,7 @@ export async function initializeOrderPayment(db: Db, orderId: string, userId: st
       orderNumber: order.order_number,
       message:
         'Online payment is not configured on this deployment. The order is saved with stock reserved, but it is not paid.',
-      devPaymentsEnabled: env.allowDevPayments,
+      devPaymentsEnabled: env.allowDevPayments || env.simulatedCheckoutEnabled,
     };
   }
 
@@ -359,7 +365,7 @@ export async function initializeOrderPayment(db: Db, orderId: string, userId: st
       providerOrderId: payment.provider_order_id,
       amountPaise: order.total_paise,
       orderNumber: order.order_number,
-      devPaymentsEnabled: env.allowDevPayments,
+      devPaymentsEnabled: env.allowDevPayments || env.simulatedCheckoutEnabled,
     };
   }
 
@@ -390,7 +396,7 @@ export async function initializeOrderPayment(db: Db, orderId: string, userId: st
     providerOrderId: rzp.id,
     amountPaise: order.total_paise,
     orderNumber: order.order_number,
-    devPaymentsEnabled: env.allowDevPayments,
+    devPaymentsEnabled: env.allowDevPayments || env.simulatedCheckoutEnabled,
   };
 }
 
@@ -745,6 +751,7 @@ export function getOrderView(db: Db, orderId: string): OrderView {
     image_url: string | null;
     quantity: number;
     unit_price_paise: number;
+    original_unit_price_paise: number | null;
     line_subtotal_paise: number;
     status: string;
     review_id: string | null;
@@ -795,6 +802,7 @@ export function getOrderView(db: Db, orderId: string): OrderView {
         imageUrl: item.image_url,
         quantity: item.quantity,
         unitPricePaise: item.unit_price_paise,
+        originalUnitPricePaise: item.original_unit_price_paise,
         lineSubtotalPaise: item.line_subtotal_paise,
         status: item.status,
         sellerName: item.seller_name,

@@ -80,7 +80,14 @@ const fieldBase =
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }>(
   function Input({ className = '', invalid, ...props }, ref) {
-    return <input ref={ref} className={`${fieldBase} ${invalid ? 'border-terra' : ''} ${className}`} {...props} />;
+    return (
+      <input
+        ref={ref}
+        aria-invalid={invalid || props['aria-invalid'] ? true : undefined}
+        className={`${fieldBase} ${invalid ? 'border-terra' : ''} ${className}`}
+        {...props}
+      />
+    );
   },
 );
 
@@ -89,7 +96,12 @@ export const Textarea = forwardRef<
   TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }
 >(function Textarea({ className = '', invalid, ...props }, ref) {
   return (
-    <textarea ref={ref} className={`${fieldBase} min-h-28 resize-y ${invalid ? 'border-terra' : ''} ${className}`} {...props} />
+    <textarea
+      ref={ref}
+      aria-invalid={invalid || props['aria-invalid'] ? true : undefined}
+      className={`${fieldBase} min-h-28 resize-y ${invalid ? 'border-terra' : ''} ${className}`}
+      {...props}
+    />
   );
 });
 

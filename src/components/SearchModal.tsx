@@ -50,7 +50,6 @@ export function SearchModal({
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
-      setQuery('');
     }
     return () => {
       document.body.style.overflow = '';
@@ -267,7 +266,7 @@ export function SearchModal({
         <div className="flex items-center justify-between border-t border-[#E7DFD3] bg-[#F7F3EB] px-4 py-3 sm:px-6 text-xs text-muted">
           <div className="flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full bg-terra" />
-            <span>Direct dispatches from certified Himachal makers</span>
+            <span>Sold by approved Himachal Pradesh makers</span>
           </div>
 
           <button

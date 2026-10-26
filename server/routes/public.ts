@@ -4,7 +4,16 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { execute, queryAll, queryOne, type Db } from '../db.js';
 import { getProduct, getRegions, getSellerStorefront, listCategories, listProducts, listPublicSellers } from '../lib/catalog.js';
-import { clientIp, parse } from '../lib/http.js';
+import {
+  campaignStats,
+  effectiveCampaignStatus,
+  getCampaignBySlug,
+  getFeaturedCampaign,
+  isCampaignPageVisible,
+  mapCampaign,
+  type CampaignRow,
+} from '../lib/campaigns.js';
+import { clientIp, notFound, parse } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { getPolicy, getSiteContent } from '../lib/site.js';
 import { paymentProviderStatus } from '../lib/payments.js';
@@ -89,10 +98,16 @@ export function publicRouter(db: Db): Router {
            WHERE p.status = 'approved' AND s.status = 'approved' AND p.region IS NOT NULL) AS regions`,
     );
 
+    const featuredCampaignRow = getFeaturedCampaign(db);
+    const featuredStats = featuredCampaignRow ? campaignStats(db, featuredCampaignRow.id) : null;
+
     res.json({
       content,
       categories,
       makers,
+      campaign: featuredCampaignRow
+        ? mapCampaign(featuredCampaignRow, featuredStats!.productCount, featuredStats!.maxDiscountPercent)
+        : null,
       bestsellers: bestsellerRows.map((row) => ({
         slug: row.slug,
         name: row.name,
@@ -164,6 +179,91 @@ export function publicRouter(db: Db): Router {
 
   router.get(['/products/:slug', '/shop/products/:slug'], (req, res) => {
     res.json({ product: getProduct(db, String(req.params.slug)) });
+  });
+
+  router.get('/campaigns/:slug', (req, res) => {
+    const campaign = getCampaignBySlug(db, String(req.params.slug));
+    // Draft and archived campaigns are editorial work in progress: they are not
+    // publicly addressable at all. Scheduled and expired campaigns are visible
+    // so a shared link does not silently break, but nothing is purchasable.
+    if (!campaign || !isCampaignPageVisible(campaign)) {
+      throw notFound('That offer is not available.');
+    }
+    const status = effectiveCampaignStatus(campaign);
+    const purchasable = status === 'active';
+
+    const sortRaw = str(req.query.sort);
+    const sort = (['relevance', 'newest', 'price_asc', 'price_desc', 'popular'] as const).includes(
+      sortRaw as 'newest',
+    )
+      ? (sortRaw as 'newest' | 'price_asc' | 'price_desc' | 'popular' | 'relevance')
+      : 'newest';
+
+    const result = purchasable
+      ? listProducts(db, {
+          category: str(req.query.category),
+          seller: str(req.query.seller),
+          sort,
+          page: optInt(req.query.page) ?? 1,
+          pageSize: optInt(req.query.pageSize) ?? 12,
+          campaignId: campaign.id,
+        })
+      : { items: [], page: 1, pageSize: 12, total: 0, totalPages: 0 };
+
+    const categories = purchasable
+      ? queryAll<{ id: string; name: string; slug: string; productCount: number }>(
+          db,
+          `SELECT c.id, c.name, c.slug, COUNT(*) AS productCount
+             FROM campaign_products cp
+             JOIN active_campaign_prices acp ON acp.product_id = cp.product_id
+             JOIN products p ON p.id = cp.product_id AND p.status = 'approved'
+             JOIN seller_profiles s ON s.id = p.seller_id AND s.status = 'approved'
+             JOIN categories c ON c.id = p.category_id
+            WHERE cp.campaign_id = ?
+            GROUP BY c.id
+            ORDER BY c.name`,
+          campaign.id,
+        )
+      : [];
+
+    const sellers = purchasable
+      ? queryAll<{ name: string; slug: string }>(
+          db,
+          `SELECT DISTINCT s.business_name AS name, s.slug
+             FROM campaign_products cp
+             JOIN active_campaign_prices acp ON acp.product_id = cp.product_id
+             JOIN products p ON p.id = cp.product_id AND p.status = 'approved'
+             JOIN seller_profiles s ON s.id = p.seller_id AND s.status = 'approved'
+            WHERE cp.campaign_id = ?
+            ORDER BY s.business_name`,
+          campaign.id,
+        )
+      : [];
+
+    const priceRange = purchasable
+      ? queryOne<{ min: number | null; max: number | null }>(
+          db,
+          `SELECT MIN(acp.promo_price_paise) AS min, MAX(acp.promo_price_paise) AS max
+             FROM campaign_products cp
+             JOIN active_campaign_prices acp ON acp.product_id = cp.product_id
+            WHERE cp.campaign_id = ?`,
+          campaign.id,
+        )
+      : undefined;
+
+    res.json({
+      campaign: (() => {
+        const stats = campaignStats(db, campaign.id);
+        return mapCampaign(campaign, stats.productCount, stats.maxDiscountPercent);
+      })(),
+      purchasable,
+      ...result,
+      filters: {
+        categories,
+        sellers,
+        priceRangePaise: priceRange ?? { min: null, max: null },
+      },
+    });
   });
 
   router.get('/sellers', (_req, res) => {
@@ -366,10 +466,18 @@ export function sitemapRouter(db: Db): Router {
         WHERE p.status = 'approved' AND s.status = 'approved'`,
     );
     const sellers = queryAll<{ slug: string }>(db, "SELECT slug FROM seller_profiles WHERE status = 'approved'");
+    const campaigns = queryAll<Pick<CampaignRow, 'id' | 'slug' | 'status' | 'starts_at' | 'ends_at'>>(
+      db,
+      "SELECT id, slug, status, starts_at, ends_at FROM campaigns WHERE status = 'active'",
+    ).filter(
+      (campaign) =>
+        effectiveCampaignStatus(campaign) === 'active' && campaignStats(db, campaign.id).productCount > 0,
+    );
     const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     const urls = [
       ...staticPaths.map((path) => `<url><loc>${escape(base + path)}</loc></url>`),
       ...policyPaths.map((path) => `<url><loc>${escape(base + path)}</loc></url>`),
+      ...campaigns.map((campaign) => `<url><loc>${escape(`${base}/offers/${campaign.slug}`)}</loc></url>`),
       ...sellers.map((seller) => `<url><loc>${escape(`${base}/makers/${seller.slug}`)}</loc></url>`),
       ...products.map(
         (product) =>

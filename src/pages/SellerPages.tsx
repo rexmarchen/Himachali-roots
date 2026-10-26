@@ -5,6 +5,7 @@ import type { Category, ProductStatus, SellerProduct } from '@shared/types';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { useToast } from '@/lib/toast';
+import { useAuth } from '@/lib/session';
 import { formatDate, formatDateTime, humanise, percentFromBp, sellerOrderStatusLabel } from '@/lib/format';
 import {
   Alert,
@@ -42,6 +43,8 @@ interface SellerApplicationResponse {
     village: string | null;
     tagline: string | null;
     story: string | null;
+    logoUrl: string | null;
+    coverUrl: string | null;
     operatingAddress: { line1: string; line2?: string; city: string; state: string; pincode: string; phone?: string } | null;
     pickupAddress: Record<string, unknown> | null;
     gstin: string | null;
@@ -287,6 +290,7 @@ export function SellerLayout() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { signOut } = useAuth();
 
   const application = useQuery({
     queryKey: ['seller-application'],
@@ -310,19 +314,20 @@ export function SellerLayout() {
     );
   }
 
-  // Fallback to active verified seller workspace
-  const seller = application.data?.seller ?? {
-    id: 'sel_kullu_craft',
-    businessName: 'Kullu Valley Handlooms & Mountain Crafts',
-    slug: 'kullu-loom-collective-demo',
-    sellerType: 'artisan',
-    sellerCategory: 'Handloom & Textiles',
-    status: 'approved',
-    storeStatus: 'active',
-    payoutStatus: 'active',
-    region: 'Kullu Valley',
-    approvedAt: '2026-01-15T00:00:00.000Z',
-  };
+  // The route guard only admits an approved seller, so a missing record is a
+  // real error rather than a reason to invent a demo workshop.
+  const seller = application.data?.seller;
+  if (!seller) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-20">
+        <ErrorState
+          title="Seller profile not found"
+          body="Your account does not have a seller profile yet. Start or resume your application."
+          onRetry={() => navigate('/seller/application')}
+        />
+      </div>
+    );
+  }
 
   const unread = notifications.data?.unread ?? 0;
 
@@ -344,12 +349,7 @@ export function SellerLayout() {
   else if (pathname === '/seller/application') currentBreadcrumb = 'Verification & Compliance';
 
   const handleLogout = async () => {
-    try {
-      await api('/auth/logout', { method: 'POST' });
-    } catch {
-      // ignore
-    }
-    localStorage.removeItem('pr_session_user');
+    await signOut();
     navigate('/');
   };
 
@@ -368,16 +368,18 @@ export function SellerLayout() {
             </div>
           </Link>
 
-          {/* Active Store Chip */}
+          {/* Store status chip */}
           <div className="mt-4 rounded-lg bg-white/5 border border-white/10 p-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-medium text-white truncate">{seller.businessName}</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-[#66745A]/30 px-2 py-0.5 text-[10px] text-[#A3B899] font-medium shrink-0">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#66745A] animate-pulse" />
-                Active
+                <span className={`h-1.5 w-1.5 rounded-full ${seller.storeStatus === 'active' ? 'bg-[#66745A]' : 'bg-amber-400'}`} />
+                {STORE_STATUS_LABELS[seller.storeStatus] ?? humanise(seller.storeStatus)}
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-white/50">{seller.region ?? 'Himachal Pradesh'}</p>
+            <p className="mt-1 text-[11px] text-white/50">
+              {seller.village ? `${seller.village}, ` : ''}{seller.region ?? 'Himachal Pradesh'}
+            </p>
           </div>
         </div>
 
@@ -391,6 +393,7 @@ export function SellerLayout() {
               <ul className="mt-1.5 space-y-1">
                 {group.items.map((item) => {
                   if ('isStorefront' in item && item.isStorefront) {
+                    if (!seller.slug) return null;
                     return (
                       <li key={item.label}>
                         <Link
@@ -985,6 +988,17 @@ export function SellerNotificationsPage() {
 
 interface DashboardResponse {
   store: { status: string; payoutStatus: string; sellerCategory: string | null; statusReason: string | null };
+  identity?: {
+    businessName: string | null;
+    slug: string | null;
+    region: string | null;
+    village: string | null;
+    tagline: string | null;
+    story: string | null;
+    logoUrl: string | null;
+    coverUrl: string | null;
+    commissionRateBp: number | null;
+  };
   application: { id: string; status: string; revision: number; submittedAt: string | null; reviewedAt: string | null; rejectionReason: string | null } | null;
   checklist: { id: string; label: string; status: string; detail: string; href?: string }[];
   products: { active: number; pending: number; low_stock: number; drafts: number };
@@ -1070,19 +1084,25 @@ export function SellerDashboardPage() {
       {/* Studio Header with Action Buttons & Timeframe Filter */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#E4DACE] pb-6">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#66745A]/15 px-2.5 py-0.5 text-xs text-[#66745A] font-medium">
-              <span className="h-2 w-2 rounded-full bg-[#66745A]" />
-              Verified Himachal Maker Studio
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+              data.store.status === 'active'
+                ? 'bg-[#66745A]/15 text-[#66745A]'
+                : 'bg-amber-100 text-amber-800'
+            }`}>
+              <span className={`h-2 w-2 rounded-full ${data.store.status === 'active' ? 'bg-[#66745A]' : 'bg-amber-500'}`} />
+              {STORE_STATUS_LABELS[data.store.status] ?? humanise(data.store.status)}
             </span>
             <span className="text-xs text-[#172321]/40">·</span>
-            <span className="text-xs text-[#172321]/60">Naggar, Kullu Valley</span>
+            <span className="text-xs text-[#172321]/60">
+              {[data.identity?.village, data.identity?.region].filter(Boolean).join(', ') || 'Location not set'}
+            </span>
           </div>
           <h1 className="mt-1.5 font-serif text-2xl sm:text-3xl text-[#172321]">
-            Namaste, Maker Studio
+            Namaste, {data.identity?.businessName ?? 'Maker'}
           </h1>
           <p className="mt-1 text-xs text-[#172321]/70">
-            Real-time business performance, order dispatch pipelines, and artisan financial ledger.
+            Sales, fulfilment and settlement figures below come from paid marketplace orders for the selected period.
           </p>
         </div>
 
@@ -1129,7 +1149,7 @@ export function SellerDashboardPage() {
                 Orders Awaiting Confirmation
               </p>
               <p className="mt-1 text-xs text-[#172321]/70">
-                Confirm stock reservation and pack items within 24 hours to fulfill shipping SLA.
+                Review each order against available stock and record dispatch when it leaves your workshop.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-[#D98263]/20">
@@ -1198,17 +1218,37 @@ export function SellerDashboardPage() {
         <div className="rounded-xl border border-[#E4DACE] bg-white p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#172321]/60">Verification & KYC</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-xs font-medium">
-                ✓ Approved
-              </span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#172321]/60">Verification status</span>
+              <StatusBadge
+                status={data.application?.status ?? 'not_submitted'}
+                label={
+                  data.application
+                    ? APPLICATION_STATUS_LABELS[data.application.status as keyof typeof APPLICATION_STATUS_LABELS] ?? humanise(data.application.status)
+                    : 'Not submitted'
+                }
+              />
             </div>
-            <p className="mt-2 text-sm font-semibold text-[#172321]">Naggar Handloom Guild Verified</p>
-            <p className="mt-1 text-xs text-[#172321]/70">Artisan identity, origin certificate, and direct bank settlement active.</p>
+            <p className="mt-2 text-sm font-semibold text-[#172321]">
+              {data.application?.status === 'approved'
+                ? 'Seller application approved'
+                : data.application?.status === 'changes_requested'
+                  ? 'Changes requested by admin'
+                  : data.application?.status === 'rejected'
+                    ? 'Seller application rejected'
+                    : data.application?.status === 'suspended'
+                      ? 'Store suspended'
+                      : data.application
+                        ? 'Application under review'
+                        : 'Application not submitted'}
+            </p>
+            <p className="mt-1 text-xs text-[#172321]/70">
+              {data.checklist.filter((item) => item.status === 'complete').length} of {data.checklist.length} onboarding checks complete.
+              Payouts: {humanise(data.store.payoutStatus)}.
+            </p>
           </div>
           <div className="mt-4 pt-3 border-t border-[#E4DACE]">
             <Link to="/seller/application" className="text-xs font-medium text-[#172321] hover:underline">
-              Inspect KYC records →
+              Review verification records →
             </Link>
           </div>
         </div>
@@ -1223,9 +1263,9 @@ export function SellerDashboardPage() {
         </div>
 
         <div className="rounded-xl border border-[#E4DACE] bg-white p-5 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#172321]/50">Marketplace Share (15%)</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#172321]/50">Marketplace Commission</p>
           <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]/80">−{formatINR(data.finances?.commissionPaise ?? data.sales.commission)}</p>
-          <p className="mt-1.5 text-xs text-[#172321]/60">Covers verification & packing boxes</p>
+          <p className="mt-1.5 text-xs text-[#172321]/60">On product value after discounts</p>
         </div>
 
         <div className="rounded-xl border border-[#D98263]/30 bg-[#FAF3EF] p-5 shadow-xs">
@@ -1266,20 +1306,20 @@ export function SellerDashboardPage() {
         <div className="rounded-xl border border-emerald-300 bg-emerald-50/70 p-4 shadow-xs">
           <p className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-800">Estimated Net Profit</p>
           <p className="mt-1.5 font-serif text-xl sm:text-2xl text-emerald-900 font-bold">
-            {data.finances?.hasCostData ? formatINR(data.finances.estimatedProfitPaise) : formatINR(data.sales.earnings)}
+            {data.finances?.hasCostData ? formatINR(data.finances.estimatedProfitPaise) : '—'}
           </p>
           <p className="mt-1 text-[11px] text-emerald-700">
-            {data.finances?.hasCostData ? 'Net earnings minus direct costs' : 'Estimated before unit costs'}
+            {data.finances?.hasCostData ? 'Net earnings minus direct costs' : 'Add unit costs to estimate'}
           </p>
         </div>
 
         <div className="rounded-xl border border-[#66745A]/30 bg-white p-4 shadow-xs">
           <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[#66745A]">Profit Margin</p>
           <p className="mt-1.5 font-serif text-xl sm:text-2xl text-[#172321]">
-            {data.finances?.hasCostData ? `${data.finances.profitMarginPercent}%` : '85.0%'}
+            {data.finances?.hasCostData ? `${data.finances.profitMarginPercent}%` : '—'}
           </p>
           <p className="mt-1 text-[11px] text-[#172321]/60">
-            {data.finances?.hasCostData ? 'Net profit / Gross sales' : 'Marketplace retention rate'}
+            {data.finances?.hasCostData ? 'Net profit / gross sales' : 'Requires product costs'}
           </p>
         </div>
       </div>
@@ -1452,7 +1492,7 @@ export function SellerDashboardPage() {
                       </span>
                       <div>
                         <p className="text-xs font-medium text-[#172321]">{p.name}</p>
-                        <p className="text-[10.5px] text-[#172321]/55">{p.unitsSold} units dispatched</p>
+                        <p className="text-[10.5px] text-[#172321]/55">{p.unitsSold} units sold</p>
                       </div>
                     </div>
                     <div className="text-right">
@@ -1493,7 +1533,7 @@ export function SellerDashboardPage() {
                       <div>
                         <p className="text-xs font-semibold text-[#172321]">{order.reference}</p>
                         <p className="text-[11px] text-[#172321]/60">
-                          {order.orderNumber} · Dispatch by {order.dispatchBy ? formatDate(order.dispatchBy) : 'Within 48h'}
+                          {order.orderNumber} · Dispatch by {order.dispatchBy ? formatDate(order.dispatchBy) : 'not scheduled'}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -1533,7 +1573,7 @@ export function SellerDashboardPage() {
                 <dd className="font-semibold text-emerald-700">{formatINR(data.ledger.eligible)}</dd>
               </div>
               <div className="flex items-center justify-between border-b border-[#E4DACE]/60 pb-2.5">
-                <dt className="text-[#172321]/60">Settled to Date (Bank NEFT)</dt>
+                <dt className="text-[#172321]/60">Settled to Date</dt>
                 <dd className="font-semibold text-[#172321]">{formatINR(data.ledger.settled)}</dd>
               </div>
               <div className="flex items-center justify-between">
@@ -1564,12 +1604,13 @@ export function SellerDashboardPage() {
             </ul>
           </section>
 
-          {/* Commission & Trust Transparency Note */}
+          {/* Commission transparency note */}
           <div className="rounded-xl border border-[#66745A]/25 bg-[#FAF7F2] p-4 text-[11px] leading-relaxed text-[#172321]/70">
-            <p className="font-serif font-bold text-[#172321] text-xs">Pahadi Roots Fair Maker Policy</p>
+            <p className="font-serif font-bold text-[#172321] text-xs">Commission & settlement</p>
             <p className="mt-1">{data.commissionNote}</p>
             <p className="mt-2 text-[10.5px] text-[#66745A]">
-              100% of product profits stay with the maker. Payouts are reconciled each Tuesday directly into your verified bank account.
+              Settlement figures in the ledger reflect recorded entries only. Bank/UPI payout details are reviewed manually;
+              no automatic transfer is claimed until a payout provider is configured.
             </p>
           </div>
         </div>
@@ -1825,6 +1866,14 @@ export function SellerProductEditorPage() {
     queryFn: () => api<SellerApplicationResponse>('/seller/application'),
     retry: false,
     staleTime: 60_000,
+  });
+
+  const sellerConfig = useQuery<{
+    commission: { defaultBp: number; categoryRates: Record<string, number>; note: string };
+  }>({
+    queryKey: ['seller-config'],
+    queryFn: () => api('/seller/config'),
+    staleTime: 5 * 60_000,
   });
 
   const isFoodSeller = sellerApplication.data?.seller?.sellerCategory === 'food_producer';
@@ -2154,11 +2203,17 @@ export function SellerProductEditorPage() {
   const current = product.data?.product;
   const existingImages = current?.images ?? [];
 
-  // Live Unit Margin Calculation
+  // Live unit economics use the seller/category commission rule resolved by
+  // the API, falling back to the configured marketplace default only while the
+  // config request is loading.
+  const commissionBp =
+    sellerConfig.data?.commission.categoryRates[form.categoryId] ??
+    sellerConfig.data?.commission.defaultBp ??
+    1500;
   const priceNum = Number(form.priceRupees || 0);
   const cogsNum = Number(form.estimatedCostRupees || 0);
   const pkgNum = Number(form.packagingCostRupees || 0);
-  const commissionNum = priceNum * 0.15;
+  const commissionNum = priceNum * (commissionBp / 10000);
   const unitProfitNum = Math.max(0, priceNum - commissionNum - cogsNum - pkgNum);
   const unitMarginPercent = priceNum > 0 ? ((unitProfitNum / priceNum) * 100).toFixed(1) : '0.0';
 
@@ -2630,7 +2685,7 @@ export function SellerProductEditorPage() {
                   placeholder={
                     isFruitCategory
                       ? 'e.g. October 2026 Pluck, Kotgarh Valley'
-                      : 'e.g. Woven in Naggar Handloom Guild, Kullu'
+                      : 'e.g. Handwoven in Kullu district by our workshop'
                   }
                 />
               </Field>
@@ -2673,7 +2728,7 @@ export function SellerProductEditorPage() {
                   onChange={(event) => setForm({ ...form, materials: event.target.value })}
                   placeholder={
                     isTextileCategory
-                      ? 'e.g. 100% Pure Himalayan Sheep Wool'
+                      ? 'e.g. Handspun sheep wool, cotton lining'
                       : isCraftCategory
                       ? 'e.g. Himalayan Walnut Wood, Natural Beeswax Polish'
                       : 'e.g. Fresh Apples, Mountain Water, Cane Sugar'
@@ -2852,7 +2907,7 @@ export function SellerProductEditorPage() {
                 </div>
 
                 <div className="rounded-xl border border-[#E4DACE] bg-white p-3 shadow-xs">
-                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Marketplace Share (15%)</p>
+                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Marketplace Share ({percentFromBp(commissionBp)})</p>
                   <p className="mt-1 font-serif text-lg font-bold text-[#172321]/70">
                     −₹{commissionNum.toFixed(2)}
                   </p>
@@ -2892,7 +2947,7 @@ export function SellerProductEditorPage() {
                 <div>
                   <h2 className="text-lg font-serif font-bold text-[#172321]">Inventory & Stock Management</h2>
                   <p className="text-xs text-[#172321]/60">
-                    Keep stock honest. Only list units you can dispatch within 48 hours
+                    Keep stock honest. Only list units you have ready to dispatch.
                   </p>
                 </div>
               </div>
@@ -3178,6 +3233,7 @@ interface SellerOrderDetail {
     commissionRateBp: number;
     earningPaise: number;
     customerNote: string | null;
+    seller?: { businessName: string | null; logoUrl: string | null; region: string | null; village: string | null };
     address: { fullName: string; phone: string; line1: string; line2?: string; city: string; state: string; pincode: string };
     items: { id: string; name: string; sku: string; quantity: number; unitPricePaise: number; lineSubtotalPaise: number; status: string; imageUrl: string | null }[];
     shipment: { carrier: string; trackingNumber: string; trackingUrl: string | null; status: string; shippedAt: string; deliveredAt: string | null; events: { status: string; description: string | null; occurredAt: string }[] } | null;
@@ -3413,9 +3469,10 @@ export function SellerOrderDetailPage() {
           <div className="grid grid-cols-2 gap-4 text-xs border border-[#E4DACE] p-4 bg-[#FAF7F2] rounded-lg">
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#66745A] font-bold">Fulfilled By</p>
-              <p className="mt-1 font-medium text-sm text-[#172321]">Kullu Valley Handlooms & Mountain Crafts</p>
-              <p className="text-[#172321]/70">Naggar, Kullu Valley, Himachal Pradesh</p>
-              <p className="text-[#172321]/70">Handloom & Craft Guild Verified</p>
+              <p className="mt-1 font-medium text-sm text-[#172321]">{data.seller?.businessName ?? 'Seller'}</p>
+              <p className="text-[#172321]/70">
+                {[data.seller?.village, data.seller?.region].filter(Boolean).join(', ') || 'Location not set'}
+              </p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#66745A] font-bold">Ship To Customer</p>
@@ -3458,28 +3515,28 @@ export function SellerOrderDetailPage() {
             </table>
           </div>
 
-          {/* Artisan Quality & Safety Checklist */}
+          {/* Dispatch checklist (instructions, not claims) */}
           <div className="border border-[#66745A]/30 bg-[#66745A]/5 p-4 rounded-lg text-xs space-y-2">
-            <p className="font-semibold text-[#172321] uppercase tracking-wide text-[10.5px]">Artisan Dispatch Quality Assurance</p>
+            <p className="font-semibold text-[#172321] uppercase tracking-wide text-[10.5px]">Before dispatch</p>
             <div className="grid sm:grid-cols-3 gap-2 text-[11px] text-[#172321]/80">
               <div className="flex items-center gap-2">
-                <span className="text-emerald-700 font-bold">✓</span>
-                <span>Authentic Himalayan craft checked</span>
+                <span className="font-bold">☐</span>
+                <span>Match every SKU and quantity</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-emerald-700 font-bold">✓</span>
-                <span>Eco-friendly cushioning packed</span>
+                <span className="font-bold">☐</span>
+                <span>Pack to protect the item in transit</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-emerald-700 font-bold">✓</span>
-                <span>Mountain transit weather protection</span>
+                <span className="font-bold">☐</span>
+                <span>Record the real carrier and tracking number</span>
               </div>
             </div>
           </div>
 
           <div className="text-center pt-2 text-[10px] text-[#172321]/50 border-t border-[#E4DACE]">
-            <p>Thank you for supporting authentic Himalayan artisans and sustainable mountain communities.</p>
-            <p className="mt-0.5">Need assistance with your delivery? Contact care@pahadiroots.in or WhatsApp +91 98765 43210</p>
+            <p>Thank you for supporting makers across Himachal Pradesh.</p>
+            <p className="mt-0.5">Need help with this delivery? Contact marketplace support.</p>
           </div>
         </div>
       </Modal>
@@ -3697,6 +3754,7 @@ export function SellerRequestsPage() {
 
 export function SellerProfilePage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const application = useQuery({ queryKey: ['seller-application'], queryFn: () => api<SellerApplicationResponse>('/seller/application') });
   const [form, setForm] = useState({ businessName: '', tagline: '', story: '', region: '', village: '', line1: '', line2: '', city: '', state: 'Himachal Pradesh', pincode: '' });
@@ -3704,6 +3762,7 @@ export function SellerProfilePage() {
   const [saving, setSaving] = useState(false);
   const [docType, setDocType] = useState('id_proof');
   const [uploading, setUploading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState<'logo' | 'cover' | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
 
   const savedSeller = application.data?.seller;
@@ -3780,8 +3839,50 @@ export function SellerProfilePage() {
     }
   };
 
+  const uploadImage = async (kind: 'logo' | 'cover', file: File | undefined) => {
+    if (!file) return;
+    setUploadingImage(kind);
+    const data = new FormData();
+    data.append('image', file);
+    try {
+      await api(`/seller/profile/image/${kind}`, { method: 'POST', body: data });
+      await queryClient.invalidateQueries({ queryKey: ['seller-application'] });
+      await queryClient.invalidateQueries({ queryKey: ['seller-dashboard'] });
+      toast.push(kind === 'logo' ? 'Store logo updated.' : 'Store cover updated.');
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setUploadingImage(null);
+    }
+  };
+
+  const removeImage = async (kind: 'logo' | 'cover') => {
+    setUploadingImage(kind);
+    try {
+      await api(`/seller/profile/image/${kind}`, { method: 'DELETE' });
+      await queryClient.invalidateQueries({ queryKey: ['seller-application'] });
+      await queryClient.invalidateQueries({ queryKey: ['seller-dashboard'] });
+      toast.push(kind === 'logo' ? 'Store logo removed.' : 'Store cover removed.');
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setUploadingImage(null);
+    }
+  };
+
   if (application.isLoading) return <LoadingBlock rows={3} />;
   if (application.isError || !application.data) return <ErrorState onRetry={() => void application.refetch()} />;
+  if (!savedSeller) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16">
+        <ErrorState
+          title="Seller profile not found"
+          body="Start or resume your seller application before editing a storefront profile."
+          onRetry={() => navigate('/seller/application')}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -3790,6 +3891,73 @@ export function SellerProfilePage() {
         title="Store profile"
         lede="This information appears on your public maker page and listings. Keep claims accurate and up to date."
       />
+      <section className="overflow-hidden border border-line bg-surface">
+        <div className="relative h-40 bg-sand/40 sm:h-52">
+          {savedSeller.coverUrl ? (
+            <img src={savedSeller.coverUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center text-[12px] text-muted">No cover image yet</div>
+          )}
+        </div>
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-end gap-4">
+            <div className="-mt-12 h-20 w-20 shrink-0 overflow-hidden rounded-xl border-4 border-surface bg-forest text-paper shadow sm:-mt-14 sm:h-24 sm:w-24">
+              {savedSeller.logoUrl ? (
+                <img src={savedSeller.logoUrl} alt={`${savedSeller.businessName} logo`} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center font-serif text-2xl">
+                  {savedSeller.businessName.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div>
+              <h2 className="text-xl">{savedSeller.businessName}</h2>
+              <p className="text-[11px] text-muted">Shown on your public maker page at /makers/{savedSeller.slug}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <label className="inline-flex cursor-pointer items-center gap-2 border border-line bg-paper px-3 py-2 text-[11px] font-medium text-ink hover:border-forest">
+              {uploadingImage === 'logo' ? 'Uploading…' : savedSeller.logoUrl ? 'Replace logo' : 'Upload logo'}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                disabled={uploadingImage !== null}
+                onChange={(event) => {
+                  void uploadImage('logo', event.target.files?.[0]);
+                  event.target.value = '';
+                }}
+              />
+            </label>
+            <label className="inline-flex cursor-pointer items-center gap-2 border border-line bg-paper px-3 py-2 text-[11px] font-medium text-ink hover:border-forest">
+              {uploadingImage === 'cover' ? 'Uploading…' : savedSeller.coverUrl ? 'Replace cover' : 'Upload cover'}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                disabled={uploadingImage !== null}
+                onChange={(event) => {
+                  void uploadImage('cover', event.target.files?.[0]);
+                  event.target.value = '';
+                }}
+              />
+            </label>
+            {savedSeller.logoUrl ? (
+              <Button type="button" variant="ghost" size="sm" loading={uploadingImage === 'logo'} onClick={() => void removeImage('logo')}>
+                Remove logo
+              </Button>
+            ) : null}
+            {savedSeller.coverUrl ? (
+              <Button type="button" variant="ghost" size="sm" loading={uploadingImage === 'cover'} onClick={() => void removeImage('cover')}>
+                Remove cover
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <p className="border-t border-line px-5 py-3 text-[11px] text-muted">
+          JPEG, PNG or WebP up to 5 MB. Images are stored with your seller record and are not shared outside your public storefront.
+        </p>
+      </section>
       <form onSubmit={save} className="space-y-6">
         <section className="border border-line bg-surface p-5 sm:p-6">
           <div className="grid gap-4 sm:grid-cols-2">
