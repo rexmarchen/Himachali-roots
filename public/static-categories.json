@@ -1,0 +1,86 @@
+{
+  "categories": [
+    {
+      "id": "cat_7efc7025-cc95-4386-8302-b3c1521c6205",
+      "name": "Shawls & Handlooms",
+      "slug": "shawls-and-weaves",
+      "description": "Handloom shawls, stoles, and woven heirlooms crafted on traditional wooden pit looms.",
+      "parentId": null,
+      "imageUrl": "/images/product-shawl.jpg",
+      "productCount": 3
+    },
+    {
+      "id": "cat_4645c5de-06ec-4873-8cc6-5513e00319bb",
+      "name": "Kangra Orthodox Tea",
+      "slug": "tea-and-infusions",
+      "description": "First flush orthodox black and green teas, single-estate harvests, and wild botanical infusions.",
+      "parentId": null,
+      "imageUrl": "/images/product-tea.jpg",
+      "productCount": 3
+    },
+    {
+      "id": "cat_405a1dfb-6f3a-4ada-84db-80d916b1ef0f",
+      "name": "Dry Fruit & Nuts",
+      "slug": "dry-fruit-and-nuts",
+      "description": "High-altitude Kinnaur walnuts, sun-dried wild apricots, and cold-desert chuli almonds.",
+      "parentId": null,
+      "imageUrl": "/images/product-walnut.jpg",
+      "productCount": 3
+    },
+    {
+      "id": "cat_2064c292-08c0-4014-920c-8c9e2e294690",
+      "name": "Wild Honey & Preserves",
+      "slug": "pantry-and-preserves",
+      "description": "Raw unpasteurized wildflower honey, slow-simmered orchard fruit jams, and traditional mountain pickles.",
+      "parentId": null,
+      "imageUrl": "/images/product-honey.jpg",
+      "productCount": 3
+    },
+    {
+      "id": "cat_cbefe516-e1aa-4e51-94ba-ecb2157b3ade",
+      "name": "Cold-Pressed Oils",
+      "slug": "cold-pressed-oils",
+      "description": "Artisanal wood cold-pressed apricot kernel oil, virgin walnut oil, and stone-ground yellow mustard oil.",
+      "parentId": null,
+      "imageUrl": "/images/product-oil.jpg",
+      "productCount": 3
+    },
+    {
+      "id": "cat_7bde268d-b326-47a3-86be-5a8d9c1c64f6",
+      "name": "Mountain Pulses & Staples",
+      "slug": "pulses-and-staples",
+      "description": "Terraced-grown Chamba rajma, Himalayan pure shilajit resin, deep crimson saffron, and mountain grains.",
+      "parentId": null,
+      "imageUrl": "/images/product-rajma.jpg",
+      "productCount": 4
+    },
+    {
+      "id": "cat_0b8f1f81-6ed1-4ffc-8fd4-777ca4879c69",
+      "name": "Warm Knitwear",
+      "slug": "knitwear",
+      "description": "Hand-knitted sheep wool socks, cozy ribbed mufflers, and cable-knit gloves for alpine winters.",
+      "parentId": null,
+      "imageUrl": "/images/product-muffler.jpg",
+      "productCount": 3
+    },
+    {
+      "id": "cat_5fbc12ae-f541-43f1-983b-a24ff7eedf51",
+      "name": "Himachali Caps",
+      "slug": "caps-and-headwear",
+      "description": "Traditional Kulluvi and Bushahri velvet-banded wool caps worn across the mountain valleys.",
+      "parentId": null,
+      "imageUrl": "/images/product-cap.jpg",
+      "productCount": 2
+    },
+    {
+      "id": "cat_be34e127-d28a-468d-a997-444dba2cf43a",
+      "name": "Curated Gifting",
+      "slug": "gifting",
+      "description": "Bespoke hand-assembled mountain pantry crates, artisanal tea selections, and winter warmth gift sets.",
+      "parentId": null,
+      "imageUrl": "/images/editorial-terrace.jpg",
+      "productCount": 3
+    }
+  ],
+  "subcategories": []
+}
