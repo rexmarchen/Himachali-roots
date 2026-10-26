@@ -850,11 +850,24 @@
       "productCount": 1
     }
   ],
+  "campaign": {
+    "id": "cmp_diwali_2026",
+    "name": "Pahadi Festive Glow",
+    "slug": "pahadi-festive-glow",
+    "description": "A Diwali collection from Himachali makers: handwoven wool, Kangra tea, orchard walnuts, wildflower honey and Chamba embroidery. Only the products listed in this offer carry a promotional price.",
+    "posterUrl": "/images/campaigns/pahadi-festive-glow-diwali-1672.webp",
+    "posterAlt": "Pahadi Festive Glow — Diwali in Himachal: festive poster with diya lights, mountain silhouettes and Pahadi Roots wordmark.",
+    "status": "active",
+    "startsAt": null,
+    "endsAt": null,
+    "maxDiscountBp": 3000,
+    "productCount": 5
+  },
   "reviews": [],
   "counts": {
     "products": 10,
     "sellers": 5,
     "regions": 5
   },
-  "generatedAt": "2026-10-25T11:42:30.685Z"
+  "generatedAt": "2026-10-26T15:45:00.000Z"
 }
