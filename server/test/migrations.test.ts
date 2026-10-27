@@ -78,7 +78,7 @@ describe('legacy database migrations', () => {
       const versions = queryAll<{ version: number }>(db, 'SELECT version FROM schema_migrations ORDER BY version').map(
         (row) => row.version,
       );
-      expect(versions).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7]);
 
       const profile = queryOne<{ status: string; store_status: string; payout_status: string }>(
         db,
@@ -100,9 +100,9 @@ describe('legacy database migrations', () => {
 
       const tables = queryAll<{ name: string }>(
         db,
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('seller_application_events','seller_notifications')",
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('seller_application_events','seller_notifications','auth_recovery_otps','auth_reset_authorizations')",
       );
-      expect(tables).toHaveLength(2);
+      expect(tables).toHaveLength(4);
       expect(queryOne(db, 'PRAGMA integrity_check')).toEqual({ integrity_check: 'ok' });
     } finally {
       db.close();
@@ -114,16 +114,18 @@ describe('legacy database migrations', () => {
     const db = openDatabase(file);
     try {
       const versions = queryAll<{ version: number }>(db, 'SELECT version FROM schema_migrations ORDER BY version');
-      expect(versions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(versions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7]);
       const orderItemColumns = queryAll<{ name: string }>(db, 'PRAGMA table_info(order_items)').map((row) => row.name);
       expect(orderItemColumns).toContain('original_unit_price_paise');
       const sessionColumns = queryAll<{ name: string }>(db, 'PRAGMA table_info(sessions)').map((row) => row.name);
       expect(sessionColumns).toContain('last_seen_at');
+      const userColumns = queryAll<{ name: string }>(db, 'PRAGMA table_info(users)').map((row) => row.name);
+      expect(userColumns).toContain('password_changed_at');
       const authTables = queryAll<{ name: string }>(
         db,
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('auth_identities','auth_link_challenges')",
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('auth_identities','auth_link_challenges','auth_recovery_otps','auth_reset_authorizations')",
       );
-      expect(authTables).toHaveLength(2);
+      expect(authTables).toHaveLength(4);
       const applications = queryAll(db, 'SELECT id FROM seller_applications');
       expect(applications).toHaveLength(1);
     } finally {

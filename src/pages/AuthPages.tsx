@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, errorFields, errorMessage } from '@/lib/api';
@@ -177,6 +177,7 @@ function GoogleAuthSection({
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -236,14 +237,26 @@ export function LoginPage() {
           />
         </Field>
         <Field label="Password" required error={fields.password}>
-          <Input
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            invalid={Boolean(fields.password)}
-          />
+          <div className="relative">
+            <Input
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              invalid={Boolean(fields.password)}
+              className="pr-14"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+              tabIndex={-1}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </Field>
         <div className="flex justify-end">
           <Link to="/forgot-password" className="text-[11.5px] text-muted underline underline-offset-4 hover:text-forest">
@@ -422,24 +435,133 @@ export function RegisterPage() {
   );
 }
 
+function OtpBoxes({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  disabled?: boolean;
+}) {
+  const digits = Array.from({ length: 6 }, (_, i) => value[i] || '');
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const handleChange = (index: number, char: string) => {
+    const clean = char.replace(/\D/g, '');
+    if (!clean) {
+      const next = digits.map((d, i) => (i === index ? '' : d)).join('');
+      onChange(next);
+      return;
+    }
+    const digit = clean[clean.length - 1];
+    const newDigits = [...digits];
+    newDigits[index] = digit;
+    const nextVal = newDigits.join('');
+    onChange(nextVal);
+    if (index < 5 && digit) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !digits[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted) {
+      onChange(pasted);
+      const targetIndex = Math.min(pasted.length, 5);
+      inputRefs.current[targetIndex]?.focus();
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-2 sm:gap-3" onPaste={handlePaste}>
+      {digits.map((digit, i) => (
+        <input
+          key={i}
+          ref={(el) => {
+            inputRefs.current[i] = el;
+          }}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={1}
+          autoComplete={i === 0 ? 'one-time-code' : 'off'}
+          aria-label={`Digit ${i + 1} of 6`}
+          value={digit}
+          disabled={disabled}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          className="h-12 w-11 rounded-sm border border-sand bg-surface text-center font-mono text-xl font-bold text-ink transition-colors focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/10 disabled:bg-paper sm:h-14 sm:w-13"
+        />
+      ))}
+    </div>
+  );
+}
+
 export function ForgotPasswordPage() {
+  const [step, setStep] = useState<'request' | 'verify' | 'reset' | 'success'>('request');
   const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [resetAuth, setResetAuth] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
   const [devResetUrl, setDevResetUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+  const [expirySeconds, setExpirySeconds] = useState(300);
+  const navigate = useNavigate();
 
-  const submit = async (event: FormEvent) => {
+  // Cooldown countdown
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const interval = setInterval(() => {
+      setCooldown((c) => (c <= 1 ? 0 : c - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldown]);
+
+  // Expiry countdown
+  useEffect(() => {
+    if (step !== 'verify' || expirySeconds <= 0) return;
+    const interval = setInterval(() => {
+      setExpirySeconds((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [step, expirySeconds]);
+
+  const handleRequest = async (event: FormEvent) => {
     event.preventDefault();
+    if (cooldown > 0) return;
     setSubmitting(true);
     setError(null);
+    setMessage(null);
     try {
-      const result = await api<{ message: string; devResetUrl?: string }>('/auth/forgot-password', {
+      const result = await api<{ message: string; devOtp?: string; devResetUrl?: string }>('/auth/forgot-password', {
         method: 'POST',
         body: { email },
       });
       setMessage(result.message);
+      setDevOtp(result.devOtp ?? null);
       setDevResetUrl(result.devResetUrl ?? null);
+      setCooldown(60);
+      setExpirySeconds(300);
+      setStep('verify');
     } catch (resetError) {
       setError(errorMessage(resetError));
     } finally {
@@ -447,29 +569,259 @@ export function ForgotPasswordPage() {
     }
   };
 
+  const handleResend = async () => {
+    if (cooldown > 0 || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await api<{ message: string; devOtp?: string; devResetUrl?: string }>('/auth/forgot-password', {
+        method: 'POST',
+        body: { email },
+      });
+      setMessage(result.message);
+      setDevOtp(result.devOtp ?? null);
+      setDevResetUrl(result.devResetUrl ?? null);
+      setCooldown(60);
+      setExpirySeconds(300);
+      setOtp('');
+    } catch (resendError) {
+      setError(errorMessage(resendError));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleVerify = async (event: FormEvent) => {
+    event.preventDefault();
+    if (otp.length !== 6) {
+      setError('Please enter all 6 digits of your verification code.');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await api<{ ok: boolean; resetAuthorization: string; message: string }>('/auth/verify-reset-otp', {
+        method: 'POST',
+        body: { email, otp },
+      });
+      setResetAuth(result.resetAuthorization);
+      setError(null);
+      setMessage(null);
+      setStep('reset');
+    } catch (verifyError) {
+      setError(errorMessage(verifyError));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReset = async (event: FormEvent) => {
+    event.preventDefault();
+    if (password !== confirm) {
+      setError('The two passwords do not match.');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api('/auth/reset-password', {
+        method: 'POST',
+        body: {
+          resetAuthorization: resetAuth,
+          password,
+          confirmPassword: confirm,
+        },
+      });
+      setStep('success');
+    } catch (pwdError) {
+      setError(errorMessage(pwdError));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formatExpiry = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  if (step === 'success') {
+    return (
+      <AuthShell
+        eyebrow="Account recovery"
+        title="Password updated"
+        lede="Your password has been changed successfully. All other active sessions were signed out for security."
+      >
+        <div className="space-y-4">
+          <Alert tone="success">
+            You can now sign in using your new password or your linked Google account.
+          </Alert>
+          <Button size="lg" className="w-full" onClick={() => navigate('/login')}>
+            Sign in to your account
+          </Button>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  if (step === 'reset') {
+    return (
+      <AuthShell
+        eyebrow="Account recovery"
+        title="Create a new password"
+        lede="Use at least 10 characters, including letters and numbers."
+        footer={<Link to="/login" className="link-underline text-forest">Back to sign in</Link>}
+      >
+        <form onSubmit={handleReset} className="space-y-4">
+          {error ? <Alert tone="error">{error}</Alert> : null}
+          <Field label="New password" required hint="10+ characters, letters and numbers">
+            <div className="relative">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                required
+                minLength={10}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="pr-14"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </Field>
+          <Field label="Repeat new password" required>
+            <div className="relative">
+              <Input
+                type={showConfirm ? 'text' : 'password'}
+                autoComplete="new-password"
+                required
+                value={confirm}
+                onChange={(event) => setConfirm(event.target.value)}
+                className="pr-14"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(!showConfirm)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+                tabIndex={-1}
+                aria-label={showConfirm ? 'Hide password' : 'Show password'}
+              >
+                {showConfirm ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </Field>
+          <Button type="submit" size="lg" className="w-full" loading={submitting}>
+            Update password
+          </Button>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  if (step === 'verify') {
+    return (
+      <AuthShell
+        eyebrow="Security verification"
+        title="Enter verification code"
+        lede={`We sent a 6-digit verification code to ${email}. Check your inbox and spam folder.`}
+        footer={
+          <div className="flex items-center justify-between text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setStep('request');
+                setOtp('');
+                setError(null);
+              }}
+              className="text-forest underline underline-offset-4 hover:text-terra"
+            >
+              Change email address
+            </button>
+            <Link to="/login" className="link-underline text-forest">
+              Back to sign in
+            </Link>
+          </div>
+        }
+      >
+        <form onSubmit={handleVerify} className="space-y-5">
+          {error ? <Alert tone="error">{error}</Alert> : null}
+          {message ? <Alert tone="info">{message}</Alert> : null}
+
+          {devOtp ? (
+            <div className="border border-terra/30 bg-[#fff8f4] p-3 text-xs">
+              <p className="font-semibold uppercase tracking-wider text-[#8e4630]">Development verification code</p>
+              <p className="mt-1 font-mono text-base font-bold text-[#7d3d28]">{devOtp}</p>
+            </div>
+          ) : null}
+          {devResetUrl ? (
+            <div className="border border-terra/30 bg-[#fff8f4] p-3 text-xs">
+              <p className="font-semibold uppercase tracking-wider text-[#8e4630]">Development reset link</p>
+              <a href={devResetUrl} className="mt-1 block break-all text-xs text-[#7d3d28] underline underline-offset-2">
+                {devResetUrl}
+              </a>
+            </div>
+          ) : null}
+
+          <div>
+            <label className="block text-xs font-medium uppercase tracking-wider text-muted mb-2">
+              6-digit verification code
+            </label>
+            <OtpBoxes value={otp} onChange={setOtp} disabled={submitting} />
+            <div className="mt-2 flex items-center justify-between text-xs text-muted">
+              <span>
+                {expirySeconds > 0 ? (
+                  <>Expires in <strong className="font-mono text-forest">{formatExpiry(expirySeconds)}</strong></>
+                ) : (
+                  <span className="text-terra">Code expired. Please request a new code.</span>
+                )}
+              </span>
+              <span>Max 5 attempts</span>
+            </div>
+          </div>
+
+          <Button type="submit" size="lg" className="w-full" loading={submitting} disabled={otp.length !== 6 || expirySeconds <= 0}>
+            Verify and continue
+          </Button>
+
+          <div className="text-center pt-2">
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={cooldown > 0 || submitting}
+              className="text-xs font-medium text-forest hover:text-terra disabled:cursor-not-allowed disabled:text-muted"
+            >
+              {cooldown > 0 ? `Resend code in ${cooldown}s` : "Didn't receive a code? Resend"}
+            </button>
+          </div>
+        </form>
+      </AuthShell>
+    );
+  }
+
   return (
     <AuthShell
       eyebrow="Account recovery"
       title="Reset your password"
-      lede="Enter the email on your account. If it is registered, a single-use link will be sent. The response is the same either way."
+      lede="Enter the email address on your account. If it is registered, a 6-digit verification code will be sent."
       footer={<Link to="/login" className="link-underline text-forest">Back to sign in</Link>}
     >
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={handleRequest} className="space-y-4">
         {error ? <Alert tone="error">{error}</Alert> : null}
         {message ? <Alert tone="success">{message}</Alert> : null}
-        {devResetUrl ? (
-          <div className="border border-terra/30 bg-[#fff8f4] p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8e4630]">Development reset link</p>
-            <a href={devResetUrl} className="mt-2 block break-all text-xs text-[#7d3d28] underline underline-offset-2">
-              {devResetUrl}
-            </a>
-          </div>
-        ) : null}
         <Field label="Email address" required>
           <Input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
         </Field>
         <Button type="submit" size="lg" className="w-full" loading={submitting}>
-          Send reset link
+          Send verification code
         </Button>
       </form>
     </AuthShell>
@@ -481,6 +833,8 @@ export function ResetPasswordPage() {
   const token = params.get('token') ?? '';
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -495,7 +849,10 @@ export function ResetPasswordPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await api('/auth/reset-password', { method: 'POST', body: { token, password } });
+      await api('/auth/reset-password', {
+        method: 'POST',
+        body: { token, password, confirmPassword: confirm },
+      });
       setDone(true);
     } catch (resetError) {
       setError(errorMessage(resetError));
@@ -505,12 +862,7 @@ export function ResetPasswordPage() {
   };
 
   if (!token) {
-    return (
-      <AuthShell eyebrow="Account recovery" title="That link is incomplete" lede="The reset token is missing from the address.">
-        <Alert tone="error">Request a new password reset link to continue.</Alert>
-        <Button className="mt-5 w-full" onClick={() => navigate('/forgot-password')}>Request a new link</Button>
-      </AuthShell>
-    );
+    return <ForgotPasswordPage />;
   }
 
   return (
@@ -524,11 +876,48 @@ export function ResetPasswordPage() {
       ) : (
         <form onSubmit={submit} className="space-y-4">
           {error ? <Alert tone="error">{error}</Alert> : null}
-          <Field label="New password" required>
-            <Input type="password" autoComplete="new-password" required minLength={10} value={password} onChange={(event) => setPassword(event.target.value)} />
+          <Field label="New password" required hint="10+ characters, letters and numbers">
+            <div className="relative">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                required
+                minLength={10}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="pr-14"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </Field>
           <Field label="Repeat new password" required>
-            <Input type="password" autoComplete="new-password" required value={confirm} onChange={(event) => setConfirm(event.target.value)} />
+            <div className="relative">
+              <Input
+                type={showConfirm ? 'text' : 'password'}
+                autoComplete="new-password"
+                required
+                value={confirm}
+                onChange={(event) => setConfirm(event.target.value)}
+                className="pr-14"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(!showConfirm)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+                tabIndex={-1}
+                aria-label={showConfirm ? 'Hide password' : 'Show password'}
+              >
+                {showConfirm ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </Field>
           <Button type="submit" size="lg" className="w-full" loading={submitting}>Update password</Button>
         </form>

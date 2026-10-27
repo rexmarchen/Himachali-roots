@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   email_verified INTEGER NOT NULL DEFAULT 0,
   is_disabled INTEGER NOT NULL DEFAULT 0,
+  password_changed_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
@@ -85,6 +86,36 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   used_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- Cryptographically secure 6-digit OTPs for account recovery. The OTP hash is
+-- stored, never plaintext. Enforces 5-minute expiry and 5 max attempts.
+CREATE TABLE IF NOT EXISTS auth_recovery_otps (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL COLLATE NOCASE,
+  purpose TEXT NOT NULL CHECK (purpose IN ('password_reset', 'email_verification')),
+  otp_hash TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 5,
+  expires_at TEXT NOT NULL,
+  resend_available_at TEXT NOT NULL,
+  consumed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_recovery_otps_user ON auth_recovery_otps(user_id, purpose);
+CREATE INDEX IF NOT EXISTS idx_recovery_otps_email ON auth_recovery_otps(email, purpose);
+
+-- Short-lived, single-use authorizations issued only after successful OTP verification.
+CREATE TABLE IF NOT EXISTS auth_reset_authorizations (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL CHECK (purpose IN ('password_reset')),
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_reset_auth_user ON auth_reset_authorizations(user_id);
+CREATE INDEX IF NOT EXISTS idx_reset_auth_expires ON auth_reset_authorizations(expires_at);
 
 CREATE TABLE IF NOT EXISTS email_verification_tokens (
   token_hash TEXT PRIMARY KEY,

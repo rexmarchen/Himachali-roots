@@ -22,7 +22,7 @@ import {
 } from '../lib/auth.js';
 import { verifyGoogleIdToken as verifyGoogleIdTokenWithGoogle, type GoogleProfile } from '../lib/google.js';
 import { audit } from '../lib/audit.js';
-import { parse, unauthorized, badRequest, conflict, forbidden } from '../lib/http.js';
+import { parse, unauthorized, badRequest, conflict, forbidden, AppError } from '../lib/http.js';
 import { newId, randomToken } from '../lib/ids.js';
 import { ensureCart, CART_COOKIE, setCartCookie } from '../lib/cart.js';
 import { notify } from '../lib/email.js';
@@ -507,60 +507,313 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
     res.json({ ok: true, devVerifyUrl });
   });
 
+  const OTP_EXPIRY_MINUTES = 5;
+  const OTP_COOLDOWN_SECONDS = 60;
+  const OTP_MAX_ATTEMPTS = 5;
+  const RESET_AUTH_MINUTES = 15;
+
+  function hashOtp(userId: string, otp: string): string {
+    return sha256(`recovery_otp:${userId}:${otp}`);
+  }
+
+  function recoveryError(code: string, message: string) {
+    return new AppError(400, code, message);
+  }
+
   router.post('/forgot-password', authLimiter(5), async (req, res) => {
     const input = parse(z.object({ email: emailSchema }), req.body);
-    const user = queryOne<{ id: string; email: string; full_name: string }>(
+    const email = normalizeEmail(input.email);
+    const user = queryOne<{ id: string; email: string; full_name: string; is_disabled: number }>(
       db,
-      'SELECT u.id, u.email, p.full_name FROM users u LEFT JOIN profiles p ON p.id = u.id WHERE u.email = ?',
-      input.email,
+      `SELECT u.id, u.email, COALESCE(p.full_name, '') AS full_name, u.is_disabled FROM users u LEFT JOIN profiles p ON p.id = u.id WHERE u.email = ?`,
+      email,
     );
+    let devOtp: string | null = null;
     let devResetUrl: string | null = null;
-    if (user) {
-      const token = randomToken(32);
+
+    if (user && !user.is_disabled) {
+      const now = new Date();
+      const nowIso = now.toISOString();
+
+      // Check 60-second resend cooldown on active OTP
+      const recent = queryOne<{ resend_available_at: string }>(
+        db,
+        `SELECT resend_available_at FROM auth_recovery_otps
+          WHERE user_id = ? AND purpose = 'password_reset' AND consumed_at IS NULL AND resend_available_at > ?
+          ORDER BY created_at DESC LIMIT 1`,
+        user.id,
+        nowIso,
+      );
+      if (recent) {
+        throw recoveryError('cooldown_active', 'Please wait a moment before requesting another verification code.');
+      }
+
+      // Invalidate previous unconsumed OTPs for this account
+      execute(
+        db,
+        `UPDATE auth_recovery_otps SET consumed_at = ? WHERE user_id = ? AND purpose = 'password_reset' AND consumed_at IS NULL`,
+        nowIso,
+        user.id,
+      );
+
+      // Generate cryptographically secure 6-digit OTP
+      const otp = String(crypto.randomInt(100000, 1000000));
+      const otpId = newId('otp_');
+      const otpHash = hashOtp(user.id, otp);
+      const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60_000).toISOString();
+      const resendAt = new Date(now.getTime() + OTP_COOLDOWN_SECONDS * 1000).toISOString();
+
+      execute(
+        db,
+        `INSERT INTO auth_recovery_otps
+           (id, user_id, email, purpose, otp_hash, attempts, max_attempts, expires_at, resend_available_at)
+         VALUES (?, ?, ?, 'password_reset', ?, 0, ?, ?, ?)`,
+        otpId,
+        user.id,
+        user.email,
+        otpHash,
+        OTP_MAX_ATTEMPTS,
+        expiresAt,
+        resendAt,
+      );
+
+      // Backwards-compatible legacy reset link
+      const legacyToken = randomToken(32);
       execute(
         db,
         'INSERT INTO password_reset_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)',
-        sha256(token),
+        sha256(legacyToken),
         user.id,
-        new Date(Date.now() + 3600_000).toISOString(),
+        new Date(now.getTime() + 3600_000).toISOString(),
       );
-      const link = `${env.appUrl}/reset-password?token=${encodeURIComponent(token)}`;
+      const link = `${env.appUrl}/reset-password?token=${encodeURIComponent(legacyToken)}`;
+
       await notify(db, {
         userId: user.id,
         email: user.email,
-        type: 'password_reset',
-        subject: 'Reset your PAHADI ROOTS password',
-        body: `<p>We received a request to reset your password. This link expires in one hour.</p>
-          <p><a href="${link}" style="display:inline-block;background:#243D32;color:#F7F3EB;padding:12px 20px;text-decoration:none">Choose a new password</a></p>
-          <p style="font-size:13px;color:#6B6F68">If this wasn’t you, no action is needed.</p>`,
-        dedupeKey: `reset:${user.id}:${Math.floor(Date.now() / 3600_000)}`,
+        type: 'password_reset_otp',
+        subject: `Your Dear Hills password reset code: ${otp}`,
+        body: `<div style="font-family:sans-serif;max-width:540px;color:#243D32">
+          <h2 style="font-size:22px;color:#243D32;margin-bottom:12px">Dear Hills Account Recovery</h2>
+          <p>Hello ${user.full_name || 'there'},</p>
+          <p>We received a request to reset your password. Use the verification code below:</p>
+          <div style="background:#F7F3EB;border:1px solid #D9D2C5;padding:16px;text-align:center;margin:20px 0">
+            <span style="font-family:monospace;font-size:32px;font-weight:bold;letter-spacing:6px;color:#243D32">${otp}</span>
+          </div>
+          <p style="font-size:13px;color:#666">This verification code expires in <strong>5 minutes</strong>. If you did not make this request, you can safely ignore this email.</p>
+        </div>`,
+        dedupeKey: `otp:${user.id}:${nowIso.slice(0, 16)}`,
       });
-      if (env.allowDevAuthHelpers && !env.smtp.configured) devResetUrl = link;
+
+      if (env.allowDevAuthHelpers || env.isTest) {
+        devOtp = otp;
+        if (!env.smtp.configured) devResetUrl = link;
+      }
     }
+
     res.json({
       ok: true,
-      message: 'If that email is registered, a reset link has been sent.',
+      message: 'If that email is registered, a 6-digit verification code has been sent.',
+      ...(devOtp ? { devOtp } : {}),
       ...(devResetUrl ? { devResetUrl } : {}),
     });
   });
 
-  router.post('/reset-password', authLimiter(10), (req, res) => {
+  router.post('/verify-reset-otp', authLimiter(10), (req, res) => {
     const input = parse(
-      z.object({ token: z.string().min(20).max(200), password: passwordSchema }),
+      z.object({
+        email: emailSchema,
+        otp: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit verification code.'),
+      }),
       req.body,
     );
-    const row = queryOne<{ user_id: string }>(
+    const email = normalizeEmail(input.email);
+    const user = queryOne<{ id: string; email: string; is_disabled: number }>(
       db,
-      'SELECT user_id FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?',
-      sha256(input.token),
-      new Date().toISOString(),
+      'SELECT id, email, is_disabled FROM users WHERE email = ?',
+      email,
     );
-    if (!row) throw badRequest('That reset link is invalid or has expired. Request a new one.');
+    if (!user || user.is_disabled) {
+      throw recoveryError('otp_not_found', 'That verification code is invalid or has expired.');
+    }
+
+    const nowIso = new Date().toISOString();
+    const record = queryOne<{
+      id: string;
+      user_id: string;
+      otp_hash: string;
+      attempts: number;
+      max_attempts: number;
+      expires_at: string;
+      consumed_at: string | null;
+    }>(
+      db,
+      `SELECT id, user_id, otp_hash, attempts, max_attempts, expires_at, consumed_at
+         FROM auth_recovery_otps
+        WHERE user_id = ? AND purpose = 'password_reset'
+        ORDER BY created_at DESC LIMIT 1`,
+      user.id,
+    );
+
+    if (!record) {
+      throw recoveryError('otp_not_found', 'No verification code request was found for this account.');
+    }
+
+    if (record.consumed_at) {
+      throw recoveryError('otp_consumed', 'That verification code has already been used. Please request a new code.');
+    }
+
+    if (record.expires_at <= nowIso) {
+      throw recoveryError('otp_expired', 'That verification code has expired. Please request a new code.');
+    }
+
+    if (record.attempts >= record.max_attempts) {
+      execute(db, 'UPDATE auth_recovery_otps SET consumed_at = ? WHERE id = ?', nowIso, record.id);
+      throw recoveryError('too_many_attempts', 'Too many incorrect attempts. Please request a new code.');
+    }
+
+    const expectedHash = hashOtp(user.id, input.otp);
+    const isMatch = crypto.timingSafeEqual(Buffer.from(record.otp_hash), Buffer.from(expectedHash));
+
+    if (!isMatch) {
+      const newAttempts = record.attempts + 1;
+      execute(db, 'UPDATE auth_recovery_otps SET attempts = ? WHERE id = ?', newAttempts, record.id);
+      const remaining = record.max_attempts - newAttempts;
+      if (remaining <= 0) {
+        execute(db, 'UPDATE auth_recovery_otps SET consumed_at = ? WHERE id = ?', nowIso, record.id);
+        throw recoveryError('too_many_attempts', 'Too many incorrect attempts. Please request a new code.');
+      }
+      throw recoveryError('invalid_otp', `Incorrect code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+    }
+
+    // Atomic OTP consumption and issue of short-lived reset authorization
+    const resetAuthorization = randomToken(32);
+    const authExpiresAt = new Date(Date.now() + RESET_AUTH_MINUTES * 60_000).toISOString();
+
     tx(db, () => {
-      execute(db, 'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?', hashPassword(input.password), new Date().toISOString(), row.user_id);
-      execute(db, 'UPDATE password_reset_tokens SET used_at = ? WHERE token_hash = ?', new Date().toISOString(), sha256(input.token));
-      execute(db, 'DELETE FROM sessions WHERE user_id = ?', row.user_id);
+      execute(db, 'UPDATE auth_recovery_otps SET consumed_at = ? WHERE id = ?', nowIso, record.id);
+      execute(
+        db,
+        `INSERT INTO auth_reset_authorizations (token_hash, user_id, purpose, expires_at)
+         VALUES (?, ?, 'password_reset', ?)`,
+        sha256(resetAuthorization),
+        user.id,
+        authExpiresAt,
+      );
     });
+
+    audit(db, { id: user.id, email: user.email }, 'auth.otp.verified', 'user', user.id);
+    res.json({
+      ok: true,
+      message: 'Verification code confirmed.',
+      resetAuthorization,
+    });
+  });
+
+  router.post('/reset-password', authLimiter(10), async (req, res) => {
+    const input = parse(
+      z
+        .object({
+          resetAuthorization: z.string().min(20).max(200).optional(),
+          token: z.string().min(20).max(200).optional(),
+          password: passwordSchema,
+          confirmPassword: z.string().optional(),
+        })
+        .refine((data) => data.resetAuthorization || data.token, {
+          message: 'Reset authorization token is required.',
+          path: ['resetAuthorization'],
+        })
+        .refine((data) => !data.confirmPassword || data.password === data.confirmPassword, {
+          message: 'The two passwords do not match.',
+          path: ['confirmPassword'],
+        }),
+      req.body,
+    );
+
+    const rawToken = input.resetAuthorization || input.token!;
+    const tokenHash = sha256(rawToken);
+    const nowIso = new Date().toISOString();
+
+    const authRow = queryOne<{ user_id: string; used_at: string | null; expires_at: string }>(
+      db,
+      `SELECT user_id, used_at, expires_at FROM auth_reset_authorizations
+        WHERE token_hash = ? AND purpose = 'password_reset'
+        ORDER BY created_at DESC LIMIT 1`,
+      tokenHash,
+    );
+
+    let userId: string | undefined;
+    let isAuthTable = false;
+
+    if (authRow) {
+      if (authRow.used_at) {
+        throw recoveryError('authorization_consumed', 'That reset authorization has already been used. Please restart recovery.');
+      }
+      if (authRow.expires_at <= nowIso) {
+        throw recoveryError('authorization_expired', 'That reset authorization has expired. Please restart recovery.');
+      }
+      userId = authRow.user_id;
+      isAuthTable = true;
+    }
+
+    if (!userId) {
+      const legacyRow = queryOne<{ user_id: string; used_at: string | null; expires_at: string }>(
+        db,
+        'SELECT user_id, used_at, expires_at FROM password_reset_tokens WHERE token_hash = ? ORDER BY expires_at DESC LIMIT 1',
+        tokenHash,
+      );
+      if (legacyRow) {
+        if (legacyRow.used_at) {
+          throw recoveryError('authorization_consumed', 'That reset link has already been used.');
+        }
+        if (legacyRow.expires_at <= nowIso) {
+          throw recoveryError('authorization_expired', 'That reset link has expired.');
+        }
+        userId = legacyRow.user_id;
+      }
+    }
+
+    if (!userId) {
+      throw recoveryError('invalid_authorization', 'That reset authorization is invalid or has expired. Please restart recovery.');
+    }
+
+    tx(db, () => {
+      execute(
+        db,
+        'UPDATE users SET password_hash = ?, password_changed_at = ?, updated_at = ? WHERE id = ?',
+        hashPassword(input.password),
+        nowIso,
+        nowIso,
+        userId,
+      );
+      if (isAuthTable) {
+        execute(db, 'UPDATE auth_reset_authorizations SET used_at = ? WHERE token_hash = ?', nowIso, tokenHash);
+      } else {
+        execute(db, 'UPDATE password_reset_tokens SET used_at = ? WHERE token_hash = ?', nowIso, tokenHash);
+      }
+      // Invalidate all active sessions for this user
+      execute(db, 'DELETE FROM sessions WHERE user_id = ?', userId);
+    });
+
+    const user = queryOne<{ email: string; full_name: string }>(
+      db,
+      `SELECT u.email, COALESCE(p.full_name, '') AS full_name FROM users u LEFT JOIN profiles p ON p.id = u.id WHERE u.id = ?`,
+      userId,
+    );
+    if (user) {
+      await notify(db, {
+        userId,
+        email: user.email,
+        type: 'password_changed',
+        subject: 'Your Dear Hills password has been changed',
+        body: `<p>Hello ${user.full_name || 'there'},</p>
+          <p>The password for your Dear Hills account was recently updated. All existing sessions were signed out for security.</p>
+          <p>If you did not make this change, please contact our support team immediately.</p>`,
+        dedupeKey: `pwd_changed:${userId}:${nowIso.slice(0, 13)}`,
+      });
+    }
+
+    audit(db, { id: userId, email: user?.email ?? '' }, 'auth.password.reset', 'user', userId);
     res.json({ ok: true, message: 'Password updated. Sign in with your new password.' });
   });
 

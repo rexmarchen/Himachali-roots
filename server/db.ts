@@ -48,6 +48,9 @@ function tableExists(db: Db, table: string): boolean {
  * below still owns validation and data backfills.
  */
 function reconcileLegacySchema(db: Db): void {
+  if (tableExists(db, 'users')) {
+    addColumn(db, 'users', 'password_changed_at', 'TEXT');
+  }
   if (tableExists(db, 'seller_profiles')) {
     addColumn(db, 'seller_profiles', 'seller_category', 'TEXT');
     addColumn(db, 'seller_profiles', 'store_status', "TEXT NOT NULL DEFAULT 'setup_incomplete'");
@@ -269,7 +272,46 @@ export function openDatabase(filename: string): Db {
 
   migrateProviderAuth(db);
   markMigration(db, 6);
+
+  migratePasswordRecoveryOtp(db);
+  markMigration(db, 7);
   return db;
+}
+
+/**
+ * Migration 7: add password_changed_at tracking and dedicated tables for
+ * secure 6-digit account recovery OTPs and single-use reset authorizations.
+ */
+function migratePasswordRecoveryOtp(db: Db): void {
+  addColumn(db, 'users', 'password_changed_at', 'TEXT');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS auth_recovery_otps (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      email TEXT NOT NULL COLLATE NOCASE,
+      purpose TEXT NOT NULL CHECK (purpose IN ('password_reset', 'email_verification')),
+      otp_hash TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      max_attempts INTEGER NOT NULL DEFAULT 5,
+      expires_at TEXT NOT NULL,
+      resend_available_at TEXT NOT NULL,
+      consumed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_recovery_otps_user ON auth_recovery_otps(user_id, purpose);
+    CREATE INDEX IF NOT EXISTS idx_recovery_otps_email ON auth_recovery_otps(email, purpose);
+
+    CREATE TABLE IF NOT EXISTS auth_reset_authorizations (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      purpose TEXT NOT NULL CHECK (purpose IN ('password_reset')),
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_reset_auth_user ON auth_reset_authorizations(user_id);
+    CREATE INDEX IF NOT EXISTS idx_reset_auth_expires ON auth_reset_authorizations(expires_at);
+  `);
 }
 
 /**
