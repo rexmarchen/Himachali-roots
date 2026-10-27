@@ -13,10 +13,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-const target = path.resolve(process.argv[2] ?? '');
+let target = path.resolve(process.argv[2] ?? '');
 if (!process.argv[2] || !fs.existsSync(target)) {
   console.error(JSON.stringify({ level: 'error', msg: 'backup_not_found', usage: 'npm run db:verify -- <backup.db>' }));
   process.exit(1);
+}
+
+if (fs.statSync(target).isDirectory()) {
+  const files = fs
+    .readdirSync(target)
+    .filter((f) => f.endsWith('.db'))
+    .map((f) => path.join(target, f))
+    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  if (!files[0]) {
+    console.error(JSON.stringify({ level: 'error', msg: 'no_backups_in_directory', directory: target }));
+    process.exit(1);
+  }
+  target = files[0];
 }
 
 const db = new DatabaseSync(target, { readOnly: true });
