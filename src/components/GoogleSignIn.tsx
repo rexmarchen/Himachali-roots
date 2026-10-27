@@ -166,6 +166,46 @@ export function GoogleSignIn({
     const accounts = window.google?.accounts?.id;
     if (accounts?.prompt) {
       accounts.prompt();
+    } else {
+      // Re-attempt loading script if previously in error state
+      loader = null;
+      setStatus('loading');
+      loadGoogleScript()
+        .then(() => {
+          const acc = window.google?.accounts?.id;
+          if (acc && containerRef.current) {
+            acc.initialize({
+              client_id: clientId,
+              callback: (response) => {
+                if (!response.credential) return;
+                setBusy(true);
+                void callbackRef
+                  .current(response.credential)
+                  .catch(() => {})
+                  .finally(() => setBusy(false));
+              },
+              auto_select: false,
+              cancel_on_tap_outside: true,
+              ux_mode: 'popup',
+            });
+            containerRef.current.replaceChildren();
+            const targetWidth = Math.max(240, Math.min(360, containerRef.current.clientWidth || 360));
+            acc.renderButton(containerRef.current, {
+              type: 'standard',
+              theme: 'outline',
+              size: 'large',
+              text,
+              shape: 'rectangular',
+              logo_alignment: 'left',
+              width: targetWidth,
+            });
+            setStatus('ready');
+            if (acc.prompt) acc.prompt();
+          }
+        })
+        .catch(() => {
+          setStatus('error');
+        });
     }
   };
 
@@ -181,7 +221,9 @@ export function GoogleSignIn({
       {/* 1. Official Google rendered button container */}
       <div
         ref={containerRef}
-        className={`w-full flex items-center justify-center min-h-[44px] ${status === 'ready' && !busy ? '' : 'hidden'}`}
+        className={`w-full flex items-center justify-center min-h-[44px] transition-opacity duration-200 ${
+          status === 'ready' && !busy ? 'block' : 'opacity-0 h-0 overflow-hidden pointer-events-none'
+        }`}
       />
 
       {/* 2. Premium branded button with official 4-color Google Icon if loading, busy or fallback */}
@@ -197,7 +239,7 @@ export function GoogleSignIn({
           ) : (
             <GoogleIcon className="h-5 w-5 shrink-0 transition-transform group-hover:scale-105" />
           )}
-          <span>{busy ? 'Connecting with Google…' : buttonLabel}</span>
+          <span>{busy ? 'Connecting with Google…' : status === 'error' ? `${buttonLabel} (Retry)` : buttonLabel}</span>
         </button>
       ) : null}
 
