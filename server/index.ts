@@ -16,7 +16,7 @@ async function main(): Promise<void> {
   }
 
   const hasProducts = queryOne<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM products');
-  if (!env.isProduction && process.env.SEED_ON_START === 'true' && (hasProducts?.count ?? 0) === 0) {
+  if (process.env.SEED_ON_START === 'true' && (hasProducts?.count ?? 0) === 0) {
     const { seed } = await import('./seed.js');
     await seed(db, { reset: false });
   }
