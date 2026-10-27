@@ -372,98 +372,318 @@ export function listCategories(db: Db): Category[] {
   }));
 }
 
-export function listPublicSellers(db: Db): {
-  id: string;
-  name: string;
-  slug: string;
-  tagline: string | null;
-  story: string | null;
-  region: string | null;
-  productCount: number;
-  imageUrl: string | null;
-  logoUrl: string | null;
-  coverUrl: string | null;
-}[] {
-  return queryAll<{
+export interface PublicMakersFilter {
+  q?: string;
+  category?: string;
+  region?: string;
+  verified?: boolean | string;
+  page?: number | string;
+  limit?: number | string;
+  pageSize?: number | string;
+  sort?: string;
+}
+
+export function listPublicMakers(db: Db, query: PublicMakersFilter = {}): {
+  makers: {
     id: string;
     name: string;
     slug: string;
+    sellerType: string;
+    sellerCategory: string | null;
     tagline: string | null;
     story: string | null;
     region: string | null;
-    logo_url: string | null;
-    cover_url: string | null;
-    product_count: number;
-    image_url: string | null;
-  }>(
-    db,
-    `SELECT s.id, s.business_name AS name, s.slug, s.tagline, s.story, s.region, s.logo_url, s.cover_url,
-            (SELECT COUNT(*) FROM products p WHERE p.seller_id = s.id AND p.status = 'approved') AS product_count,
-            (SELECT pi.url FROM products p JOIN product_images pi ON pi.product_id = p.id
-              WHERE p.seller_id = s.id AND p.status = 'approved' ORDER BY p.is_featured DESC, pi.sort_order LIMIT 1) AS image_url
-       FROM seller_profiles s
-      WHERE s.status = 'approved' AND s.store_status = 'active'
-      ORDER BY product_count DESC, s.business_name`,
-  ).map((row) => ({
-    id: row.id,
-    name: row.name,
-    slug: row.slug,
-    tagline: row.tagline,
-    story: row.story,
-    region: row.region,
-    productCount: row.product_count,
-    imageUrl: row.image_url,
-    logoUrl: row.logo_url,
-    coverUrl: row.cover_url,
-  }));
-}
-
-export function getSellerStorefront(db: Db, slug: string): {
-  id: string;
-  name: string;
-  slug: string;
-  tagline: string | null;
-  story: string | null;
-  region: string | null;
-  village: string | null;
-  logoUrl: string | null;
-  coverUrl: string | null;
-  sellerCategory: string | null;
-  approvedAt: string | null;
-  productCount: number;
+    village: string | null;
+    logoUrl: string | null;
+    coverUrl: string | null;
+    imageUrl: string | null;
+    productCount: number;
+    categories: { id: string; name: string; slug: string }[];
+    specialities: string[];
+    isVerified: boolean;
+    yearsOperating: number | null;
+    approvedAt: string | null;
+    createdAt: string;
+  }[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  filters: {
+    categories: { id: string; name: string; slug: string; count: number }[];
+    regions: { region: string; count: number }[];
+  };
 } {
-  const seller = queryOne<{
+  const page = Math.max(1, Math.floor(Number(query.page) || 1));
+  const limit = Math.min(48, Math.max(1, Math.floor(Number(query.limit ?? query.pageSize) || 12)));
+  const offset = (page - 1) * limit;
+
+  const conditions: string[] = ["s.status = 'approved'", "s.store_status = 'active'"];
+  const params: (string | number)[] = [];
+
+  const q = typeof query.q === 'string' ? query.q.trim() : '';
+  if (q) {
+    conditions.push(
+      '(s.business_name LIKE ? OR s.tagline LIKE ? OR s.story LIKE ? OR s.region LIKE ? OR s.village LIKE ?)',
+    );
+    const pattern = `%${q}%`;
+    params.push(pattern, pattern, pattern, pattern, pattern);
+  }
+
+  const category = typeof query.category === 'string' ? query.category.trim() : '';
+  if (category && category !== 'all') {
+    conditions.push(
+      `(s.seller_category = ? OR EXISTS (
+        SELECT 1 FROM products p JOIN categories c ON c.id = p.category_id
+         WHERE p.seller_id = s.id AND p.status = 'approved' AND (c.slug = ? OR c.id = ?)
+      ) OR EXISTS (
+        SELECT 1 FROM seller_applications sa
+         WHERE sa.seller_id = s.id AND sa.status = 'approved' AND sa.categories LIKE ?
+      ))`,
+    );
+    params.push(category, category, category, `%"${category}"%`);
+  }
+
+  const region = typeof query.region === 'string' ? query.region.trim() : '';
+  if (region && region !== 'all') {
+    conditions.push('LOWER(s.region) = LOWER(?)');
+    params.push(region);
+  }
+
+  const verified = query.verified === true || query.verified === 'true' || query.verified === '1';
+  if (verified) {
+    conditions.push('s.verified_at IS NOT NULL');
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+  const countRow = queryOne<{ count: number }>(
+    db,
+    `SELECT COUNT(*) AS count FROM seller_profiles s ${whereClause}`,
+    ...params,
+  );
+  const total = countRow?.count ?? 0;
+
+  let orderBy = 'product_count DESC, s.business_name ASC';
+  if (query.sort === 'name_asc') {
+    orderBy = 's.business_name ASC';
+  } else if (query.sort === 'name_desc') {
+    orderBy = 's.business_name DESC';
+  } else if (query.sort === 'newest') {
+    orderBy = 's.approved_at DESC, s.created_at DESC';
+  }
+
+  const rows = queryAll<{
     id: string;
     name: string;
     slug: string;
+    seller_type: string;
+    seller_category: string | null;
     tagline: string | null;
     story: string | null;
     region: string | null;
     village: string | null;
     logo_url: string | null;
     cover_url: string | null;
-    seller_category: string | null;
+    verified_at: string | null;
     approved_at: string | null;
+    created_at: string;
+    product_count: number;
+    image_url: string | null;
+    product_categories_json: string | null;
+    app_categories_json: string | null;
+    specialities_json: string | null;
+    years_operating: number | null;
   }>(
     db,
-    `SELECT id, business_name AS name, slug, tagline, story, region, village, logo_url, cover_url,
-            seller_category, approved_at
-       FROM seller_profiles WHERE slug = ? AND status = 'approved' AND store_status = 'active'`,
+    `SELECT s.id, s.business_name AS name, s.slug, s.seller_type, s.seller_category, s.tagline, s.story,
+            s.region, s.village, s.logo_url, s.cover_url, s.verified_at, s.approved_at, s.created_at,
+            (SELECT COUNT(*) FROM products p WHERE p.seller_id = s.id AND p.status = 'approved') AS product_count,
+            (SELECT pi.url FROM products p JOIN product_images pi ON pi.product_id = p.id
+              WHERE p.seller_id = s.id AND p.status = 'approved' ORDER BY p.is_featured DESC, pi.sort_order LIMIT 1) AS image_url,
+            (SELECT json_group_array(json_object('id', sub.id, 'name', sub.name, 'slug', sub.slug))
+               FROM (SELECT DISTINCT c.id, c.name, c.slug
+                       FROM products p JOIN categories c ON c.id = p.category_id
+                      WHERE p.seller_id = s.id AND p.status = 'approved') sub) AS product_categories_json,
+            (SELECT la.categories FROM seller_applications la
+              WHERE la.seller_id = s.id AND la.status = 'approved' ORDER BY la.revision DESC LIMIT 1) AS app_categories_json,
+            (SELECT json_extract(la.data_json, '$.productGroups') FROM seller_applications la
+              WHERE la.seller_id = s.id ORDER BY la.revision DESC LIMIT 1) AS specialities_json,
+            (SELECT json_extract(la.data_json, '$.yearsOperating') FROM seller_applications la
+              WHERE la.seller_id = s.id ORDER BY la.revision DESC LIMIT 1) AS years_operating
+       FROM seller_profiles s
+      ${whereClause}
+      ORDER BY ${orderBy}
+      LIMIT ? OFFSET ?`,
+    ...params,
+    limit,
+    offset,
+  );
+
+  const categoryFilters = queryAll<{ id: string; name: string; slug: string; count: number }>(
+    db,
+    `SELECT c.id, c.name, c.slug, COUNT(DISTINCT s.id) AS count
+       FROM categories c
+       JOIN products p ON p.category_id = c.id
+       JOIN seller_profiles s ON s.id = p.seller_id
+      WHERE p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'
+      GROUP BY c.id, c.name, c.slug
+      ORDER BY count DESC, c.sort_order ASC`,
+  );
+
+  const regionFilters = queryAll<{ region: string; count: number }>(
+    db,
+    `SELECT s.region, COUNT(*) AS count
+       FROM seller_profiles s
+      WHERE s.status = 'approved' AND s.store_status = 'active'
+        AND s.region IS NOT NULL AND s.region != ''
+      GROUP BY s.region
+      ORDER BY count DESC, s.region ASC`,
+  );
+
+  const makers = rows.map((row) => {
+    let categories: { id: string; name: string; slug: string }[] = [];
+    try {
+      if (row.product_categories_json) {
+        categories = JSON.parse(row.product_categories_json);
+      }
+    } catch {
+      categories = [];
+    }
+
+    let specialities: string[] = [];
+    try {
+      if (row.specialities_json) {
+        const parsed = JSON.parse(row.specialities_json);
+        if (Array.isArray(parsed)) specialities = parsed.filter((item): item is string => typeof item === 'string');
+      }
+    } catch {
+      specialities = [];
+    }
+
+    return {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      sellerType: row.seller_type,
+      sellerCategory: row.seller_category,
+      tagline: row.tagline,
+      story: row.story,
+      region: row.region,
+      village: row.village,
+      logoUrl: row.logo_url,
+      coverUrl: row.cover_url,
+      imageUrl: row.image_url ?? row.cover_url ?? row.logo_url,
+      productCount: row.product_count,
+      categories,
+      specialities,
+      isVerified: Boolean(row.verified_at),
+      yearsOperating: row.years_operating ? Number(row.years_operating) : null,
+      approvedAt: row.approved_at,
+      createdAt: row.created_at,
+    };
+  });
+
+  return {
+    makers,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+    filters: {
+      categories: categoryFilters,
+      regions: regionFilters,
+    },
+  };
+}
+
+export function listPublicSellers(db: Db) {
+  return listPublicMakers(db, { limit: 48 }).makers;
+}
+
+export function getSellerStorefront(db: Db, slug: string) {
+  const seller = queryOne<{
+    id: string;
+    name: string;
+    slug: string;
+    seller_type: string;
+    seller_category: string | null;
+    tagline: string | null;
+    story: string | null;
+    region: string | null;
+    village: string | null;
+    logo_url: string | null;
+    cover_url: string | null;
+    verified_at: string | null;
+    approved_at: string | null;
+    created_at: string;
+    product_count: number;
+    image_url: string | null;
+    product_categories_json: string | null;
+    specialities_json: string | null;
+    years_operating: number | null;
+  }>(
+    db,
+    `SELECT s.id, s.business_name AS name, s.slug, s.seller_type, s.seller_category, s.tagline, s.story,
+            s.region, s.village, s.logo_url, s.cover_url, s.verified_at, s.approved_at, s.created_at,
+            (SELECT COUNT(*) FROM products p WHERE p.seller_id = s.id AND p.status = 'approved') AS product_count,
+            (SELECT pi.url FROM products p JOIN product_images pi ON pi.product_id = p.id
+              WHERE p.seller_id = s.id AND p.status = 'approved' ORDER BY p.is_featured DESC, pi.sort_order LIMIT 1) AS image_url,
+            (SELECT json_group_array(json_object('id', sub.id, 'name', sub.name, 'slug', sub.slug))
+               FROM (SELECT DISTINCT c.id, c.name, c.slug
+                       FROM products p JOIN categories c ON c.id = p.category_id
+                      WHERE p.seller_id = s.id AND p.status = 'approved') sub) AS product_categories_json,
+            (SELECT json_extract(la.data_json, '$.productGroups') FROM seller_applications la
+              WHERE la.seller_id = s.id ORDER BY la.revision DESC LIMIT 1) AS specialities_json,
+            (SELECT json_extract(la.data_json, '$.yearsOperating') FROM seller_applications la
+              WHERE la.seller_id = s.id ORDER BY la.revision DESC LIMIT 1) AS years_operating
+       FROM seller_profiles s
+      WHERE s.slug = ? AND s.status = 'approved' AND s.store_status = 'active'`,
     slug,
   );
   if (!seller) throw notFound('That maker is not available.');
-  const count = queryOne<{ count: number }>(
-    db,
-    "SELECT COUNT(*) AS count FROM products WHERE seller_id = ? AND status = 'approved'",
-    seller.id,
-  );
+
+  let categories: { id: string; name: string; slug: string }[] = [];
+  try {
+    if (seller.product_categories_json) categories = JSON.parse(seller.product_categories_json);
+  } catch {
+    categories = [];
+  }
+
+  let specialities: string[] = [];
+  try {
+    if (seller.specialities_json) {
+      const parsed = JSON.parse(seller.specialities_json);
+      if (Array.isArray(parsed)) specialities = parsed.filter((item): item is string => typeof item === 'string');
+    }
+  } catch {
+    specialities = [];
+  }
+
   return {
-    ...seller,
+    id: seller.id,
+    name: seller.name,
+    slug: seller.slug,
+    sellerType: seller.seller_type,
+    sellerCategory: seller.seller_category,
+    tagline: seller.tagline,
+    story: seller.story,
+    region: seller.region,
+    village: seller.village,
     logoUrl: seller.logo_url,
     coverUrl: seller.cover_url,
-    sellerCategory: seller.seller_category,
+    imageUrl: seller.image_url ?? seller.cover_url ?? seller.logo_url,
+    productCount: seller.product_count,
+    categories,
+    specialities,
+    isVerified: Boolean(seller.verified_at),
+    yearsOperating: seller.years_operating ? Number(seller.years_operating) : null,
     approvedAt: seller.approved_at,
-    productCount: count?.count ?? 0,
+    createdAt: seller.created_at,
   };
 }
 

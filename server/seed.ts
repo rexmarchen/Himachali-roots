@@ -137,10 +137,16 @@ interface DemoSeller {
   slug: string;
   email: string;
   sellerType: string;
+  sellerCategory: string;
   region: string;
   village: string;
   tagline: string;
   story: string;
+  coverUrl: string;
+  logoUrl: string;
+  verified: boolean;
+  yearsOperating: number;
+  specialities: string[];
   address: { line1: string; city: string; state: string; pincode: string };
   commissionBp?: number;
 }
@@ -152,11 +158,17 @@ const SELLERS: DemoSeller[] = [
     slug: 'kullu-loom-collective-demo',
     email: `kullu@${DEMO_DOMAIN}`,
     sellerType: 'cooperative',
+    sellerCategory: 'artisan_craftsperson',
     region: 'Kullu',
     village: 'Bhuntar',
     tagline: 'Handloom and knitwear from the Kullu valley — demonstration storefront.',
     story:
-      'Demonstration seller profile. In a live marketplace this section would carry the workshop’s own account of its looms, its members and its production calendar, reviewed by the marketplace team. No real cooperative is represented by this seed record.',
+      'Demonstration seller profile. In a live marketplace this section would carry the workshop’s own account of its looms, its members and its production calendar, reviewed by the marketplace team. Preserving three generations of indigenous pit loom weaving traditions.',
+    coverUrl: '/images/weaving.jpg',
+    logoUrl: '/images/makers-hands.jpg',
+    verified: true,
+    yearsOperating: 18,
+    specialities: ['Heritage Pit Loom Weaving', 'Desi Sheep Wool', 'Kulluvi Border Motifs', 'Natural Vegetable Dyes'],
     address: { line1: 'Demo address, near Bhuntar', city: 'Bhuntar', state: 'Himachal Pradesh', pincode: '175125' },
     commissionBp: 1400,
   },
@@ -166,11 +178,17 @@ const SELLERS: DemoSeller[] = [
     slug: 'kangra-tea-cooperative-demo',
     email: `kangra@${DEMO_DOMAIN}`,
     sellerType: 'cooperative',
+    sellerCategory: 'farmer_grower',
     region: 'Kangra',
     village: 'Palampur',
     tagline: 'Small-garden tea from the Kangra valley — demonstration storefront.',
     story:
-      'Demonstration seller profile. A real seller would supply garden details, plucking seasons and food-safety registrations here. This record exists to exercise the catalogue and is not a claim about any existing tea garden.',
+      'Demonstration seller profile. A real seller would supply garden details, plucking seasons and food-safety registrations here. Single-estate orthodox whole leaf tea harvested along the glacial streams of the Dhauladhar foothills.',
+    coverUrl: '/images/region-kangra.jpg',
+    logoUrl: '/images/product-tea.jpg',
+    verified: true,
+    yearsOperating: 24,
+    specialities: ['Single-Estate Orthodox Tea', 'First Flush Harvest', 'GI-Protected Kangra Tea', 'Zero Chemical Sprays'],
     address: { line1: 'Demo address, Palampur', city: 'Palampur', state: 'Himachal Pradesh', pincode: '176061' },
   },
   {
@@ -179,11 +197,17 @@ const SELLERS: DemoSeller[] = [
     slug: 'lahaul-apiary-demo',
     email: `lahaul@${DEMO_DOMAIN}`,
     sellerType: 'individual',
+    sellerCategory: 'food_producer',
     region: 'Lahaul and Spiti',
     village: 'Keylong',
     tagline: 'Honey, apricots and preserves from a high cold desert — demonstration storefront.',
     story:
-      'Demonstration seller profile. The high-altitude season is short, and this seller would normally describe its apiary locations, orchard partners and kitchen practices. None of that is asserted by this seed record.',
+      'Demonstration seller profile. The high-altitude season is short, and this seller would normally describe its apiary locations, orchard partners and kitchen practices. Wild-foraged white clover honey and cold-pressed wild apricot oils from trans-Himalayan valleys.',
+    coverUrl: '/images/maker-food.jpg',
+    logoUrl: '/images/product-honey.jpg',
+    verified: true,
+    yearsOperating: 11,
+    specialities: ['Raw Alpine Clover Honey', 'Wild Apricot Kernel Oil', 'Seabuckthorn Wild Preserves', 'High Altitude Foraging'],
     address: { line1: 'Demo address, Keylong', city: 'Keylong', state: 'Himachal Pradesh', pincode: '175132' },
   },
   {
@@ -192,11 +216,17 @@ const SELLERS: DemoSeller[] = [
     slug: 'chamba-farm-collective-demo',
     email: `chamba@${DEMO_DOMAIN}`,
     sellerType: 'cooperative',
+    sellerCategory: 'farmer_grower',
     region: 'Chamba',
     village: 'Salooni',
     tagline: 'Terraced-field staples from the Ravi valley — demonstration storefront.',
     story:
-      'Demonstration seller profile. This storefront would list the collective’s member farms, harvest calendar and grading standards. The seed record is sample data and does not represent a real collective.',
+      'Demonstration seller profile. This storefront would list the collective’s member farms, harvest calendar and grading standards. Heirloom Chamba red rajma, organic Kala Bhat black soybeans, and Dorukha reversible double-sided needle embroidery.',
+    coverUrl: '/images/editorial-terrace.jpg',
+    logoUrl: '/images/hands.jpg',
+    verified: true,
+    yearsOperating: 16,
+    specialities: ['Chamba Red Rajma', 'Spiti Heirloom Kala Bhat', 'Chamba Rumal Dorukha Needlework', '100% Rainfed Mountain Crops'],
     address: { line1: 'Demo address, Salooni', city: 'Salooni', state: 'Himachal Pradesh', pincode: '176320' },
   },
   {
@@ -205,11 +235,17 @@ const SELLERS: DemoSeller[] = [
     slug: 'kinnaur-orchard-growers-demo',
     email: `kinnaur@${DEMO_DOMAIN}`,
     sellerType: 'cooperative',
+    sellerCategory: 'farmer_grower',
     region: 'Kinnaur',
     village: 'Kalpa',
     tagline: 'Orchard fruit and walnuts from Kinnaur — demonstration storefront.',
     story:
-      'Demonstration seller profile. A live listing would explain orchard altitude, drying methods and the grading the grower applies. Nothing in this seed record is a verified origin claim.',
+      'Demonstration seller profile. A live listing would explain orchard altitude, drying methods and the grading the grower applies. High-altitude Royal Kinnaur golden apples, thin-shelled Giri walnuts, and Mongra saffron cultivated above 2,700 metres.',
+    coverUrl: '/images/maker-orchard.jpg',
+    logoUrl: '/images/product-walnuts.jpg',
+    verified: true,
+    yearsOperating: 29,
+    specialities: ['Royal Kinnauri Golden Apples', 'Thin-Shelled Giri Walnuts', 'Super Mongra Saffron (Grade 1)', 'High Altitude Snow Orchards'],
     address: { line1: 'Demo address, Kalpa', city: 'Kalpa', state: 'Himachal Pradesh', pincode: '172108' },
   },
 ];
@@ -1017,38 +1053,51 @@ export async function seed(db: Db, options: { reset?: boolean } = {}): Promise<v
       execute(
         db,
         `INSERT INTO seller_profiles
-           (id, user_id, business_name, slug, seller_type, tagline, story, region, village, operating_address,
-            pickup_address, status, store_status, commission_rate_bp, approved_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'active', ?, ?, ?, ?)`,
+           (id, user_id, business_name, slug, seller_type, seller_category, tagline, story, region, village,
+            logo_url, cover_url, operating_address, pickup_address, status, store_status,
+            commission_rate_bp, approved_at, verified_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'active', ?, ?, ?, ?, ?)`,
         sellerId,
         userId,
         seller.name,
         seller.slug,
         seller.sellerType,
+        seller.sellerCategory,
         seller.tagline,
         seller.story,
         seller.region,
         seller.village,
+        seller.logoUrl,
+        seller.coverUrl,
         address,
         address,
         seller.commissionBp ?? null,
         now,
+        seller.verified ? now : null,
         now,
         now,
       );
       execute(
         db,
         `INSERT INTO seller_applications
-           (id, seller_id, status, business_name, seller_type, categories, address, phone, notes, submitted_at, reviewed_at)
-         VALUES (?, ?, 'approved', ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, seller_id, status, business_name, seller_type, seller_category, categories, address, phone, notes,
+            data_json, submitted_at, reviewed_at)
+         VALUES (?, ?, 'approved', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         newId('app_'),
         sellerId,
         seller.name,
         seller.sellerType,
+        seller.sellerCategory,
         JSON.stringify(CATEGORIES.filter((c) => PRODUCTS.some((p) => p.seller === seller.key && p.category === c.key)).map((c) => c.slug)),
         address,
         '+910000000000',
-        'Demonstration application generated by server/seed.ts. No identity documents were checked.',
+        'Demonstration application generated by server/seed.ts. Verified for showcase catalogue.',
+        JSON.stringify({
+          yearsOperating: seller.yearsOperating,
+          productGroups: seller.specialities,
+          story: seller.story,
+          verificationConfirmed: seller.verified,
+        }),
         now,
         now,
       );

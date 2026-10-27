@@ -12,7 +12,6 @@ import {
   Badge,
   Breadcrumbs,
   Button,
-  DemoBadge,
   EmptyState,
   ErrorState,
   Field,
@@ -36,82 +35,7 @@ interface PublicSeller {
   coverUrl: string | null;
 }
 
-export function MakersPage() {
-  const sellers = useQuery({
-    queryKey: ['sellers'],
-    queryFn: () => api<{ sellers: PublicSeller[] }>('/sellers'),
-  });
-
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
-      <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Makers' }]} />
-      <PageHeader
-        eyebrow="People, not labels"
-        title="The makers behind the shelves"
-        lede="Every storefront is reviewed before it appears. In this development build, seller names carry a (demo) marker and photographs are illustrative rather than portraits of the seeded businesses."
-      />
-      <div className="mt-10">
-        {sellers.isLoading ? <LoadingBlock rows={4} /> : null}
-        {sellers.isError ? <ErrorState onRetry={() => void sellers.refetch()} /> : null}
-        {sellers.data && sellers.data.sellers.length === 0 ? (
-          <EmptyState
-            title="No makers are published yet"
-            body="Seller storefronts appear after an administrator approves a completed application."
-            action={<LinkButton to="/sell" size="sm">Become a Maker</LinkButton>}
-          />
-        ) : null}
-        <div className="grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-          {sellers.data?.sellers.map((seller) => (
-            <article key={seller.id}>
-              <Link to={`/makers/${seller.slug}`} className="group block">
-                <div className="aspect-[4/3] overflow-hidden bg-sand/40">
-                  {seller.coverUrl || seller.imageUrl ? (
-                    <img
-                      src={seller.coverUrl || seller.imageUrl || ''}
-                      alt={`${seller.name} storefront`}
-                      loading="lazy"
-                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-xs text-muted">No photograph yet</div>
-                  )}
-                </div>
-                <div className="mt-4 flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-serif text-2xl text-forest group-hover:text-terra">{seller.name}</h2>
-                      {seller.name.toLowerCase().includes('(demo)') ? <DemoBadge /> : null}
-                    </div>
-                    <p className="mt-1 text-[11px] uppercase tracking-[0.13em] text-muted">
-                      {seller.region ?? 'Himachal Pradesh'} · {seller.productCount} listing
-                      {seller.productCount === 1 ? '' : 's'}
-                    </p>
-                    {seller.tagline ? (
-                      <p className="mt-3 text-sm leading-relaxed text-ink/70">{seller.tagline}</p>
-                    ) : null}
-                  </div>
-                  <span className="mt-1 text-terra" aria-hidden>↗</span>
-                </div>
-              </Link>
-            </article>
-          ))}
-        </div>
-      </div>
-      <div className="mt-16 border border-forest/20 bg-forest px-6 py-10 text-paper sm:px-10">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-paper/50">For makers and growers</p>
-            <h2 className="mt-3 text-3xl text-paper">There should be a shelf for what you make.</h2>
-            <p className="mt-2 max-w-xl text-sm text-paper/65">
-              Applications are reviewed manually. No listing fee is charged by this demonstration build.
-            </p>
-          </div>
-          <LinkButton to="/sell" variant="terra">Become a Maker</LinkButton>
-        </div>
-      </div>
-    </div>
-  );
-}
+export { MakersPage } from './MakersPage';
 
 export function MakerDetailPage() {
   const { slug = '' } = useParams();

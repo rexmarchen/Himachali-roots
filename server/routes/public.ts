@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { execute, queryAll, queryOne, type Db } from '../db.js';
-import { getProduct, getRegions, getSellerStorefront, listCategories, listProducts, listPublicSellers } from '../lib/catalog.js';
+import { getProduct, getRegions, getSellerStorefront, listCategories, listProducts, listPublicMakers, listPublicSellers } from '../lib/catalog.js';
 import {
   campaignStats,
   effectiveCampaignStatus,
@@ -268,14 +268,68 @@ export function publicRouter(db: Db): Router {
     });
   });
 
-  router.get('/sellers', (_req, res) => {
-    res.json({ sellers: listPublicSellers(db) });
+  router.get('/makers', (req, res) => {
+    const query = {
+      q: str(req.query.q),
+      category: str(req.query.category),
+      region: str(req.query.region),
+      verified: req.query.verified === 'true' ? true : req.query.verified === 'false' ? false : undefined,
+      sort: str(req.query.sort) as 'products' | 'name_asc' | 'name_desc' | 'newest' | undefined,
+      page: optInt(req.query.page),
+      limit: optInt(req.query.limit) ?? optInt(req.query.pageSize),
+    };
+    const result = listPublicMakers(db, query);
+    res.json({
+      success: true,
+      data: result,
+      makers: result.makers,
+      sellers: result.makers,
+      pagination: result.pagination,
+      filters: result.filters,
+    });
+  });
+
+  router.get('/makers/:slug', (req, res) => {
+    const seller = getSellerStorefront(db, req.params.slug);
+    const products = listProducts(db, { seller: seller.slug, pageSize: 24, sort: 'newest' });
+    res.json({
+      success: true,
+      data: { seller, products },
+      seller,
+      products,
+    });
+  });
+
+  router.get('/sellers', (req, res) => {
+    const query = {
+      q: str(req.query.q),
+      category: str(req.query.category),
+      region: str(req.query.region),
+      verified: req.query.verified === 'true' ? true : req.query.verified === 'false' ? false : undefined,
+      sort: str(req.query.sort) as 'products' | 'name_asc' | 'name_desc' | 'newest' | undefined,
+      page: optInt(req.query.page),
+      limit: optInt(req.query.limit) ?? optInt(req.query.pageSize) ?? 48,
+    };
+    const result = listPublicMakers(db, query);
+    res.json({
+      success: true,
+      data: result,
+      sellers: result.makers,
+      makers: result.makers,
+      pagination: result.pagination,
+      filters: result.filters,
+    });
   });
 
   router.get('/sellers/:slug', (req, res) => {
     const seller = getSellerStorefront(db, req.params.slug);
     const products = listProducts(db, { seller: seller.slug, pageSize: 24, sort: 'newest' });
-    res.json({ seller, products });
+    res.json({
+      success: true,
+      data: { seller, products },
+      seller,
+      products,
+    });
   });
 
   router.get('/regions', (_req, res) => {

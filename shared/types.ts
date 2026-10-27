@@ -371,3 +371,46 @@ export function formatINR(paise: number): string {
     maximumFractionDigits: 2,
   })}`;
 }
+
+export interface PublicMakerCategory {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface PublicMaker {
+  id: string;
+  name: string;
+  slug: string;
+  sellerType: string;
+  sellerCategory: SellerCategoryId | string | null;
+  tagline: string | null;
+  story: string | null;
+  region: string | null;
+  village: string | null;
+  logoUrl: string | null;
+  coverUrl: string | null;
+  imageUrl: string | null;
+  productCount: number;
+  categories: PublicMakerCategory[];
+  specialities: string[];
+  isVerified: boolean;
+  yearsOperating: number | null;
+  approvedAt: string | null;
+  createdAt: string;
+}
+
+export interface MakersQueryResponse {
+  makers: PublicMaker[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  filters: {
+    categories: { id: string; name: string; slug: string; count: number }[];
+    regions: { region: string; count: number }[];
+  };
+}
+
