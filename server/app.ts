@@ -151,7 +151,7 @@ export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.E
     );
     app.use(express.static(dist, { index: false, maxAge: '1h' }));
     app.use((req, res, next) => {
-      if (req.method !== 'GET' || req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      if ((req.method !== 'GET' && req.method !== 'HEAD') || req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
         next();
         return;
       }
