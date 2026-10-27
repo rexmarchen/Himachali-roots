@@ -126,6 +126,29 @@ export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.E
   // Production: serve the built SPA. Development uses Vite on :5173.
   if (env.isProduction) {
     const dist = path.resolve(process.cwd(), 'dist');
+    // Immutable fingerprinted JS/CSS chunks: 1 year cache
+    app.use(
+      '/assets',
+      express.static(path.join(dist, 'assets'), {
+        index: false,
+        immutable: true,
+        maxAge: '1y',
+        setHeaders: (res) => {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        },
+      }),
+    );
+    // Public images: 30 days cache with stale-while-revalidate
+    app.use(
+      '/images',
+      express.static(path.join(dist, 'images'), {
+        index: false,
+        maxAge: '30d',
+        setHeaders: (res) => {
+          res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
+        },
+      }),
+    );
     app.use(express.static(dist, { index: false, maxAge: '1h' }));
     app.use((req, res, next) => {
       if (req.method !== 'GET' || req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
@@ -137,6 +160,7 @@ export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.E
         res.status(503).type('text/plain').send('Frontend build not found. Run `npm run build`.');
         return;
       }
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       res.sendFile(indexPath);
     });
   }

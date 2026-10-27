@@ -84,14 +84,18 @@ const PRINCIPLES = [
 const HERO_SLIDES = [
   {
     id: 'kotgarh-apple-orchard',
-    src: '/images/hero-apple-orchard.jpg',
+    src: '/images/home/apple-orchard-1800.jpg',
+    srcSet:
+      '/images/home/apple-orchard-720.jpg 720w, /images/home/apple-orchard-1100.jpg 1100w, /images/home/apple-orchard-1800.jpg 1800w',
     alt: 'Sunlit Himachali apple orchard in Kotgarh with ripe red apples overlooking snow-capped Himalayan peaks',
     place: 'Kotgarh Valley, Shimla',
     caption: 'Sunlit apple orchards overlooking the Great Himalayan peaks',
   },
   {
     id: 'kinner-kailash-sunrise',
-    src: '/images/hero-snow-peaks.jpg',
+    src: '/images/home/snow-peaks-1800.jpg',
+    srcSet:
+      '/images/home/snow-peaks-720.jpg 720w, /images/home/snow-peaks-1100.jpg 1100w, /images/home/snow-peaks-1800.jpg 1800w',
     alt: 'Golden sunrise light illuminating snow-capped Himalayan peaks and pine forests in Kinnaur',
     place: 'Kinner Kailash Range, Kinnaur',
     caption: 'First light breaking over snow-covered Himalayan summits',
@@ -107,7 +111,9 @@ const HERO_SLIDES = [
   },
   {
     id: 'kotgarh-royal-orchard',
-    src: '/images/maker-orchard.jpg',
+    src: '/images/home/maker-orchard-1800.jpg',
+    srcSet:
+      '/images/home/maker-orchard-720.jpg 720w, /images/home/maker-orchard-1100.jpg 1100w, /images/home/maker-orchard-1800.jpg 1800w',
     alt: 'High-altitude Royal Delicious apple orchard overlooking the Himalayan ridge in Kotgarh',
     place: 'Kotgarh Ridge, Shimla',
     caption: 'Centuries of apple horticulture across high mountain terraces',
@@ -174,6 +180,10 @@ function CinematicHero() {
       <div className="absolute inset-0 z-0">
         {HERO_SLIDES.map((item, index) => {
           const active = index === current;
+          const isAdjacent =
+            index === (current + 1) % HERO_SLIDES.length ||
+            index === (current - 1 + HERO_SLIDES.length) % HERO_SLIDES.length;
+          if (!active && !isAdjacent) return null;
           return (
             <div
               key={item.id}
