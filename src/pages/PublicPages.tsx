@@ -57,7 +57,7 @@ export function MakersPage() {
           <EmptyState
             title="No makers are published yet"
             body="Seller storefronts appear after an administrator approves a completed application."
-            action={<LinkButton to="/sell" size="sm">Apply to sell</LinkButton>}
+            action={<LinkButton to="/sell" size="sm">Become a Maker</LinkButton>}
           />
         ) : null}
         <div className="grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
@@ -106,7 +106,7 @@ export function MakersPage() {
               Applications are reviewed manually. No listing fee is charged by this demonstration build.
             </p>
           </div>
-          <LinkButton to="/sell" variant="terra">Apply to sell</LinkButton>
+          <LinkButton to="/sell" variant="terra">Become a Maker</LinkButton>
         </div>
       </div>
     </div>

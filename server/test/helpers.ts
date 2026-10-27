@@ -75,8 +75,9 @@ function addSeller(db: Db, id: string, userId: string, name: string, slug: strin
   execute(
     db,
     `INSERT INTO seller_profiles
-       (id, user_id, business_name, slug, seller_type, region, operating_address, pickup_address, status, approved_at)
-     VALUES (?, ?, ?, ?, 'individual', ?, ?, ?, 'approved', ?)`,
+       (id, user_id, business_name, slug, seller_type, region, operating_address, pickup_address, status,
+        store_status, approved_at)
+     VALUES (?, ?, ?, ?, 'individual', ?, ?, ?, 'approved', 'active', ?)`,
     id,
     userId,
     name,

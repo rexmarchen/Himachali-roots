@@ -1018,8 +1018,8 @@ export async function seed(db: Db, options: { reset?: boolean } = {}): Promise<v
         db,
         `INSERT INTO seller_profiles
            (id, user_id, business_name, slug, seller_type, tagline, story, region, village, operating_address,
-            pickup_address, status, commission_rate_bp, approved_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?)`,
+            pickup_address, status, store_status, commission_rate_bp, approved_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'active', ?, ?, ?, ?)`,
         sellerId,
         userId,
         seller.name,

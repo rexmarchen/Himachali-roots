@@ -61,7 +61,7 @@ export function publicRouter(db: Db): Router {
          FROM order_items oi
          JOIN orders o ON o.id = oi.order_id AND o.paid_at IS NOT NULL
          JOIN products p ON p.id = oi.product_id AND p.status = 'approved'
-         JOIN seller_profiles s ON s.id = p.seller_id AND s.status = 'approved'
+         JOIN seller_profiles s ON s.id = p.seller_id AND s.status = 'approved' AND s.store_status = 'active'
         WHERE o.created_at >= ?
         GROUP BY p.id
         ORDER BY units DESC
@@ -82,6 +82,7 @@ export function publicRouter(db: Db): Router {
       `SELECT r.id, r.rating, r.body, r.created_at, p.full_name, pr.name AS product_name, pr.slug AS product_slug
          FROM reviews r
          JOIN products pr ON pr.id = r.product_id AND pr.status = 'approved'
+         JOIN seller_profiles sr ON sr.id = pr.seller_id AND sr.status = 'approved' AND sr.store_status = 'active'
          JOIN users u ON u.id = r.user_id
          LEFT JOIN profiles p ON p.id = u.id
         WHERE r.status = 'published'
@@ -92,10 +93,11 @@ export function publicRouter(db: Db): Router {
       db,
       `SELECT
          (SELECT COUNT(*) FROM products p JOIN seller_profiles s ON s.id = p.seller_id
-           WHERE p.status = 'approved' AND s.status = 'approved') AS products,
-         (SELECT COUNT(*) FROM seller_profiles WHERE status = 'approved') AS sellers,
+           WHERE p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active') AS products,
+         (SELECT COUNT(*) FROM seller_profiles WHERE status = 'approved' AND store_status = 'active') AS sellers,
          (SELECT COUNT(DISTINCT p.region) FROM products p JOIN seller_profiles s ON s.id = p.seller_id
-           WHERE p.status = 'approved' AND s.status = 'approved' AND p.region IS NOT NULL) AS regions`,
+           WHERE p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'
+             AND p.region IS NOT NULL) AS regions`,
     );
 
     const featuredCampaignRow = getFeaturedCampaign(db);
@@ -217,7 +219,7 @@ export function publicRouter(db: Db): Router {
              FROM campaign_products cp
              JOIN active_campaign_prices acp ON acp.product_id = cp.product_id
              JOIN products p ON p.id = cp.product_id AND p.status = 'approved'
-             JOIN seller_profiles s ON s.id = p.seller_id AND s.status = 'approved'
+             JOIN seller_profiles s ON s.id = p.seller_id AND s.status = 'approved' AND s.store_status = 'active'
              JOIN categories c ON c.id = p.category_id
             WHERE cp.campaign_id = ?
             GROUP BY c.id
@@ -233,7 +235,7 @@ export function publicRouter(db: Db): Router {
              FROM campaign_products cp
              JOIN active_campaign_prices acp ON acp.product_id = cp.product_id
              JOIN products p ON p.id = cp.product_id AND p.status = 'approved'
-             JOIN seller_profiles s ON s.id = p.seller_id AND s.status = 'approved'
+             JOIN seller_profiles s ON s.id = p.seller_id AND s.status = 'approved' AND s.store_status = 'active'
             WHERE cp.campaign_id = ?
             ORDER BY s.business_name`,
           campaign.id,
@@ -472,9 +474,12 @@ export function sitemapRouter(db: Db): Router {
     const products = queryAll<{ slug: string; updated_at: string }>(
       db,
       `SELECT p.slug, p.updated_at FROM products p JOIN seller_profiles s ON s.id = p.seller_id
-        WHERE p.status = 'approved' AND s.status = 'approved'`,
+        WHERE p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'`,
     );
-    const sellers = queryAll<{ slug: string }>(db, "SELECT slug FROM seller_profiles WHERE status = 'approved'");
+    const sellers = queryAll<{ slug: string }>(
+      db,
+      "SELECT slug FROM seller_profiles WHERE status = 'approved' AND store_status = 'active'",
+    );
     const campaigns = queryAll<Pick<CampaignRow, 'id' | 'slug' | 'status' | 'starts_at' | 'ends_at'>>(
       db,
       "SELECT id, slug, status, starts_at, ends_at FROM campaigns WHERE status = 'active'",

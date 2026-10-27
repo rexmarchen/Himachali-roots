@@ -155,7 +155,7 @@ function migrateSellerOnboarding(db: Db): void {
           id TEXT PRIMARY KEY,
           seller_id TEXT NOT NULL REFERENCES seller_profiles(id) ON DELETE CASCADE,
           status TEXT NOT NULL DEFAULT 'draft'
-            CHECK (status IN ('draft','submitted','under_review','changes_requested','approved','rejected','suspended')),
+            CHECK (status IN ('draft','submitted','under_review','changes_requested','approved','rejected','suspended','withdrawn')),
           revision INTEGER NOT NULL DEFAULT 1,
           current_step INTEGER NOT NULL DEFAULT 1,
           seller_category TEXT,
@@ -290,7 +290,111 @@ export function openDatabase(filename: string): Db {
 
   migrateOrderIntegrity(db);
   markMigration(db, 8);
+
+  // Migration 9: allow applicants to withdraw their application without
+  // deleting its history. SQLite cannot alter a CHECK constraint in place, so
+  // the application table is copied transactionally and foreign keys are
+  // suspended only for the duration of the swap.
+  migrateApplicationWithdrawal(db);
+  markMigration(db, 9);
   return db;
+}
+
+function migrateApplicationWithdrawal(db: Db): void {
+  if (!tableExists(db, 'seller_applications')) return;
+  const current = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'seller_applications'")
+    .get() as { sql: string } | undefined;
+  if (current?.sql.includes("'withdrawn'")) return;
+
+  const columns = db.prepare('PRAGMA table_info(seller_applications)').all() as { name: string }[];
+  const has = (name: string) => columns.some((column) => column.name === name);
+  const select = (name: string, fallback: string) => (has(name) ? name : fallback);
+
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    db.exec('DROP TABLE IF EXISTS seller_applications_migrated');
+    db.exec(`
+      CREATE TABLE seller_applications_migrated (
+        id TEXT PRIMARY KEY,
+        seller_id TEXT NOT NULL REFERENCES seller_profiles(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'draft'
+          CHECK (status IN ('draft','submitted','under_review','changes_requested','approved','rejected','suspended','withdrawn')),
+        revision INTEGER NOT NULL DEFAULT 1,
+        current_step INTEGER NOT NULL DEFAULT 1,
+        seller_category TEXT,
+        business_name TEXT NOT NULL DEFAULT '',
+        seller_type TEXT NOT NULL DEFAULT 'individual',
+        categories TEXT NOT NULL DEFAULT '[]',
+        address TEXT NOT NULL DEFAULT '{}',
+        gstin TEXT,
+        phone TEXT,
+        notes TEXT,
+        data_json TEXT NOT NULL DEFAULT '{}',
+        verification_json TEXT,
+        shipping_json TEXT,
+        payout_json TEXT,
+        agreement_json TEXT,
+        rejection_reason TEXT,
+        submitted_at TEXT,
+        reviewed_by TEXT REFERENCES users(id),
+        reviewed_at TEXT,
+        last_saved_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+    `);
+    db.exec(`
+      INSERT INTO seller_applications_migrated
+        (id, seller_id, status, revision, current_step, seller_category, business_name, seller_type,
+         categories, address, gstin, phone, notes, data_json, verification_json, shipping_json,
+         payout_json, agreement_json, rejection_reason, submitted_at, reviewed_by, reviewed_at,
+         last_saved_at, created_at, updated_at)
+      SELECT id, seller_id,
+             CASE status WHEN 'more_info_required' THEN 'changes_requested' ELSE status END,
+             ${select('revision', '1')},
+             ${select('current_step', '1')},
+             ${select('seller_category', 'NULL')},
+             ${select('business_name', "''")},
+             ${select('seller_type', "'individual'")},
+             ${select('categories', "'[]'")},
+             ${select('address', "'{}'")},
+             ${select('gstin', 'NULL')},
+             ${select('phone', 'NULL')},
+             ${select('notes', 'NULL')},
+             ${select('data_json', "'{}'")},
+             ${select('verification_json', 'NULL')},
+             ${select('shipping_json', 'NULL')},
+             ${select('payout_json', 'NULL')},
+             ${select('agreement_json', 'NULL')},
+             ${select('rejection_reason', 'NULL')},
+             ${select('submitted_at', 'NULL')},
+             ${select('reviewed_by', 'NULL')},
+             ${select('reviewed_at', 'NULL')},
+             ${select('last_saved_at', 'NULL')},
+             ${select('created_at', "COALESCE(submitted_at, strftime('%Y-%m-%dT%H:%M:%fZ','now'))")},
+             ${select('updated_at', "COALESCE(submitted_at, strftime('%Y-%m-%dT%H:%M:%fZ','now'))")}
+        FROM seller_applications;
+    `);
+    db.exec('DROP TABLE seller_applications');
+    db.exec('ALTER TABLE seller_applications_migrated RENAME TO seller_applications');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_seller_app_status ON seller_applications(status)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_seller_app_seller ON seller_applications(seller_id, created_at DESC)');
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_seller_app_one_draft ON seller_applications(seller_id) WHERE status = 'draft'",
+    );
+    db.exec('COMMIT');
+  } catch (error) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      // Already rolled back.
+    }
+    throw error;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
 }
 
 /**

@@ -30,6 +30,9 @@ describe('Demo Checkout, Inventory & Admin Order Management', () => {
         stock: 5,
         sku: 'DEMO-HONEY-003',
         description: 'Rare Chamba forest honey sample for local testing and demo checkout.',
+        // Publication checks follow the product category. The suite fixture
+        // category is a textile category, so a material description is needed.
+        materials: 'Pure Chamba forest honey',
         isDemo: true,
       });
       expect(createRes.status).toBe(201);

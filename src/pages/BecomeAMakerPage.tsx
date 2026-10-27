@@ -39,10 +39,40 @@ const STEPS = [
   { number: 5, title: 'Products, origin & authenticity', short: 'Origin', hint: 'What you will sell' },
   { number: 6, title: 'Identity & verification', short: 'Documents', hint: 'Private evidence' },
   { number: 7, title: 'Shipping & packaging', short: 'Shipping', hint: 'How you dispatch' },
-  { number: 8, title: 'Payout onboarding', short: 'Payouts', hint: 'How you get paid' },
+  { number: 8, title: 'Getting paid (after approval)', short: 'Payouts', hint: 'Separate, secured setup later' },
   { number: 9, title: 'Agreements & commission', short: 'Agreements', hint: 'Terms and disclosure' },
   { number: 10, title: 'Review & submit', short: 'Review', hint: 'Check and send' },
 ] as const;
+
+/**
+ * The application is grouped into three understandable stages while the
+ * reviewer-facing form keeps its finer sub-steps. This is the progress model
+ * makers see first: details, verification, then review.
+ */
+const STAGES = [
+  {
+    number: 1,
+    title: 'Your details',
+    hint: 'Account, what you make, your story and where you work.',
+    steps: [1, 2, 3, 4, 5],
+  },
+  {
+    number: 2,
+    title: 'Verification & operations',
+    hint: 'Documents, compliance and how you pack and dispatch.',
+    steps: [6, 7, 8],
+  },
+  {
+    number: 3,
+    title: 'Review & submit',
+    hint: 'Accept the terms, check everything and send it to the team.',
+    steps: [9, 10],
+  },
+] as const;
+
+function stageForStep(step: number) {
+  return STAGES.find((stage) => (stage.steps as readonly number[]).includes(step)) ?? STAGES[0];
+}
 
 interface SellerCategoryOption {
   id: SellerCategoryId;
@@ -155,11 +185,15 @@ const PRODUCT_GROUP_LABELS: Record<string, string> = {
 
 const SELLER_TYPE_LABELS: Record<string, string> = {
   individual: 'Individual maker or grower',
+  artisan: 'Artisan or craftsperson',
+  farmer: 'Farmer, grower or orchardist',
+  home_business: 'Home-based business',
   proprietorship: 'Sole proprietorship',
   partnership: 'Partnership firm',
   private_limited: 'Private limited company',
   cooperative: 'Cooperative society',
-  self_help_group: 'Self-help group',
+  self_help_group: 'Self-help group (SHG)',
+  other: 'Other structure',
 };
 
 const FALLBACK_DOC_LABELS: Record<string, string> = {
@@ -338,6 +372,7 @@ interface ApplicationResponse {
     labels: Record<string, string>;
   };
   checklist?: ChecklistItem[];
+  canWithdraw?: boolean;
   verification?: { emailVerified: boolean; phoneVerified: boolean; smsConfigured: boolean };
   payoutProvider?: { configured: boolean; provider: string; message: string };
   commissionNote?: string;
@@ -633,18 +668,6 @@ function validateStep(
       errors['shipping.packaging'] = 'Describe how products are packed.';
     }
   }
-  if (step === 8) {
-    if (!form.payout.accountHolderName.trim()) errors['payout.accountHolderName'] = 'Enter the account holder name.';
-    if (form.payout.method === 'bank_transfer') {
-      if (!/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(form.payout.ifsc.trim())) {
-        errors['payout.ifsc'] = 'Enter a valid IFSC code.';
-      }
-    }
-    if (form.payout.method === 'upi' && !form.payout.upiIdMasked.trim()) {
-      errors['payout.upiIdMasked'] = 'Enter the UPI ID that should receive settlements.';
-    }
-    if (!form.payout.consent) errors['payout.consent'] = 'Confirm that these payout details belong to the seller.';
-  }
   if (step === 9) {
     if (!form.agreements.sellerAgreement) errors['agreements.sellerAgreement'] = 'Accept the seller agreement.';
     if (!form.agreements.commissionDisclosure) {
@@ -673,7 +696,6 @@ function firstStepWithErrors(errors: Record<string, string>): number {
   }
   if (keys.some((key) => key.startsWith('documents.') || key === 'fssaiNumber')) return 6;
   if (keys.some((key) => key.startsWith('shipping.'))) return 7;
-  if (keys.some((key) => key.startsWith('payout.'))) return 8;
   if (keys.some((key) => key.startsWith('agreements.'))) return 9;
   return 10;
 }
@@ -711,6 +733,9 @@ export function BecomeAMakerPage() {
   const [regTerms, setRegTerms] = useState(false);
 
   const [uploadingType, setUploadingType] = useState<string | null>(null);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [withdrawReason, setWithdrawReason] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
 
   const revisionRef = useRef(0);
   // Assigned lazily on the first submit attempt so rendering stays pure and a
@@ -834,12 +859,6 @@ export function BecomeAMakerPage() {
     revisionRef.current += 1;
     setDirty(true);
     setForm((previous) => ({ ...previous, shipping: { ...previous.shipping, ...changes } }));
-  }, []);
-
-  const patchPayout = useCallback((changes: Partial<PayoutForm>) => {
-    revisionRef.current += 1;
-    setDirty(true);
-    setForm((previous) => ({ ...previous, payout: { ...previous.payout, ...changes } }));
   }, []);
 
   const patchAgreements = useCallback((changes: Partial<AgreementsForm>) => {
@@ -970,6 +989,50 @@ export function BecomeAMakerPage() {
       await queryClient.invalidateQueries({ queryKey: ['seller-application'] });
     } catch (error) {
       toast.push(errorMessage(error), 'error');
+    }
+  };
+
+  const withdrawApplication = async () => {
+    setWithdrawing(true);
+    try {
+      await api('/seller/application/withdraw', {
+        method: 'POST',
+        body: { reason: withdrawReason.trim() || undefined },
+      });
+      setWithdrawOpen(false);
+      setWithdrawReason('');
+      setSubmittedNow(false);
+      // Stay on the read-only summary so the withdrawal is visible. The
+      // "Start a new application" action opens the wizard with the previous
+      // answers still in the form.
+      submitKeyRef.current = '';
+      setDirty(false);
+      toast.push('Application withdrawn. Your previous answers are kept if you want to start again.');
+      await queryClient.invalidateQueries({ queryKey: ['seller-application'] });
+      await queryClient.invalidateQueries({ queryKey: ['session'] });
+      await refresh();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const startNewApplication = async () => {
+    setSaving(true);
+    try {
+      // A withdrawn application stays on record. Saving first opens a fresh
+      // draft so the maker can continue editing without overwriting history.
+      await persistDraft(step, form, true);
+      setForceEdit(true);
+      submitKeyRef.current = '';
+      setDirty(false);
+      await queryClient.invalidateQueries({ queryKey: ['seller-application'] });
+      await refresh();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1139,7 +1202,7 @@ export function BecomeAMakerPage() {
         </div>
         {user.emailVerified ? (
           <Alert tone="success" title="Email confirmed">
-            Your account is verified. Keep filling the application — nothing is sent to the review team until step 10.
+            Your account is verified. Keep filling the application — nothing is sent to the review team until the final review step.
           </Alert>
         ) : (
           <Alert tone="warning" title="Confirm your email to submit">
@@ -1825,118 +1888,28 @@ export function BecomeAMakerPage() {
 
   const renderPayoutStep = () => (
     <div className="space-y-6">
-      <Alert tone="warning" title="Payouts are reviewed manually for now">
-        {payoutMessage} Your bank or UPI preference is recorded for reviewed, manual settlement. No automatic transfer is
-        promised, and no payout provider credentials are collected here.
+      <Alert tone="info" title="Bank and UPI details are collected after approval">
+        {payoutMessage} We do not ask for account numbers during the first application. If you are approved, the team
+        will invite you to a separate, secured payout setup. No automatic transfer is promised until a provider is
+        configured, and nothing on this page is a payment instruction.
       </Alert>
 
-      <div role="radiogroup" aria-label="Payout method" className="grid gap-3 sm:grid-cols-2">
-        {[
-          { value: 'bank_transfer' as const, label: 'Bank transfer', detail: 'Account held by the seller or registered entity.' },
-          { value: 'upi' as const, label: 'UPI', detail: 'A UPI ID that belongs to the seller.' },
-        ].map((option) => {
-          const selected = form.payout.method === option.value;
-          return (
-            <label
-              key={option.value}
-              className={`cursor-pointer border p-4 ${
-                selected ? 'border-orchard bg-orchard/[0.04]' : 'border-line bg-surface'
-              }`}
-            >
-              <input
-                type="radio"
-                name="payoutMethod"
-                value={option.value}
-                checked={selected}
-                onChange={() => patchPayout({ method: option.value })}
-                className="sr-only"
-              />
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-ink">{option.label}</span>
-                <span
-                  aria-hidden
-                  className={`h-3 w-3 rounded-full border ${selected ? 'border-orchard bg-orchard' : 'border-sand'}`}
-                />
-              </div>
-              <p className="mt-1.5 text-xs leading-relaxed text-muted">{option.detail}</p>
-            </label>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label="Account holder name"
-          required
-          error={errors['payout.accountHolderName']}
-          className="sm:col-span-2"
-          htmlFor="payout-name"
-        >
-          <Input
-            id="payout-name"
-            value={form.payout.accountHolderName}
-            invalid={Boolean(errors['payout.accountHolderName'])}
-            onChange={(event) => patchPayout({ accountHolderName: event.target.value })}
-          />
-        </Field>
-        {form.payout.method === 'bank_transfer' ? (
-          <>
-            <Field label="Account number — last four digits" hint="Full numbers are not collected here" htmlFor="payout-last4">
-              <Input
-                id="payout-last4"
-                inputMode="numeric"
-                maxLength={4}
-                value={form.payout.accountLast4}
-                onChange={(event) => patchPayout({ accountLast4: event.target.value.replace(/\D/g, '').slice(0, 4) })}
-              />
-            </Field>
-            <Field label="IFSC code" required error={errors['payout.ifsc']} htmlFor="payout-ifsc">
-              <Input
-                id="payout-ifsc"
-                value={form.payout.ifsc}
-                maxLength={11}
-                invalid={Boolean(errors['payout.ifsc'])}
-                onChange={(event) => patchPayout({ ifsc: event.target.value.toUpperCase().slice(0, 11) })}
-              />
-            </Field>
-          </>
-        ) : (
-          <Field
-            label="UPI ID"
-            required
-            error={errors['payout.upiIdMasked']}
-            className="sm:col-span-2"
-            htmlFor="payout-upi"
-          >
-            <Input
-              id="payout-upi"
-              value={form.payout.upiIdMasked}
-              invalid={Boolean(errors['payout.upiIdMasked'])}
-              onChange={(event) => patchPayout({ upiIdMasked: event.target.value })}
-              placeholder="name@bank"
-            />
-          </Field>
-        )}
-      </div>
-
-      <div>
-        <label className="flex items-start gap-2.5 text-[13px] leading-relaxed text-bark">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-4 w-4 accent-[#572B36]"
-            checked={form.payout.consent}
-            onChange={(event) => patchPayout({ consent: event.target.checked })}
-          />
-          <span>
-            I confirm these payout details belong to me or the seller entity I represent, and that I will update them if
-            they change.
-          </span>
-        </label>
-        {errors['payout.consent'] ? (
-          <p className="mt-1.5 text-xs text-terra" role="alert">
-            {errors['payout.consent']}
-          </p>
-        ) : null}
+      <div className="border border-line bg-warm-paper p-5">
+        <p className="text-[11px] uppercase tracking-[0.14em] text-harvest">What happens later</p>
+        <ol className="mt-3 space-y-3 text-sm leading-relaxed text-bark">
+          <li className="flex gap-3">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 bg-harvest" aria-hidden />
+            You finish this application, verification and product review.
+          </li>
+          <li className="flex gap-3">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 bg-harvest" aria-hidden />
+            Once approved, the operator opens a restricted payout onboarding step.
+          </li>
+          <li className="flex gap-3">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 bg-harvest" aria-hidden />
+            Settlement records remain visible in your workspace, but no payout is claimed before it is actually made.
+          </li>
+        </ol>
       </div>
     </div>
   );
@@ -2104,15 +2077,8 @@ export function BecomeAMakerPage() {
     },
     {
       step: 8,
-      title: 'Payout',
-      rows: [
-        ['Method', form.payout.method === 'bank_transfer' ? 'Bank transfer' : 'UPI'],
-        ['Account holder', form.payout.accountHolderName],
-        ['Account last four', form.payout.accountLast4],
-        ['IFSC', form.payout.ifsc],
-        ['UPI ID', form.payout.upiIdMasked],
-        ['Provider status', 'Pending configuration — manual reviewed settlement'],
-      ],
+      title: 'Payouts',
+      rows: [['Collected later', 'Bank and UPI details are not requested during the initial application.']],
     },
     {
       step: 9,
@@ -2230,7 +2196,9 @@ export function BecomeAMakerPage() {
                 ? 'The review team needs specific changes before this application can be approved.'
                 : app?.status === 'rejected'
                   ? 'This application was not approved. The reason is recorded below; you can revise and resubmit if that is appropriate.'
-                  : 'Your application is in the review queue. You will be notified when its status changes.'}
+                  : app?.status === 'withdrawn'
+                    ? 'You withdrew this application, so it is no longer in the review queue. Your answers are kept if you decide to apply again.'
+                    : 'Your application is in the review queue. You will be notified when its status changes.'}
         </p>
 
         {app?.rejectionReason ? (
@@ -2306,10 +2274,60 @@ export function BecomeAMakerPage() {
               Revise application
             </Button>
           ) : null}
+          {app?.status === 'withdrawn' ? (
+            <Button type="button" onClick={() => void startNewApplication()} loading={saving}>
+              Start a new application
+            </Button>
+          ) : null}
           <Link to="/seller" className={buttonClass(locked ? 'primary' : 'secondary')}>
             Open seller workspace
           </Link>
         </div>
+
+        {view?.canWithdraw && !locked ? (
+          <div className="border-t border-line pt-4">
+            {!withdrawOpen ? (
+              <button
+                type="button"
+                onClick={() => setWithdrawOpen(true)}
+                className="text-xs font-medium text-muted underline decoration-line underline-offset-4 hover:text-ink"
+              >
+                Withdraw this application
+              </button>
+            ) : (
+              <div role="group" aria-labelledby="withdraw-heading" className="space-y-3">
+                <h3 id="withdraw-heading" className="font-display text-lg text-orchard">
+                  Withdraw this application?
+                </h3>
+                <p className="text-[13px] leading-relaxed text-bark">
+                  It will leave the review queue and any live listings will be paused. Your answers stay on record so you
+                  can start a new application later. This cannot be undone from this page.
+                </p>
+                <Field
+                  label="Reason (optional)"
+                  hint="Only the marketplace team sees this."
+                  htmlFor="withdraw-reason"
+                >
+                  <Textarea
+                    id="withdraw-reason"
+                    rows={3}
+                    maxLength={500}
+                    value={withdrawReason}
+                    onChange={(event) => setWithdrawReason(event.target.value)}
+                  />
+                </Field>
+                <div className="flex flex-wrap gap-3">
+                  <Button type="button" variant="secondary" onClick={() => setWithdrawOpen(false)} disabled={withdrawing}>
+                    Keep my application
+                  </Button>
+                  <Button type="button" variant="danger" onClick={() => void withdrawApplication()} disabled={withdrawing}>
+                    {withdrawing ? 'Withdrawing…' : 'Withdraw application'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -2343,7 +2361,8 @@ export function BecomeAMakerPage() {
 
   const showStatusPanel =
     Boolean(applicationStatus) &&
-    (locked || (!forceEdit && ['changes_requested', 'rejected'].includes(applicationStatus ?? '')));
+    (locked ||
+      (!forceEdit && ['changes_requested', 'rejected', 'withdrawn'].includes(applicationStatus ?? '')));
 
   const applicationLoading = Boolean(user) && !hydrated && (application.isLoading || application.isFetching);
 
@@ -2491,11 +2510,11 @@ export function BecomeAMakerPage() {
           <div className="max-w-2xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-harvest">Maker application</p>
             <h2 className="mt-4 font-display text-4xl leading-tight text-orchard sm:text-5xl">
-              Ten steps. One considered application.
+              Three stages. Saved as you go.
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-muted">
-              Your progress is saved as a draft. You can leave and resume with the same account — nothing is submitted
-              until you review it at the end.
+              Start with who you are and what you make. Add verification and dispatch details next. Then review
+              everything before submitting. Your progress is saved as a draft, and nothing is sent until the final step.
             </p>
           </div>
 
@@ -2524,7 +2543,7 @@ export function BecomeAMakerPage() {
               <div className="border-b border-line px-5 py-4 sm:px-7 sm:py-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-harvest">
-                    Step {step} of {TOTAL_STEPS}
+                    Stage {stageForStep(step).number} of {STAGES.length} · Step {step} of {TOTAL_STEPS}
                   </p>
                   <p className="text-[11px] text-muted" aria-live="polite">
                     {saving
@@ -2720,11 +2739,36 @@ function WizardProgress({
   onSelect: (step: number) => void;
 }) {
   const percent = Math.round((completed / TOTAL_STEPS) * 100);
+  const currentStage = stageForStep(step);
   return (
     <nav aria-label="Application steps" className="lg:sticky lg:top-24 lg:self-start">
       <div className="border border-line bg-surface">
         <div className="border-b border-line px-4 py-3">
-          <div className="flex items-baseline justify-between gap-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-harvest">
+            Stage {currentStage.number} of {STAGES.length}
+          </p>
+          <ol className="mt-2 grid grid-cols-3 gap-1" aria-label="Application stages">
+            {STAGES.map((stage) => {
+              const active = stage.number === currentStage.number;
+              const done = stage.number < currentStage.number;
+              return (
+                <li key={stage.number}>
+                  <div
+                    aria-current={active ? 'step' : undefined}
+                    className={`border-t-2 pt-1.5 ${
+                      active ? 'border-terra' : done ? 'border-forest/50' : 'border-line'
+                    }`}
+                  >
+                    <span className={`block text-[10px] font-semibold uppercase tracking-[0.08em] ${active ? 'text-terra' : done ? 'text-forest' : 'text-muted'}`}>
+                      {stage.number}. {stage.title}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+          <p className="mt-2 text-[11px] leading-snug text-muted">{currentStage.hint}</p>
+          <div className="mt-3 flex items-baseline justify-between gap-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-harvest">Your progress</p>
             <p className="text-[11px] text-muted">{percent}% ready</p>
           </div>

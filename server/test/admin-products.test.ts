@@ -128,6 +128,7 @@ describe('Admin Product Management', () => {
         pricePaise: 65000,
         stock: 15,
         description: 'Raw multifloral forest honey ethically gathered from high altitude flora.',
+        materials: 'Raw multifloral forest honey',
         isDemo: true,
       });
       expect(created.status).toBe(201);
@@ -304,6 +305,37 @@ describe('Admin Product Management', () => {
       });
       expect(res.status).toBe(400);
       expect(res.body.error.fields).toHaveProperty('compareAtPricePaise');
+    });
+  });
+
+  describe('Category publication gates', () => {
+    it('refuses direct published creation in a regulated category', async () => {
+      const res = await mutate(adminAgent.post('/api/admin/products')).send({
+        name: 'Direct Published Weave',
+        pricePaise: 90_000,
+        stock: 4,
+        description: 'A handwoven runner that should go through category review before publication.',
+        status: 'approved',
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.fields).toHaveProperty('status');
+    });
+
+    it('refuses to publish a regulated draft without the required category information', async () => {
+      const created = await mutate(adminAgent.post('/api/admin/products')).send({
+        name: 'Draft Weave Without Materials',
+        pricePaise: 90_000,
+        stock: 4,
+        description: 'A handwoven runner that is missing its material description in the draft.',
+      });
+      expect(created.status).toBe(201);
+
+      const published = await mutate(adminAgent.post(`/api/admin/products/${created.body.id}/publish`)).send({});
+      expect(published.status).toBe(400);
+      expect(published.body.error.fields).toHaveProperty('materials');
+
+      const row = queryOne<{ status: string }>(db, 'SELECT status FROM products WHERE id = ?', created.body.id);
+      expect(row?.status).toBe('draft');
     });
   });
 

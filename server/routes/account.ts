@@ -529,7 +529,12 @@ export function accountRouter(db: Db): Router {
   });
 
   router.post('/wishlist/:productId', (req, res) => {
-    const product = queryOne<{ id: string }>(db, "SELECT id FROM products WHERE id = ? AND status = 'approved'", req.params.productId);
+    const product = queryOne<{ id: string }>(
+      db,
+      `SELECT p.id FROM products p JOIN seller_profiles s ON s.id = p.seller_id
+        WHERE p.id = ? AND p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'`,
+      req.params.productId,
+    );
     if (!product) throw notFound('Product not found.');
     execute(
       db,

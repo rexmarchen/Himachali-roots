@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS seller_applications (
   id TEXT PRIMARY KEY,
   seller_id TEXT NOT NULL REFERENCES seller_profiles(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'draft'
-    CHECK (status IN ('draft','submitted','under_review','changes_requested','approved','rejected','suspended')),
+    CHECK (status IN ('draft','submitted','under_review','changes_requested','approved','rejected','suspended','withdrawn')),
   revision INTEGER NOT NULL DEFAULT 1,
   current_step INTEGER NOT NULL DEFAULT 1,
   seller_category TEXT,

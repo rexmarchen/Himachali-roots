@@ -99,6 +99,12 @@ async function uploadIdProof(agent: Awaited<ReturnType<typeof login>>, docType =
   return response;
 }
 
+async function uploadProductImage(agent: Awaited<ReturnType<typeof login>>, productId: string) {
+  return mutate(agent.post(`/api/seller/products/${productId}/images`))
+    .field('alt', 'A product photograph used by the automated suite')
+    .attach('image', JPEG, { filename: 'listing.jpg', contentType: 'image/jpeg' });
+}
+
 async function submitCompleteApplication(agent: Awaited<ReturnType<typeof login>>, idempotencyKey = 'submit-once') {
   const draft = await saveDraft(agent, applicationData());
   expect(draft.status).toBe(200);
@@ -131,6 +137,34 @@ describe('seller onboarding application', () => {
     expect(view.body.application.data.businessName).toBe('Draft Loom');
     expect(view.body.seller.storeStatus).toBe('setup_incomplete');
     expect(view.body.payoutProvider.configured).toBe(false);
+  });
+
+  it('offers the full maker structure list, including artisan, farmer and home business', async () => {
+    const applicant = await login(app, 'customer@test.local');
+    const config = await applicant.get('/api/seller/config');
+    expect(config.body.sellerTypes).toEqual(
+      expect.arrayContaining([
+        'artisan',
+        'farmer',
+        'home_business',
+        'self_help_group',
+        'cooperative',
+        'proprietorship',
+        'partnership',
+        'other',
+      ]),
+    );
+
+    for (const sellerType of ['artisan', 'farmer', 'home_business', 'other']) {
+      const saved = await saveDraft(
+        applicant,
+        { businessName: `Maker ${sellerType}`, sellerCategory: 'home_business', sellerType },
+        3,
+      );
+      expect(saved.status).toBe(200);
+      const view = await applicant.get('/api/seller/application');
+      expect(view.body.application.sellerType).toBe(sellerType);
+    }
   });
 
   it('rejects an incomplete submission with field-level reasons', async () => {
@@ -384,6 +418,7 @@ describe('seller product moderation', () => {
       sku: 'TEST-RUNNER-1',
       unit: 'piece',
       weightG: 450,
+      materials: 'Handspun Kullu wool',
       region: 'Kullu',
       originPlace: 'Naggar',
     });
@@ -445,5 +480,252 @@ describe('seller product moderation', () => {
     const paused = queryOne<{ status: string }>(db, 'SELECT status FROM products WHERE id = ?', productId);
     expect(paused?.status).toBe('paused');
     expect((await anonymous.get(`/api/products/${created.body.slug}`)).status).toBe(404);
+  });
+
+  it('requires food information for a food-category listing before submission and approval', async () => {
+    execute(
+      db,
+      "INSERT INTO categories (id, name, slug, description, sort_order) VALUES ('cat_food_test', 'Test Tea', 'tea-and-infusions', 'Test food category', 2)",
+    );
+    const seller = await login(app, 'seller@test.local');
+    const payload = {
+      name: 'Test Orthodox Tea',
+      categoryId: 'cat_food_test',
+      shortDescription: 'A small-batch orthodox tea from a high-altitude garden.',
+      description:
+        'A small-batch orthodox tea grown on a high-altitude family garden, hand-plucked in the first flush and withered slowly before rolling and drying.',
+      pricePaise: 45_000,
+      sku: 'TEST-TEA-1',
+      unit: 'pack',
+      weightG: 250,
+      materials: 'Orthodox tea leaves',
+    };
+    const created = await mutate(seller.post('/api/seller/products')).send(payload);
+    expect(created.status).toBe(201);
+    const productId = created.body.id as string;
+    expect((await uploadProductImage(seller, productId)).status).toBe(201);
+
+    const missing = await mutate(seller.post(`/api/seller/products/${productId}/submit`)).send({});
+    expect(missing.status).toBe(400);
+    expect(missing.body.error.fields).toMatchObject({
+      'compliance.fssaiLicense': expect.any(String),
+      'compliance.ingredients': expect.any(String),
+      'compliance.allergenInfo': expect.any(String),
+      'compliance.shelfLife': expect.any(String),
+      'compliance.storage': expect.any(String),
+    });
+    expect(missing.body.error.fields.materials).toBeUndefined();
+
+    const updated = await mutate(seller.patch(`/api/seller/products/${productId}`)).send({
+      ...payload,
+      compliance: {
+        fssaiLicense: '12345678901234',
+        ingredients: 'Orthodox black tea leaves',
+        allergenInfo: 'None known',
+        shelfLife: '18 months from packing',
+        storage: 'Store airtight away from light and moisture',
+      },
+    });
+    expect(updated.status).toBe(200);
+
+    const submitted = await mutate(seller.post(`/api/seller/products/${productId}/submit`)).send({});
+    expect(submitted.status).toBe(200);
+
+    const admin = await login(app, 'admin@test.local');
+    const approved = await mutate(admin.post(`/api/admin/products/${productId}/decision`)).send({
+      decision: 'approve',
+      originVerified: true,
+    });
+    expect(approved.status).toBe(200);
+  });
+});
+
+describe('applicant withdrawal and seller review access', () => {
+  it('submits without payout details and does not create a payout requirement', async () => {
+    const applicant = await login(app, 'customer@test.local');
+    const data: Record<string, unknown> = { ...applicationData() };
+    delete data.payout;
+
+    const draft = await saveDraft(applicant, data);
+    expect(draft.status).toBe(200);
+    expect((await uploadIdProof(applicant)).status).toBe(201);
+
+    const submitted = await mutate(applicant.post('/api/seller/application/submit')).send({
+      data,
+      idempotencyKey: 'no-payout',
+    });
+    expect(submitted.status).toBe(201);
+
+    const view = await applicant.get('/api/seller/application');
+    expect(view.body.application.status).toBe('submitted');
+    expect(view.body.checklist.some((item: { id: string }) => item.id === 'payout')).toBe(false);
+    const seller = queryOne<{ payout_status: string }>(
+      db,
+      'SELECT payout_status FROM seller_profiles WHERE id = ?',
+      submitted.body.sellerId,
+    );
+    expect(seller?.payout_status).toBe('not_started');
+    expect(view.body.payoutProvider.configured).toBe(false);
+  });
+
+  it('withdraws a submitted application, preserves its history and starts a fresh draft', async () => {
+    const applicant = await login(app, 'customer@test.local');
+    const submitted = await submitCompleteApplication(applicant, 'withdraw-me');
+    const sellerId = submitted.body.sellerId as string;
+    const applicationId = submitted.body.applicationId as string;
+
+    const before = await applicant.get('/api/seller/application');
+    expect(before.body.canWithdraw).toBe(true);
+
+    const withdrawn = await mutate(applicant.post('/api/seller/application/withdraw')).send({
+      reason: 'Pausing the workshop for the winter.',
+    });
+    expect(withdrawn.status).toBe(200);
+    expect(withdrawn.body.status).toBe('withdrawn');
+    expect(withdrawn.body.previousStatus).toBe('submitted');
+
+    const profile = queryOne<{ status: string; store_status: string }>(
+      db,
+      'SELECT status, store_status FROM seller_profiles WHERE id = ?',
+      sellerId,
+    );
+    expect(profile).toMatchObject({ status: 'draft', store_status: 'setup_incomplete' });
+
+    const record = queryOne<{ status: string; rejection_reason: string }>(
+      db,
+      'SELECT status, rejection_reason FROM seller_applications WHERE id = ?',
+      applicationId,
+    );
+    expect(record?.status).toBe('withdrawn');
+    expect(record?.rejection_reason).toContain('winter');
+
+    expect(
+      queryOne(
+        db,
+        "SELECT 1 FROM seller_application_events WHERE application_id = ? AND event = 'application_withdrawn'",
+        applicationId,
+      ),
+    ).toBeTruthy();
+    expect(
+      queryOne(
+        db,
+        "SELECT 1 FROM seller_notifications WHERE seller_id = ? AND type = 'application_withdrawn'",
+        sellerId,
+      ),
+    ).toBeTruthy();
+
+    const view = await applicant.get('/api/seller/application');
+    expect(view.body.application.status).toBe('withdrawn');
+    expect(view.body.canWithdraw).toBe(false);
+
+    // The withdrawn row is closed; saving a draft creates a new application.
+    const restarted = await saveDraft(applicant, applicationData({ businessName: 'Asha Weaves Again' }));
+    expect(restarted.status).toBe(200);
+    const applications = queryAll<{ status: string }>(
+      db,
+      'SELECT status FROM seller_applications WHERE seller_id = ? ORDER BY created_at, rowid',
+      sellerId,
+    );
+    expect(applications.map((row) => row.status)).toEqual(['withdrawn', 'draft']);
+  });
+
+  it('refuses withdrawal after approval and never targets another seller', async () => {
+    execute(
+      db,
+      `INSERT INTO seller_applications
+         (id, seller_id, status, revision, current_step, business_name, seller_type, submitted_at, reviewed_at)
+       VALUES ('app_approved_withdraw', ?, 'approved', 1, 10, 'Test Loom', 'individual', ?, ?)`,
+      IDS.seller,
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
+    const seller = await login(app, 'seller@test.local');
+    const refused = await mutate(seller.post('/api/seller/application/withdraw')).send({ sellerId: IDS.seller2 });
+    expect(refused.status).toBe(409);
+    expect(queryOne<{ status: string }>(db, 'SELECT status FROM seller_applications WHERE id = ?', 'app_approved_withdraw')?.status).toBe('approved');
+
+    const other = await login(app, 'seller2@test.local');
+    const noApplication = await mutate(other.post('/api/seller/application/withdraw')).send({ sellerId: IDS.seller });
+    expect(noApplication.status).toBe(400);
+    expect(queryOne<{ status: string }>(db, 'SELECT status FROM seller_applications WHERE id = ?', 'app_approved_withdraw')?.status).toBe('approved');
+  });
+
+  it('paginates and filters the seller review list, including the application reference', async () => {
+    execute(
+      db,
+      `INSERT INTO seller_profiles
+         (id, user_id, business_name, slug, seller_type, seller_category, region, status, store_status, payout_status)
+       VALUES ('sel_filter_orchard', ?, 'Filter Orchard', 'filter-orchard', 'partnership', 'farmer_grower',
+               'Lahaul-Spiti', 'submitted', 'pending_activation', 'not_started')`,
+      IDS.otherCustomer,
+    );
+    execute(
+      db,
+      `INSERT INTO seller_applications
+         (id, seller_id, status, revision, current_step, business_name, seller_type, seller_category, submitted_at)
+       VALUES ('app_filter_ref', 'sel_filter_orchard', 'submitted', 2, 10, 'Filter Orchard', 'partnership',
+               'farmer_grower', ?)`,
+      new Date().toISOString(),
+    );
+    const admin = await login(app, 'admin@test.local');
+
+    const paged = await admin.get('/api/admin/sellers?page=1&pageSize=1');
+    expect(paged.status).toBe(200);
+    expect(paged.body.sellers).toHaveLength(1);
+    expect(paged.body.pageSize).toBe(1);
+    expect(paged.body.total).toBeGreaterThanOrEqual(3);
+    expect(paged.body.totalPages).toBe(paged.body.total);
+
+    const byReference = await admin.get('/api/admin/sellers?q=app_filter_ref');
+    expect(byReference.body.sellers).toHaveLength(1);
+    expect(byReference.body.sellers[0].id).toBe('sel_filter_orchard');
+    expect(byReference.body.sellers[0].application_id).toBe('app_filter_ref');
+    expect(byReference.body.sellers[0].application_revision).toBe(2);
+
+    const byFilters = await admin.get('/api/admin/sellers?sellerCategory=farmer_grower&region=Lahaul-Spiti');
+    expect(byFilters.body.sellers.map((row: { id: string }) => row.id)).toEqual(['sel_filter_orchard']);
+    expect(byFilters.body.filters.seller_category).toContain('farmer_grower');
+    expect(byFilters.body.filters.region).toContain('Lahaul-Spiti');
+  });
+
+  it('hides approved listings when the maker store is not active', async () => {
+    const anonymous = request(app);
+    expect((await anonymous.get('/api/products/test-shawl')).status).toBe(200);
+    expect((await anonymous.get('/api/sellers/test-loom')).status).toBe(200);
+
+    execute(db, "UPDATE seller_profiles SET store_status = 'suspended' WHERE id = ?", IDS.seller);
+    expect((await anonymous.get('/api/products/test-shawl')).status).toBe(404);
+    expect((await anonymous.get('/api/sellers/test-loom')).status).toBe(404);
+
+    execute(db, "UPDATE seller_profiles SET store_status = 'active' WHERE id = ?", IDS.seller);
+    expect((await anonymous.get('/api/products/test-shawl')).status).toBe(200);
+    expect((await anonymous.get('/api/sellers/test-loom')).status).toBe(200);
+  });
+
+  it('audits administrator document access and keeps private files away from other sellers', async () => {
+    const applicant = await login(app, 'customer@test.local');
+    expect((await saveDraft(applicant, applicationData())).status).toBe(200);
+    const uploaded = await uploadIdProof(applicant, 'address_proof');
+    expect(uploaded.status).toBe(201);
+    const docId = uploaded.body.id as string;
+
+    const owner = await applicant.get(`/api/seller/documents/${docId}/file`);
+    expect(owner.status).toBe(200);
+    expect(owner.headers['cache-control']).toContain('no-store');
+
+    const admin = await login(app, 'admin@test.local');
+    const opened = await admin.get(`/api/admin/seller-documents/${docId}/file`);
+    expect(opened.status).toBe(200);
+    const auditEntry = queryOne<{ actor_email: string }>(
+      db,
+      `SELECT actor_email FROM audit_logs
+        WHERE entity_type = 'seller_document' AND entity_id = ? AND action = 'seller.document_opened'`,
+      docId,
+    );
+    expect(auditEntry?.actor_email).toBe('admin@test.local');
+
+    const other = await login(app, 'other@test.local');
+    expect((await other.get(`/api/admin/seller-documents/${docId}/file`)).status).toBe(403);
+    expect((await other.get(`/api/seller/documents/${docId}/file`)).status).toBe(404);
   });
 });

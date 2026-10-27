@@ -11,8 +11,10 @@ import { newId, uniqueSlug } from '../lib/ids.js';
 import { documentUpload, hasValidFileSignature, imageUpload, isInsidePrivateDocs } from '../lib/uploads.js';
 import { notify, escapeHtml } from '../lib/email.js';
 import { COMMISSION_BASIS_NOTE, resolveCommissionBp } from '../lib/pricing.js';
+import { firstComplianceError, validateProductCompliance, COMPLIANCE_GUIDES } from '../lib/productCompliance.js';
 import { sellerOrderAction, type SellerAction } from '../lib/orders.js';
 import {
+  applyApplicantWithdrawal,
   assertCompleteSubmission,
   DOCUMENT_LABELS,
   DOCUMENT_TYPES,
@@ -36,7 +38,7 @@ import {
 
 const applySchema = z.object({
   businessName: z.string().trim().min(2, 'Enter your business or maker name.').max(120),
-  sellerType: z.enum(['individual', 'proprietorship', 'partnership', 'private_limited', 'cooperative', 'self_help_group']),
+  sellerType: z.enum(SELLER_TYPES),
   sellerCategory: z
     .enum(['farmer_grower', 'artisan_craftsperson', 'food_producer', 'home_business', 'local_brand', 'retailer'])
     .optional(),
@@ -219,6 +221,7 @@ export function sellerRouter(db: Db): Router {
         sms: false,
         note: 'Email verification is active. Mobile verification requires an SMS provider and is completed during manual review.',
       },
+      productCompliance: COMPLIANCE_GUIDES,
     });
   });
 
@@ -278,6 +281,9 @@ export function sellerRouter(db: Db): Router {
         approvedAt: seller.approved_at,
       },
       application: applicationView(application),
+      canWithdraw: Boolean(
+        application && ['draft', 'submitted', 'under_review', 'changes_requested', 'rejected'].includes(application.status),
+      ),
       documents: documents.map((doc) => ({
         id: doc.id,
         docType: doc.doc_type,
@@ -318,10 +324,32 @@ export function sellerRouter(db: Db): Router {
     });
   });
 
+  router.post('/application/withdraw', (req, res) => {
+    const seller = sellerForUser(db, req.user!.id);
+    if (!seller) throw badRequest('There is no application to withdraw.');
+    const input = parse(
+      z.object({
+        reason: z.string().trim().max(500).optional(),
+      }),
+      req.body ?? {},
+    );
+    const result = applyApplicantWithdrawal(db, req.user!, seller.id, input.reason || null);
+    res.json({
+      ok: true,
+      status: result.nextStatus,
+      previousStatus: result.previousStatus,
+      applicationId: result.applicationId,
+      message: 'Application withdrawn. You can start a new draft at any time.',
+    });
+  });
+
   router.post('/application/draft', (req, res) => {
     const draft = normaliseDraft(req.body);
     const seller = ensureSellerProfile(db, req.user!.id, draft.data);
-    const current = latestApplication(db, seller.id);
+    const latest = latestApplication(db, seller.id);
+    // A withdrawn application is preserved for history, but it is closed. A
+    // fresh draft is created rather than mutating the withdrawn record.
+    const current = latest && latest.status !== 'withdrawn' ? latest : undefined;
     if (current && ['submitted', 'under_review', 'approved', 'suspended'].includes(current.status)) {
       throw conflict(
         current.status === 'approved'
@@ -542,7 +570,7 @@ export function sellerRouter(db: Db): Router {
         emptyToNull(validated.gstin),
         emptyToNull(validated.panLast4),
         storeStatusForApplication('submitted'),
-        validated.payout?.method ? 'pending_configuration' : 'not_started',
+        'not_started',
         now,
         seller.id,
       );
@@ -653,14 +681,6 @@ export function sellerRouter(db: Db): Router {
         shipsAcrossIndia: true,
         coldChain: false,
         notes: '',
-      },
-      payout: {
-        method: 'bank_transfer',
-        accountHolderName: input.businessName,
-        accountLast4: '',
-        ifsc: '',
-        upiIdMasked: '',
-        consent: true,
       },
       agreements: {
         sellerAgreement: true,
@@ -1536,11 +1556,20 @@ export function sellerRouter(db: Db): Router {
       weight_g: number | null;
       sku: string;
       category_id: string;
+      category_slug: string;
+      category_name: string;
+      materials: string | null;
+      dimensions: string | null;
+      care_instructions: string | null;
       changes_requested_at: string | null;
       compliance_json: string | null;
     }>(
       db,
-      'SELECT id, name, status, description, price_paise, weight_g, sku, category_id, changes_requested_at, compliance_json FROM products WHERE id = ? AND seller_id = ?',
+      `SELECT p.id, p.name, p.status, p.description, p.price_paise, p.weight_g, p.sku, p.category_id,
+              p.materials, p.dimensions, p.care_instructions, p.changes_requested_at, p.compliance_json,
+              c.slug AS category_slug, c.name AS category_name
+         FROM products p LEFT JOIN categories c ON c.id = p.category_id
+        WHERE p.id = ? AND p.seller_id = ?`,
       req.params.id,
       id,
     );
@@ -1554,24 +1583,17 @@ export function sellerRouter(db: Db): Router {
     if (!product.weight_g) throw badRequest('Add the packed weight so shipping can be calculated.');
     const images = queryOne<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM product_images WHERE product_id = ?', product.id);
     if ((images?.count ?? 0) === 0) throw badRequest('Add at least one photograph before submitting.');
-    const sellerProfile = queryOne<{ seller_category: string | null }>(
-      db,
-      'SELECT seller_category FROM seller_profiles WHERE id = ?',
-      id,
-    );
-    if (sellerProfile?.seller_category === 'food_producer') {
-      const compliance = parseJson<Record<string, string>>(product.compliance_json, {});
-      if (!compliance.fssaiLicense) {
-        throw badRequest('Enter the FSSAI licence for this food product before submitting.', {
-          'compliance.fssaiLicense': 'FSSAI licence is required for food products.',
-        });
-      }
-      if (!compliance.ingredients || !compliance.shelfLife) {
-        throw badRequest('Add ingredients and shelf life before submitting a food product.', {
-          'compliance.ingredients': 'Ingredients are required.',
-          'compliance.shelfLife': 'Shelf life is required.',
-        });
-      }
+
+    const application = latestApplication(db, id);
+    const applicationData = parseJson<Record<string, unknown>>(application?.data_json ?? null, {});
+    const compliance = validateProductCompliance({
+      categorySlug: product.category_slug,
+      categoryName: product.category_name,
+      product,
+      sellerFssaiNumber: typeof applicationData.fssaiNumber === 'string' ? applicationData.fssaiNumber : null,
+    });
+    if (Object.keys(compliance.errors).length) {
+      throw badRequest(firstComplianceError(compliance.errors), compliance.errors);
     }
     const now = new Date().toISOString();
     execute(

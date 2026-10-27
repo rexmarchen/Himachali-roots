@@ -87,11 +87,15 @@ export const SELLER_CATEGORY_CONFIG: Record<
 
 export const SELLER_TYPES = [
   'individual',
+  'artisan',
+  'farmer',
+  'home_business',
   'proprietorship',
   'partnership',
   'private_limited',
   'cooperative',
   'self_help_group',
+  'other',
 ] as const;
 
 export const DOCUMENT_TYPES = [
@@ -173,6 +177,7 @@ export const APPLICATION_STATUSES = [
   'approved',
   'rejected',
   'suspended',
+  'withdrawn',
 ] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
@@ -180,13 +185,14 @@ export const STORE_STATUSES = ['setup_incomplete', 'pending_activation', 'active
 export type StoreStatus = (typeof STORE_STATUSES)[number];
 
 export const APPLICATION_TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]> = {
-  draft: ['submitted'],
-  submitted: ['under_review', 'changes_requested', 'rejected', 'approved'],
-  under_review: ['changes_requested', 'rejected', 'approved', 'suspended'],
-  changes_requested: ['submitted', 'rejected'],
+  draft: ['submitted', 'withdrawn'],
+  submitted: ['under_review', 'changes_requested', 'rejected', 'approved', 'withdrawn'],
+  under_review: ['changes_requested', 'rejected', 'approved', 'suspended', 'withdrawn'],
+  changes_requested: ['submitted', 'rejected', 'withdrawn'],
   approved: ['suspended', 'under_review'],
-  rejected: ['submitted', 'draft'],
+  rejected: ['submitted', 'draft', 'withdrawn'],
   suspended: ['under_review', 'approved'],
+  withdrawn: [],
 };
 
 export function canTransition(from: ApplicationStatus, to: ApplicationStatus): boolean {
@@ -212,6 +218,9 @@ export function storeStatusForApplication(status: ApplicationStatus): StoreStatu
 /** Profile status is the coarser compatibility field used by existing guards. */
 export function profileStatusForApplication(status: ApplicationStatus): string {
   if (status === 'changes_requested') return 'more_info_required';
+  // A withdrawal is applicant-driven and returns the account to a pre-submission
+  // state. The application row itself keeps the explicit `withdrawn` status.
+  if (status === 'withdrawn') return 'draft';
   return status;
 }
 
@@ -449,13 +458,10 @@ export function assertCompleteSubmission(
   if (!shipping.success) {
     for (const issue of shipping.error.issues) errors[`shipping.${issue.path.join('.')}`] = issue.message;
   }
-  const payout = payoutSchema.safeParse(data.payout);
-  if (!payout.success) {
-    for (const issue of payout.error.issues) errors[`payout.${issue.path.join('.')}`] = issue.message;
-  }
-  if (data.payout?.method === 'bank_transfer' && !data.payout.ifsc) {
-    errors['payout.ifsc'] = 'Enter the IFSC code for bank payouts.';
-  }
+  // Payout details are deliberately not collected during onboarding. They are
+  // introduced later through a separate, secured payout process once a
+  // settlement provider is configured. Legacy drafts may still carry values,
+  // and those are preserved rather than validated as a submission requirement.
   const agreements = agreementsSchema.safeParse(data.agreements);
   if (!agreements.success) {
     for (const issue of agreements.error.issues) errors[`agreements.${issue.path.join('.')}`] = issue.message;
@@ -544,15 +550,6 @@ export function onboardingChecklist(
       status: data.shipping?.dispatchDays ? 'complete' : 'pending',
       detail: data.shipping?.dispatchDays ? `Dispatch within ${data.shipping.dispatchDays} days.` : 'Set dispatch expectations.',
       href: '/sell?edit=1&step=7',
-    },
-    {
-      id: 'payout',
-      label: 'Payout preferences',
-      status: data.payout?.method ? 'complete' : 'pending',
-      detail: data.payout?.method
-        ? 'Saved. Provider verification is pending configuration.'
-        : 'Choose how you would like to be paid.',
-      href: '/sell?edit=1&step=8',
     },
     {
       id: 'agreements',
@@ -647,6 +644,91 @@ export interface DecisionResult {
   previousStatus: ApplicationStatus;
   nextStatus: ApplicationStatus;
   businessName: string;
+}
+
+/**
+ * An applicant may withdraw an application that has not been approved. This is
+ * deliberately separate from administrative decisions: it cannot approve,
+ * reject, suspend or reinstate anything, and it records the applicant as actor.
+ */
+export function applyApplicantWithdrawal(
+  db: Db,
+  actor: SessionUser,
+  sellerId: string,
+  reason: string | null,
+): DecisionResult {
+  const seller = queryOne<{ id: string; user_id: string; status: string; business_name: string }>(
+    db,
+    'SELECT id, user_id, status, business_name FROM seller_profiles WHERE id = ? AND user_id = ?',
+    sellerId,
+    actor.id,
+  );
+  if (!seller) throw forbidden('You can only withdraw your own application.');
+  const application = latestApplication(db, seller.id);
+  if (!application) throw badRequest('There is no application to withdraw.');
+  assertTransition(application.status, 'withdrawn');
+
+  const now = new Date().toISOString();
+  tx(db, () => {
+    execute(
+      db,
+      `UPDATE seller_applications
+          SET status = 'withdrawn', rejection_reason = ?, updated_at = ?
+        WHERE id = ?`,
+      reason,
+      now,
+      application.id,
+    );
+    execute(
+      db,
+      `UPDATE seller_profiles
+          SET status = 'draft', store_status = 'setup_incomplete',
+              store_status_reason = ?, rejection_reason = NULL, updated_at = ?
+        WHERE id = ?`,
+      'Application withdrawn by the applicant.',
+      now,
+      seller.id,
+    );
+    execute(
+      db,
+      "UPDATE products SET status = 'paused', updated_at = ? WHERE seller_id = ? AND status IN ('approved','pending')",
+      now,
+      seller.id,
+    );
+    recordApplicationEvent(db, {
+      applicationId: application.id,
+      sellerId: seller.id,
+      actor,
+      event: 'application_withdrawn',
+      fromStatus: application.status,
+      toStatus: 'withdrawn',
+      reason,
+    });
+    sellerNotification(db, {
+      sellerId: seller.id,
+      userId: seller.user_id,
+      type: 'application_withdrawn',
+      title: 'Application withdrawn',
+      body: reason?.trim()
+        ? `Your application has been withdrawn. Reason recorded: ${reason.trim()} You can start a new draft whenever you are ready.`
+        : 'Your application has been withdrawn. You can start a new draft whenever you are ready. Any listings that were live have been paused.',
+      actionUrl: '/seller/application',
+      dedupeKey: `withdrawn:${application.id}:${now}`,
+    });
+    audit(db, actor, 'seller.application_withdrawn', 'seller', seller.id, { status: application.status }, {
+      applicationId: application.id,
+      status: 'withdrawn',
+      reason,
+    });
+  });
+
+  return {
+    applicationId: application.id,
+    sellerId: seller.id,
+    previousStatus: application.status,
+    nextStatus: 'withdrawn',
+    businessName: seller.business_name,
+  };
 }
 
 /**

@@ -26,6 +26,7 @@ import {
 import { POLICY_KEYS } from '../../shared/content.js';
 import { assertProductionConfig } from '../env.js';
 import { paymentProviderStatus } from '../lib/payments.js';
+import { firstComplianceError, validateProductCompliance, complianceGroupFor } from '../lib/productCompliance.js';
 import {
   applySellerDecision,
   checkDocumentRequirements,
@@ -173,17 +174,45 @@ export function adminRouter(db: Db): Router {
   /* ------------------------------ Sellers ------------------------------ */
 
   router.get('/sellers', (req, res) => {
+    const { page, pageSize, offset } = pageParams(req.query);
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const queue = typeof req.query.queue === 'string' ? req.query.queue : undefined;
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const region = typeof req.query.region === 'string' ? req.query.region.trim() : '';
+    const sellerCategory = typeof req.query.sellerCategory === 'string' ? req.query.sellerCategory.trim() : '';
+    const sellerType = typeof req.query.sellerType === 'string' ? req.query.sellerType.trim() : '';
     const conditions: string[] = [];
-    const params: string[] = [];
+    const params: (string | number)[] = [];
     if (queue === 'review') {
       conditions.push("COALESCE(la.status, sp.status) IN ('submitted','under_review','changes_requested','more_info_required')");
     } else if (status) {
       conditions.push('COALESCE(la.status, sp.status) = ?');
       params.push(status);
     }
+    if (q) {
+      conditions.push(`(sp.business_name LIKE ? OR sp.slug LIKE ? OR u.email LIKE ? OR la.id LIKE ? OR sp.region LIKE ?)`);
+      const like = `%${q}%`;
+      params.push(like, like, like, like, like);
+    }
+    if (region) {
+      conditions.push('sp.region = ?');
+      params.push(region);
+    }
+    if (sellerCategory) {
+      conditions.push('COALESCE(la.seller_category, sp.seller_category) = ?');
+      params.push(sellerCategory);
+    }
+    if (sellerType) {
+      conditions.push('COALESCE(la.seller_type, sp.seller_type) = ?');
+      params.push(sellerType);
+    }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const from = `FROM seller_profiles sp JOIN users u ON u.id = sp.user_id
+         LEFT JOIN seller_applications la ON la.id = (
+           SELECT id FROM seller_applications a WHERE a.seller_id = sp.id ORDER BY a.created_at DESC LIMIT 1
+         )`;
+    const totalRow = queryOne<{ total: number }>(db, `SELECT COUNT(*) AS total ${from} ${where}`, ...params);
+    const total = totalRow?.total ?? 0;
     const rows = queryAll<{
       id: string;
       business_name: string;
@@ -200,6 +229,7 @@ export function adminRouter(db: Db): Router {
       product_count: number;
       paid_orders: number;
       gmv: number;
+      application_id: string | null;
       application_status: string | null;
       application_revision: number | null;
       application_current_step: number | null;
@@ -208,24 +238,40 @@ export function adminRouter(db: Db): Router {
       db,
       `SELECT sp.id, sp.business_name, sp.slug, sp.status, sp.store_status, sp.payout_status,
               sp.seller_category, sp.seller_type, sp.region, sp.created_at, sp.approved_at,
-              u.email, la.status AS application_status, la.revision AS application_revision,
+              u.email, la.id AS application_id, la.status AS application_status, la.revision AS application_revision,
               la.current_step AS application_current_step, la.submitted_at,
               (SELECT COUNT(*) FROM products p WHERE p.seller_id = sp.id AND p.status = 'approved') AS product_count,
               (SELECT COUNT(*) FROM seller_orders so JOIN orders o ON o.id = so.order_id
                 WHERE so.seller_id = sp.id AND o.paid_at IS NOT NULL) AS paid_orders,
               (SELECT COALESCE(SUM(so.total_paise),0) FROM seller_orders so JOIN orders o ON o.id = so.order_id
                 WHERE so.seller_id = sp.id AND o.paid_at IS NOT NULL AND so.status != 'cancelled') AS gmv
-         FROM seller_profiles sp JOIN users u ON u.id = sp.user_id
-         LEFT JOIN seller_applications la ON la.id = (
-           SELECT id FROM seller_applications a WHERE a.seller_id = sp.id ORDER BY a.created_at DESC LIMIT 1
-         )
+         ${from}
         ${where}
         ORDER BY CASE COALESCE(la.status, sp.status)
                    WHEN 'submitted' THEN 0 WHEN 'under_review' THEN 1 WHEN 'changes_requested' THEN 2
-                   ELSE 3 END, sp.created_at DESC`,
+                   ELSE 3 END, sp.created_at DESC
+        LIMIT ? OFFSET ?`,
       ...params,
+      pageSize,
+      offset,
     );
-    res.json({ sellers: rows });
+    const filterRows = queryAll<{ field: string; value: string }>(
+      db,
+      `SELECT 'region' AS field, region AS value FROM seller_profiles WHERE region IS NOT NULL AND region != ''
+       UNION SELECT 'seller_category', seller_category FROM seller_profiles WHERE seller_category IS NOT NULL
+       UNION SELECT 'seller_type', seller_type FROM seller_profiles WHERE seller_type IS NOT NULL
+       ORDER BY field, value`,
+    );
+    const filters: Record<string, string[]> = { region: [], seller_category: [], seller_type: [] };
+    for (const row of filterRows) filters[row.field]?.push(row.value);
+    res.json({
+      sellers: rows,
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+      filters,
+    });
   });
 
   router.get('/sellers/:id', (req, res) => {
@@ -369,12 +415,18 @@ export function adminRouter(db: Db): Router {
   });
 
   router.get('/seller-documents/:id/file', (req, res) => {
-    const doc = queryOne<{ file_path: string; mime_type: string; original_name: string }>(
+    const doc = queryOne<{ seller_id: string; file_path: string; mime_type: string; original_name: string; doc_type: string }>(
       db,
-      'SELECT file_path, mime_type, original_name FROM seller_documents WHERE id = ?',
+      'SELECT seller_id, file_path, mime_type, original_name, doc_type FROM seller_documents WHERE id = ?',
       req.params.id,
     );
     if (!doc || !isInsidePrivateDocs(doc.file_path) || !fs.existsSync(doc.file_path)) throw notFound('Document not found.');
+    // Opening identity evidence is itself a sensitive action. Record who opened
+    // which document without copying the file contents into the log.
+    audit(db, req.user!, 'seller.document_opened', 'seller_document', req.params.id, null, {
+      sellerId: doc.seller_id,
+      docType: doc.doc_type,
+    });
     res.setHeader('Content-Type', doc.mime_type);
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.original_name)}"`);
     res.setHeader('Cache-Control', 'private, no-store');
@@ -590,11 +642,21 @@ export function adminRouter(db: Db): Router {
       seller_id: string;
       description: string;
       images: number;
+      materials: string | null;
+      dimensions: string | null;
+      care_instructions: string | null;
+      weight_g: number | null;
+      compliance_json: string | null;
+      category_slug: string | null;
+      category_name: string | null;
     }>(
       db,
-      `SELECT p.id, p.name, p.status, p.seller_id, p.description,
+      `SELECT p.id, p.name, p.status, p.seller_id, p.description, p.materials, p.dimensions,
+              p.care_instructions, p.weight_g, p.compliance_json,
+              c.slug AS category_slug, c.name AS category_name,
               (SELECT COUNT(*) FROM product_images pi WHERE pi.product_id = p.id) AS images
-         FROM products p WHERE p.id = ?`,
+         FROM products p LEFT JOIN categories c ON c.id = p.category_id
+        WHERE p.id = ?`,
       req.params.id,
     );
     if (!product) throw notFound('Product not found.');
@@ -602,6 +664,17 @@ export function adminRouter(db: Db): Router {
     if (input.decision === 'approve') {
       if (product.images === 0) throw conflict('This listing has no photograph and cannot be approved.');
       if (product.description.trim().length < 80) throw conflict('This listing does not have a sufficient description.');
+      const application = latestApplication(db, product.seller_id);
+      const applicationData = parseJson<Record<string, unknown>>(application?.data_json ?? null, {});
+      const compliance = validateProductCompliance({
+        categorySlug: product.category_slug,
+        categoryName: product.category_name,
+        product,
+        sellerFssaiNumber: typeof applicationData.fssaiNumber === 'string' ? applicationData.fssaiNumber : null,
+      });
+      if (Object.keys(compliance.errors).length) {
+        throw badRequest(firstComplianceError(compliance.errors), compliance.errors);
+      }
     }
     if (input.decision !== 'approve' && (!input.reason || input.reason.trim().length < 10)) {
       throw badRequest('Give the seller a clear reason (at least 10 characters).', { reason: 'A reason is required.' });
@@ -725,13 +798,33 @@ export function adminRouter(db: Db): Router {
     }
 
     let category = input.categoryId
-      ? queryOne<{ id: string }>(db, 'SELECT id FROM categories WHERE id = ? AND is_active = 1', input.categoryId)
-      : queryOne<{ id: string }>(db, 'SELECT id FROM categories WHERE is_active = 1 ORDER BY sort_order LIMIT 1');
+      ? queryOne<{ id: string; slug: string; name: string }>(
+          db,
+          'SELECT id, slug, name FROM categories WHERE id = ? AND is_active = 1',
+          input.categoryId,
+        )
+      : queryOne<{ id: string; slug: string; name: string }>(
+          db,
+          'SELECT id, slug, name FROM categories WHERE is_active = 1 ORDER BY sort_order LIMIT 1',
+        );
     if (!category) {
-      category = queryOne<{ id: string }>(db, 'SELECT id FROM categories ORDER BY sort_order LIMIT 1');
+      category = queryOne<{ id: string; slug: string; name: string }>(
+        db,
+        'SELECT id, slug, name FROM categories ORDER BY sort_order LIMIT 1',
+      );
     }
     if (!category) {
       throw badRequest('Choose a valid, active category.', { categoryId: 'Invalid category.' });
+    }
+
+    // Publishing directly from the create form would bypass the category
+    // publication checks. Regulated categories must be created as a draft and
+    // approved through moderation with their evidence attached.
+    if (input.status === 'approved' && complianceGroupFor(category.slug, category.name) !== 'general') {
+      throw badRequest(
+        'Create this listing as a draft. Category-specific compliance information must be reviewed before publication.',
+        { status: 'Use draft status for this category.' },
+      );
     }
 
     let seller = input.sellerId
@@ -978,8 +1071,37 @@ export function adminRouter(db: Db): Router {
   });
 
   router.post('/products/:id/publish', (req, res) => {
-    const product = queryOne<{ id: string; status: string }>(db, 'SELECT id, status FROM products WHERE id = ?', req.params.id);
+    const product = queryOne<{
+      id: string;
+      status: string;
+      seller_id: string;
+      materials: string | null;
+      dimensions: string | null;
+      care_instructions: string | null;
+      weight_g: number | null;
+      compliance_json: string | null;
+      category_slug: string | null;
+      category_name: string | null;
+    }>(
+      db,
+      `SELECT p.id, p.status, p.seller_id, p.materials, p.dimensions, p.care_instructions, p.weight_g,
+              p.compliance_json, c.slug AS category_slug, c.name AS category_name
+         FROM products p LEFT JOIN categories c ON c.id = p.category_id
+        WHERE p.id = ?`,
+      req.params.id,
+    );
     if (!product) throw notFound('Product not found.');
+    const application = latestApplication(db, product.seller_id);
+    const applicationData = parseJson<Record<string, unknown>>(application?.data_json ?? null, {});
+    const compliance = validateProductCompliance({
+      categorySlug: product.category_slug,
+      categoryName: product.category_name,
+      product,
+      sellerFssaiNumber: typeof applicationData.fssaiNumber === 'string' ? applicationData.fssaiNumber : null,
+    });
+    if (Object.keys(compliance.errors).length) {
+      throw badRequest(firstComplianceError(compliance.errors), compliance.errors);
+    }
     const now = new Date().toISOString();
     execute(
       db,

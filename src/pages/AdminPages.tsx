@@ -1415,8 +1415,18 @@ interface SellerRow {
   id: string; business_name: string; slug: string; status: string; seller_type: string; region: string | null;
   created_at: string; approved_at: string | null; email: string; product_count: number; paid_orders: number; gmv: number;
   store_status: string; payout_status: string; seller_category: string | null;
+  application_id: string | null;
   application_status: string | null; application_revision: number | null; application_current_step: number | null;
   submitted_at: string | null;
+}
+
+interface SellerListResponse {
+  sellers: SellerRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  filters?: { region?: string[]; seller_category?: string[]; seller_type?: string[] };
 }
 
 function sellerApplicationStatus(seller: SellerRow): string {
@@ -1431,28 +1441,29 @@ export function AdminSellersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = searchParams.get('status') ?? '';
   const queue = searchParams.get('queue') ?? '';
+  const region = searchParams.get('region') ?? '';
+  const sellerCategory = searchParams.get('sellerCategory') ?? '';
+  const sellerType = searchParams.get('sellerType') ?? '';
   const [q, setQ] = useState('');
-  const deferredQ = useDeferredValue(q.trim().toLowerCase());
+  const deferredQ = useDeferredValue(q.trim());
+  const [page, setPage] = useState(1);
 
   const sellers = useQuery({
-    queryKey: ['admin-sellers', status, queue],
+    queryKey: ['admin-sellers', status, queue, region, sellerCategory, sellerType, deferredQ, page],
     queryFn: () => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ page: String(page) });
       if (status) params.set('status', status);
       if (queue) params.set('queue', queue);
-      return api<{ sellers: SellerRow[] }>(`/admin/sellers${params.size ? `?${params.toString()}` : ''}`);
+      if (region) params.set('region', region);
+      if (sellerCategory) params.set('sellerCategory', sellerCategory);
+      if (sellerType) params.set('sellerType', sellerType);
+      if (deferredQ) params.set('q', deferredQ);
+      return api<SellerListResponse>(`/admin/sellers?${params.toString()}`);
     },
   });
 
-  const all = useMemo(() => sellers.data?.sellers ?? [], [sellers.data]);
-  const rows = useMemo(() => {
-    if (!deferredQ) return all;
-    return all.filter((seller) =>
-      [seller.business_name, seller.email, seller.region, seller.seller_category, seller.seller_type]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(deferredQ)),
-    );
-  }, [all, deferredQ]);
+  const rows = useMemo(() => sellers.data?.sellers ?? [], [sellers.data]);
+  const total = sellers.data?.total ?? 0;
 
   const overview = useQuery({
     queryKey: ['admin-overview'],
@@ -1461,17 +1472,19 @@ export function AdminSellersPage() {
   });
   const reviewCount = overview.data?.metrics.pending_sellers ?? 0;
 
-  const setFilter = (nextStatus: string, nextQueue = '') => {
+  const setFilter = (next: { status?: string; queue?: string; region?: string; sellerCategory?: string; sellerType?: string }) => {
     const params = new URLSearchParams(searchParams);
-    if (nextStatus) params.set('status', nextStatus);
-    else params.delete('status');
-    if (nextQueue) params.set('queue', nextQueue);
-    else params.delete('queue');
+    for (const [key, value] of Object.entries(next)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
+    setPage(1);
     setSearchParams(params, { replace: true });
   };
 
   const clearFilters = () => {
     setQ('');
+    setPage(1);
     setSearchParams(new URLSearchParams(), { replace: true });
   };
 
@@ -1488,16 +1501,58 @@ export function AdminSellersPage() {
         <Field label="Search sellers" className="w-full sm:max-w-xs">
           <Input
             value={q}
-            onChange={(event) => setQ(event.target.value)}
-            placeholder="Business, email, region or category"
+            onChange={(event) => {
+              setQ(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Business, email, region, category or application ref"
             type="search"
           />
         </Field>
         <Field label="Application status">
-          <Select value={status} onChange={(event) => setFilter(event.target.value)} className="max-w-56">
+          <Select value={status} onChange={(event) => setFilter({ status: event.target.value })} className="max-w-56">
             <option value="">All statuses</option>
-            {['draft', 'submitted', 'under_review', 'changes_requested', 'approved', 'rejected', 'suspended'].map((value) => (
+            {['draft', 'submitted', 'under_review', 'changes_requested', 'approved', 'rejected', 'suspended', 'withdrawn'].map((value) => (
               <option key={value} value={value}>{applicationLabel(value)}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Region">
+          <Select
+            value={region}
+            onChange={(event) => setFilter({ region: event.target.value })}
+            className="max-w-44"
+            aria-label="Filter by region"
+          >
+            <option value="">All regions</option>
+            {(sellers.data?.filters?.region ?? []).map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Maker category">
+          <Select
+            value={sellerCategory}
+            onChange={(event) => setFilter({ sellerCategory: event.target.value })}
+            className="max-w-52"
+            aria-label="Filter by maker category"
+          >
+            <option value="">All categories</option>
+            {(sellers.data?.filters?.seller_category ?? []).map((value) => (
+              <option key={value} value={value}>{humanise(value)}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Legal type">
+          <Select
+            value={sellerType}
+            onChange={(event) => setFilter({ sellerType: event.target.value })}
+            className="max-w-48"
+            aria-label="Filter by seller legal type"
+          >
+            <option value="">All types</option>
+            {(sellers.data?.filters?.seller_type ?? []).map((value) => (
+              <option key={value} value={value}>{humanise(value)}</option>
             ))}
           </Select>
         </Field>
@@ -1505,13 +1560,14 @@ export function AdminSellersPage() {
           type="button"
           size="sm"
           variant={queue === 'review' ? 'primary' : 'secondary'}
-          onClick={() => setFilter('', queue === 'review' ? '' : 'review')}
+          onClick={() => setFilter({ queue: queue === 'review' ? '' : 'review' })}
           className="mb-0.5"
         >
           Needs review{reviewCount ? ` · ${reviewCount}` : ''}
         </Button>
         <p className="pb-3 text-[11px] text-muted sm:ml-auto">
-          Showing {rows.length} of {all.length} seller{all.length === 1 ? '' : 's'} in this view
+          {total} seller{total === 1 ? '' : 's'} in this view
+          {sellers.data && sellers.data.totalPages > 1 ? ` · page ${page} of ${sellers.data.totalPages}` : ''}
         </p>
       </div>
 
@@ -1550,6 +1606,11 @@ export function AdminSellersPage() {
                           {seller.submitted_at ? `Submitted ${formatDate(seller.submitted_at)}` : `Step ${seller.application_current_step ?? 1} of 10 · draft`}
                           {seller.application_revision && seller.application_revision > 1 ? ` · revision ${seller.application_revision}` : ''}
                         </p>
+                        {seller.application_id ? (
+                          <p className="mt-1 break-all font-mono text-[10px] text-muted" title={seller.application_id}>
+                            Ref {seller.application_id}
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-4 py-4">
                         <span className="text-ink">{STORE_STATUS_LABELS[seller.store_status] ?? humanise(seller.store_status)}</span>
@@ -1577,10 +1638,13 @@ export function AdminSellersPage() {
             body={
               queue === 'review'
                 ? 'Submitted and re-opened applications appear here. Approved sellers can be found under All statuses.'
-                : 'Try a different status or clear the search to see every seller account.'
+                : 'Try a different status, region or search term, or clear the filters to see every seller account.'
             }
             action={<Button variant="secondary" size="sm" onClick={clearFilters}>Clear filters</Button>}
           />
+        ) : null}
+        {sellers.data ? (
+          <Pagination page={page} totalPages={sellers.data.totalPages} onChange={setPage} />
         ) : null}
       </div>
     </div>
@@ -2180,7 +2244,7 @@ export function AdminProductsPage() {
 
   const approvedSellers = useQuery({
     queryKey: ['admin-sellers', 'approved', 'product-create'],
-    queryFn: () => api<{ sellers: { id: string; business_name: string }[] }>('/admin/sellers?status=approved'),
+    queryFn: () => api<{ sellers: { id: string; business_name: string }[] }>('/admin/sellers?status=approved&pageSize=100'),
   });
 
   const refresh = async () => {
@@ -4893,7 +4957,7 @@ export function AdminCommissionsPage() {
   });
   const sellers = useQuery({
     queryKey: ['admin-sellers', 'approved'],
-    queryFn: () => api<{ sellers: SellerRow[] }>('/admin/sellers?status=approved'),
+    queryFn: () => api<{ sellers: SellerRow[] }>('/admin/sellers?status=approved&pageSize=100'),
   });
 
   const submit = async (event: FormEvent) => {
@@ -5088,7 +5152,7 @@ export function AdminSettlementsPage() {
   });
   const sellers = useQuery({
     queryKey: ['admin-sellers', 'approved'],
-    queryFn: () => api<{ sellers: SellerRow[] }>('/admin/sellers?status=approved'),
+    queryFn: () => api<{ sellers: SellerRow[] }>('/admin/sellers?status=approved&pageSize=100'),
   });
   const detail = useQuery({
     queryKey: ['admin-settlement', selectedId],

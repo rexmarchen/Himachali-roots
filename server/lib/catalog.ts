@@ -3,7 +3,7 @@ import type { Category, Paged, ProductDetail, ProductSummary, Review } from '../
 import { notFound } from './http.js';
 import { attachCampaignMeta } from './campaigns.js';
 
-const PUBLIC_CONDITION = "p.status = 'approved' AND s.status = 'approved'";
+const PUBLIC_CONDITION = "p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'";
 
 interface SummaryRow {
   id: string;
@@ -242,7 +242,7 @@ export function getProduct(db: Db, slug: string): ProductDetail {
        JOIN categories c ON c.id = p.category_id
        JOIN inventory i ON i.product_id = p.id
        LEFT JOIN active_campaign_prices acp ON acp.product_id = p.id
-      WHERE p.slug = ? AND p.status = 'approved' AND s.status = 'approved'`,
+      WHERE p.slug = ? AND p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'`,
     slug,
   );
   if (!row) throw notFound('That product is not available.');
@@ -358,7 +358,8 @@ export function listCategories(db: Db): Category[] {
     `SELECT c.id, c.name, c.slug, c.description, c.parent_id, c.image_url,
             (SELECT COUNT(*) FROM products p
               JOIN seller_profiles s ON s.id = p.seller_id
-             WHERE p.category_id = c.id AND p.status = 'approved' AND s.status = 'approved') AS product_count
+             WHERE p.category_id = c.id AND p.status = 'approved' AND s.status = 'approved'
+               AND s.store_status = 'active') AS product_count
        FROM categories c WHERE c.is_active = 1 ORDER BY c.sort_order, c.name`,
   ).map((row) => ({
     id: row.id,
@@ -401,7 +402,7 @@ export function listPublicSellers(db: Db): {
             (SELECT pi.url FROM products p JOIN product_images pi ON pi.product_id = p.id
               WHERE p.seller_id = s.id AND p.status = 'approved' ORDER BY p.is_featured DESC, pi.sort_order LIMIT 1) AS image_url
        FROM seller_profiles s
-      WHERE s.status = 'approved'
+      WHERE s.status = 'approved' AND s.store_status = 'active'
       ORDER BY product_count DESC, s.business_name`,
   ).map((row) => ({
     id: row.id,
@@ -447,7 +448,7 @@ export function getSellerStorefront(db: Db, slug: string): {
     db,
     `SELECT id, business_name AS name, slug, tagline, story, region, village, logo_url, cover_url,
             seller_category, approved_at
-       FROM seller_profiles WHERE slug = ? AND status = 'approved'`,
+       FROM seller_profiles WHERE slug = ? AND status = 'approved' AND store_status = 'active'`,
     slug,
   );
   if (!seller) throw notFound('That maker is not available.');
@@ -471,7 +472,8 @@ export function getRegions(db: Db): { region: string; productCount: number }[] {
     db,
     `SELECT p.region, COUNT(*) AS product_count
        FROM products p JOIN seller_profiles s ON s.id = p.seller_id
-      WHERE p.status = 'approved' AND s.status = 'approved' AND p.region IS NOT NULL AND p.region != ''
+      WHERE p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'
+        AND p.region IS NOT NULL AND p.region != ''
       GROUP BY p.region ORDER BY product_count DESC`,
   ).map((row) => ({ region: row.region, productCount: row.product_count }));
 }

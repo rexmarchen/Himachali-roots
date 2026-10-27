@@ -20,7 +20,8 @@ export type ApplicationStatus =
   | 'changes_requested'
   | 'approved'
   | 'rejected'
-  | 'suspended';
+  | 'suspended'
+  | 'withdrawn';
 export type StoreStatus = 'setup_incomplete' | 'pending_activation' | 'active' | 'suspended';
 export type SellerCategoryId =
   | 'farmer_grower'
@@ -330,6 +331,7 @@ export const APPLICATION_STATUS_LABELS: Record<string, string> = {
   approved: 'Approved',
   rejected: 'Not approved',
   suspended: 'Suspended',
+  withdrawn: 'Withdrawn',
 };
 
 export const STORE_STATUS_LABELS: Record<string, string> = {

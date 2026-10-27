@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'reac
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Category, ProductStatus, SellerProduct } from '@shared/types';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
+import { COMPLIANCE_GUIDES, complianceGroupFor } from '@shared/productCompliance';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { useAuth } from '@/lib/session';
@@ -1861,13 +1862,6 @@ export function SellerProductEditorPage() {
     enabled: Boolean(id),
   });
 
-  const sellerApplication = useQuery<SellerApplicationResponse>({
-    queryKey: ['seller-application'],
-    queryFn: () => api<SellerApplicationResponse>('/seller/application'),
-    retry: false,
-    staleTime: 60_000,
-  });
-
   const sellerConfig = useQuery<{
     commission: { defaultBp: number; categoryRates: Record<string, number>; note: string };
   }>({
@@ -1876,7 +1870,6 @@ export function SellerProductEditorPage() {
     staleTime: 5 * 60_000,
   });
 
-  const isFoodSeller = sellerApplication.data?.seller?.sellerCategory === 'food_producer';
   const workflowStatus = product.data?.product?.workflowStatus;
   const inReview = workflowStatus === 'submitted';
 
@@ -1884,6 +1877,14 @@ export function SellerProductEditorPage() {
   const selectedCategoryObj =
     categories.data?.categories.find((c) => c.id === form.categoryId) ||
     categories.data?.subcategories.find((c) => c.id === form.categoryId);
+
+  // Publication requirements follow the product category, not the maker's own
+  // category. A farmer who also sells a woven blanket still needs textile
+  // details for that listing, and a craft shop selling preserves still needs
+  // the food information.
+  const complianceGroup = complianceGroupFor(selectedCategoryObj?.slug, selectedCategoryObj?.name);
+  const complianceGuide = COMPLIANCE_GUIDES[complianceGroup];
+  const needsMaterialDetails = ['textile', 'clothing', 'craft'].includes(complianceGroup);
 
   const isFruitCategory =
     selectedCategoryObj?.slug?.includes('fruit') ||
@@ -2068,6 +2069,47 @@ export function SellerProductEditorPage() {
       return;
     }
 
+    if (shouldSubmit) {
+      const missing: Record<string, string> = {};
+      if (complianceGroup === 'food') {
+        if (form.compliance.fssaiLicense && !/^\d{14}$/.test(form.compliance.fssaiLicense.trim())) {
+          missing['compliance.fssaiLicense'] = 'Enter a 14-digit FSSAI registration or licence number.';
+        }
+        if (form.compliance.ingredients.trim().length < 3) {
+          missing['compliance.ingredients'] = 'List the ingredients used in this product.';
+        }
+        if (form.compliance.allergenInfo.trim().length < 2) {
+          missing['compliance.allergenInfo'] = 'Declare allergens, or state that none are known.';
+        }
+        if (form.compliance.shelfLife.trim().length < 2) {
+          missing['compliance.shelfLife'] = 'State the shelf life or best-before period.';
+        }
+        if (form.compliance.storage.trim().length < 3) {
+          missing['compliance.storage'] = 'Describe how the product should be stored.';
+        }
+      }
+      if (needsMaterialDetails && form.materials.trim().length < 3) {
+        missing.materials = 'Describe the fibre or material composition.';
+      }
+      if (complianceGroup === 'clothing') {
+        if (form.dimensions.trim().length < 2) {
+          missing.dimensions = 'Add the size or key measurements.';
+        }
+        if (form.careInstructions.trim().length < 3) {
+          missing.careInstructions = 'Add washing and care instructions.';
+        }
+      }
+      if (Object.keys(missing).length) {
+        setFields(missing);
+        toast.push('Add the category-specific information before submitting for review.', 'error');
+        const provenanceOnly = Object.keys(missing).every((key) =>
+          ['materials', 'dimensions', 'careInstructions'].includes(key),
+        );
+        setActiveStep(provenanceOnly ? 3 : 7);
+        return;
+      }
+    }
+
     setSaving(true);
     setFields({});
 
@@ -2224,7 +2266,15 @@ export function SellerProductEditorPage() {
     { num: 4, label: 'Story & Description', icon: '✍️' },
     { num: 5, label: 'Pricing & Profit', icon: '💰' },
     { num: 6, label: 'Stock & Fulfilment', icon: '📦' },
-    ...(isFoodSeller ? [{ num: 7, label: 'Food Compliance', icon: '🍯' }] : []),
+    ...(complianceGroup !== 'general'
+      ? [
+          {
+            num: 7,
+            label: complianceGroup === 'food' ? 'Food compliance' : 'Category requirements',
+            icon: '📋',
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -2722,10 +2772,11 @@ export function SellerProductEditorPage() {
                 />
               </Field>
 
-              <Field label="Materials or Ingredients" className="sm:col-span-2">
+              <Field label="Materials or Ingredients" className="sm:col-span-2" required={needsMaterialDetails} error={fields.materials}>
                 <Input
                   value={form.materials}
                   onChange={(event) => setForm({ ...form, materials: event.target.value })}
+                  invalid={Boolean(fields.materials)}
                   placeholder={
                     isTextileCategory
                       ? 'e.g. Handspun sheep wool, cotton lining'
@@ -2736,18 +2787,30 @@ export function SellerProductEditorPage() {
                 />
               </Field>
 
-              <Field label="Dimensions or Sizing" hint="Optional sizing specifications">
+              <Field
+                label="Dimensions or Sizing"
+                hint={complianceGroup === 'clothing' ? 'Required for clothing listings' : 'Optional sizing specifications'}
+                required={complianceGroup === 'clothing'}
+                error={fields.dimensions}
+              >
                 <Input
                   value={form.dimensions}
                   onChange={(event) => setForm({ ...form, dimensions: event.target.value })}
+                  invalid={Boolean(fields.dimensions)}
                   placeholder="e.g. 200 × 100 cm (Shawl) or 30 × 20 cm box"
                 />
               </Field>
 
-              <Field label="Care or Preservation Instructions" hint="Optional storage advice">
+              <Field
+                label="Care or Preservation Instructions"
+                hint={complianceGroup === 'clothing' ? 'Required for clothing listings' : 'Optional storage advice'}
+                required={complianceGroup === 'clothing'}
+                error={fields.careInstructions}
+              >
                 <Input
                   value={form.careInstructions}
                   onChange={(event) => setForm({ ...form, careInstructions: event.target.value })}
+                  invalid={Boolean(fields.careInstructions)}
                   placeholder="e.g. Dry clean only or Store in a cool dry dark space"
                 />
               </Field>
@@ -2992,9 +3055,9 @@ export function SellerProductEditorPage() {
         )}
 
         {/* =========================================================================
-            STEP 7: Food Compliance (Only for Food Producers)
+            STEP 7: Category-specific publication information
             ========================================================================= */}
-        {isFoodSeller && (activeStep === 'all' || activeStep === 7) && (
+        {complianceGroup !== 'general' && (activeStep === 'all' || activeStep === 7) && (
           <section className="rounded-2xl border border-[#E4DACE] bg-white p-5 sm:p-7 shadow-xs">
             <div className="flex items-center justify-between border-b border-[#E4DACE] pb-4">
               <div className="flex items-center gap-3">
@@ -3002,77 +3065,147 @@ export function SellerProductEditorPage() {
                   7
                 </span>
                 <div>
-                  <h2 className="text-lg font-serif font-bold text-[#172321]">Food Compliance & FSSAI Details</h2>
-                  <p className="text-xs text-[#172321]/60">
-                    Required for food producers before product can be approved for sale
-                  </p>
+                  <h2 className="text-lg font-serif font-bold text-[#172321]">
+                    {complianceGuide.label}
+                  </h2>
+                  <p className="text-xs text-[#172321]/60">{complianceGuide.summary}</p>
                 </div>
               </div>
               <span className="rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-semibold">
-                FSSAI Required
+                Reviewed before publication
               </span>
             </div>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <Field label="FSSAI Licence Number" required error={fields['compliance.fssaiLicense']}>
-                <Input
-                  value={form.compliance.fssaiLicense}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      compliance: { ...form.compliance, fssaiLicense: event.target.value.replace(/\s/g, '') },
-                    })
-                  }
-                  placeholder="e.g. 10921011000123"
-                  maxLength={30}
-                />
-              </Field>
+              {complianceGroup === 'food' ? (
+                <>
+                  <Field
+                    label="FSSAI registration / licence number"
+                    required
+                    error={fields['compliance.fssaiLicense']}
+                    hint="Leave blank only if your verified application already records this licence"
+                  >
+                    <Input
+                      value={form.compliance.fssaiLicense}
+                      onChange={(event) =>
+                        setForm({
+                          ...form,
+                          compliance: { ...form.compliance, fssaiLicense: event.target.value.replace(/\s/g, '') },
+                        })
+                      }
+                      placeholder="e.g. 10921011000123"
+                      maxLength={30}
+                    />
+                  </Field>
 
-              <Field label="Shelf Life" required hint="e.g. 12 months from packing">
-                <Input
-                  value={form.compliance.shelfLife}
-                  onChange={(event) =>
-                    setForm({ ...form, compliance: { ...form.compliance, shelfLife: event.target.value } })
-                  }
-                  placeholder="e.g. 9 months from packing"
-                  maxLength={120}
-                />
-              </Field>
+                  <Field label="Shelf life / best before" required error={fields['compliance.shelfLife']} hint="e.g. 12 months from packing">
+                    <Input
+                      value={form.compliance.shelfLife}
+                      onChange={(event) =>
+                        setForm({ ...form, compliance: { ...form.compliance, shelfLife: event.target.value } })
+                      }
+                      placeholder="e.g. 9 months from packing"
+                      maxLength={120}
+                    />
+                  </Field>
 
-              <Field label="Ingredients List" required className="sm:col-span-2" error={fields['compliance.ingredients']}>
-                <Textarea
-                  rows={3}
-                  value={form.compliance.ingredients}
-                  onChange={(event) =>
-                    setForm({ ...form, compliance: { ...form.compliance, ingredients: event.target.value } })
-                  }
-                  placeholder="e.g. Wild Himalayan Apples, Raw Cane Sugar, Natural Fruit Pectin, Lemon Juice"
-                  maxLength={1000}
-                />
-              </Field>
+                  <Field label="Ingredients" required className="sm:col-span-2" error={fields['compliance.ingredients']}>
+                    <Textarea
+                      rows={3}
+                      value={form.compliance.ingredients}
+                      onChange={(event) =>
+                        setForm({ ...form, compliance: { ...form.compliance, ingredients: event.target.value } })
+                      }
+                      placeholder="e.g. Wild Himalayan Apples, Raw Cane Sugar, Natural Fruit Pectin, Lemon Juice"
+                      maxLength={1000}
+                    />
+                  </Field>
 
-              <Field label="Batch Number (If assigned)">
-                <Input
-                  value={form.compliance.batchNumber}
-                  onChange={(event) =>
-                    setForm({ ...form, compliance: { ...form.compliance, batchNumber: event.target.value } })
-                  }
-                  placeholder="e.g. B-2026-10"
-                  maxLength={80}
-                />
-              </Field>
+                  <Field
+                    label="Allergen declaration"
+                    required
+                    className="sm:col-span-2"
+                    error={fields['compliance.allergenInfo']}
+                    hint="Declare allergens, or state that none are known"
+                  >
+                    <Input
+                      value={form.compliance.allergenInfo}
+                      onChange={(event) =>
+                        setForm({ ...form, compliance: { ...form.compliance, allergenInfo: event.target.value } })
+                      }
+                      placeholder="e.g. Contains tree nuts. Packed in a facility that also handles milk."
+                      maxLength={300}
+                    />
+                  </Field>
 
-              <Field label="Storage Instructions">
-                <Input
-                  value={form.compliance.storage}
-                  onChange={(event) =>
-                    setForm({ ...form, compliance: { ...form.compliance, storage: event.target.value } })
-                  }
-                  placeholder="e.g. Store in a cool dry place away from direct sunlight."
-                  maxLength={300}
-                />
-              </Field>
+                  <Field label="Batch number (if assigned)">
+                    <Input
+                      value={form.compliance.batchNumber}
+                      onChange={(event) =>
+                        setForm({ ...form, compliance: { ...form.compliance, batchNumber: event.target.value } })
+                      }
+                      placeholder="e.g. B-2026-10"
+                      maxLength={80}
+                    />
+                  </Field>
+
+                  <Field label="Storage guidance" required error={fields['compliance.storage']}>
+                    <Input
+                      value={form.compliance.storage}
+                      onChange={(event) =>
+                        setForm({ ...form, compliance: { ...form.compliance, storage: event.target.value } })
+                      }
+                      placeholder="e.g. Store in a cool dry place away from direct sunlight."
+                      maxLength={300}
+                    />
+                  </Field>
+                </>
+              ) : null}
+
+              {complianceGroup !== 'food' ? (
+                <div className="sm:col-span-2 border border-[#E4DACE] bg-[#FAF7F2] p-4">
+                  <p className="text-sm font-medium text-[#172321]">These details come from the provenance step</p>
+                  <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-[#66745A]">
+                    <li>
+                      Material and composition:{' '}
+                      {form.materials.trim() ? <span className="text-[#172321]">{form.materials.trim()}</span> : 'not recorded yet'}
+                    </li>
+                    {complianceGroup === 'clothing' ? (
+                      <>
+                        <li>
+                          Size or measurements:{' '}
+                          {form.dimensions.trim() ? (
+                            <span className="text-[#172321]">{form.dimensions.trim()}</span>
+                          ) : (
+                            'not recorded yet'
+                          )}
+                        </li>
+                        <li>
+                          Care instructions:{' '}
+                          {form.careInstructions.trim() ? (
+                            <span className="text-[#172321]">{form.careInstructions.trim()}</span>
+                          ) : (
+                            'not recorded yet'
+                          )}
+                        </li>
+                      </>
+                    ) : null}
+                  </ul>
+                  <p className="mt-3 text-xs leading-relaxed text-[#66745A]">
+                    Edit these in the provenance step. They are required before this listing can be submitted for
+                    review.
+                  </p>
+                  <Button type="button" variant="secondary" size="sm" className="mt-3" onClick={() => setActiveStep(3)}>
+                    Edit provenance details
+                  </Button>
+                </div>
+              ) : null}
             </div>
+
+            <p className="mt-4 rounded-xl border border-[#E4DACE] bg-[#FAF7F2] p-3 text-xs leading-relaxed text-[#66745A]">
+              This information is checked by a reviewer before the listing can appear in the shop. It is not a
+              substitute for your own legal or food-safety obligations.
+            </p>
           </section>
         )}
 
