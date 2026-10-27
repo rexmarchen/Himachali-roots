@@ -139,6 +139,46 @@ describe('seller onboarding application', () => {
     expect(view.body.payoutProvider.configured).toBe(false);
   });
 
+  it('saves an initial step 1 draft with empty address and unaccepted agreements', async () => {
+    const applicant = await login(app, 'customer@test.local');
+    const step1Payload = {
+      fullName: 'Shrayas',
+      phone: '',
+      businessName: '',
+      sellerType: 'individual',
+      sellerCategory: undefined,
+      tagline: '',
+      story: '',
+      region: '',
+      village: '',
+      address: { line1: '', line2: '', city: '', state: 'Himachal Pradesh', pincode: '' },
+      dispatchAddress: { line1: '', line2: '', city: '', state: 'Himachal Pradesh', pincode: '' },
+      dispatchSameAsOperating: true,
+      categorySlugs: [],
+      productGroups: [],
+      originNarrative: '',
+      authenticityDeclaration: false,
+      categoryAnswers: {},
+      gstin: '',
+      panLast4: '',
+      fssaiNumber: '',
+      udyamNumber: '',
+      businessRegistrationNumber: '',
+      yearsOperating: undefined,
+      shipping: { dispatchDays: 0, packaging: '', shipsAcrossIndia: true, coldChain: false, notes: '' },
+      payout: { method: 'bank_transfer', accountHolderName: '', accountLast4: '', ifsc: '', upiIdMasked: '', consent: false },
+      agreements: { sellerAgreement: false, commissionDisclosure: false, authenticityPolicy: false, privacyPolicy: false, version: '2026.1' },
+    };
+    const saved = await saveDraft(applicant, step1Payload, 1);
+    expect(saved.status).toBe(200);
+    expect(saved.body.savedAt).toBeDefined();
+
+    const view = await applicant.get('/api/seller/application');
+    expect(view.status).toBe(200);
+    expect(view.body.application.currentStep).toBe(1);
+    expect(view.body.application.data.fullName).toBe('Shrayas');
+  });
+
   it('offers the full maker structure list, including artisan, farmer and home business', async () => {
     const applicant = await login(app, 'customer@test.local');
     const config = await applicant.get('/api/seller/config');

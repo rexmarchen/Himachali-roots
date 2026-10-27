@@ -358,6 +358,68 @@ export function normaliseWizardData(input: unknown): WizardData {
   return wizardDataSchema.parse(input ?? {});
 }
 
+export const draftAddressSchema = z.object({
+  line1: z.string().trim().max(200).optional().default(''),
+  line2: z.string().trim().max(200).optional().default(''),
+  city: z.string().trim().max(80).optional().default(''),
+  state: z.string().trim().max(80).optional().default('Himachal Pradesh'),
+  pincode: z.string().trim().max(10).optional().default(''),
+});
+
+export const draftShippingSchema = z.object({
+  dispatchDays: z.coerce.number().int().min(0).max(30).optional().default(0),
+  packaging: z.string().trim().max(500).optional().default(''),
+  shipsAcrossIndia: z.boolean().optional().default(true),
+  coldChain: z.boolean().optional().default(false),
+  notes: z.string().trim().max(800).optional().default(''),
+});
+
+export const draftPayoutSchema = z.object({
+  method: z.enum(['bank_transfer', 'upi']).optional().default('bank_transfer'),
+  accountHolderName: z.string().trim().max(120).optional().default(''),
+  accountLast4: z.string().trim().max(10).optional().default(''),
+  ifsc: z.string().trim().max(20).optional().default(''),
+  upiIdMasked: z.string().trim().max(80).optional().default(''),
+  consent: z.boolean().optional().default(false),
+});
+
+export const draftAgreementsSchema = z.object({
+  sellerAgreement: z.boolean().optional().default(false),
+  commissionDisclosure: z.boolean().optional().default(false),
+  authenticityPolicy: z.boolean().optional().default(false),
+  privacyPolicy: z.boolean().optional().default(false),
+  version: z.string().trim().max(40).optional().default(''),
+});
+
+export const draftDataSchema = z.object({
+  fullName: z.string().trim().max(120).optional().default(''),
+  phone: z.string().trim().max(20).optional().default(''),
+  businessName: z.string().trim().max(140).optional().default(''),
+  sellerType: z.enum(SELLER_TYPES).optional().default('individual'),
+  sellerCategory: z.enum(SELLER_CATEGORY_IDS).optional(),
+  tagline: z.string().trim().max(160).optional().default(''),
+  story: z.string().trim().max(3000).optional().default(''),
+  region: z.string().trim().max(80).optional().default(''),
+  village: z.string().trim().max(120).optional().default(''),
+  address: draftAddressSchema.optional(),
+  dispatchAddress: draftAddressSchema.optional(),
+  dispatchSameAsOperating: z.boolean().optional().default(true),
+  categorySlugs: z.array(z.string().trim().max(80)).max(20).optional().default([]),
+  productGroups: z.array(z.string().trim().max(60)).max(20).optional().default([]),
+  originNarrative: z.string().trim().max(2000).optional().default(''),
+  authenticityDeclaration: z.boolean().optional().default(false),
+  categoryAnswers: z.record(z.string().max(60), z.string().max(800)).optional().default({}),
+  gstin: z.string().trim().max(20).optional().default(''),
+  panLast4: z.string().trim().max(10).optional().default(''),
+  fssaiNumber: z.string().trim().max(30).optional().default(''),
+  udyamNumber: z.string().trim().max(30).optional().default(''),
+  businessRegistrationNumber: z.string().trim().max(60).optional().default(''),
+  yearsOperating: z.coerce.number().int().min(0).max(100).optional(),
+  shipping: draftShippingSchema.optional(),
+  payout: draftPayoutSchema.optional(),
+  agreements: draftAgreementsSchema.optional(),
+});
+
 /**
  * Save-as-draft tolerates incomplete input but never accepts fields outside the
  * wizard contract, and rejects oversized payloads before they reach SQLite.
@@ -368,8 +430,8 @@ export function normaliseDraft(input: unknown): { currentStep: number; data: Par
   if (serialised.length > 64_000) {
     throw badRequest('This draft is too large to save. Remove long text or attachments.', { data: 'Draft too large.' });
   }
-  const data = wizardDataSchema.partial().parse(parsed.data);
-  return { currentStep: parsed.currentStep ?? 1, data };
+  const data = draftDataSchema.parse(parsed.data ?? {});
+  return { currentStep: parsed.currentStep ?? 1, data: data as Partial<WizardData> };
 }
 
 export function listDocuments(db: Db, sellerId: string): Array<{
