@@ -23,10 +23,11 @@ Last reviewed: 27 October 2026.
 - Manual settlements accept only an explicit bank/UPI reference before marked paid.
 - `npm run check` passes: typecheck, lint, the full test suite and production build.
 - `npm run build` produces the production SPA (282.72 kB bootstrap chunk, no source maps, no chunk-size warning). `scripts/build-web.mjs` forces `NODE_ENV=production` before Vite reads a local `.env`, so a developer setting cannot ship React's development bundle.
-- The Docker image builds and runs as an unprivileged user, serves the SPA and API on one origin, passes readiness with schema 6, accepts administrator login and produces a verified SQLite backup. This validates the deployment artifact locally, not the live host.
-- `npm run smoke` passes 28/28 non-admin live HTTP checks against a running development API (33 with admin credentials).
-- A seller-lifecycle E2E run passed 53/53 checks against a disposable API and database.
-- The legacy-migration test upgrades a pre-onboarding (v1–v2) database to version 6 with rows preserved; `integrity_check` and foreign-key checks are clean in the test database.
+- The Docker image was built and smoke-tested in an earlier pass: unprivileged user, SPA and API on one origin, readiness with the current schema, administrator login and a verified SQLite backup. This validates the deployment artifact locally, not the live host.
+- `npm run smoke` passed 28/28 non-admin live HTTP checks in an earlier development run (33 with admin credentials); it was not re-run against production.
+- A seller-lifecycle E2E run passed 53/53 checks against a disposable API and database in an earlier run.
+- The legacy-migration test upgrades a pre-onboarding (v1–v2) database to migration 8 with rows preserved; `integrity_check` and foreign-key checks are clean in the test database.
+- On 27 October 2026, `npm run typecheck`, `npm run lint`, `npm test` (154 tests / 18 files) and `npm run build` all passed. The live host returned real JSON for `/api/health`, `/api/health/ready`, `/api/config`, `/api/products` and `/api/auth/me`, with payments unconfigured and 0 products.
 
 Evidence and exact outcomes are in [Verification](VERIFICATION.md).
 
@@ -44,13 +45,13 @@ Evidence and exact outcomes are in [Verification](VERIFICATION.md).
 
 ### 2. Transactional email is unconfigured and unverified
 
-**State:** Nodemailer integration, HTML templates, notification records and per-event dedupe keys exist. Without SMTP, records are marked `skipped`; failures are marked `failed`.
+**State:** Resend transactional email is implemented with per-request timeout, bounded retries, `Idempotency-Key`, atomic dedupe, provider message ids and sanitised errors; SMTP remains a fallback. Without either provider, records are marked `skipped`; failures are marked `failed`. `retryFailedNotifications` can retry failed rows manually.
 
-**Missing:** SMTP provider, authenticated sending domain, SPF/DKIM/DMARC, delivery testing, bounce handling and retry/outbox processing.
+**Missing:** A fresh Resend key, a verified sending domain with SPF/DKIM/DMARC, live delivery testing, bounce/complaint handling and an automatic background outbox worker.
 
-**Risk:** Customers may not receive verification, password reset, order or refund notices. Password reset is unusable for a real customer without dev helpers. There is no automatic retry of failed emails.
+**Risk:** Customers may not receive verification, password reset, order or refund notices. Password reset is unusable for a real customer without dev helpers. A leaked Resend key must be revoked and replaced, never reused.
 
-**Unblock:** Configure SMTP and sending domain, add a monitored outbox/retry process if deliverability matters, and test every event.
+**Unblock:** Create a fresh Resend key, verify the domain, send every event to a monitored inbox, check `notifications` rows, and schedule the manual retry helper until an outbox worker exists.
 
 **Mobile verification:** No SMS provider is configured. The application reports `sms: false` and relies on email verification; a phone number collected during onboarding is not independently verified by the platform.
 
@@ -194,13 +195,13 @@ Evidence and exact outcomes are in [Verification](VERIFICATION.md).
 
 **Unblock:** Follow [Google sign-in go-live](DEPLOYMENT.md#google-sign-in-go-live), test new/returning/collision/disabled cases in a clean browser, then remove the "Google sign-in unavailable" fallback from the launch announcement if it cannot be completed.
 
-### 17. The live `.in` domain still serves the pre-hardening static bundle
+### 17. Legacy static bundle and exposed credentials
 
-**State:** `https://www.dearhills.in` resolves to Vercel and serves an old static build. `/api/config` and the health endpoints return 404. The deployed JavaScript bundle still contains the former hardcoded administrator email/password and fabricated `localStorage` session code that were removed from this branch.
+**State:** On 27 October 2026, `https://www.dearhills.in` is served by the Express process behind Caddy and `/api/*` returns real JSON, so the old static bundle is no longer the live application. The old bundle had contained a hardcoded administrator email/password and a fabricated `localStorage` session; those were removed from this branch. Any cached copy, service worker, Vercel preview or shared link may still exist.
 
-**Risk:** The credentials are public and must be treated as compromised. Visitors can appear signed in to a fake admin/customer UI. No real order or account data is exposed through that static host because it has no API, but the password may be reused elsewhere.
+**Risk:** The former credentials must be treated as public and compromised. Anyone reusing that password elsewhere is exposed.
 
-**Unblock:** Change the exposed password everywhere it was used, rotate the Google client secret, then remove `dearhills.in` / `www.dearhills.in` from the Vercel project or redeploy a clean static build. Move the domain to the Express host only after `https://www.dearhills.in/api/health/ready` returns 200.
+**Unblock:** Rotate every password that appeared in the old bundle, rotate the Google client secret, revoke any exposed Resend/Razorpay keys, confirm the Vercel project no longer claims the custom domain, and ask users/ staff to hard-refresh or clear cache. Verify `/api/health/ready` returns 200 and the browser bundle no longer contains the old strings.
 
 ## Deliberate non-goals / product decisions
 
@@ -208,9 +209,9 @@ Evidence and exact outcomes are in [Verification](VERIFICATION.md).
 - **No fake reviews or sales statistics.** Reviews require a delivered purchase.
 - **No invented certifications or origin badges.** `origin_verified` is an admin-controlled claim requiring evidence.
 - **No automated payouts or live shipping claim.**
-- **No payment provider other than Razorpay is integrated.** Cashfree is not implemented.
+- **No payment provider other than the existing, unconfigured Razorpay adapter is integrated.** Cashfree, PhonePe and Stripe are not implemented. Payment-gateway integration is out of scope for this build.
 - **No mobile apps, subscriptions, GST invoice PDFs, CMS page builder or multi-currency support.**
 
 ## Launch statement
 
-The application can be demonstrated end to end today with development payment simulation and manual dispatch. It cannot honestly be called a live, legally compliant marketplace until at least blockers **1–7** and **14–17** are closed, with **8–11** strongly recommended before accepting material transaction volume.
+The application can be demonstrated end to end today with development payment simulation and manual dispatch. It cannot honestly be called a live, legally compliant marketplace until at least blockers **1–7** and **14–16** are closed, the credential rotation in **17** is confirmed, with **8–11** strongly recommended before accepting material transaction volume. Payment-gateway work (blocker 1) must be separately scoped and is not claimed by this build.

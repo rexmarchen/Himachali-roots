@@ -1,4 +1,4 @@
-import { env, assertProductionConfig } from './env.js';
+import { env, assertProductionConfig, criticalProductionIssues } from './env.js';
 import { initDb, getDb, queryOne } from './db.js';
 import { createApp } from './app.js';
 import { releaseExpiredOrders } from './lib/orders.js';
@@ -9,8 +9,11 @@ async function main(): Promise<void> {
   if (env.isProduction) {
     const issues = assertProductionConfig();
     for (const issue of issues) console.warn(JSON.stringify({ level: 'warn', msg: 'production_config', issue }));
-    if (env.allowDevPayments || env.allowDevAuthHelpers) {
-      console.error('Refusing to start: development helpers are enabled in production.');
+    const critical = criticalProductionIssues(issues);
+    if (critical.length > 0) {
+      console.error(
+        JSON.stringify({ level: 'error', msg: 'refusing_to_start_insecure_configuration', issues: critical }),
+      );
       process.exit(1);
     }
   }
@@ -48,7 +51,7 @@ async function main(): Promise<void> {
         env: env.nodeEnv,
         payments: env.razorpay.configured ? 'configured' : 'unconfigured',
         devPayments: env.allowDevPayments,
-        email: env.smtp.configured ? 'configured' : 'unconfigured',
+        email: env.email.provider,
       }),
     );
   });

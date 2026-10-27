@@ -526,6 +526,7 @@ CREATE TABLE IF NOT EXISTS return_requests (
   user_id TEXT NOT NULL REFERENCES users(id),
   reason TEXT NOT NULL,
   description TEXT,
+  requested_amount_paise INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'requested'
     CHECK (status IN ('requested','approved','rejected','pickup_scheduled','received','refunded','closed')),
   resolution_note TEXT,
@@ -533,12 +534,30 @@ CREATE TABLE IF NOT EXISTS return_requests (
   decided_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+CREATE INDEX IF NOT EXISTS idx_return_requests_order ON return_requests(order_id);
+CREATE INDEX IF NOT EXISTS idx_return_requests_seller_order ON return_requests(seller_order_id);
+
+-- A return may cover only part of a line (for example 1 of 2 shawls). Each row
+-- is the quantity and snapshotted value the customer asked to return.
+CREATE TABLE IF NOT EXISTS return_request_items (
+  id TEXT PRIMARY KEY,
+  return_request_id TEXT NOT NULL REFERENCES return_requests(id) ON DELETE CASCADE,
+  order_item_id TEXT NOT NULL REFERENCES order_items(id),
+  quantity INTEGER NOT NULL CHECK (quantity > 0),
+  unit_price_paise INTEGER NOT NULL,
+  line_amount_paise INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (return_request_id, order_item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_return_items_request ON return_request_items(return_request_id);
+CREATE INDEX IF NOT EXISTS idx_return_items_order_item ON return_request_items(order_item_id);
 
 CREATE TABLE IF NOT EXISTS refunds (
   id TEXT PRIMARY KEY,
   order_id TEXT NOT NULL REFERENCES orders(id),
   seller_order_id TEXT REFERENCES seller_orders(id),
   payment_id TEXT REFERENCES payments(id),
+  return_request_id TEXT REFERENCES return_requests(id),
   amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
   reason TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'requested'
@@ -548,9 +567,29 @@ CREATE TABLE IF NOT EXISTS refunds (
   decided_at TEXT,
   provider_refund_id TEXT UNIQUE,
   provider_status TEXT,
+  dedupe_key TEXT,
   completed_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_refunds_dedupe ON refunds(dedupe_key) WHERE dedupe_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_refunds_order ON refunds(order_id);
+CREATE INDEX IF NOT EXISTS idx_refunds_seller_order ON refunds(seller_order_id);
+
+-- Append-only business timeline. audit_logs answers "who changed what"; this
+-- answers "what happened to this order", and is safe to show to staff/customers.
+CREATE TABLE IF NOT EXISTS order_events (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  seller_order_id TEXT REFERENCES seller_orders(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  description TEXT NOT NULL,
+  actor_id TEXT,
+  actor_role TEXT,
+  metadata_json TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events(order_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_order_events_seller_order ON order_events(seller_order_id, created_at);
 
 CREATE TABLE IF NOT EXISTS commission_rules (
   id TEXT PRIMARY KEY,
@@ -715,6 +754,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sent','failed','skipped')),
   sent_at TEXT,
   error TEXT,
+  provider_message_id TEXT,
   dedupe_key TEXT UNIQUE,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );

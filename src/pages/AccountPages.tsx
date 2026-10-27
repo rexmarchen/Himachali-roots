@@ -261,6 +261,7 @@ export function OrderDetailPage() {
   const [cancelReason, setCancelReason] = useState(CANCEL_REASONS[0]);
   const [cancelNote, setCancelNote] = useState('');
   const [returnSeller, setReturnSeller] = useState<string | null>(null);
+  const [returnItems, setReturnItems] = useState<Record<string, number>>({});
   const [returnReason, setReturnReason] = useState(RETURN_REASONS[0]);
   const [returnNote, setReturnNote] = useState('');
   const [reviewItem, setReviewItem] = useState<{ id: string; name: string } | null>(null);
@@ -305,17 +306,36 @@ export function OrderDetailPage() {
     }
   };
 
+  const openReturn = (sellerOrderId: string) => {
+    const sellerOrder = order.data?.order.sellerOrders.find((row) => row.id === sellerOrderId);
+    setReturnSeller(sellerOrderId);
+    setReturnItems(
+      Object.fromEntries(
+        (sellerOrder?.items ?? [])
+          .filter((item) => item.status === 'delivered')
+          .map((item) => [item.id, item.quantity]),
+      ),
+    );
+  };
+
   const submitReturn = async () => {
     if (!returnSeller) return;
+    const items = Object.entries(returnItems)
+      .filter(([, quantity]) => quantity > 0)
+      .map(([orderItemId, quantity]) => ({ orderItemId, quantity }));
+    if (items.length === 0) {
+      toast.push('Select at least one item to return.', 'error');
+      return;
+    }
     setBusy(true);
     try {
       await api(`/account/orders/${encodeURIComponent(orderNumber)}/returns`, {
         method: 'POST',
-        body: { sellerOrderId: returnSeller, reason: returnReason, description: returnNote || undefined },
+        body: { sellerOrderId: returnSeller, reason: returnReason, description: returnNote || undefined, items },
       });
       setReturnSeller(null);
       setReturnNote('');
-      toast.push('Return request submitted for review.');
+      toast.push('Return request submitted for review. No refund has been issued yet.');
       await refresh();
     } catch (error) {
       toast.push(errorMessage(error), 'error');
@@ -454,7 +474,7 @@ export function OrderDetailPage() {
                   <Button size="sm" variant="secondary" onClick={() => setCancelSeller(sellerOrder.id)}>Cancel shipment</Button>
                 ) : null}
                 {data.canRequestReturn && sellerOrder.status === 'delivered' ? (
-                  <Button size="sm" variant="secondary" onClick={() => setReturnSeller(sellerOrder.id)}>Request return</Button>
+                  <Button size="sm" variant="secondary" onClick={() => openReturn(sellerOrder.id)}>Request return</Button>
                 ) : null}
                 {!data.canCancel && !data.canRequestReturn ? <span className="text-[11px] text-muted">No actions available for this shipment.</span> : null}
               </div>
@@ -486,6 +506,19 @@ export function OrderDetailPage() {
               {data.shippingAddress.city}, {data.shippingAddress.state} {data.shippingAddress.pincode}<br />
               {data.shippingAddress.phone}
             </address>
+          </section>
+          <section className="border border-line bg-surface p-5">
+            <h2 className="text-lg">Order timeline</h2>
+            {data.timeline.length ? (
+              <ol className="mt-3 space-y-2 text-[11.5px]">
+                {data.timeline.map((event, index) => (
+                  <li key={`${event.type}-${index}`} className="border-l border-line pl-3">
+                    <p className="font-medium text-ink">{event.description}</p>
+                    <p className="text-muted">{formatDateTime(event.occurredAt)}{event.actorRole ? ` · ${event.actorRole}` : ''}</p>
+                  </li>
+                ))}
+              </ol>
+            ) : <p className="mt-3 text-sm text-muted">No order events recorded yet.</p>}
           </section>
           <div className="border border-line bg-paper p-5 text-[11.5px] leading-relaxed text-muted">
             <p className="font-medium text-ink">Need help with this order?</p>
@@ -522,6 +555,28 @@ export function OrderDetailPage() {
       >
         <div className="space-y-4">
           <Alert tone="info">Returns are reviewed manually. Perishable food and personalised items are only eligible when damaged or incorrect.</Alert>
+          <Field label="Items and quantities" required hint="Return part or all of the delivered items.">
+            <div className="space-y-2">
+              {(data.sellerOrders.find((row) => row.id === returnSeller)?.items ?? [])
+                .filter((item) => item.status === 'delivered')
+                .map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-3 border border-line bg-paper px-3 py-2">
+                    <span className="text-[12px]">{item.name} <span className="text-muted">· {item.quantity} bought</span></span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={item.quantity}
+                      className="w-24"
+                      value={returnItems[item.id] ?? 0}
+                      onChange={(event) => {
+                        const next = Math.max(0, Math.min(item.quantity, Number.parseInt(event.target.value, 10) || 0));
+                        setReturnItems((current) => ({ ...current, [item.id]: next }));
+                      }}
+                    />
+                  </div>
+                ))}
+            </div>
+          </Field>
           <Field label="Reason" required>
             <Select value={returnReason} onChange={(event) => setReturnReason(event.target.value)}>
               {RETURN_REASONS.map((reason) => <option key={reason}>{reason}</option>)}

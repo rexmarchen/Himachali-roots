@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { execute, queryAll, queryOne, tx, type Db } from '../db.js';
+import { env } from '../env.js';
 import { hasUsablePassword, hashPassword, requireAuth, sessionToken, sha256, verifyPassword } from '../lib/auth.js';
 import { badRequest, conflict, notFound, parse, unauthorized } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
@@ -139,7 +140,7 @@ export function accountRouter(db: Db): Router {
     execute(db, 'UPDATE profiles SET deletion_requested_at = COALESCE(deletion_requested_at, ?) WHERE id = ?', now, req.user!.id);
     audit(db, req.user!, 'account.deletion_requested', 'user', req.user!.id, null, { reason: input.reason ?? null });
     await notify(db, {
-      email: process.env.SUPPORT_EMAIL ?? 'hello@pahadiroots.example',
+      email: env.email.supportEmail,
       type: 'account_deletion_request',
       subject: `Account deletion request — ${req.user!.email}`,
       body: `<p>The customer requested account deletion.</p><p><strong>Account:</strong> ${escapeHtml(req.user!.email)}<br/><strong>Reason:</strong> ${escapeHtml(input.reason ?? 'Not provided')}</p>`,
@@ -351,7 +352,7 @@ export function accountRouter(db: Db): Router {
           : `Cancellation requested for order ${order.order_number}`,
       body: `<p>${
         result.status === 'completed'
-          ? 'Your cancellation request was processed successfully. Any refund due is being processed.'
+          ? 'Your cancellation request was processed. A refund request has been recorded for review; no money has moved yet.'
           : 'Your cancellation request has been received by our support team and is being reviewed.'
       }</p><p><strong>Reason:</strong> ${escapeHtml(input.reason)}</p>`,
       dedupeKey: `cust-cancel:${order.id}:${input.sellerOrderId}`,
@@ -359,18 +360,28 @@ export function accountRouter(db: Db): Router {
     res.json(result);
   });
 
-  router.post('/orders/:orderNumber/returns', (req, res) => {
+  router.post('/orders/:orderNumber/returns', async (req, res) => {
     const input = parse(
       z.object({
         sellerOrderId: z.string().min(3).max(80),
         reason: z.string().trim().min(3).max(200),
         description: z.string().trim().max(2000).optional(),
+        items: z
+          .array(
+            z.object({
+              orderItemId: z.string().min(3).max(80),
+              quantity: z.number().int().min(1).max(99),
+            }),
+          )
+          .min(1)
+          .max(50)
+          .optional(),
       }),
       req.body,
     );
-    const order = queryOne<{ id: string; user_id: string }>(
+    const order = queryOne<{ id: string; user_id: string; email: string; order_number: string }>(
       db,
-      'SELECT id, user_id FROM orders WHERE order_number = ?',
+      'SELECT id, user_id, email, order_number FROM orders WHERE order_number = ?',
       req.params.orderNumber,
     );
     if (!order || order.user_id !== req.user!.id) throw notFound('Order not found.');
@@ -380,8 +391,51 @@ export function accountRouter(db: Db): Router {
       userId: req.user!.id,
       reason: input.reason,
       description: input.description,
+      items: input.items,
     });
-    res.status(201).json({ id: result.id, message: 'Return request submitted for review.' });
+
+    await notify(db, {
+      userId: order.user_id,
+      email: order.email,
+      type: 'return_requested',
+      subject: `Return request received for ${order.order_number}`,
+      body: `<p>We have received your return request for <strong>₹${(result.amountPaise / 100).toLocaleString('en-IN')}</strong>. Our team will review it within the published returns policy.</p><p>Approval records a refund request only; no money has moved at this stage.</p><p><strong>Reason:</strong> ${escapeHtml(input.reason)}</p>`,
+      dedupeKey: `return-requested:${result.id}`,
+    });
+
+    const seller = queryOne<{ email: string; user_id: string; business_name: string }>(
+      db,
+      `SELECT u.email, u.id AS user_id, sp.business_name
+         FROM seller_orders so
+         JOIN seller_profiles sp ON sp.id = so.seller_id
+         JOIN users u ON u.id = sp.user_id
+        WHERE so.id = ?`,
+      input.sellerOrderId,
+    );
+    if (seller) {
+      await notify(db, {
+        userId: seller.user_id,
+        email: seller.email,
+        type: 'seller_return_requested',
+        subject: `Return request for ${order.order_number}`,
+        body: `<p>A customer requested a return for part of this shipment.</p><p><strong>Reason:</strong> ${escapeHtml(input.reason)}</p><p>Review the request in your seller dashboard and wait for the marketplace team's decision.</p>`,
+        dedupeKey: `seller-return-requested:${result.id}`,
+      });
+    }
+
+    await notify(db, {
+      email: env.email.adminNotificationEmail,
+      type: 'admin_return_requested',
+      subject: `Return review needed — ${order.order_number}`,
+      body: `<p>A return request was submitted for <strong>₹${(result.amountPaise / 100).toLocaleString('en-IN')}</strong>.</p><p><strong>Order:</strong> ${escapeHtml(order.order_number)}<br/><strong>Reason:</strong> ${escapeHtml(input.reason)}</p>`,
+      dedupeKey: `admin-return-requested:${result.id}`,
+    });
+
+    res.status(201).json({
+      id: result.id,
+      amountPaise: result.amountPaise,
+      message: 'Return request submitted for review. No refund has been issued yet.',
+    });
   });
 
   router.get('/requests', (req, res) => {
@@ -539,7 +593,7 @@ export function accountRouter(db: Db): Router {
       input.body,
     );
     await notify(db, {
-      email: process.env.SUPPORT_EMAIL ?? 'hello@pahadiroots.example',
+      email: env.email.supportEmail,
       type: 'review_submitted',
       subject: `New ${input.rating}-star review`,
       body: `<p>A verified purchase review was published for ${escapeHtml(item.product_slug)}.</p><p>It can be removed from the admin review queue if it breaches the review policy.</p>`,

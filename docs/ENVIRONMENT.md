@@ -16,7 +16,7 @@ Copy-Item .env.example .env
 | --- | --- | --- |
 | `NODE_ENV` | `development` | Set `production` for a production build. Production enables HSTS/CSP, serves `dist/`, and force-disables development helpers. |
 | `PORT` | `8787` | API and production SPA port. |
-| `APP_URL` | `http://localhost:5173` | Public origin, no trailing slash. Production for this project is `https://www.dearhills.in`; it controls secure cookies, trusted origins and links in email. |
+| `APP_URL` | `http://localhost:5173` | Public origin, no trailing slash. Production for this project is `https://www.dearhills.in`; it controls secure cookies, trusted origins and links in email. `APP_BASE_URL` is accepted as an alias and takes precedence when both are set. |
 | `TRUST_PROXY` | `0` | Set `1` behind Caddy/Nginx/Cloudflare so secure-cookie detection and rate limiting see the real client IP. |
 | `ALLOWED_ORIGINS` | empty | Comma-separated extra browser origins permitted to call the API with credentials. Only for a split SPA/API deployment; same-origin needs none. Each entry must be HTTPS in production. |
 | `VITE_API_BASE_URL` | empty | Build-time client setting. The API origin used by the browser (for example `https://api.shop.example`). Leave unset to call same-origin `/api`. |
@@ -74,8 +74,9 @@ Google CSP entries are already allowed for `accounts.google.com` in production. 
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `ALLOW_DEV_PAYMENTS` | `false` | Non-production only. Enables `/api/dev/orders/:orderNumber/pay`, which marks an order paid and returns an explicit "no money moved" warning. Production startup aborts if this resolves to true. |
-| `ALLOW_DEV_AUTH_HELPERS` | `false` | Non-production only. Allows verification/reset links to be returned in API responses and enables `/api/auth/dev/last-reset-link` when SMTP is absent. Production startup aborts if true. |
+| `ALLOW_DEV_PAYMENTS` | `false` | Non-production only. Enables `/api/dev/orders/:orderNumber/pay`, which marks an order paid and returns an explicit "no money moved" warning. Production startup aborts if enabled. |
+| `SIMULATED_CHECKOUT_ENABLED` | `false` | Non-production only. Exposes the labelled demo-checkout button and the same simulation endpoint. Production startup aborts if enabled in any form. |
+| `ALLOW_DEV_AUTH_HELPERS` | `false` | Non-production only. Allows verification/reset links to be returned in API responses and enables `/api/auth/dev/last-reset-link` when email is absent. Production startup aborts if true. |
 
 Do not enable either helper on any host reachable by the public, even while testing.
 
@@ -103,18 +104,22 @@ Subscribe to `payment.captured`, `order.paid`, `payment.failed`, `refund.process
 - records raw provider events in `payment_events`;
 - finalises refunds matched by provider refund/payment IDs.
 
-### SMTP / transactional email
+### Transactional email (Resend or SMTP)
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `SMTP_HOST` | empty | SMTP server hostname. |
+| `RESEND_API_KEY` | empty | Preferred provider. Server-only. Create a **fresh** key for this deployment; never reuse a key that has appeared in chat, docs or source control. |
+| `EMAIL_TIMEOUT_MS` | `10000` | Per-request timeout for Resend. |
+| `EMAIL_MAX_ATTEMPTS` | `3` | Retry attempts for retryable Resend responses (clamped to 1–5). |
+| `EMAIL_FROM` | `PAHADI ROOTS <no-reply@pahadiroots.example>` | From header. Must be a verified Resend sending domain or an authorised SMTP identity. Placeholder `.example` addresses are rejected as a production warning. |
+| `SUPPORT_EMAIL` | `hello@pahadiroots.example` | Displayed in email footers and some content. |
+| `ADMIN_NOTIFICATION_EMAIL` | `SUPPORT_EMAIL` | Real monitored inbox for return, refund and account-deletion alerts. |
+| `SMTP_HOST` | empty | SMTP fallback hostname. |
 | `SMTP_PORT` | `587` | Port `465` enables implicit TLS; other ports use STARTTLS as negotiated by Nodemailer. |
 | `SMTP_USER` | empty | SMTP username. |
 | `SMTP_PASS` | empty | SMTP password or app password. |
-| `EMAIL_FROM` | `PAHADI ROOTS <no-reply@pahadiroots.example>` | From header. Must be an authorised sending identity. |
-| `SUPPORT_EMAIL` | `hello@pahadiroots.example` | Displayed in email footers and some content. |
 
-SMTP is considered configured only when host, user and password are all present. Without SMTP, notifications are still recorded in the database with status `skipped` and no email is sent. Failed deliveries are recorded as `failed`; there is no outbox retry worker yet.
+Provider resolution is `RESEND_API_KEY` → SMTP → none. Without either provider, notifications are recorded with status `skipped` and nothing is sent. Resend requests carry an `Idempotency-Key`, retry with backoff, and persist the provider message id. Atomic dedupe (`INSERT OR IGNORE` on the dedupe key) prevents duplicate order mail. Provider failures are recorded as `failed` with a sanitised, length-limited error that redacts API keys. `retryFailedNotifications` in `server/lib/email.ts` can retry `failed` rows manually; there is no background outbox worker or admin retry button yet.
 
 ### Reserved integration settings
 
@@ -129,19 +134,17 @@ With `NODE_ENV=production`, the server:
 
 - serves the built SPA from `dist/` and falls back to `index.html` for client-side routes;
 - enables HSTS, a strict CSP and secure cookies when `APP_URL` is HTTPS;
-- refuses to start if development payment or auth helpers are enabled;
-- refuses a `SESSION_IDLE_DAYS` outside `1..SESSION_DAYS`, a non-HTTPS `APP_URL`, an HTTP entry in `ALLOWED_ORIGINS`, or `SESSION_COOKIE_SAMESITE=none` without HTTPS;
-- warns if Razorpay is not configured, SMTP is not configured, or the database file is missing;
-- warns if `GOOGLE_CLIENT_ID` is absent or does not look like a Google Web Client ID. Google sign-in is then hidden; password login still works.
+- refuses to start (exit code 1) if development payment/auth helpers are enabled, `APP_URL` is not HTTPS, `SESSION_IDLE_DAYS` is outside `1..SESSION_DAYS`, `SESSION_COOKIE_SAMESITE=none` is used without HTTPS, or an `ALLOWED_ORIGINS` entry is not HTTPS;
+- warns if Razorpay is not configured, no email provider is configured, `EMAIL_FROM`/`ADMIN_NOTIFICATION_EMAIL` still use `.example` addresses, the database file is missing, `TRUST_PROXY` is disabled, or `GOOGLE_CLIENT_ID` is absent/malformed. Google sign-in is then hidden; password login still works.
 
-Warnings are not hard failures for missing payment/email credentials: this permits an intentionally catalogue-only deployment. A storefront that accepts checkout without a payment provider is not a live-commerce configuration. Google sign-in should be configured before launch if it is advertised.
+Warnings are not hard failures for missing payment/email credentials: this permits an intentionally catalogue-only deployment. A storefront that accepts checkout without a payment provider is not a live-commerce configuration. Payment-gateway integration is out of scope for this build; adding live keys does not by itself make payments and refunds production-ready.
 
 Health endpoints:
 
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /api/health/live` | Process liveness only. Does not touch the database. |
-| `GET /api/health/ready` | Readiness: database reachable and schema at least version 6. Returns `503` when not ready. |
+| `GET /api/health/ready` | Readiness: database reachable and schema current (migration 8). Returns `503` when not ready. |
 | `GET /api/health` | Alias of readiness, kept for existing monitors. |
 
 Readiness deliberately does not disclose payment, SMTP or storage configuration. Check those through startup warnings and the admin console, not a public endpoint.
@@ -176,13 +179,13 @@ A same-origin deployment is strongly recommended. If the SPA must be served from
 4. Keep `credentials: 'include'` on API calls and keep the `X-Requested-With` header.
 5. Re-test login, logout, cart merge, Google sign-in and webhooks after the split. Cookies with `SameSite=None` are third-party cookies and may be blocked by browser privacy settings; a first-party API on a subdomain of the same site is safer.
 
-The Vercel configuration in this repository is a static SPA rewrite only. It does not host the Express API, so a Vercel-only deployment can browse the static catalogue fallback but cannot register, sign in, keep a cart or place an order.
+The Vercel configuration in this repository is a static SPA rewrite only. It does not host the Express API, and there is no static catalogue fallback. A Vercel-only deployment shows the shell but cannot load products, register, sign in, keep a cart or place an order. Production must run the Node process (Docker/Caddy or Railway) as described in [Deployment](DEPLOYMENT.md).
 
 ## Secret handling
 
 - Generate a unique admin password; never ship a default admin account.
 - Keep `.env` out of version control and restrict its permissions.
-- Razorpay and SMTP secrets belong only in the server environment.
-- Rotate credentials after staff changes or suspected exposure.
+- Razorpay, Resend and SMTP secrets belong only in the server environment.
+- Rotate credentials after staff changes or suspected exposure. A leaked Resend key must be revoked in the Resend dashboard, replaced with a fresh key, and never copied into documentation, logs or chat.
 - Database backups contain password hashes, personal data and order history; treat them as sensitive.
 - The demo seller password is public by design only for `.test` accounts. Do not reuse it anywhere real.

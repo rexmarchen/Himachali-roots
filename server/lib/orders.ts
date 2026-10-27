@@ -55,6 +55,44 @@ export function validateAddress(address: OrderAddress): void {
   if (!address.state || address.state.trim().length < 2) fail('state', 'Enter the state.');
 }
 
+/**
+ * Append a business-readable event. Unlike audit_logs (which records staff
+ * changes), this timeline is safe to show on an order because it contains no
+ * internal margin, payment secret or provider payload data.
+ */
+export function recordOrderEvent(
+  db: Db,
+  params: {
+    orderId: string;
+    sellerOrderId?: string | null;
+    type: string;
+    description: string;
+    actor?: (Pick<SessionUser, 'id'> & { roles?: string[] }) | null;
+    metadata?: Record<string, unknown>;
+  },
+): void {
+  const role = params.actor
+    ? params.actor.roles?.includes('admin')
+      ? 'admin'
+      : params.actor.roles?.includes('seller')
+        ? 'seller'
+        : 'customer'
+    : 'system';
+  execute(
+    db,
+    `INSERT INTO order_events (id, order_id, seller_order_id, type, description, actor_id, actor_role, metadata_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    newId('oev_'),
+    params.orderId,
+    params.sellerOrderId ?? null,
+    params.type.slice(0, 80),
+    params.description.slice(0, 500),
+    params.actor?.id ?? null,
+    role,
+    params.metadata ? JSON.stringify(params.metadata).slice(0, 2000) : null,
+  );
+}
+
 export function createOrder(db: Db, input: CheckoutInput): { orderId: string; orderNumber: string; totalPaise: number } {
   const existing = queryOne<{ id: string; user_id: string; order_number: string; total_paise: number }>(
     db,
@@ -314,6 +352,13 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
       execute(db, 'UPDATE coupons SET used_count = used_count + 1 WHERE id = ?', couponId);
     }
 
+    recordOrderEvent(db, {
+      orderId: id,
+      type: 'order.placed',
+      description: `Order placed with ${sellerIds.length} seller${sellerIds.length === 1 ? '' : 's'}; stock reserved for ${env.reservationMinutes} minutes.`,
+      metadata: { totalPaise: total, isDemo: isDemoOrder === 1 },
+    });
+
     execute(db, "UPDATE carts SET status = 'converted', updated_at = ? WHERE id = ?", now.toISOString(), input.cartId);
   });
 
@@ -496,13 +541,14 @@ export function markOrderPaid(db: Db, params: PaidParams): { alreadyProcessed: b
         );
         execute(
           db,
-          `INSERT INTO refunds (id, order_id, payment_id, amount_paise, reason, status, requested_by)
-           VALUES (?, ?, ?, ?, ?, 'requested', 'system')`,
+          `INSERT OR IGNORE INTO refunds (id, order_id, payment_id, amount_paise, reason, status, requested_by, dedupe_key)
+           VALUES (?, ?, ?, ?, ?, 'requested', 'system', ?)`,
           newId('ref_'),
           order.id,
           paymentRow?.id ?? null,
           order.total_paise,
           'Late payment captured after stock reservation expired. Requires review.',
+          `refund:late:${order.id}`,
         );
         audit(db, null, 'payment.late_capture', 'order', order.id, null, {
           stockIssue: true,
@@ -538,6 +584,15 @@ export function markOrderPaid(db: Db, params: PaidParams): { alreadyProcessed: b
       new Date().toISOString(),
       order.id,
     );
+
+    recordOrderEvent(db, {
+      orderId: order.id,
+      type: 'payment.captured',
+      description: isDev
+        ? 'Simulated development payment recorded. No money moved; this is a demo order.'
+        : `Payment verified with ${params.provider}.`,
+      metadata: { provider: params.provider, amountPaise: params.amountPaise, demo: isDev },
+    });
 
     const dispatchBy = new Date(Date.now() + 2 * 86400_000).toISOString();
     const sellerOrders = queryAll<{
@@ -646,28 +701,45 @@ export async function notifyOrderPaid(db: Db, orderId: string): Promise<void> {
 }
 
 export function releaseExpiredOrders(db: Db, now = new Date()): number {
-  const expired = queryAll<{ id: string; order_number: string }>(
+  const candidates = queryAll<{ id: string; order_number: string }>(
     db,
     `SELECT id, order_number FROM orders
       WHERE status = 'pending_payment' AND reservation_expires_at IS NOT NULL AND reservation_expires_at < ?`,
     now.toISOString(),
   );
   let count = 0;
-  for (const order of expired) {
-    tx(db, () => {
+  for (const order of candidates) {
+    const released = tx(db, () => {
+      // Claim the order inside the write transaction first. A concurrent sweep
+      // sees changes = 0 and therefore cannot release the same stock twice.
+      const claimed = execute(
+        db,
+        "UPDATE orders SET status = 'expired', cancelled_at = ? WHERE id = ? AND status = 'pending_payment'",
+        now.toISOString(),
+        order.id,
+      );
+      if (Number(claimed.changes) !== 1) return false;
+
       const items = queryAll<{ product_id: string; quantity: number }>(
         db,
         'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
         order.id,
       );
       for (const item of items) {
-        execute(
+        const releasedRow = execute(
           db,
-          'UPDATE inventory SET reserved_quantity = MAX(0, reserved_quantity - ?), updated_at = ? WHERE product_id = ?',
+          `UPDATE inventory SET reserved_quantity = MAX(0, reserved_quantity - ?), updated_at = ?
+            WHERE product_id = ?`,
           item.quantity,
           now.toISOString(),
           item.product_id,
         );
+        if (Number(releasedRow.changes) !== 1) {
+          audit(db, null, 'inventory.release_mismatch', 'product', item.product_id, null, {
+            orderId: order.id,
+            quantity: item.quantity,
+          });
+        }
         execute(
           db,
           `INSERT INTO inventory_movements (id, product_id, change, reason, reference, note)
@@ -678,7 +750,6 @@ export function releaseExpiredOrders(db: Db, now = new Date()): number {
           order.order_number,
         );
       }
-      execute(db, "UPDATE orders SET status = 'expired' WHERE id = ? AND status = 'pending_payment'", order.id);
       execute(db, "UPDATE payments SET status = 'cancelled' WHERE order_id = ? AND status IN ('created','pending')", order.id);
       const redemption = queryOne<{ coupon_id: string }>(
         db,
@@ -689,9 +760,15 @@ export function releaseExpiredOrders(db: Db, now = new Date()): number {
         execute(db, 'DELETE FROM coupon_redemptions WHERE order_id = ?', order.id);
         execute(db, 'UPDATE coupons SET used_count = MAX(0, used_count - 1) WHERE id = ?', redemption.coupon_id);
       }
+      recordOrderEvent(db, {
+        orderId: order.id,
+        type: 'order.expired',
+        description: 'The payment window closed and the stock reservation was released.',
+      });
       audit(db, null, 'order.expired', 'order', order.id, { status: 'pending_payment' }, { status: 'expired' });
-      count += 1;
+      return true;
     });
+    if (released) count += 1;
   }
   return count;
 }
@@ -715,7 +792,11 @@ interface OrderRow {
   is_demo: number;
 }
 
-export function getOrderView(db: Db, orderId: string): OrderView {
+export function getOrderView(
+  db: Db,
+  orderId: string,
+  options: { includeFinancials?: boolean } = {},
+): OrderView {
   const order = queryOne<OrderRow>(db, 'SELECT * FROM orders WHERE id = ?', orderId);
   if (!order) throw notFound('Order not found.');
 
@@ -820,8 +901,9 @@ export function getOrderView(db: Db, orderId: string): OrderView {
       discountPaise: seller.discount_paise,
       taxPaise: seller.tax_paise,
       totalPaise: seller.total_paise,
-      commissionPaise: seller.commission_paise,
-      sellerEarningPaise: seller.seller_earning_paise,
+      ...(options.includeFinancials
+        ? { commissionPaise: seller.commission_paise, sellerEarningPaise: seller.seller_earning_paise }
+        : {}),
       items: sellerItems,
       shipment,
       dispatchBy: seller.dispatch_by,
@@ -835,6 +917,22 @@ export function getOrderView(db: Db, orderId: string): OrderView {
     'SELECT provider, status, provider_payment_id FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1',
     orderId,
   );
+
+  const timeline = queryAll<{
+    type: string;
+    description: string;
+    actor_role: string | null;
+    created_at: string;
+  }>(
+    db,
+    'SELECT type, description, actor_role, created_at FROM order_events WHERE order_id = ? ORDER BY created_at, id',
+    orderId,
+  ).map((event) => ({
+    type: event.type,
+    description: event.description,
+    actorRole: event.actor_role,
+    occurredAt: event.created_at,
+  }));
 
   const cancellable = sellerOrders.every((so) => ['pending', 'confirmed'].includes(so.status));
   const returnWindowEnd = Date.now() - 7 * 86400_000;
@@ -861,6 +959,7 @@ export function getOrderView(db: Db, orderId: string): OrderView {
     canCancel: order.status === 'paid' && cancellable,
     canRequestReturn: order.status !== 'cancelled' && returnable,
     reservationExpiresAt: order.reservation_expires_at,
+    timeline,
     isDemo: order.is_demo === 1,
   };
 }
@@ -909,9 +1008,23 @@ export function sellerOrderAction(
   if (action === 'confirm') {
     if (so.status !== 'pending') throw conflict('Only a new order can be confirmed.');
     execute(db, "UPDATE seller_orders SET status = 'confirmed', updated_at = ? WHERE id = ?", now.toISOString(), so.id);
+    recordOrderEvent(db, {
+      orderId: so.order_id,
+      sellerOrderId: so.id,
+      type: 'seller_order.confirmed',
+      description: 'The maker confirmed the order and started preparing it.',
+      actor: params.actor,
+    });
   } else if (action === 'pack') {
     if (!['pending', 'confirmed'].includes(so.status)) throw conflict('This order cannot be packed from its current state.');
     execute(db, "UPDATE seller_orders SET status = 'packed', updated_at = ? WHERE id = ?", now.toISOString(), so.id);
+    recordOrderEvent(db, {
+      orderId: so.order_id,
+      sellerOrderId: so.id,
+      type: 'seller_order.packed',
+      description: 'The order was packed and is ready for handover.',
+      actor: params.actor,
+    });
   } else if (action === 'ship') {
     if (!['confirmed', 'packed'].includes(so.status)) {
       throw conflict('Confirm the order and prepare it before marking it shipped.');
@@ -935,7 +1048,7 @@ export function sellerOrderAction(
         so.id,
       );
       for (const item of items) {
-        execute(
+        const moved = execute(
           db,
           `UPDATE inventory SET quantity = quantity - ?, reserved_quantity = reserved_quantity - ?, updated_at = ?
             WHERE product_id = ? AND quantity >= ? AND reserved_quantity >= ?`,
@@ -946,6 +1059,12 @@ export function sellerOrderAction(
           item.quantity,
           item.quantity,
         );
+        if (Number(moved.changes) !== 1) {
+          throw conflict(
+            'Stock could not be released for this shipment. Inventory changed after checkout; refresh and contact support before dispatching.',
+            'inventory_mismatch',
+          );
+        }
         execute(
           db,
           `INSERT INTO inventory_movements (id, product_id, change, reason, reference, note)
@@ -983,6 +1102,19 @@ export function sellerOrderAction(
         "UPDATE order_items SET status = 'shipped' WHERE seller_order_id = ? AND status = 'ordered'",
         so.id,
       );
+      recordOrderEvent(db, {
+        orderId: so.order_id,
+        sellerOrderId: so.id,
+        type: 'seller_order.shipped',
+        description: `Handed to ${carrier} with tracking ${tracking}.`,
+        actor: params.actor,
+        metadata: { carrier, trackingNumber: tracking },
+      });
+      audit(db, params.actor, 'seller_order.shipped', 'seller_order', so.id, { status: so.status }, {
+        status: 'shipped',
+        carrier,
+        trackingNumber: tracking,
+      });
     });
   } else if (action === 'deliver') {
     if (so.status !== 'shipped') throw conflict('Only a shipped order can be marked delivered.');
@@ -1021,6 +1153,13 @@ export function sellerOrderAction(
         so.id,
       );
       audit(db, params.actor, 'seller_order.delivered', 'seller_order', so.id, { status: 'shipped' }, { status: 'delivered' });
+      recordOrderEvent(db, {
+        orderId: so.order_id,
+        sellerOrderId: so.id,
+        type: 'seller_order.delivered',
+        description: 'Delivery was recorded. The 7-day return window now applies.',
+        actor: params.actor,
+      });
     });
   } else if (action === 'cancel') {
     if (!['pending', 'confirmed', 'packed'].includes(so.status)) {
@@ -1071,8 +1210,8 @@ export function sellerOrderAction(
         );
         execute(
           db,
-          `INSERT INTO refunds (id, order_id, seller_order_id, payment_id, amount_paise, reason, status, requested_by)
-           VALUES (?, ?, ?, ?, ?, ?, 'requested', ?)`,
+          `INSERT OR IGNORE INTO refunds (id, order_id, seller_order_id, payment_id, amount_paise, reason, status, requested_by, dedupe_key)
+           VALUES (?, ?, ?, ?, ?, ?, 'requested', ?, ?)`,
           newId('ref_'),
           so.order_id,
           so.id,
@@ -1080,8 +1219,17 @@ export function sellerOrderAction(
           so.total_paise,
           params.note?.trim() || 'Seller order cancelled before dispatch',
           params.actor.id,
+          `refund:cancel:${so.id}`,
         );
       }
+      recordOrderEvent(db, {
+        orderId: so.order_id,
+        sellerOrderId: so.id,
+        type: 'seller_order.cancelled',
+        description: params.note?.trim() || 'The seller cancelled this shipment before dispatch.',
+        actor: params.actor,
+        metadata: { previousStatus: so.status },
+      });
       audit(db, params.actor, 'seller_order.cancelled', 'seller_order', so.id, { status: so.status }, { status: 'cancelled' });
     });
   }
@@ -1181,7 +1329,13 @@ function applyRefundToLedger(db: Db, refundId: string, orderId: string, sellerOr
   );
 }
 
-export function finalizeRefund(db: Db, refundId: string, providerRefundId: string, providerStatus: string): void {
+export function finalizeRefund(
+  db: Db,
+  refundId: string,
+  providerRefundId: string,
+  providerStatus: string,
+  actor: SessionUser | null = null,
+): void {
   tx(db, () => {
     const refund = queryOne<{
       id: string;
@@ -1194,6 +1348,9 @@ export function finalizeRefund(db: Db, refundId: string, providerRefundId: strin
     if (!refund) throw notFound('Refund not found.');
     if (refund.status === 'completed') return;
     if (refund.status === 'rejected') throw conflict('This refund was rejected.');
+    if (!['approved', 'processing', 'failed'].includes(refund.status)) {
+      throw conflict('Only an approved or processing refund can be recorded as completed.');
+    }
     execute(
       db,
       `UPDATE refunds SET status = 'completed', provider_refund_id = ?, provider_status = ?, completed_at = ?
@@ -1221,7 +1378,15 @@ export function finalizeRefund(db: Db, refundId: string, providerRefundId: strin
       }
     }
     refreshOrderStatus(db, refund.order_id);
-    audit(db, null, 'refund.completed', 'refund', refund.id, { status: refund.status }, {
+    recordOrderEvent(db, {
+      orderId: refund.order_id,
+      sellerOrderId: refund.seller_order_id,
+      type: 'refund.completed',
+      description: `A refund of ₹${(refund.amount_paise / 100).toLocaleString('en-IN')} was recorded with reference ${providerRefundId}.`,
+      metadata: { refundId: refund.id, amountPaise: refund.amount_paise, providerStatus },
+      actor,
+    });
+    audit(db, actor, 'refund.completed', 'refund', refund.id, { status: refund.status }, {
       status: 'completed',
       providerRefundId,
       amount: refund.amount_paise,
@@ -1262,8 +1427,30 @@ export async function decideRefund(
     params.refundId,
   );
   if (!refund) throw notFound('Refund not found.');
-  if (!['requested', 'approved', 'processing', 'failed'].includes(refund.status)) {
-    throw conflict('This refund has already been finalised.');
+  if (!['requested', 'failed'].includes(refund.status)) {
+    throw conflict(
+      refund.status === 'completed'
+        ? 'This refund is already completed.'
+        : 'This refund has already been reviewed. Use the completion action to record the transfer.',
+    );
+  }
+
+  const committed = queryOne<{ total: number }>(
+    db,
+    `SELECT COALESCE(SUM(amount_paise),0) AS total FROM refunds
+      WHERE order_id = ? AND id != ? AND status IN ('requested','approved','processing','completed')`,
+    refund.order_id,
+    refund.id,
+  )?.total ?? 0;
+  const orderTotal = queryOne<{ total_paise: number }>(
+    db,
+    'SELECT total_paise FROM orders WHERE id = ?',
+    refund.order_id,
+  )?.total_paise ?? 0;
+  if (refund.amount_paise <= 0 || refund.amount_paise + committed > orderTotal) {
+    throw badRequest('The refund amount exceeds the unrefunded balance of this order.', {
+      amountPaise: 'Refund cannot exceed the paid order balance.',
+    });
   }
 
   if (params.decision === 'reject') {
@@ -1309,14 +1496,25 @@ export async function decideRefund(
         new Date().toISOString(),
         refund.id,
       );
+      recordOrderEvent(db, {
+        orderId: refund.order_id,
+        sellerOrderId: refund.seller_order_id,
+        type: 'refund.approved',
+        description: `A manual bank/UPI refund was approved for ₹${(refund.amount_paise / 100).toLocaleString('en-IN')}. The transfer must still be confirmed.`,
+        actor: params.actor,
+        metadata: { refundId: refund.id, amountPaise: refund.amount_paise, method: 'manual' },
+      });
       audit(db, params.actor, 'refund.manual_approved', 'refund', refund.id, { status: refund.status }, {
         status: 'approved',
         reference,
         note: params.note ?? null,
       });
     });
-    finalizeRefund(db, refund.id, `manual:${reference}`, 'manual');
-    return { status: 'completed', message: 'Manual refund recorded as completed with reference.' };
+    return {
+      status: 'approved',
+      message:
+        'Manual refund approved and recorded. No money has moved yet: complete the bank/UPI transfer, then record it with the completion action.',
+    };
   }
 
   if (!refund.provider_payment_id) {
@@ -1345,6 +1543,50 @@ export async function decideRefund(
     status: 'processing',
     message: 'Refund submitted to Razorpay. It will be marked completed only after the provider webhook confirms it.',
   };
+}
+
+/**
+ * Record an offline bank/UPI transfer that staff have actually verified. This
+ * does not move money — it is an explicit manual attestation, kept separate from
+ * approval so an "approved" refund can never look like a completed one.
+ */
+export function markManualRefundCompleted(
+  db: Db,
+  params: { refundId: string; actor: SessionUser; manualReference: string; note?: string },
+): { status: 'completed' } {
+  const reference = params.manualReference.trim();
+  if (reference.length < 4) {
+    throw badRequest('Enter the bank/UPI reference for the completed transfer.', {
+      manualReference: 'Reference is required.',
+    });
+  }
+  return tx(db, () => {
+    const refund = queryOne<{ id: string; status: string; provider_refund_id: string | null }>(
+      db,
+      'SELECT id, status, provider_refund_id FROM refunds WHERE id = ?',
+      params.refundId,
+    );
+    if (!refund) throw notFound('Refund not found.');
+    if (refund.status === 'completed') return { status: 'completed' as const };
+    if (refund.status !== 'approved') {
+      throw conflict('Approve this refund before recording the completed transfer.');
+    }
+    const providerRefundId = `manual:${reference}`;
+    const duplicate = queryOne<{ id: string }>(
+      db,
+      'SELECT id FROM refunds WHERE provider_refund_id = ? AND id != ?',
+      providerRefundId,
+      refund.id,
+    );
+    if (duplicate) throw conflict('That bank/UPI reference is already attached to another refund.');
+    finalizeRefund(db, refund.id, providerRefundId, 'manual-confirmed', params.actor);
+    audit(db, params.actor, 'refund.manual_completed', 'refund', refund.id, { status: 'approved' }, {
+      status: 'completed',
+      reference,
+      note: params.note ?? null,
+    });
+    return { status: 'completed' as const };
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -1388,6 +1630,14 @@ export function requestCancellation(
       params.userId,
       params.reason.trim().slice(0, 1000),
     );
+    recordOrderEvent(db, {
+      orderId: params.orderId,
+      sellerOrderId: params.sellerOrderId,
+      type: 'cancellation.requested',
+      description: 'The customer requested cancellation of this shipment.',
+      actor: params.actor,
+      metadata: { reason: params.reason.trim().slice(0, 200) },
+    });
     if (['pending', 'confirmed', 'packed'].includes(so.status)) {
       sellerOrderAction(db, {
         sellerOrderId: params.sellerOrderId,
@@ -1399,11 +1649,11 @@ export function requestCancellation(
         db,
         `UPDATE cancellation_requests SET status = 'completed', resolution_note = ?, decided_at = ?
           WHERE id = ?`,
-        'Cancelled before dispatch under the published policy. Refund queued for review.',
+        'Cancelled before dispatch under the published policy. A refund request is recorded for review.',
         new Date().toISOString(),
         id,
       );
-      return { status: 'completed', message: 'Order cancelled. Any refund due will be reviewed by our team.' };
+      return { status: 'completed', message: 'Order cancelled. A refund request was recorded for review; no money has moved yet.' };
     }
     return {
       status: 'requested',
@@ -1415,18 +1665,25 @@ export function requestCancellation(
     status: result?.status ?? 'requested',
     message:
       result?.status === 'completed'
-        ? 'Order cancelled. Any refund due will be reviewed by our team.'
+        ? 'Order cancelled. A refund request was recorded for review; no money has moved yet.'
         : 'Cancellation request submitted for review.',
   };
 }
 
 export function requestReturn(
   db: Db,
-  params: { orderId: string; sellerOrderId: string; userId: string; reason: string; description?: string },
-): { id: string } {
-  const so = queryOne<{ id: string; status: string; delivered_at: string | null; user_id: string }>(
+  params: {
+    orderId: string;
+    sellerOrderId: string;
+    userId: string;
+    reason: string;
+    description?: string;
+    items?: { orderItemId: string; quantity: number }[];
+  },
+): { id: string; amountPaise: number } {
+  const so = queryOne<{ id: string; status: string; delivered_at: string | null; total_paise: number; shipping_paise: number; user_id: string }>(
     db,
-    `SELECT so.id, so.status, so.delivered_at, o.user_id
+    `SELECT so.id, so.status, so.delivered_at, so.total_paise, so.shipping_paise, o.user_id
        FROM seller_orders so JOIN orders o ON o.id = so.order_id
       WHERE so.id = ? AND so.order_id = ?`,
     params.sellerOrderId,
@@ -1437,25 +1694,108 @@ export function requestReturn(
   if (new Date(so.delivered_at).getTime() < Date.now() - 7 * 86400_000) {
     throw conflict('The 7-day return window has closed for this item.');
   }
-  const existing = queryOne<{ id: string }>(
+
+  const orderItems = queryAll<{ id: string; name: string; quantity: number; status: string; unit_price_paise: number }>(
     db,
-    "SELECT id FROM return_requests WHERE seller_order_id = ? AND status NOT IN ('rejected','closed')",
+    'SELECT id, name, quantity, status, unit_price_paise FROM order_items WHERE seller_order_id = ? ORDER BY created_at',
     so.id,
   );
-  if (existing) throw conflict('A return request already exists for this shipment.');
+  if (orderItems.length === 0) throw conflict('This shipment has no returnable items.');
+
+  const alreadyReturned = new Map<string, number>();
+  const priorRows = queryAll<{ order_item_id: string; quantity: number }>(
+    db,
+    `SELECT ri.order_item_id, COALESCE(SUM(ri.quantity),0) AS quantity
+       FROM return_request_items ri
+       JOIN return_requests rr ON rr.id = ri.return_request_id
+      WHERE rr.seller_order_id = ? AND rr.status NOT IN ('rejected','closed')
+      GROUP BY ri.order_item_id`,
+    so.id,
+  );
+  for (const row of priorRows) alreadyReturned.set(row.order_item_id, row.quantity);
+
+  const requested = params.items?.length
+    ? params.items
+    : orderItems
+        .filter((item) => item.status === 'delivered')
+        .map((item) => ({ orderItemId: item.id, quantity: item.quantity }));
+
+  if (requested.length === 0) throw conflict('There are no delivered items available to return.');
+
+  const seen = new Set<string>();
+  const resolved: { item: (typeof orderItems)[number]; quantity: number; amount: number }[] = [];
+  for (const input of requested) {
+    if (seen.has(input.orderItemId)) throw badRequest('Each order item may appear only once in a return.');
+    seen.add(input.orderItemId);
+    if (!Number.isInteger(input.quantity) || input.quantity < 1) {
+      throw badRequest('Choose a whole quantity of at least 1 for every returned item.');
+    }
+    const item = orderItems.find((candidate) => candidate.id === input.orderItemId);
+    if (!item) throw badRequest('One of the selected items does not belong to this shipment.');
+    if (item.status !== 'delivered') throw conflict(`${item.name} is not eligible for return.`);
+    const remaining = item.quantity - (alreadyReturned.get(item.id) ?? 0);
+    if (input.quantity > remaining) {
+      throw conflict(
+        remaining <= 0
+          ? `${item.name} has already been returned or is awaiting a return decision.`
+          : `Only ${remaining} of ${item.name} can still be returned.`,
+        'return_quantity_exceeded',
+      );
+    }
+    resolved.push({ item, quantity: input.quantity, amount: item.unit_price_paise * input.quantity });
+  }
+
+  const requestedAmountRaw = resolved.reduce((sum, row) => sum + row.amount, 0);
+  const returnsEveryUnit = orderItems.every((item) => {
+    const requestedRow = resolved.find((row) => row.item.id === item.id);
+    return (requestedRow?.quantity ?? 0) + (alreadyReturned.get(item.id) ?? 0) >= item.quantity;
+  });
+  const requestedAmount = Math.min(
+    so.total_paise,
+    requestedAmountRaw + (returnsEveryUnit ? so.shipping_paise : 0),
+  );
+  if (requestedAmount <= 0) throw conflict('The selected items have no refundable value.');
+
   const id = newId('ret_');
-  execute(
-    db,
-    `INSERT INTO return_requests (id, order_id, seller_order_id, user_id, reason, description, status)
-     VALUES (?, ?, ?, ?, ?, ?, 'requested')`,
-    id,
-    params.orderId,
-    so.id,
-    params.userId,
-    params.reason.trim().slice(0, 200),
-    params.description?.trim().slice(0, 2000) ?? null,
-  );
-  return { id };
+  tx(db, () => {
+    execute(
+      db,
+      `INSERT INTO return_requests
+         (id, order_id, seller_order_id, order_item_id, user_id, reason, description, requested_amount_paise, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'requested')`,
+      id,
+      params.orderId,
+      so.id,
+      resolved.length === 1 ? resolved[0].item.id : null,
+      params.userId,
+      params.reason.trim().slice(0, 200),
+      params.description?.trim().slice(0, 2000) ?? null,
+      requestedAmount,
+    );
+    for (const row of resolved) {
+      execute(
+        db,
+        `INSERT INTO return_request_items
+           (id, return_request_id, order_item_id, quantity, unit_price_paise, line_amount_paise)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        newId('rti_'),
+        id,
+        row.item.id,
+        row.quantity,
+        row.item.unit_price_paise,
+        row.amount,
+      );
+    }
+    recordOrderEvent(db, {
+      orderId: params.orderId,
+      sellerOrderId: so.id,
+      type: 'return.requested',
+      description: `A return was requested for ${resolved.length} item${resolved.length === 1 ? '' : 's'} worth ₹${(requestedAmount / 100).toLocaleString('en-IN')}.`,
+      actor: { id: params.userId },
+      metadata: { returnId: id, amountPaise: requestedAmount },
+    });
+  });
+  return { id, amountPaise: requestedAmount };
 }
 
 export function createRefundForReturn(
@@ -1467,14 +1807,36 @@ export function createRefundForReturn(
     order_id: string;
     seller_order_id: string;
     status: string;
+    requested_amount_paise: number;
   }>(db, 'SELECT * FROM return_requests WHERE id = ?', params.returnId);
   if (!ret) throw notFound('Return request not found.');
+  if (ret.status !== 'requested') throw conflict('This return has already been reviewed.');
+  if (!ret.seller_order_id) throw conflict('This return is not linked to a seller shipment.');
+
   const so = queryOne<{ total_paise: number; status: string }>(
     db,
     'SELECT total_paise, status FROM seller_orders WHERE id = ?',
     ret.seller_order_id,
   );
   if (!so) throw notFound('Seller order not found.');
+  if (so.status === 'cancelled') throw conflict('A cancelled shipment cannot produce a return refund.');
+
+  const committed = queryOne<{ total: number }>(
+    db,
+    `SELECT COALESCE(SUM(amount_paise),0) AS total FROM refunds
+      WHERE seller_order_id = ? AND status IN ('requested','approved','processing','completed')`,
+    ret.seller_order_id,
+  )?.total ?? 0;
+  const requestedAmount = ret.requested_amount_paise > 0 ? ret.requested_amount_paise : so.total_paise;
+  const maximum = Math.max(0, Math.min(requestedAmount, so.total_paise - committed));
+  if (maximum <= 0) throw conflict('This shipment has no refundable balance left.');
+  const amount = params.amountPaise ?? maximum;
+  if (!Number.isInteger(amount) || amount <= 0 || amount > maximum) {
+    throw badRequest(`Refund cannot exceed the eligible return value of ₹${(maximum / 100).toLocaleString('en-IN')}.`, {
+      amountPaise: 'Refund exceeds the eligible return value.',
+    });
+  }
+
   const payment = queryOne<{ id: string }>(
     db,
     "SELECT id FROM payments WHERE order_id = ? AND status = 'paid' ORDER BY created_at DESC LIMIT 1",
@@ -1482,18 +1844,24 @@ export function createRefundForReturn(
   );
   const refundId = newId('ref_');
   tx(db, () => {
-    execute(
+    const inserted = execute(
       db,
-      `INSERT INTO refunds (id, order_id, seller_order_id, payment_id, amount_paise, reason, status, requested_by)
-       VALUES (?, ?, ?, ?, ?, ?, 'requested', ?)`,
+      `INSERT OR IGNORE INTO refunds
+         (id, order_id, seller_order_id, payment_id, return_request_id, amount_paise, reason, status, requested_by, dedupe_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'requested', ?, ?)`,
       refundId,
       ret.order_id,
       ret.seller_order_id,
       payment?.id ?? null,
-      params.amountPaise ?? so.total_paise,
+      ret.id,
+      amount,
       params.note ?? 'Return approved',
       params.actor.id,
+      `refund:return:${ret.id}`,
     );
+    if (Number(inserted.changes) !== 1) {
+      throw conflict('A refund record already exists for this return.');
+    }
     execute(
       db,
       "UPDATE return_requests SET status = 'approved', decided_by = ?, decided_at = ?, resolution_note = ? WHERE id = ?",
@@ -1502,9 +1870,18 @@ export function createRefundForReturn(
       params.note ?? null,
       ret.id,
     );
+    recordOrderEvent(db, {
+      orderId: ret.order_id,
+      sellerOrderId: ret.seller_order_id,
+      type: 'return.approved',
+      description: `The return was approved and a refund request for ₹${(amount / 100).toLocaleString('en-IN')} was recorded.`,
+      actor: params.actor,
+      metadata: { returnId: ret.id, refundId, amountPaise: amount },
+    });
     audit(db, params.actor, 'return.approved', 'return_request', ret.id, { status: ret.status }, {
       status: 'approved',
       refundId,
+      amountPaise: amount,
     });
   });
   return refundId;

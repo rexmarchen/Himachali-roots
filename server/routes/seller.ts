@@ -593,7 +593,7 @@ export function sellerRouter(db: Db): Router {
       dedupeKey: `seller-application:${current.id}:${nextRevision}`,
     });
     await notify(db, {
-      email: env.smtp.supportEmail,
+      email: env.email.supportEmail,
       type: 'seller_application_admin',
       subject: `Seller application: ${validated.businessName}`,
       body: `<p>A seller application requires review.</p><p><strong>Applicant:</strong> ${escapeHtml(req.user!.email)}<br/><strong>Business:</strong> ${escapeHtml(validated.businessName)}<br/><strong>Category:</strong> ${escapeHtml(validated.sellerCategory ?? '—')}<br/><strong>Region:</strong> ${escapeHtml(validated.region)}</p>`,
@@ -1587,7 +1587,7 @@ export function sellerRouter(db: Db): Router {
       resubmission: isChangeResubmission,
     });
     await notify(db, {
-      email: env.smtp.supportEmail,
+      email: env.email.supportEmail,
       type: 'product_submitted',
       subject: `Product awaiting moderation: ${product.name}`,
       body: `<p>A seller submitted a listing for review.</p><p><strong>Product:</strong> ${escapeHtml(product.name)}</p>`,
@@ -1927,7 +1927,7 @@ export function sellerRouter(db: Db): Router {
         email: order.email,
         type: 'order_cancelled',
         subject: `Update regarding order ${order.order_number}`,
-        body: `<p>Your seller order (${so?.reference}) could not be fulfilled and was cancelled by the maker.</p>${input.reason || input.note ? `<p><strong>Reason:</strong> ${escapeHtml(input.reason || input.note || '')}</p>` : ''}<p>Any amount paid for this item is being processed for a refund.</p>`,
+        body: `<p>Your seller order (${so?.reference}) could not be fulfilled and was cancelled by the maker.</p>${input.reason || input.note ? `<p><strong>Reason:</strong> ${escapeHtml(input.reason || input.note || '')}</p>` : ''}<p>A refund request has been recorded for review. No money has moved yet.</p>`,
         dedupeKey: `order-cancelled:${so?.reference}:${Date.now()}`,
       });
     }

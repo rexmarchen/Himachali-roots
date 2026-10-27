@@ -78,7 +78,7 @@ describe('legacy database migrations', () => {
       const versions = queryAll<{ version: number }>(db, 'SELECT version FROM schema_migrations ORDER BY version').map(
         (row) => row.version,
       );
-      expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 
       const profile = queryOne<{ status: string; store_status: string; payout_status: string }>(
         db,
@@ -109,12 +109,96 @@ describe('legacy database migrations', () => {
     }
   });
 
+  it('opens a v7 database whose refund/return/notification tables predate migration 8', () => {
+    const file = path.join(directory, 'legacy-v7.db');
+    const legacy = new DatabaseSync(file);
+    legacy.exec(`
+      CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+      INSERT INTO schema_migrations (version, applied_at) VALUES
+        (1, '2026-01-01T00:00:00.000Z'), (2, '2026-01-01T00:00:00.000Z'),
+        (3, '2026-01-01T00:00:00.000Z'), (4, '2026-01-01T00:00:00.000Z'),
+        (5, '2026-01-01T00:00:00.000Z'), (6, '2026-01-01T00:00:00.000Z'),
+        (7, '2026-01-01T00:00:00.000Z');
+
+      CREATE TABLE refunds (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        seller_order_id TEXT,
+        payment_id TEXT,
+        amount_paise INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'requested',
+        provider TEXT,
+        provider_refund_id TEXT UNIQUE,
+        provider_status TEXT,
+        requested_by TEXT,
+        decided_by TEXT,
+        decided_at TEXT,
+        completed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      INSERT INTO refunds (id, order_id, amount_paise, reason, status)
+      VALUES ('ref_legacy', 'ord_legacy', 10000, 'Legacy refund', 'requested');
+
+      CREATE TABLE notifications (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        email TEXT NOT NULL,
+        type TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        body TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'queued',
+        sent_at TEXT,
+        error TEXT,
+        dedupe_key TEXT UNIQUE,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      INSERT INTO notifications (id, email, type, subject, body)
+      VALUES ('ntf_legacy', 'legacy@example.com', 'legacy', 'Legacy notice', 'Body');
+
+      CREATE TABLE return_requests (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        seller_order_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'requested',
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT
+      );
+      INSERT INTO return_requests (id, order_id, seller_order_id, reason)
+      VALUES ('ret_legacy', 'ord_legacy', 'so_legacy', 'Legacy return');
+    `);
+    legacy.close();
+
+    const db = openDatabase(file);
+    try {
+      const versions = queryAll<{ version: number }>(db, 'SELECT version FROM schema_migrations ORDER BY version');
+      expect(versions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      for (const [table, column] of [
+        ['refunds', 'dedupe_key'],
+        ['refunds', 'return_request_id'],
+        ['notifications', 'provider_message_id'],
+        ['return_requests', 'requested_amount_paise'],
+      ]) {
+        const columns = queryAll<{ name: string }>(db, `PRAGMA table_info(${table})`).map((row) => row.name);
+        expect(columns, `${table}.${column}`).toContain(column);
+      }
+      expect(queryOne(db, "SELECT id FROM refunds WHERE id = 'ref_legacy'")).toBeTruthy();
+      expect(queryOne(db, "SELECT id FROM notifications WHERE id = 'ntf_legacy'")).toBeTruthy();
+      expect(queryOne(db, "SELECT id FROM return_requests WHERE id = 'ret_legacy'")).toBeTruthy();
+      expect(queryOne(db, 'PRAGMA integrity_check')).toEqual({ integrity_check: 'ok' });
+    } finally {
+      db.close();
+    }
+  });
+
   it('can open the upgraded database again without duplicating migrations', () => {
     const file = path.join(directory, 'legacy.db');
     const db = openDatabase(file);
     try {
       const versions = queryAll<{ version: number }>(db, 'SELECT version FROM schema_migrations ORDER BY version');
-      expect(versions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      expect(versions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
       const orderItemColumns = queryAll<{ name: string }>(db, 'PRAGMA table_info(order_items)').map((row) => row.name);
       expect(orderItemColumns).toContain('original_unit_price_paise');
       const sessionColumns = queryAll<{ name: string }>(db, 'PRAGMA table_info(sessions)').map((row) => row.name);
@@ -128,6 +212,14 @@ describe('legacy database migrations', () => {
       expect(authTables).toHaveLength(4);
       const applications = queryAll(db, 'SELECT id FROM seller_applications');
       expect(applications).toHaveLength(1);
+      const refundColumns = queryAll<{ name: string }>(db, 'PRAGMA table_info(refunds)').map((row) => row.name);
+      expect(refundColumns).toContain('dedupe_key');
+      expect(refundColumns).toContain('return_request_id');
+      const integrityTables = queryAll<{ name: string }>(
+        db,
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('order_events','return_request_items')",
+      );
+      expect(integrityTables).toHaveLength(2);
     } finally {
       db.close();
     }

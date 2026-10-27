@@ -1,7 +1,8 @@
 # Docker deployment
 
 This is the shortest path to serving the **full Express + SQLite application** at
-`https://www.dearhills.in`, instead of the current static Vercel preview.
+`https://www.dearhills.in`. The domain is currently served by an Express process
+behind Caddy; Vercel remains a static SPA shell only and cannot host the API.
 
 The image runs one Node process serving both the SPA and the API. SQLite, uploads
 and private seller documents live on named volumes.
@@ -18,7 +19,9 @@ and private seller documents live on named volumes.
 git clone https://github.com/rexmarchen/Himachali-roots.git
 cd Himachali-roots
 cp deploy/production.env.example .env.production
-# Edit .env.production: set GOOGLE_CLIENT_ID and any real Razorpay/SMTP values.
+# Edit .env.production: set APP_URL, GOOGLE_CLIENT_ID, a fresh RESEND_API_KEY,
+# EMAIL_FROM on a verified sending domain, and SUPPORT_EMAIL/ADMIN_NOTIFICATION_EMAIL.
+# Leave Razorpay empty unless a separately scoped payment integration is verified.
 chmod 600 .env.production
 
 docker compose up -d --build
@@ -26,7 +29,9 @@ docker compose ps
 curl -fsS http://127.0.0.1:8787/api/health/ready
 ```
 
-Readiness must return `200` with `"ready":true` and `"schema":"current"`.
+Readiness must return `200` with `"ready":true` and `"schema":"current"`. Confirm `/api/config` reports `payments.configured:false` unless a payment integration has been separately completed; this build does not claim live payments or refunds.
+
+Send one real test email (registration verification or password reset) and confirm the `notifications` row is `sent` with a provider message id. A `failed` row stores a sanitised error; `skipped` means no provider is configured.
 
 Create the first administrator (it prompts for the password twice):
 

@@ -7,19 +7,23 @@ This report records what was actually executed. It separates automated coverage 
 
 ## Command results
 
+Latest run: **27 October 2026** after the Resend/order-integrity changes and the v7 → v8 migration reconciliation.
+
 | Command | Result |
 | --- | --- |
 | `npm run typecheck` | Passed — client, server and test TypeScript projects |
 | `npm run lint` | Passed — 0 errors, 0 warnings |
-| `npm test` | Passed — **131 of 131** tests across **16** files |
-| `npm run build` | Passed — production SPA in `dist/`, server in `dist-server/`, schema copied; no source maps and no oversized-chunk warning |
-| `npm audit` | Passed — **0 vulnerabilities** after upgrading `nodemailer` to 10.2.1 and `vitest` to 5.0.5. A repeat audit on 27 October could not reach the npm registry (`ECONNRESET`); the lockfile did not change after the passing run |
-| `npm run smoke` | Passed — **28 of 28** non-admin live HTTP checks against the development API; admin checks were skipped without credentials (the full run with an administrator is 33 checks) |
-| `node scripts/e2e-seller-flow.mjs` | Passed — **53 of 53** live HTTP checks of the full seller lifecycle against the same disposable API |
-| `GET /api/health/ready` | `200` — `{"status":"ok","ready":true,"database":"up","schema":"current",…}` |
-| `npm run db:backup` + `db:verify` | Passed — `integrity: ok`, 0 foreign-key violations, migrations `[1,2,3,4,5,6]` |
+| `npm test` | Passed — **154 of 154** tests across **18** files |
+| `npm run build` | Passed — production SPA in `dist/`, server in `dist-server/`, schema copied; no source maps |
+| `GET https://www.dearhills.in/api/health/ready` | `200` — `{"status":"ok","ready":true,"database":"up","schema":"current",…}` |
+| `GET https://www.dearhills.in/api/config` | `200` — `payments.configured: false`, `devPaymentsEnabled: false` |
+| `GET https://www.dearhills.in/api/products` | `200` — `total: 0` (production catalogue is empty) |
+| `npm audit` | Earlier run passed with **0 vulnerabilities** after upgrading `nodemailer` to 10.2.1 and `vitest` to 5.0.5. A later audit could not reach the npm registry (`ECONNRESET`); re-run before release |
+| `npm run smoke` | Re-run 27 October: **28 of 28** non-admin live HTTP checks against an isolated staging-equivalent API on port `8799` (admin checks were exercised separately) |
+| `node scripts/e2e-seller-flow.mjs` | Earlier run: **53 of 53** live HTTP checks of the full seller lifecycle against a disposable API |
+| `npm run db:backup` + `db:verify` | Re-run 27 October against the local development database: `integrity: ok`, 0 foreign-key violations, 27 products, migrations `1–8` after the WAL-aware snapshot was taken |
 
-The seller-lifecycle E2E run used an explicitly labelled development payment simulation (`ALLOW_DEV_PAYMENTS=true`, `NODE_ENV` not production) against a disposable database and disposable storage directories (`DATABASE_PATH`, `UPLOAD_DIR`, `PRIVATE_DOCS_DIR`). Admin checks were enabled with a locally provisioned throwaway administrator (`E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD`); the temporary database and uploaded test files were removed afterwards. The 28-check smoke run reported above ran against the development API and created ordinary test records there; it skipped the five admin checks because no smoke administrator credentials were supplied. No real money moved and no real customer data was used.
+The seller-lifecycle E2E run used an explicitly labelled development payment simulation (`ALLOW_DEV_PAYMENTS=true`, `NODE_ENV` not production) against a disposable database and disposable storage directories (`DATABASE_PATH`, `UPLOAD_DIR`, `PRIVATE_DOCS_DIR`). Admin checks were enabled with a locally provisioned throwaway administrator (`E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD`); the temporary database and uploaded test files were removed afterwards. The 28-check smoke run was re-run this pass against a temporary database and storage directory on port `8799`; it used the labelled development payment simulation, created only disposable records and moved no money. The separate admin return/refund flow is described below. No real customer data was used.
 
 ## Automated test inventory
 
@@ -31,17 +35,19 @@ The seller-lifecycle E2E run used an explicitly labelled development payment sim
 | `server/test/seller-onboarding.test.ts` | 10 | Draft save/resume, incomplete submission reasons, category-aware FSSAI rules, duplicate submission, change requests and resubmission revision, approval/store activation/audit, self-approval refusal, invalid transitions, private documents, RBAC/isolation, product moderation and suspension |
 | `server/test/storefront.test.ts` | 6 | Home payload and approved-only counts, catalogue filters, product/maker pages, 404, sitemap/robots |
 | `server/test/fulfilment.test.ts` | 4 | Confirm → pack → ship → deliver, seller isolation, admin fulfilment, ledger eligibility and settlement |
-| `server/test/refunds.test.ts` | 4 | Pre-dispatch cancellation, post-delivery return, commission reversal, dispatch lock, reason validation |
+| `server/test/refunds.test.ts` | 4 | Pre-dispatch cancellation, post-delivery return, partial-item returns, commission reversal, dispatch lock, reason validation, manual refund approval → completed with reference, idempotency, amount caps |
 | `server/test/categories.test.ts` | 4 | Admin category create/edit, duplicate slugs, loops, in-use deactivation guard, admin-only access |
 | `server/test/pricing.test.ts` | 4 | Commission basis, shipping thresholds, GST-inclusive arithmetic, integer-paise totals |
 | `server/test/uploads.test.ts` | 3 | Seller-only image upload, magic-byte rejection, private seller documents |
 | `server/test/webhook.test.ts` | 3 | Razorpay HMAC rejection, idempotent payment, amount-mismatch manual reconciliation |
-| `server/test/migrations.test.ts` | 2 | Opening a pre-onboarding (v1–v2) database, preserving rows, backfilling store status, re-opening without duplicate migrations, and applying schema version 6 (provider-auth tables, `sessions.last_seen_at`, campaign tables/view, `order_items.original_unit_price_paise`) |
+| `server/test/migrations.test.ts` | 3 | Opening a pre-onboarding (v1–v2) database, preserving rows, backfilling store status, re-opening without duplicate migrations, upgrading through migrations 3–8, and upgrading a v7 database whose refund/return/notification tables predate migration 8 |
 | `server/test/campaigns.test.ts` | 11 | Campaign pricing on eligible products only, homepage banner guard, discount-cap and price validation, draft privacy and admin RBAC, scheduled preview without selling, expiry consistency, cart/checkout repricing and client-price rejection, activation overlap guard, poster/window validation and audit trail, product removal lifecycle |
 | `server/test/admin-products.test.ts` | 18 | Admin product creation and validation, publish/unpublish/archive lifecycle, stock set/adjust/reserved guard, low-stock threshold and published-only filter, PATCH validation, customer denied |
 | `server/test/demo-checkout-and-orders.test.ts` | 6 | Admin-created demo product to checkout, oversell race, server repricing, demo/real GMV isolation, customer order privacy, customer denied status updates |
 | `server/test/himachali-seller-order-profit.test.ts` | 3 | Seller order revenue, commission and cost-derived profit figures, and seller isolation of financial detail |
-| **Total** | **131** | |
+| `server/test/recovery-auth.test.ts` | 16 | Recovery OTP issue/attempt limits/resend cooldown, password reset authorisation, token single use, session invalidation, rate limits |
+| `server/test/email.test.ts` | 6 | Atomic dedupe, provider message id, failure redaction, skipped status, Resend retry/idempotency, no API-key leakage |
+| **Total** | **154** | |
 
 Tests open a fresh in-memory SQLite database, seed deterministic fixtures and call the real Express routes through Supertest. They do not mock the database or the route layer. The migration test uses a temporary on-disk database shaped like the legacy schema.
 
@@ -114,28 +120,33 @@ Automated coverage added to `server/test/checkout.test.ts`:
 - Shipping is recalculated after the coupon: a ₹1,500 bag discounted to ₹1,350 is charged the flat ₹79 rather than free shipping.
 - A pending order can reinitialise payment without creating a second order; a paid order refuses reinitialisation.
 
-Not executed: no browser automation or viewport-level visual test exists in this repository, and no live Razorpay, SMTP, courier or payout credentials are present. The payment UI was verified by typecheck, lint, production build and review of the server contracts; it has not been exercised against a real provider.
+Not executed: no browser automation or viewport-level visual test exists in this repository, and no live Razorpay, Resend/SMTP, courier or payout credentials are present. The payment UI was verified by typecheck, lint, production build and review of the server contracts; it has not been exercised against a real provider. Email transport is covered by injected-fetch tests, not by a real Resend delivery.
 
 ## Legacy database migration check
 
-A copy of the existing development database (with its WAL files) was migrated separately; the live file was not modified.
+Two migration paths were checked on isolated copies. The production database was not opened, upgraded or restored.
+
+**v7 → v8 on a copy of the local development database (with WAL):**
 
 | Check | Result |
 | --- | --- |
-| Before | schema versions `1, 2`; 5 seller profiles, 5 seller applications, 10 products, 1 order |
-| After | schema versions `1, 2, 3`; identical row counts |
-| Application table | rebuilt with `data_json`, `current_step`, `revision`, timestamps; existing `approved` rows preserved |
-| Seller profile backfill | `approved` sellers received `store_status = active`; `payout_status = not_started` |
-| New tables | `seller_application_events`, `seller_notifications` |
+| Before | schema versions `1–7`; 9 users, 3 orders, 27 products, 5 seller profiles, 15 notifications, 0 refunds, 0 return-request items; no `order_events` table |
+| After | schema versions `1–8`; identical row counts; `order_events` and its indexes created |
 | `PRAGMA integrity_check` | `ok` |
-| `PRAGMA foreign_key_check` | no violations |
+| `PRAGMA foreign_key_check` | 0 violations |
 | Second open | no duplicate migration rows; counts unchanged; integrity still `ok` |
 
-This check caught a startup defect: `schema.sql` creates indexes on columns added by the onboarding migration, so running the schema script against a pre-onboarding database failed before the migration could add them. `server/db.ts` now reconciles those columns before executing the schema script, and `server/test/migrations.test.ts` guards the behaviour.
+**Earlier v1 → v2 copy:** schema versions advanced `1, 2 → 1, 2, 3`, row counts were preserved, legacy applications were rebuilt with `data_json`/`current_step`/`revision`/timestamps, approved sellers received `store_status = active` and `payout_status = not_started`, and the second open stayed idempotent.
+
+The v7 check caught a real release defect: `schema.sql` creates a unique index on `refunds.dedupe_key`, so opening a v7 database that already had `refunds`, `notifications` and `return_requests` failed with `no such column: dedupe_key` before migration 8 could run. `server/db.ts` now reconciles the migration-8 columns (`refunds.return_request_id`, `refunds.dedupe_key`, `notifications.provider_message_id`, `return_requests.requested_amount_paise`) before executing the schema script. `server/test/migrations.test.ts` covers that exact v7 shape; the migration file now has three tests.
+
+The earlier v1 → v2 check caught the equivalent onboarding defect: indexes referenced `seller_profiles.store_status`/`seller_category` and `seller_applications.created_at` before migration 3 added them. Those columns are reconciled before the schema script too, and the same test file guards both cases.
+
+A later backup taken from the local development database reported migrations `1–8`, 27 products, `integrity: ok` and 0 foreign-key violations. The first snapshot in the same session reported only `1–7` because the WAL had not yet been checkpointed into the main file; re-running `npm run db:backup` after the server applied v8 produced a complete snapshot. Always verify the backup output with `npm run db:verify`; do not assume a backup is current because the file exists.
 
 ## Live HTTP smoke coverage
 
-`npm run smoke` against the development API passed all 28 checks available without administrator credentials. With `SMOKE_ADMIN_EMAIL` and `SMOKE_ADMIN_PASSWORD` supplied, the same script runs five additional admin checks (33 total). The run covers:
+`npm run smoke` was re-run on 27 October against an isolated staging-equivalent API on `127.0.0.1:8799`. It passed all 28 checks available without administrator credentials. With `SMOKE_ADMIN_EMAIL` and `SMOKE_ADMIN_PASSWORD` supplied, the same script runs five additional admin checks (33 total); those five were not run in this pass. The run covers:
 
 - Health and database status.
 - Storefront home, categories and approved catalogue totals.
@@ -151,6 +162,22 @@ This check caught a startup defect: `schema.sql` creates indexes on columns adde
 - Settlement creation refused while the 7-day availability window is still open (expected `400`).
 
 The smoke test writes real rows and reduces stock. Run it against disposable data; use `npm run reset` and recreate the administrator if a clean demonstration database is required.
+
+## Isolated staging-equivalent verification
+
+No staging environment, staging hostname or staging credentials exist in this repository or its deployment configuration. The hostname must not be invented and production must not be used as a substitute. Instead, the release was exercised against a disposable local staging equivalent:
+
+- Temporary SQLite database, upload directory and private-document directory under the system temp folder; no production database, storage or credentials were read or written.
+- Demo seed: 5 demonstration sellers, 27 demonstration products and 9 categories. The seed used a throwaway local password that is not a production credential.
+- API on `127.0.0.1:8799`; ports `8787` and `5173` were left to their pre-existing local processes.
+- `npm run smoke`: **28/28** checks passed, including registration, email-verification token exchange, cart, server repricing, checkout, explicitly labelled development payment simulation, seller confirm → pack → ship → deliver, customer order detail and seller earnings.
+- A separate HTTP-only partial-return flow: **51/51** checks passed. It registered a customer, created a two-seller order with a quantity-2 line, had both sellers deliver, requested a return of **1 of 2 units**, verified the returned amount, refused an over-return, approved the return, approved the manual refund without moving money, refused a completion with no reference, completed the manual refund with a reference, verified idempotent repeat completion, verified the order became `partially_refunded` while the shipment stayed `delivered`, and verified `return.approved`, `refund.manual_approved` and `refund.manual_completed` audit records.
+- Database after the flow: `integrity_check = ok`, 0 foreign-key violations, migrations `1–8`, and no duplicate notification `dedupe_key` values. Notifications were recorded as `skipped` because no email provider was configured; no real email was sent.
+- A restart with the same database and a production-mode server (`NODE_ENV=production`) served `/` and `/shop` as the SPA (`200`, `text/html`), returned `200` from `/api/health` and `/api/health/ready` with `"schema":"current"`, and returned `/api/config` with `payments.configured: false`, `devPaymentsEnabled: false`, `devAuthHelpers: false`, `googleEnabled: false` and `googleClientId: null`. A customer could log in after the restart and still read the `partially_refunded` order, proving database persistence.
+- Server logs and the built SPA contained no Resend key, Google client secret, private key, live API key, database URL or session secret. The temporary local demo password appeared only in the disposable seed log, which is outside the repository.
+- No staging host, staging database, staging object storage or staging credentials were available, so no external deployment or provider integration was attempted. Google sign-in, Resend delivery, Razorpay and courier/payout integrations remain unexercised.
+
+The required staging plan is documented in [Deployment](DEPLOYMENT.md#staging). It must not be applied to production until a separate host, database, storage path and credentials are authorized.
 
 ## Live seller lifecycle E2E
 
@@ -221,13 +248,19 @@ The image deliberately reports Razorpay and SMTP as unconfigured until real cred
 8. **Destructive actions used browser dialogs.** Document rejection, archive, image deletion and review removal now use in-app dialogs with required reasons where applicable; `window.confirm`, `prompt` and `alert` are gone from the admin console.
 9. **The low-stock product filter could fail on its count query.** The list query joined `inventory`, but the pagination count query did not, so `?lowStock=true` could fail with a missing alias. The count query now joins inventory, the low-stock filter is limited to published listings when no status is supplied, and `/admin/products` returns `reserved` and `low_stock_threshold`. Covered by the new low-stock test in `server/test/admin-products.test.ts`.
 10. **The catalogue composition omitted rejected and paused listings** while claiming to show every stored listing. `/admin/overview` now reports both counts, and the chart labels the full moderation state set.
-11. **The browser API client silently fabricated authenticated state.** `src/lib/api.ts` served bundled/local JSON when an HTTP request failed and carried hardcoded administrator credentials plus fake localStorage sessions, which could present a false signed-in state. Authentication, account, cart, seller and admin calls now fail honestly. A public GET-only static catalogue fallback remains for a static preview; it cannot create a session or return private data.
+11. **The browser API client silently fabricated authenticated state.** `src/lib/api.ts` served bundled/local JSON when an HTTP request failed and carried hardcoded administrator credentials plus fake localStorage sessions, which could present a false signed-in state. Authentication, account, cart, seller and admin calls now fail honestly. The static catalogue fallback was removed entirely, so no stale prices or demo records are served when the API is unavailable.
 12. **The seed created an administrator with a default password.** A development-only seed account used a cleartext, documented password. The seed now provisions an administrator only when `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` are supplied; existing accounts can be reset with `npm run admin:create -- <email> "<name>" --reset-password`.
 13. **Public pages carried unverifiable trust claims and fabricated seller metrics.** Copy such as “100% verified origin”, cash-on-delivery, fixed dispatch days and invented earnings was removed or replaced with values read from the API. Product, maker and policy pages now render only stored product, seller, review and policy data, and label estimates as estimates.
 14. **Private seller documents ignored storage configuration.** `privateDocsDir` was hardcoded relative to the working directory, so automated tests wrote identity documents into the application's real private storage and deployments could not relocate the private volume independently. It now reads `PRIVATE_DOCS_DIR`, and Vitest points both public and private upload paths at a temporary directory.
 15. **Stale static catalogue JSON was still shipped publicly.** The seed wrote `static-products.json`, `static-product-details.json`, `static-categories.json` and several other `static-*.json` snapshots into `public/`, even though nothing read them after the fallback client was removed. They contained demo records and stale prices and were copied into every build. The export was removed from the seed and the files were deleted; the production bundle no longer contains them.
 16. **Authentication could be bypassed in the browser and lacked Google support.** Hardcoded admin credentials and localStorage identities were removed; the server now owns the session. Google Identity Services sign-in verifies signed ID tokens server-side, keys accounts on the Google `sub`, refuses invalid/expired/wrong-audience tokens, never auto-merges by email, issues a hashed single-use linking challenge, rotates sessions on sign-in, enforces idle and absolute expiry, refuses disabled accounts, and clears the session server-side on logout. Google-only accounts can set a password before unlinking. Covered by `server/test/google-auth.test.ts`.
 17. **Production builds could silently contain React's development bundle.** Vite reads `NODE_ENV` from `.env`; the local API `.env` sets `NODE_ENV=development`, so `npm run build` produced a 548 kB bootstrap chunk instead of the 282 kB production chunk. `scripts/build-web.mjs` now forces `NODE_ENV=production` in the parent process before Vite loads its config. The Docker build uses the same script. Verified by comparing bundle sizes, checking for development markers, and confirming no chunk-size warning.
+18. **Expired reservations could release stock twice.** `releaseExpiredOrders` read expired orders and then released stock with no write claim, so a concurrent sweep could double-release inventory. It now claims each order inside a transaction before releasing reserved quantity. Covered by the checkout/expiry suite.
+19. **Shipping could proceed with inconsistent inventory.** The ship action decremented on-hand and reserved stock without asserting the update. It now checks the affected rows and rolls back with `inventory_mismatch` when stock or reservation is inconsistent.
+20. **Manual refunds could jump from requested to completed.** `decideRefund` now accepts only `requested`/`failed` and leaves manual approvals at `approved`; a separate `POST /api/admin/refunds/:id/complete-manual` requires a verified bank/UPI reference and is idempotent. Amounts are validated server-side against the order/return cap.
+21. **Order history had no auditable timeline.** New `order_events` rows record placement, payment, expiry, fulfilment, cancellation, return and refund actions, and the customer/admin order files render them. Partial returns record per-item quantities in `return_request_items`.
+22. **Email delivery could duplicate or leak secrets.** Resend now sends an `Idempotency-Key`, retries with backoff, dedupes atomically, stores the provider message id, and sanitises provider errors so API keys cannot reach `notifications` or logs.
+23. **Hardcoded Google client ID and static demo snapshots were removed.** The browser now reads Google configuration from `/api/config`; tracked `public/static-*.json` files and the Vercel `/api/*` static rewrites were deleted.
 
 ## What this verification proves
 
@@ -248,7 +281,7 @@ These are **not** covered by the evidence above:
 
 - **Live Google token verification and browser sign-in.** No real `GOOGLE_CLIENT_ID` or authorised origin was configured. Server-side claim handling, linking and session behaviour are tested with an injected verifier; the Google popup, consent screen and CSP interaction were not exercised.
 - **Live Razorpay payments and refunds.** Keys, merchant approval, a public HTTPS webhook and real transactions were unavailable. Webhook tests use locally generated HMAC signatures.
-- **Live email delivery.** No SMTP provider was configured. Notifications are recorded as skipped when SMTP is absent; SPF/DKIM/DMARC, bounces and retries are untested.
+- **Live email delivery.** Resend is implemented and covered by injected-fetch tests, but no fresh API key or verified sending domain was available. Real SPF/DKIM/DMARC delivery, bounces, complaints and the manual retry helper against a live provider are untested.
 - **Mobile/SMS verification.** No SMS provider is configured; the API reports this explicitly and email verification is the only real channel.
 - **Courier automation.** Shiprocket is not implemented; dispatch is manual. No live carrier label or tracking sync was tested.
 - **Automated seller payouts.** Settlements are manual with a recorded bank/UPI reference. No payout provider is integrated, and the payout onboarding step records preferences only.
@@ -257,7 +290,7 @@ These are **not** covered by the evidence above:
 - **PostgreSQL/Supabase.** The build runs on single-node SQLite. The documented migration path has not been executed against live data.
 - **Tax invoices and GST correctness.** `tax_rate_bp` defaults to `0`; rates, HSN mapping, invoices, credit notes and TCS/TDS need a chartered accountant.
 - **Browser, accessibility, performance and load testing.** No Playwright/browser suite, screen-reader audit, Core Web Vitals run or load test was performed. Responsive layout and keyboard/focus behaviour were reviewed by hand only.
-- **Disaster recovery in production.** The online SQLite backup command and read-only verifier pass locally (`integrity_check = ok`, 0 foreign-key violations, migrations `[1..6]`), but no timed restore drill on production infrastructure has been done.
+- **Disaster recovery in production.** The online SQLite backup command and read-only verifier pass locally (`integrity_check = ok`, 0 foreign-key violations, migrations `1–8`), and an isolated copy was migrated and reopened, but no timed restore drill on production infrastructure has been done.
 - **Admin MFA, shared rate limiting, object storage, observability and error tracking.** Not implemented.
 
 ## Reproduce

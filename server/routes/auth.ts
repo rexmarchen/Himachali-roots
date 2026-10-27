@@ -214,7 +214,7 @@ async function issueVerification(db: Db, user: { id: string; email: string; full
       <p style="font-size:13px;color:#6B6F68">If you did not create this account, you can ignore this message.</p>`,
     dedupeKey: `verify:${user.id}:${new Date().toISOString().slice(0, 10)}`,
   });
-  return env.allowDevAuthHelpers && !env.smtp.configured ? link : null;
+  return env.allowDevAuthHelpers && !env.email.configured ? link : null;
 }
 
 export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
@@ -607,7 +607,7 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
 
       if (env.allowDevAuthHelpers || env.isTest) {
         devOtp = otp;
-        if (!env.smtp.configured) devResetUrl = link;
+        if (!env.email.configured) devResetUrl = link;
       }
     }
 

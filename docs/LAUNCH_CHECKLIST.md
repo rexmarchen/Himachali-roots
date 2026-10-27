@@ -19,7 +19,7 @@ Nothing below should be assumed complete merely because the software supports it
 - [ ] Seller KYC and business verification process defined, including beneficial ownership, bank account verification and periodic re-verification.
 - [ ] Product restrictions reviewed: no wildlife/forest produce requiring permits, no restricted medicines, no prohibited weapons, no unsupported therapeutic claims.
 - [ ] Origin, GI, organic, handmade and certification claims have documentary evidence. The software must not display a badge without it.
-- [ ] Payment aggregator onboarding complete for the actual business entity and marketplace model.
+- [ ] Payment aggregator onboarding complete for the actual business entity and marketplace model. **Payment-gateway integration is out of scope for this build**; do not tick this until a separately scoped integration is implemented and verified.
 - [ ] DPDP Act notice, consent, purpose limitation, retention, erasure and breach-response process reviewed. Data processing agreements with vendors in place.
 - [ ] Insurance (cyber, professional indemnity, product liability as applicable) considered.
 - [ ] Intellectual property for the name/logo cleared; contributor/photography licences documented.
@@ -27,10 +27,10 @@ Nothing below should be assumed complete merely because the software supports it
 ## B. Accounts and secrets
 
 - [ ] Production domain and TLS active.
-- [ ] Razorpay live keys and webhook secret in the production secret store.
+- [ ] *(Only if a payment integration is separately scoped)* Razorpay live keys and webhook secret in the production secret store; webhook configured with payment and refund events. The current build leaves payments unconfigured and must not claim online payment.
 - [ ] Google OAuth Web client created with only the real production JavaScript origin (and localhost for development); `GOOGLE_CLIENT_ID` set in production. No client secret is used by this flow.
-- [ ] Razorpay webhook configured to `https://<domain>/api/webhooks/razorpay` with payment and refund events enabled.
-- [ ] SMTP/transactional email provider configured with SPF, DKIM and DMARC; `EMAIL_FROM` is an authorised identity.
+- [ ] Fresh Resend API key created for this deployment (never a key that appeared in chat, docs or source control); sending domain verified with SPF, DKIM and DMARC; `EMAIL_FROM` and `ADMIN_NOTIFICATION_EMAIL` are monitored real addresses.
+- [ ] Registration verification, password reset, order, cancellation, return and refund emails delivered to a real inbox; `notifications` rows show `sent` with provider ids.
 - [ ] Courier accounts and pickup addresses operational. Understand that shipping is manual; no Shiprocket adapter exists.
 - [ ] Separate production and staging environments and credentials.
 - [ ] Administrator accounts are individual, named and have unique strong passwords. **MFA is not implemented**; compensate with restricted access, short session review, audit monitoring and network controls until MFA is added.

@@ -1,6 +1,8 @@
 # Railway Production Deployment Guide — PAHADI ROOTS / Dear Hills
 
-This document defines the production-grade deployment specification for running the backend and unified web application on [Railway](https://railway.com).
+This document defines an alternate deployment specification for running the backend and unified web application on [Railway](https://railway.com).
+
+> **Current production note (27 October 2026):** `https://www.dearhills.in` is currently served by the single-node Express + SQLite process behind Caddy, not Railway. This guide is kept for a Railway migration and has not been re-verified in this audit. Use [Deployment](DEPLOYMENT.md) and [`deploy/README.md`](../deploy/README.md) for the live topology.
 
 ---
 
@@ -83,26 +85,30 @@ Add the following variables in the Railway Service **Variables** tab:
 | `TRUST_PROXY` | `1` | Trusts Railway's reverse proxy for TLS & client IPs |
 | `DATABASE_PATH` | `/data/pahadi-roots.db` | Persistent SQLite database file on volume |
 | `UPLOAD_DIR` | `/data/uploads` | Persistent directory for public product & seller photos |
-| `PRIVATE_DOCS_DIR` | `/data/private/seller-docs` | Persistent directory for encrypted seller KYC files |
+| `PRIVATE_DOCS_DIR` | `/data/private/seller-docs` | Persistent directory for private seller KYC files (access-controlled, not encrypted at rest by the app) |
 | `SESSION_DAYS` | `30` | Maximum session lifetime |
 | `SESSION_IDLE_DAYS` | `7` | Inactivity session timeout |
 | `SESSION_COOKIE_SAMESITE` | `lax` | Use `lax` when unified, `none` if frontend on separate domain |
 | `SEED_ON_START` | `true` *(on first deploy)* / `false` | Seeds initial catalog if database is completely empty |
 | `ALLOW_DEV_PAYMENTS` | `false` | Hard block: must be false in production |
 | `ALLOW_DEV_AUTH_HELPERS` | `false` | Hard block: must be false in production |
-| `GOOGLE_CLIENT_ID` | `129835560363-tbk55n76db9qsuu21i6rr2n9uv5oi8f0.apps.googleusercontent.com` | Google OAuth Web Client ID |
-| `SEED_ADMIN_EMAIL` | `anshuar9065@gmail.com` | Automatically provisions admin on initial seed |
-| `SEED_ADMIN_PASSWORD` | *(Secure password, min 8 chars)* | Used for initial admin provisioning |
-| `RAZORPAY_KEY_ID` | `rzp_live_...` | Razorpay Live API Key ID |
-| `RAZORPAY_KEY_SECRET` | `...` | Razorpay Live Secret Key |
-| `RAZORPAY_WEBHOOK_SECRET` | `...` | Razorpay Webhook Signing Secret |
-| `SMTP_HOST` | `smtp.resend.com` / `smtp.gmail.com` | SMTP host for transactional emails |
-| `SMTP_PORT` | `587` | SMTP port |
-| `SMTP_USER` | `...` | SMTP username |
-| `SMTP_PASS` | `...` | SMTP app password |
-| `EMAIL_FROM` | `PAHADI ROOTS <no-reply@dearhills.in>` | Transactional email from address |
+| `GOOGLE_CLIENT_ID` | `<your-web-client-id>.apps.googleusercontent.com` | Google OAuth Web Client ID; never commit the real value |
+| `RESEND_API_KEY` | *(fresh key created for this deployment)* | Preferred transactional email provider. Never reuse a leaked key |
+| `EMAIL_TIMEOUT_MS` | `10000` | Resend request timeout |
+| `EMAIL_MAX_ATTEMPTS` | `3` | Resend retry attempts |
+| `EMAIL_FROM` | `PAHADI ROOTS <no-reply@dearhills.in>` | Must be on a verified Resend sending domain |
 | `SUPPORT_EMAIL` | `support@dearhills.in` | Store support email address |
+| `ADMIN_NOTIFICATION_EMAIL` | `support@dearhills.in` | Monitored inbox for return/refund/deletion alerts |
+| `SMTP_HOST` | *(optional fallback)* | SMTP host; Resend wins when configured |
+| `SMTP_PORT` | `587` | SMTP port |
+| `SMTP_USER` | *(optional)* | SMTP username |
+| `SMTP_PASS` | *(optional)* | SMTP app password |
+| `RAZORPAY_KEY_ID` | *(leave empty for this build)* | Pre-existing adapter; payment-gateway integration is out of scope and unverified |
+| `RAZORPAY_KEY_SECRET` | *(leave empty)* | Server-only secret; do not add without a separately scoped integration |
+| `RAZORPAY_WEBHOOK_SECRET` | *(leave empty)* | Not configured in this build |
 | `LOG_LEVEL` | `info` | Logging verbosity |
+
+Do not put an administrator email or password in this document or any repository file. Create the first administrator with the CLI (or `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` on a one-off first seed) and unset the variables afterwards. Demo seeding (`SEED_ON_START`) is not appropriate for a live marketplace.
 
 ---
 
@@ -139,17 +145,16 @@ If using Railway CLI locally:
 ## 6. Verifying Production Readiness
 
 Once deployed, Railway checks:
-- `GET /api/health/ready` -> Returns `200 OK` with JSON:
+- `GET /api/health/ready` -> Returns `200 OK` with JSON shaped like:
   ```json
   {
-    "status": "ready",
-    "checks": {
-      "database": "ok",
-      "schema": "current",
-      "storage": "writable",
-      "privateDocs": "writable"
-    }
+    "status": "ok",
+    "ready": true,
+    "database": "up",
+    "schema": "current",
+    "timestamp": "2026-10-27T00:00:00.000Z"
   }
   ```
-- `GET /api/config` -> Returns `200 OK` with `googleEnabled: true`.
-- Log in with `anshuar9065@gmail.com` -> Admin privileges verified.
+- `GET /api/config` -> Returns `200 OK`; confirm `googleEnabled` is true only when `GOOGLE_CLIENT_ID` is really configured.
+- Create a named administrator with `npm run admin:create` / the container CLI, then sign in with that account and confirm admin access. Do not use a shared or documented credential.
+- Confirm `/api/config` reports `payments.configured: false` unless a payment integration has been separately completed and verified.

@@ -4197,8 +4197,8 @@ export function AdminOrderDetailPage() {
               <div className="grid gap-2 border-t border-line px-5 py-3 text-[11.5px] sm:grid-cols-2">
                 <span>Product value {formatINR(sellerOrder.subtotalPaise)}</span>
                 <span>Shipping {formatINR(sellerOrder.shippingPaise)}</span>
-                <span>Commission {formatINR(sellerOrder.commissionPaise)}</span>
-                <span>Seller earning {formatINR(sellerOrder.sellerEarningPaise)}</span>
+                <span>Commission {formatINR(sellerOrder.commissionPaise ?? 0)}</span>
+                <span>Seller earning {formatINR(sellerOrder.sellerEarningPaise ?? 0)}</span>
               </div>
               <div className="flex flex-wrap gap-2 border-t border-line px-5 py-3">
                 {sellerOrder.status === 'pending' ? <Button size="sm" onClick={() => setAction({ sellerOrderId: sellerOrder.id, action: 'confirm' })}>Confirm</Button> : null}
@@ -4209,6 +4209,19 @@ export function AdminOrderDetailPage() {
               </div>
             </section>
           ))}
+          <section className="border border-line bg-surface p-5">
+            <h2 className="text-lg">Order timeline</h2>
+            {order.timeline.length ? (
+              <ol className="mt-3 space-y-2 text-[12px]">
+                {order.timeline.map((event, index) => (
+                  <li key={`${event.type}-${index}`} className="border-l border-line pl-3">
+                    <p className="font-medium text-ink">{event.description}</p>
+                    <p className="text-[10.5px] text-muted">{formatDateTime(event.occurredAt)}{event.actorRole ? ` · ${event.actorRole}` : ''}</p>
+                  </li>
+                ))}
+              </ol>
+            ) : <p className="mt-3 text-sm text-muted">No order events recorded.</p>}
+          </section>
           <section className="border border-line bg-surface p-5">
             <h2 className="text-lg">Payment events</h2>
             {data.events.length ? (
@@ -4406,6 +4419,7 @@ export function AdminRefundsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = searchParams.get('status') ?? '';
   const [refund, setRefund] = useState<AdminRefundRow | null>(null);
+  const [completing, setCompleting] = useState(false);
   const [decision, setDecision] = useState<'approve' | 'reject'>('approve');
   const [method, setMethod] = useState<'manual' | 'razorpay'>('manual');
   const [reference, setReference] = useState('');
@@ -4418,6 +4432,7 @@ export function AdminRefundsPage() {
 
   const open = (row: AdminRefundRow) => {
     setRefund(row);
+    setCompleting(row.status === 'approved');
     setDecision('approve');
     setMethod(row.provider === 'razorpay' && row.provider_payment_id ? 'razorpay' : 'manual');
     setReference('');
@@ -4426,21 +4441,30 @@ export function AdminRefundsPage() {
 
   const submit = async () => {
     if (!refund) return;
-    if (decision === 'approve' && method === 'manual' && reference.trim().length < 4) {
+    if (completing && reference.trim().length < 4) {
+      toast.push('Enter the verified bank or UPI reference for the completed transfer.', 'error');
+      return;
+    }
+    if (!completing && decision === 'approve' && method === 'manual' && reference.trim().length < 4) {
       toast.push('Enter the bank or UPI reference for the refund.', 'error');
       return;
     }
     setBusy(true);
     try {
-      const result = await api<{ status: string; message: string }>(`/admin/refunds/${refund.id}/decide`, {
-        method: 'POST',
-        body: {
-          decision,
-          method: decision === 'approve' ? method : undefined,
-          manualReference: decision === 'approve' && method === 'manual' ? reference.trim() : undefined,
-          note: note.trim() || undefined,
-        },
-      });
+      const result = completing
+        ? await api<{ status: string; message: string }>(`/admin/refunds/${refund.id}/complete-manual`, {
+            method: 'POST',
+            body: { manualReference: reference.trim(), note: note.trim() || undefined },
+          })
+        : await api<{ status: string; message: string }>(`/admin/refunds/${refund.id}/decide`, {
+            method: 'POST',
+            body: {
+              decision,
+              method: decision === 'approve' ? method : undefined,
+              manualReference: decision === 'approve' && method === 'manual' ? reference.trim() : undefined,
+              note: note.trim() || undefined,
+            },
+          });
       toast.push(result.message);
       setRefund(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-refunds'] });
@@ -4496,7 +4520,13 @@ export function AdminRefundsPage() {
                     <td className="px-4 py-4"><span className="block max-w-56 whitespace-pre-wrap text-[11.5px] text-muted">{row.reason}</span></td>
                     <td className="px-4 py-4"><StatusBadge status={row.status} />{row.provider_refund_id ? <p className="mt-1 max-w-40 break-all text-[10px] text-muted">{row.provider_refund_id}</p> : null}</td>
                     <td className="px-4 py-4 text-muted">{formatDateTime(row.created_at)}</td>
-                    <td className="px-4 py-4 text-right">{['requested', 'approved', 'processing', 'failed'].includes(row.status) ? <Button size="sm" variant="secondary" onClick={() => open(row)}>Review</Button> : null}</td>
+                    <td className="px-4 py-4 text-right">
+                      {['requested', 'failed'].includes(row.status) ? (
+                        <Button size="sm" variant="secondary" onClick={() => open(row)}>Review</Button>
+                      ) : row.status === 'approved' ? (
+                        <Button size="sm" variant="secondary" onClick={() => open(row)}>Record transfer</Button>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -4509,7 +4539,7 @@ export function AdminRefundsPage() {
         open={Boolean(refund)}
         onClose={() => setRefund(null)}
         title={refund ? `Refund ${formatINR(refund.amount_paise)} — ${refund.order_number}` : 'Refund'}
-        footer={<><Button variant="ghost" onClick={() => setRefund(null)}>Cancel</Button><Button loading={busy} onClick={() => void submit()}>Record decision</Button></>}
+        footer={<><Button variant="ghost" onClick={() => setRefund(null)}>Cancel</Button><Button loading={busy} onClick={() => void submit()}>{completing ? 'Record completed transfer' : 'Record decision'}</Button></>}
       >
         {refund ? (
           <div className="space-y-4">
@@ -4518,29 +4548,43 @@ export function AdminRefundsPage() {
               <div><dt className="text-muted">Provider payment</dt><dd className="break-all">{refund.provider_payment_id ?? 'None attached'}</dd></div>
               <div className="sm:col-span-2"><dt className="text-muted">Reason</dt><dd className="whitespace-pre-wrap">{refund.reason}</dd></div>
             </dl>
-            <Field label="Decision">
-              <Select value={decision} onChange={(event) => setDecision(event.target.value as 'approve' | 'reject')}>
-                <option value="approve">Approve</option>
-                <option value="reject">Reject</option>
-              </Select>
-            </Field>
-            {decision === 'approve' ? (
+            {completing ? (
               <>
-                <Field label="Refund route" hint="A manual transfer is the only route without a verified provider payment.">
-                  <Select value={method} onChange={(event) => setMethod(event.target.value as 'manual' | 'razorpay')}>
-                    <option value="manual">Manual bank / UPI transfer</option>
-                    <option value="razorpay" disabled={!refund.provider_payment_id}>Razorpay reversal</option>
+                <Alert tone="warning">
+                  Only record this after the bank/UPI transfer is genuinely complete. This writes the completion
+                  evidence to the audit log and updates the customer's order.
+                </Alert>
+                <Field label="Verified bank / UPI reference" required hint="UTR, transaction ID or receipt number">
+                  <Input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="UTR or transaction ID" />
+                </Field>
+              </>
+            ) : (
+              <>
+                <Field label="Decision">
+                  <Select value={decision} onChange={(event) => setDecision(event.target.value as 'approve' | 'reject')}>
+                    <option value="approve">Approve</option>
+                    <option value="reject">Reject</option>
                   </Select>
                 </Field>
-                {method === 'manual' ? (
-                  <Field label="Bank / UPI reference" required hint="Recorded in the audit log">
-                    <Input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="UTR, transaction ID or receipt number" />
-                  </Field>
-                ) : (
-                  <Alert tone="warning">A Razorpay reversal needs configured API keys. If the request fails, no refund is recorded as complete.</Alert>
-                )}
+                {decision === 'approve' ? (
+                  <>
+                    <Field label="Refund route" hint="A manual transfer is the only route without a verified provider payment.">
+                      <Select value={method} onChange={(event) => setMethod(event.target.value as 'manual' | 'razorpay')}>
+                        <option value="manual">Manual bank / UPI transfer</option>
+                        <option value="razorpay" disabled={!refund.provider_payment_id}>Razorpay reversal</option>
+                      </Select>
+                    </Field>
+                    {method === 'manual' ? (
+                      <Field label="Planned transfer reference" required hint="Approval records the plan only; completion is a separate step.">
+                        <Input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="UTR, transaction ID or receipt number" />
+                      </Field>
+                    ) : (
+                      <Alert tone="warning">A Razorpay reversal needs configured API keys. If the request fails, no refund is recorded as complete.</Alert>
+                    )}
+                  </>
+                ) : null}
               </>
-            ) : null}
+            )}
             <Field label="Internal note" hint="Optional"><Textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} /></Field>
           </div>
         ) : null}

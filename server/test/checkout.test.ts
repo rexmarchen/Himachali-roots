@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import type { Express } from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { closeDb, execute, queryOne, type Db } from '../db.js';
+import { closeDb, execute, queryAll, queryOne, type Db } from '../db.js';
 import {
   ADDRESS,
   IDS,
@@ -123,12 +123,22 @@ describe('checkout', () => {
     const sellerOrders = response.body.order.sellerOrders as Array<{
       sellerName: string;
       totalPaise: number;
-      commissionPaise: number;
-      sellerEarningPaise: number;
+      commissionPaise?: number;
+      sellerEarningPaise?: number;
     }>;
     expect(sellerOrders).toHaveLength(2);
     expect(sellerOrders.reduce((sum, row) => sum + row.totalPaise, 0)).toBe(response.body.order.totalPaise);
-    expect(sellerOrders.map((row) => row.commissionPaise).sort((a, b) => a - b)).toEqual([7_500, 15_000]);
+    const storedCommissions = queryAll<{ commission_paise: number }>(
+      db,
+      `SELECT so.commission_paise FROM seller_orders so
+         JOIN orders o ON o.id = so.order_id
+        WHERE o.order_number = ?`,
+      response.body.order.orderNumber,
+    ).map((row) => row.commission_paise);
+    expect(storedCommissions.sort((a, b) => a - b)).toEqual([7_500, 15_000]);
+    // Internal margins are staff-only data and must never reach a customer response.
+    expect(sellerOrders.every((row) => row.commissionPaise === undefined)).toBe(true);
+    expect(sellerOrders.every((row) => row.sellerEarningPaise === undefined)).toBe(true);
   });
 
   it('applies a coupon once per customer and snapshots the discount', async () => {

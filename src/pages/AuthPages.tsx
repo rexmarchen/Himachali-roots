@@ -79,8 +79,8 @@ function GoogleAuthSection({
   const [error, setError] = useState<string | null>(null);
   const [linkingBusy, setLinkingBusy] = useState(false);
 
-  const googleClientId = config?.googleClientId || '129835560363-tbk55n76db9qsuu21i6rr2n9uv5oi8f0.apps.googleusercontent.com';
-  const googleEnabled = config?.googleEnabled ?? Boolean(googleClientId);
+  const googleClientId = config?.googleClientId ?? '';
+  const googleEnabled = Boolean(config?.googleEnabled && googleClientId);
 
   if (!googleEnabled || !googleClientId) return null;
 

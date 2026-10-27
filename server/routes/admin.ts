@@ -9,7 +9,7 @@ import { audit } from '../lib/audit.js';
 import { badRequest, conflict, notFound, parse } from '../lib/http.js';
 import { newId, uniqueSlug } from '../lib/ids.js';
 import { escapeHtml, notify, notificationQueueSummary } from '../lib/email.js';
-import { getOrderView, decideRefund, createRefundForReturn, generateSettlement, markSettlementPaid, sellerOrderAction, refreshOrderStatus } from '../lib/orders.js';
+import { getOrderView, decideRefund, createRefundForReturn, generateSettlement, markSettlementPaid, markManualRefundCompleted, sellerOrderAction, refreshOrderStatus } from '../lib/orders.js';
 import { isInsidePrivateDocs, imageUpload, hasValidFileSignature } from '../lib/uploads.js';
 import { getSiteContent, setSiteContent } from '../lib/site.js';
 import {
@@ -164,7 +164,7 @@ export function adminRouter(db: Db): Router {
       integrations: {
         payments,
         shipping: env.shiprocket.configured ? 'configured' : 'manual-only',
-        email: env.smtp.configured ? 'configured' : 'unconfigured',
+        email: env.email.configured ? 'configured' : 'unconfigured',
       },
       notifications: notificationQueueSummary(db),
     });
@@ -1210,7 +1210,7 @@ export function adminRouter(db: Db): Router {
   router.get('/orders/:orderNumber', (req, res) => {
     const order = queryOne<{ id: string }>(db, 'SELECT id FROM orders WHERE order_number = ?', req.params.orderNumber);
     if (!order) throw notFound('Order not found.');
-    const view = getOrderView(db, order.id);
+    const view = getOrderView(db, order.id, { includeFinancials: true });
     const payments = queryAll<{
       id: string;
       provider: string;
@@ -1395,11 +1395,49 @@ export function adminRouter(db: Db): Router {
         body: `<p>${input.decision === 'reject' ? 'After review, this refund request was not approved.' : 'Your refund has been approved.'}</p>
           <p><strong>Amount:</strong> ₹${(refund.amount_paise / 100).toLocaleString('en-IN')}</p>
           ${input.note ? `<p><strong>Note:</strong> ${input.note.replaceAll('<', '&lt;')}</p>` : ''}
-          <p>${result.status === 'processing' ? 'The payment provider is processing it; the status will update when confirmed.' : 'The final status is shown in your account.'}</p>`,
+          <p>${result.status === 'processing' ? 'The payment provider is processing it; the status will update when confirmed.' : result.status === 'approved' ? 'The refund has been approved and recorded. A bank/UPI transfer still has to be completed and confirmed.' : 'The final status is shown in your account.'}</p>`,
         dedupeKey: `refund-decision:${refund.id}:${input.decision}`,
       });
     }
     res.json(result);
+  });
+
+  router.post('/refunds/:id/complete-manual', async (req, res) => {
+    const input = parse(
+      z.object({
+        manualReference: z.string().trim().min(4).max(120),
+        note: z.string().trim().max(500).optional(),
+      }),
+      req.body,
+    );
+    const refund = queryOne<{ id: string; order_id: string; amount_paise: number; status: string }>(
+      db,
+      'SELECT id, order_id, amount_paise, status FROM refunds WHERE id = ?',
+      req.params.id,
+    );
+    if (!refund) throw notFound('Refund not found.');
+    const result = markManualRefundCompleted(db, {
+      refundId: refund.id,
+      actor: req.user!,
+      manualReference: input.manualReference,
+      note: input.note,
+    });
+    const order = queryOne<{ email: string; user_id: string; order_number: string }>(
+      db,
+      'SELECT email, user_id, order_number FROM orders WHERE id = ?',
+      refund.order_id,
+    );
+    if (order) {
+      await notify(db, {
+        userId: order.user_id,
+        email: order.email,
+        type: 'refund_completed',
+        subject: `Refund recorded for ${order.order_number}`,
+        body: `<p>Your refund of <strong>₹${(refund.amount_paise / 100).toLocaleString('en-IN')}</strong> has been recorded as completed against the verified bank/UPI reference.</p><p><strong>Reference:</strong> ${escapeHtml(input.manualReference)}</p>`,
+        dedupeKey: `refund-complete:${refund.id}`,
+      });
+    }
+    res.json({ ...result, message: 'Manual refund recorded as completed with the verified transfer reference.' });
   });
 
   /* -------------------------- Returns / cancels ------------------------ */
@@ -1474,7 +1512,7 @@ export function adminRouter(db: Db): Router {
         email: order.email,
         type: input.decision === 'approve' ? 'return_approved' : 'return_rejected',
         subject: `Return request ${input.decision === 'approve' ? 'approved' : 'declined'} — ${order.order_number}`,
-        body: `<p>${input.decision === 'approve' ? 'Your return has been approved and a refund is queued for processing.' : 'After review, we could not approve this return.'}</p><p><strong>Note:</strong> ${input.note.replaceAll('<', '&lt;')}</p>`,
+        body: `<p>${input.decision === 'approve' ? 'Your return has been approved and a refund request has been recorded for review.' : 'After review, we could not approve this return.'}</p><p><strong>Note:</strong> ${input.note.replaceAll('<', '&lt;')}</p>`,
         dedupeKey: `return-decision:${ret.id}:${input.decision}`,
       });
     }
@@ -1551,7 +1589,7 @@ export function adminRouter(db: Db): Router {
         subject: `Cancellation request ${input.decision === 'approve' ? 'approved' : 'declined'} — ${order.order_number}`,
         body: `<p>${
           input.decision === 'approve'
-            ? 'Your cancellation request was approved and any refund due is queued for processing.'
+            ? 'Your cancellation request was approved and a refund request has been recorded for review (no money has moved yet).'
             : 'After review, your cancellation request could not be approved.'
         }</p>${input.note ? `<p><strong>Note:</strong> ${escapeHtml(input.note)}</p>` : ''}`,
         dedupeKey: `cancellation-decision:${request.id}:${input.decision}`,
@@ -2632,7 +2670,13 @@ export function adminRouter(db: Db): Router {
           keySecretConfigured: Boolean(env.razorpay.keySecret),
           webhookSecretConfigured: Boolean(env.razorpay.webhookSecret),
         },
-        email: { configured: env.smtp.configured, from: env.smtp.from, supportEmail: env.smtp.supportEmail },
+        email: {
+          configured: env.email.configured,
+          provider: env.email.provider,
+          from: env.email.from,
+          supportEmail: env.email.supportEmail,
+          adminNotificationEmail: env.email.adminNotificationEmail,
+        },
         shipping: { provider: 'manual', shiprocketConfigured: env.shiprocket.configured },
         monitoring: { sentryConfigured: Boolean(env.sentryDsn) },
       },

@@ -224,13 +224,21 @@ export interface SellerOrderView {
   discountPaise: number;
   taxPaise: number;
   totalPaise: number;
-  commissionPaise: number;
-  sellerEarningPaise: number;
+  /** Present only in staff responses; never returned to customers. */
+  commissionPaise?: number;
+  sellerEarningPaise?: number;
   items: OrderItemSummary[];
   shipment: ShipmentView | null;
   dispatchBy: string | null;
   shippedAt: string | null;
   deliveredAt: string | null;
+}
+
+export interface OrderEventView {
+  type: string;
+  description: string;
+  actorRole: string | null;
+  occurredAt: string;
 }
 
 export interface OrderView {
@@ -252,6 +260,7 @@ export interface OrderView {
   canCancel: boolean;
   canRequestReturn: boolean;
   reservationExpiresAt: string | null;
+  timeline: OrderEventView[];
   isDemo?: boolean;
 }
 

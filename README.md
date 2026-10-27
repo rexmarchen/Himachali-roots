@@ -4,11 +4,11 @@ A multi-vendor marketplace for products made and grown in Himachal Pradesh — s
 
 The visual system is deliberately editorial rather than "startup dashboard": warm paper, orchard burgundy, apple blossom and harvest gold, Cormorant Garamond display type and Manrope interface type. Product and story pages are built around makers, materials and places, not generic Himalayan decoration.
 
-> **Project status: a complete, tested development build — not a launched business.**
+> **Project status: a security-hardened marketplace build — not a launched business.**
 >
-> Core commerce and marketplace workflows run against a real server and database. Live payment, email and courier integrations cannot be validated until credentials and merchant approvals exist. Demonstration records are labelled as demonstrations. See [Remaining blockers](docs/REMAINING_BLOCKERS.md) before treating this as production-ready.
+> Core commerce and marketplace workflows run against a real server and database. Payment-gateway integration is **out of scope for this build**: orders stay in `pending_payment` unless a configured provider produces verified evidence. Transactional email is implemented through Resend (SMTP fallback) but cannot be proven until a verified sending domain and a fresh API key exist. Courier dispatch is manual. Demonstration records are labelled as demonstrations. See [Remaining blockers](docs/REMAINING_BLOCKERS.md) before treating this as production-ready.
 
-**Main hosted link:** [https://www.dearhills.in](https://www.dearhills.in). At the time of writing it is a **static Vercel build only** — `/api/*` returns 404, so sign-in, carts and checkout do not work there. The intended production origin is the same URL served by the Express + SQLite process described in [Deployment](docs/DEPLOYMENT.md). Do not treat the current static deployment as the live shop.
+**Main hosted link:** [https://www.dearhills.in](https://www.dearhills.in). It is currently served by the Express 5 + SQLite process behind Caddy: `/api/health`, `/api/health/ready`, `/api/config`, `/api/products` and `/api/auth/me` return real API JSON. The Vercel configuration in this repository is a static SPA rewrite only and cannot host the API. The production database is intentionally empty (0 products, 0 sellers); do not treat the hosted instance as a trading shop until catalogue, credentials and operational checks in [Launch checklist](docs/LAUNCH_CHECKLIST.md) are complete.
 
 ## What works now
 
@@ -18,11 +18,13 @@ The visual system is deliberately editorial rather than "startup dashboard": war
 | Customer account | Registration/login, Google sign-in with explicit password-confirmed linking, email verification, password reset, addresses, order history/detail, cancellation and return requests, reviews for delivered purchases, wishlist, notifications, profile and deletion request |
 | Seller workspace | Ten-step resumable maker application with category-aware questions, private document upload, explicit application/store status and review history; approval gate; dashboard and readiness checklist; product drafts, submission and resubmission after change requests; image upload, inventory, order confirm → pack → ship → deliver, tracking, earnings ledger, settlements, store profile, notifications |
 | Admin console | Seller application review with evidence, checklist, requirements, reason-required decisions, review history and audit trail; product moderation including change requests; seasonal campaign creation, status/window control, poster upload, eligible-product pricing; category management, orders and fulfilment, payments, refunds, returns, cancellations, commission rules, settlement creation/payout recording, customers, review moderation, structured content editors, coupons, support inbox, audit log, integration status |
-| Commerce rules | Integer-paise accounting, GST-inclusive prices, server-side repricing, coupon validation and redemption limits, shipping thresholds, commission snapshots, stock reservation, idempotent checkout, seller-order splitting |
+| Commerce rules | Integer-paise accounting, GST-inclusive prices, server-side repricing, coupon validation and redemption limits, shipping thresholds, commission snapshots, stock reservation with double-release protection, idempotent checkout, seller-order splitting |
+| Orders & aftercare | Order event timeline, customer/seller/admin order files, cancellations before dispatch, per-item partial returns, refund-request records with manual bank/UPI completion, no paid status without verified payment evidence |
+| Email | Resend transactional email with retry, timeout, idempotency key, atomic dedupe and sanitised errors; SMTP fallback; notification queue visibility in the admin console |
 | Security | scrypt passwords, server-verified Google ID tokens with explicit account linking, opaque hashed sessions with rotation and idle/absolute expiry, RBAC, CSRF header + origin allowlist checks, rate limits, Helmet/CSP, parameterised SQL, ownership checks, upload type/signature validation, HMAC payment verification, audit logging |
-| Quality | TypeScript typecheck, ESLint, 131 integration/security/migration/campaign tests, live HTTP smoke, seller-lifecycle E2E, production build, dependency audit |
+| Quality | TypeScript typecheck, ESLint, 154 integration/security/migration/email tests across 18 files, live HTTP smoke, seller-lifecycle E2E, production build, dependency audit |
 
-The full route tree is available without an external service. Google Identity Services, Razorpay and SMTP are the external integrations wired; courier dispatch is manual. The application reports unconfigured integrations rather than pretending they are live.
+The full route tree is available without an external service. Google Identity Services, Resend/SMTP and an optional Razorpay adapter are the external integrations wired; **only Razorpay is out of scope for production sign-off** and remains unconfigured/untested with live credentials. Courier dispatch is manual. The application reports unconfigured integrations rather than pretending they are live.
 
 ## Stack
 
@@ -85,6 +87,10 @@ With no Razorpay keys, checkout creates an order in `pending_payment` and offers
 
 The simulation endpoint explicitly states that no money moved. It is force-disabled in production, and the server refuses to start if the flag is enabled under `NODE_ENV=production`.
 
+### Transactional email
+
+Set `RESEND_API_KEY` plus a verified `EMAIL_FROM` domain to send order, verification, return and refund notices through Resend. `SMTP_*` remains a fallback. Notifications are deduplicated in `notifications` with a unique dedupe key; failed sends are `failed`, unconfigured sends are `skipped`, and provider errors are sanitised so keys never reach logs. `retryFailedNotifications` in `server/lib/email.ts` can be run by an operator; there is no background outbox worker yet.
+
 ## Scripts
 
 | Command | Purpose |
@@ -101,7 +107,7 @@ The simulation endpoint explicitly states that no money moved. It is force-disab
 | `npm run smoke` | Live HTTP smoke test against a running development API |
 | `npm run typecheck` | Client, server and test TypeScript checks |
 | `npm run lint` | ESLint |
-| `npm test` | 131 Vitest/Supertest tests |
+| `npm test` | 154 Vitest/Supertest tests |
 | `npm run check` | Typecheck + lint + tests + production build |
 
 ## Project structure
@@ -158,20 +164,18 @@ Detailed state machines and money rules live in `server/lib/orders.ts`, `server/
 
 ## Verification
 
-Last verified on 26 October 2026 with Node 24.21.0:
+Last verified on 27 October 2026 with Node 24.21.0:
 
-- `npm run typecheck` — passed
+- `npm run typecheck` — passed (client, server and test projects)
 - `npm run lint` — passed
-- `npm test` — 131 of 131 tests passed across 16 files, including Google sign-in/linking, session hardening, campaign, seller onboarding, admin products, checkout, refunds and legacy-migration suites
-- `npm run build` - passed; production-sized SPA and `dist-server/server/index.js` generated, with no chunk-size warning and no source maps; `scripts/build-web.mjs` pins `NODE_ENV=production` so a local `.env` cannot ship React's development bundle
-- `npm run smoke` — 28 of 28 non-admin live HTTP checks passed against a running development API (33 checks when `SMOKE_ADMIN_EMAIL` and `SMOKE_ADMIN_PASSWORD` are supplied), including storefront, registration, checkout with the labelled development payment simulation, seller confirm → pack → ship → deliver, and the admin settlement hold guard
-- Seller lifecycle E2E — 53 of 53 live HTTP checks passed against a disposable API and database
-- `npm audit` — 0 vulnerabilities after upgrading `nodemailer` and `vitest`
-- The legacy-migration test opened a pre-onboarding v1–v2 database and upgraded it to version 6 without losing seeded rows; the development database itself is at migration 6
-- Campaign, cart and order rows were verified through public and admin HTTP endpoints, with the promotional price applied consistently and the original unit price retained on order lines
-- `/api/health/ready` returns `ready: true`, `database: up`, `schema: current` in the default development environment; it deliberately omits integration configuration
-
-The tests use an in-memory SQLite database and exercise real HTTP routes. They cover Google token claims/sign-in/linking and session hardening, auth/RBAC/CSRF, storefront home/catalogue/sitemap, campaign eligibility, scheduling/expiry, overlap guards and promotional repricing in catalogue/cart/checkout, checkout repricing and idempotency, stock races, coupon use, GST snapshots, seller isolation, fulfilment order, ledger/settlement eligibility, cancellation/refund/return accounting, upload signatures/private documents, admin category rules, Razorpay webhook signature/idempotency/amount mismatch, draft save/resume, category-aware validation (including FSSAI rules for food), duplicate submission, change requests and resubmission revisions, self-approval refusal, cross-seller isolation, product moderation/publish/suspend, and upgrading a pre-onboarding database. They do **not** prove live provider behaviour. See [Verification](docs/VERIFICATION.md).
+- `npm test` - 154 of 154 tests passed across 18 files, including Google sign-in/linking, session hardening, campaign, seller onboarding, admin products, checkout, returns/refunds, email/Resend and legacy-migration suites
+- `npm run build` — passed; production-sized SPA and `dist-server/server/index.js` generated, with no source maps; `scripts/build-web.mjs` pins `NODE_ENV=production` so a local `.env` cannot ship React's development bundle
+- `npm run smoke` — 28 of 28 non-admin live HTTP checks passed in an earlier development run (33 checks when `SMOKE_ADMIN_EMAIL` and `SMOKE_ADMIN_PASSWORD` are supplied); not re-run against live production
+- Seller lifecycle E2E — 53 of 53 live HTTP checks passed against a disposable API and database in an earlier run
+- `npm audit` — 0 vulnerabilities at the time of the dependency upgrade; re-run before release
+- The legacy-migration test opens a pre-onboarding database and upgrades it to the current migration without losing seeded rows; production readiness reports `schema: current`
+- Live production probe at `https://www.dearhills.in` returned `200` for `/api/health`, `/api/health/ready`, `/api/config`, `/api/products` and `/api/auth/me`; `/api/config` reports `payments.configured: false`, `devPaymentsEnabled: false`, and `/api/products` returns 0 items
+- Tests use in-memory SQLite and real HTTP routes. They do **not** prove live Razorpay, Resend domain delivery, Google OAuth browser consent or courier behaviour. See [Verification](docs/VERIFICATION.md).
 
 ## Documentation
 

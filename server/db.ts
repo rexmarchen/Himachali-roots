@@ -78,6 +78,18 @@ function reconcileLegacySchema(db: Db): void {
     addColumn(db, 'products', 'harvest_info', 'TEXT');
     addColumn(db, 'products', 'dispatch_conditions', 'TEXT');
   }
+  // Migration 8 columns must exist before schema.sql runs: its unique index on
+  // refunds(dedupe_key) would otherwise fail on a database created at v7.
+  if (tableExists(db, 'refunds')) {
+    addColumn(db, 'refunds', 'return_request_id', 'TEXT');
+    addColumn(db, 'refunds', 'dedupe_key', 'TEXT');
+  }
+  if (tableExists(db, 'notifications')) {
+    addColumn(db, 'notifications', 'provider_message_id', 'TEXT');
+  }
+  if (tableExists(db, 'return_requests')) {
+    addColumn(db, 'return_requests', 'requested_amount_paise', 'INTEGER NOT NULL DEFAULT 0');
+  }
   if (tableExists(db, 'categories')) {
     const coreCats = [
       {
@@ -275,7 +287,66 @@ export function openDatabase(filename: string): Db {
 
   migratePasswordRecoveryOtp(db);
   markMigration(db, 7);
+
+  migrateOrderIntegrity(db);
+  markMigration(db, 8);
   return db;
+}
+
+/**
+ * Migration 8 is additive. It adds the customer-visible order timeline, partial
+ * return quantities, refund idempotency keys and the provider message id used by
+ * transactional email delivery. Existing rows are preserved and backfilled from
+ * data that was already snapshotted on the order.
+ */
+function migrateOrderIntegrity(db: Db): void {
+  addColumn(db, 'return_requests', 'requested_amount_paise', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'refunds', 'return_request_id', 'TEXT');
+  addColumn(db, 'refunds', 'dedupe_key', 'TEXT');
+  addColumn(db, 'notifications', 'provider_message_id', 'TEXT');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS order_events (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      seller_order_id TEXT REFERENCES seller_orders(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      description TEXT NOT NULL,
+      actor_id TEXT,
+      actor_role TEXT,
+      metadata_json TEXT,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events(order_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_order_events_seller_order ON order_events(seller_order_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS return_request_items (
+      id TEXT PRIMARY KEY,
+      return_request_id TEXT NOT NULL REFERENCES return_requests(id) ON DELETE CASCADE,
+      order_item_id TEXT NOT NULL REFERENCES order_items(id),
+      quantity INTEGER NOT NULL CHECK (quantity > 0),
+      unit_price_paise INTEGER NOT NULL,
+      line_amount_paise INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      UNIQUE (return_request_id, order_item_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_return_items_request ON return_request_items(return_request_id);
+    CREATE INDEX IF NOT EXISTS idx_return_items_order_item ON return_request_items(order_item_id);
+    CREATE INDEX IF NOT EXISTS idx_return_requests_order ON return_requests(order_id);
+    CREATE INDEX IF NOT EXISTS idx_return_requests_seller_order ON return_requests(seller_order_id);
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_refunds_dedupe ON refunds(dedupe_key) WHERE dedupe_key IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_refunds_order ON refunds(order_id);
+    CREATE INDEX IF NOT EXISTS idx_refunds_seller_order ON refunds(seller_order_id);
+  `);
+  db.exec(`
+    UPDATE return_requests
+       SET requested_amount_paise = COALESCE((
+             SELECT SUM(oi.unit_price_paise * oi.quantity)
+               FROM order_items oi
+              WHERE oi.seller_order_id = return_requests.seller_order_id
+           ), 0)
+     WHERE requested_amount_paise = 0;
+  `);
 }
 
 /**

@@ -75,7 +75,28 @@ describe('cancellations and refunds', () => {
       note: 'Approved for manual refund',
     });
     expect(approved.status).toBe(200);
-    expect(approved.body.status).toBe('completed');
+    expect(approved.body.status).toBe('approved');
+
+    expect(
+      queryOne<{ status: string; provider_status: string; provider_refund_id: string | null }>(
+        db,
+        'SELECT status, provider_status, provider_refund_id FROM refunds WHERE id = ?',
+        refund!.id,
+      ),
+    ).toMatchObject({ status: 'approved', provider_status: 'manual-approved', provider_refund_id: null });
+
+    // Approval is a record only. The order is cancelled but not refunded until
+    // the external transfer is explicitly confirmed.
+    expect(queryOne<{ status: string }>(db, 'SELECT status FROM orders WHERE order_number = ?', paid.orderNumber)?.status).toBe(
+      'cancelled',
+    );
+
+    const completed = await mutate(admin.post(`/api/admin/refunds/${refund!.id}/complete-manual`)).send({
+      manualReference: 'UPI-REF-7788',
+      note: 'Bank transfer verified',
+    });
+    expect(completed.status).toBe(200);
+    expect(completed.body.status).toBe('completed');
 
     expect(
       queryOne<{ status: string; provider_refund_id: string }>(
@@ -136,10 +157,22 @@ describe('cancellations and refunds', () => {
       decision: 'approve',
       method: 'manual',
       manualReference: 'BANK-REF-9900',
-      note: 'Manual refund completed',
+      note: 'Manual refund approved',
     });
     expect(refunded.status).toBe(200);
-    expect(refunded.body.status).toBe('completed');
+    expect(refunded.body.status).toBe('approved');
+
+    expect(sellerOrderFor(db, paid.orderNumber)?.status).toBe('delivered');
+    expect(queryOne<{ status: string }>(db, 'SELECT status FROM orders WHERE order_number = ?', paid.orderNumber)?.status).toBe(
+      'fulfilled',
+    );
+
+    const completed = await mutate(admin.post(`/api/admin/refunds/${approved.body.refundId}/complete-manual`)).send({
+      manualReference: 'BANK-REF-9900',
+      note: 'Bank transfer verified',
+    });
+    expect(completed.status).toBe(200);
+    expect(completed.body.status).toBe('completed');
 
     expect(sellerOrderFor(db, paid.orderNumber)?.status).toBe('refunded');
     expect(queryOne<{ status: string }>(db, 'SELECT status FROM orders WHERE order_number = ?', paid.orderNumber)?.status).toBe(

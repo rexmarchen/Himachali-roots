@@ -19,15 +19,15 @@ Run **one** Node instance against a given SQLite database. SQLite uses WAL and s
 
 ### Vercel is not an API host in this repository
 
-`vercel.json` rewrites every path to `/index.html`. There is no serverless function, no Express handler and no proxy to the API. A Vercel deployment is therefore a static SPA preview only:
+`vercel.json` rewrites every path to `/index.html`. There is no serverless function, no Express handler and no proxy to the API. A Vercel deployment is therefore a static SPA shell only:
 
-- public catalogue pages can use the checked-in static JSON fallback;
+- there is no static catalogue fallback — the client calls `/api/*` and surfaces the failure honestly;
 - registration, login, Google sign-in, carts, checkout, seller and admin screens cannot work;
 - browser calls to `/api/*` return 404 (or the SPA HTML, depending on rewrites) and fail rather than creating a fake local session.
 
-**Current status (26 October 2026):** `https://www.dearhills.in` points at a static Vercel deployment. `/api/config`, `/api/health/live` and `/api/health/ready` all return 404, and the deployed JavaScript bundle is older than this branch. Treat it as a preview, not the shop.
+**Current status (27 October 2026):** `https://www.dearhills.in` is served by the Express 5 + SQLite process behind Caddy (response header `Server: Caddy`). `/api/health`, `/api/health/ready`, `/api/config`, `/api/products` and `/api/auth/me` return real API JSON. `/api/config` reports `payments.configured: false` and `devPaymentsEnabled: false`; the production catalogue currently contains 0 products and 3 categories. Do not treat the hosted instance as a trading shop until catalogue and operational checks are complete.
 
-To run the real application, deploy the Express process and SQLite volume as described above, or build a separate API host and follow the split-origin configuration. Do not advertise a Vercel-only deployment as a working shop.
+A Vercel-only deployment is a preview and not a working shop. Production must run the Node process and SQLite volume as described above, or use the Docker/Caddy or Railway paths.
 
 ### Docker option
 
@@ -88,13 +88,21 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
    RAZORPAY_KEY_SECRET=
    RAZORPAY_WEBHOOK_SECRET=
 
+   RESEND_API_KEY=
+   EMAIL_TIMEOUT_MS=10000
+   EMAIL_MAX_ATTEMPTS=3
+   EMAIL_FROM=PAHADI ROOTS <no-reply@dearhills.in>
+   SUPPORT_EMAIL=support@dearhills.in
+   ADMIN_NOTIFICATION_EMAIL=support@dearhills.in
+
+   # Optional SMTP fallback; Resend wins when both are set.
    SMTP_HOST=
    SMTP_PORT=587
    SMTP_USER=
    SMTP_PASS=
-   EMAIL_FROM=PAHADI ROOTS <no-reply@dearhills.in>
-   SUPPORT_EMAIL=support@dearhills.in
    ```
+
+   `EMAIL_FROM` must be on a verified Resend sending domain (SPF, DKIM and DMARC configured). Create a **fresh** Resend key for the host; never reuse a key that has appeared in chat or source control. The server refuses to start on critical production misconfiguration and warns when email is unconfigured or still uses `.example` addresses.
 
    Use real values before accepting orders. `APP_URL` **must** be the HTTPS origin; it controls secure cookies and links. `dearhills.in` must be a mailbox you actually monitor; otherwise set `SUPPORT_EMAIL` to the real support inbox.
 
@@ -126,7 +134,7 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
    }
    ```
 
-   `/api/health` and `/api/health/ready` are readiness checks and return `503` when the database is unreachable or the schema is older than version 6. `/api/health/live` checks only that the process is alive. Readiness intentionally does not disclose payment or email configuration; confirm those from startup warnings or the admin console.
+   `/api/health` and `/api/health/ready` are readiness checks and return `503` when the database is unreachable or the schema is not current (migration 8). `/api/health/live` checks only that the process is alive. Readiness intentionally does not disclose payment or email configuration; confirm those from startup warnings or the admin console.
 
 5. Configure the reverse proxy and systemd (below).
 
@@ -267,39 +275,44 @@ The production CSP already allows `https://accounts.google.com` for scripts, fra
 
 The canonical origin is **`https://www.dearhills.in`**. The apex `dearhills.in` should redirect permanently to the `www` host so cookies, canonical links and OAuth origins stay on one origin.
 
-At the time of writing, `www.dearhills.in` resolves to Vercel and serves a **static** build; `/api/*` returns 404. Before the Express host can take over:
+As of 27 October 2026, `www.dearhills.in` is already served by the Express process behind Caddy and `/api/*` returns real JSON. Keep the Vercel project from claiming the custom domain; if it still does, remove it to avoid DNS/TLS conflicts.
+
+For a new host or a move:
 
 1. Deploy this repository to the Node host and start it behind Caddy/Nginx.
-2. Remove `dearhills.in` / `www.dearhills.in` from the Vercel project (or delete that project's custom domain) to avoid DNS and TLS conflicts.
-3. At the DNS provider, replace the existing records with:
-   - `www` → `A` (or `AAAA`) record pointing at the Express host, or a `CNAME` if the provider supports it;
-   - apex `dearhills.in` → `A`/`AAAA` at the same host, with the proxy redirecting to `https://www.dearhills.in`.
-4. Wait for DNS propagation, then confirm `https://www.dearhills.in/api/health/ready` returns `200` with `"ready": true`.
+2. Remove `dearhills.in` / `www.dearhills.in` from any static host project.
+3. At the DNS provider, point:
+   - `www` at the Express host (`A`/`AAAA`, or `CNAME` where supported);
+   - apex `dearhills.in` at the same host, with the proxy redirecting to `https://www.dearhills.in`.
+4. Wait for DNS propagation, then confirm `https://www.dearhills.in/api/health/ready` returns `200` with `"ready": true` and `"schema": "current"`.
 5. Add `https://www.dearhills.in` to the Google OAuth authorised JavaScript origins.
 6. Set `APP_URL=https://www.dearhills.in` and `TRUST_PROXY=1`.
 
 Terminate TLS at Caddy/Nginx and redirect HTTP to HTTPS. `APP_URL` must exactly match the HTTPS origin used by the browser; a mismatch causes cookie and Origin/CSRF failures. If the SPA and API are split across hosts, follow the split-origin section in [Environment](ENVIRONMENT.md#split-spa-and-api) instead of guessing at CORS settings.
 
-## Razorpay go-live
+## Payment gateway — out of scope for this build
 
-1. Complete Razorpay merchant onboarding and obtain production keys.
-2. Put `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET` in the production environment. Do not put the secret in the browser bundle or repository.
-3. In the Razorpay dashboard, create a webhook to `https://www.dearhills.in/api/webhooks/razorpay` and subscribe to `payment.captured`, `order.paid`, `payment.failed`, `refund.processed` and `refund.created`.
-4. Run a small live transaction end to end, including a refund. Verify:
-   - the order becomes `paid` once, not twice;
-   - the webhook event is stored in `payment_events`;
-   - the seller order moves to `pending`;
-   - a refund produces a provider reference and ledger reversal;
-   - failure and amount-mismatch paths are visible to an administrator.
-5. Keep `ALLOW_DEV_PAYMENTS=false`. Production startup refuses if it is true.
+Payment-gateway integration is explicitly **out of scope** for this production-readiness pass. No Cashfree, PhonePe, Stripe or new Razorpay features were added. The repository contains a pre-existing, configuration-gated Razorpay adapter (Orders, Checkout signature verification, webhook HMAC verification, Refunds API). It is not configured in production (`payments.configured: false`) and has not been exercised against Razorpay's live service.
 
-The code uses Razorpay Orders, Checkout signature verification, webhook HMAC verification and the Refunds API. These paths are covered by local HMAC tests but have not been exercised against Razorpay's live service in this build.
+The safe operating posture is:
+
+1. Keep `ALLOW_DEV_PAYMENTS` and `SIMULATED_CHECKOUT_ENABLED` false. Production startup refuses if either is enabled.
+2. Without a configured provider, checkout creates `pending_payment` orders and never marks them paid.
+3. Do not advertise online payment, instant refunds or automatic settlement.
+4. Treat the Razorpay section in [Remaining blockers](REMAINING_BLOCKERS.md) as a prerequisite for a future, separately scoped integration. If keys are ever added, run a small live transaction and refund end to end before accepting orders, and verify the order becomes paid once, the event lands in `payment_events`, the seller order moves to `pending`, and amount-mismatch paths are visible to an administrator.
+
+Manual refunds record a request, an approval, and a separate completed action with a verified bank/UPI reference. No money moves through this application.
 
 ## Email go-live
 
-Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` and `SUPPORT_EMAIL`. Use a dedicated transactional sending identity and configure SPF, DKIM and DMARC. Test registration verification, password reset, order confirmation, dispatch, refund and seller decision emails.
+1. Create a **fresh** Resend API key for this deployment. Do not reuse a key that has been pasted into chat, docs or source control.
+2. Verify the sending domain in Resend and publish SPF, DKIM and DMARC records.
+3. Set `RESEND_API_KEY`, `EMAIL_FROM` (on the verified domain), `SUPPORT_EMAIL` and `ADMIN_NOTIFICATION_EMAIL`. Keep `EMAIL_TIMEOUT_MS=10000` and `EMAIL_MAX_ATTEMPTS=3` unless there is a reason to change them.
+4. Send a real test to a monitored inbox for: registration verification, password reset, order confirmation, seller decision, cancellation, return and refund approval.
+5. Check `/admin` integration status and `notifications` rows: `sent` with a provider message id, `failed` with a sanitised error, or `skipped` when unconfigured.
+6. Run `retryFailedNotifications` manually if a transient provider outage left failed rows; there is no background retry worker.
 
-Without SMTP, notifications are recorded with `skipped`. They are not retried automatically.
+SMTP remains a fallback when `RESEND_API_KEY` is empty. Without either provider, notifications are recorded with `skipped` and nothing is sent. Delivery, bounces and complaints are not automatically reconciled.
 
 ## Shipping operations
 
@@ -341,6 +354,55 @@ A product may belong to only one live or scheduled campaign. Scheduled campaigns
 To end an offer, set it to `archived` (or let the end date pass). The promo price disappears from the catalogue immediately and open carts are repriced on their next read. If a product's base price is later edited below its promotional price, or the campaign cap is reduced below a configured saving, the view stops applying that invalid promotion rather than selling at a misleading discount. Check the campaign's admin product list after bulk price changes.
 
 Every create, edit, status change, pricing change and deletion is written to `audit_logs` with the acting administrator.
+
+## Staging
+
+**Status on 27 October 2026:** no staging environment exists. There is no staging hostname, server, database, storage bucket, credential set or deployment target in this repository, the Caddy configuration, Compose, Railway or Vercel configuration. Do not invent a hostname, reuse `www.dearhills.in`, point staging DNS at the production host, or copy production user data into a new environment without explicit authorization and a sanitisation step.
+
+A staging deployment is a **separate single-node installation** of the same artifact. It must not share any of the following with production:
+
+| Resource | Staging requirement |
+| --- | --- |
+| Hostname / TLS | A hostname allocated by the operator (placeholder: `<staging-host>`); never the production apex or `www` |
+| Application process | Its own Node process/container and port; never the production service |
+| SQLite database | Its own `DATABASE_PATH`; never the production file, its WAL/SHM files or a live network mount |
+| Public uploads | Its own `UPLOAD_DIR` |
+| Private seller documents | Its own `PRIVATE_DOCS_DIR` |
+| Backups | Its own `BACKUP_DIR`/volume, tested with `npm run db:verify` |
+| Credentials | Staging-only values; no production Razorpay, Resend, SMTP, Google or admin credentials |
+| Data | Demonstration or synthetic data only; production data only with authorization and sanitisation |
+
+Minimum environment for a staging process:
+
+```dotenv
+NODE_ENV=production
+APP_URL=https://<staging-host>
+ALLOWED_ORIGINS=https://<staging-host>
+TRUST_PROXY=1
+DATABASE_PATH=/srv/staging/data/pahadi-roots.db
+UPLOAD_DIR=/srv/staging/storage/uploads
+PRIVATE_DOCS_DIR=/srv/staging/storage/private/seller-docs
+ALLOW_DEV_PAYMENTS=false
+SIMULATED_CHECKOUT_ENABLED=false
+ALLOW_DEV_AUTH_HELPERS=false
+SEED_ON_START=false
+```
+
+Payments stay unconfigured on staging unless a separate test merchant account is authorized. Email must use a staging sender and an explicitly authorized test recipient, or remain unconfigured and record notifications as `skipped`. Google sign-in stays disabled until a staging OAuth client with the staging origin is available.
+
+Deployment and verification sequence once a host is authorized:
+
+1. Record the intended release commit and confirm the working tree is clean.
+2. Build the release (`npm ci && npm run check`), then deploy that commit to the staging release directory.
+3. Create an empty staging database; do not copy production. Take a baseline backup.
+4. Start the process once so the additive migrations run. Confirm `schema_migrations` reaches the expected version, `PRAGMA integrity_check` is `ok` and `PRAGMA foreign_key_check` is empty.
+5. Provision a staging-only administrator with `npm run admin:create -- <email> "<name>"` and a password supplied through the host's secret mechanism.
+6. Verify `/`, a deep SPA route, `/api/health`, `/api/health/ready` and `/api/config`. `config` must report `payments.configured: false`, `devPaymentsEnabled: false`, `devAuthHelpers: false`, no Google client ID unless deliberately configured, and no secret values.
+7. Run `npm run smoke` against the staging URL with staging admin credentials. Run the partial-return/manual-refund flow against disposable staging accounts. Use only an authorized test email recipient.
+8. Restart the service and verify login, order history and uploaded files survive. Check logs for secrets.
+9. Record the deployed commit, hostname, command results and any blocked integrations.
+
+Until a host and credentials are supplied, external staging deployment is blocked. Production deployment remains prohibited and payments remain out of scope.
 
 ## Release procedure
 
@@ -403,6 +465,24 @@ Before deploying:
 4. Start the new build, then check `/api/health/ready`.
 
 Rollback is restoring the version 5 backup; an older binary must not be pointed at the version 6 database.
+
+### Order-integrity migration (schema version 8)
+
+Version 7 added account-recovery OTPs and single-use reset authorisations. Version 8 is additive:
+
+- `order_events` stores the customer-visible order timeline; `return_request_items` stores per-item partial-return quantities and amounts;
+- `refunds.return_request_id`, `refunds.dedupe_key` and a unique partial index make refund requests idempotent;
+- `notifications.provider_message_id` records the Resend/SMTP provider reference;
+- existing `return_requests.requested_amount_paise` rows are backfilled from their order items.
+
+Before deploying:
+
+1. Back up with `npm run db:backup` while the service is stopped, or copy the database and its `-wal`/`-shm` sidecars.
+2. Open the copy with the new build and run `npm run db:verify -- <backup.db>`. Confirm `schema_migrations` ends at `8`, `integrity_check` is `ok`, and there are no foreign-key violations.
+3. Confirm row counts for users, orders, refunds and notifications are unchanged.
+4. Start the new build and check `/api/health/ready` returns `200` with `"schema": "current"`.
+
+There are no down migrations. Restoring the pre-upgrade backup is the rollback path; do not point an older binary at a version 8 database.
 
 ## Backup
 
