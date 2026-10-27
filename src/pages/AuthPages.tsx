@@ -185,13 +185,14 @@ export function LoginPage() {
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const next = params.get('next') || '/account';
+  const rawNext = params.get('next');
+  const next = rawNext && rawNext.startsWith('/') && rawNext !== '/account' ? rawNext : '/';
 
   const completeSignIn = async (message = 'Signed in.') => {
     await queryClient.invalidateQueries({ queryKey: ['session'] });
     await queryClient.invalidateQueries({ queryKey: ['cart'] });
     toast.push(message);
-    navigate(next.startsWith('/') ? next : '/account', { replace: true });
+    navigate(next, { replace: true });
   };
 
   const submit = async (event: FormEvent) => {
@@ -218,7 +219,7 @@ export function LoginPage() {
       footer={
         <p>
           New here?{' '}
-          <Link to={`/register${next !== '/account' ? `?next=${encodeURIComponent(next)}` : ''}`} className="link-underline text-forest">
+          <Link to={`/register${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`} className="link-underline text-forest">
             Create an account
           </Link>
         </p>
@@ -292,13 +293,14 @@ export function RegisterPage() {
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const next = params.get('next') || '/account';
+  const rawNext = params.get('next');
+  const next = rawNext && rawNext.startsWith('/') && rawNext !== '/account' ? rawNext : '/';
 
   const completeRegistration = async (message: string) => {
     await queryClient.invalidateQueries({ queryKey: ['session'] });
     await queryClient.invalidateQueries({ queryKey: ['cart'] });
     toast.push(message);
-    navigate(next.startsWith('/') ? next : '/account', { replace: true });
+    navigate(next, { replace: true });
   };
 
   const submit = async (event: FormEvent) => {
@@ -354,8 +356,8 @@ export function RegisterPage() {
         >
           {devVerifyUrl}
         </a>
-        <Button className="mt-5 w-full" onClick={() => navigate(next.startsWith('/') ? next : '/account')}>
-          Continue to your account
+        <Button className="mt-5 w-full" onClick={() => navigate(next)}>
+          {next === '/' ? 'Continue to homepage' : 'Continue'}
         </Button>
       </AuthShell>
     );
@@ -371,7 +373,7 @@ export function RegisterPage() {
       footer={
         <p>
           Already have an account?{' '}
-          <Link to={`/login${next !== '/account' ? `?next=${encodeURIComponent(next)}` : ''}`} className="link-underline text-forest">
+          <Link to={`/login${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`} className="link-underline text-forest">
             Sign in
           </Link>
         </p>
