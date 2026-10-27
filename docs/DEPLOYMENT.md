@@ -29,6 +29,10 @@ Run **one** Node instance against a given SQLite database. SQLite uses WAL and s
 
 To run the real application, deploy the Express process and SQLite volume as described above, or build a separate API host and follow the split-origin configuration. Do not advertise a Vercel-only deployment as a working shop.
 
+### Docker option
+
+`Dockerfile`, `compose.yaml`, `deploy/Caddyfile` and `deploy/README.md` package the same single-node topology as a container image. The image was built and smoke-tested locally: it serves the SPA and API on one origin, runs as an unprivileged user, reports readiness with the current schema, and keeps the database, uploads and backups on named volumes. Use this path when the host has Docker and you want Caddy to terminate TLS and permanently redirect the apex to `https://www.dearhills.in`. See [`deploy/README.md`](../deploy/README.md) for first deployment, backup, update and rollback commands.
+
 ## Prerequisites
 
 - Linux server (Ubuntu 24.04 LTS or similar) with a non-root service user
@@ -55,7 +59,7 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
    npm run check          # typecheck, lint, full test suite, production build
    ```
 
-   Tests are optional on a production host but the build is not. `npm run build` produces `dist/` and `dist-server/`.
+   Tests are optional on a production host but the build is not. `npm run build` produces `dist/` and `dist-server/`. It runs `scripts/build-web.mjs`, which forces `NODE_ENV=production` before Vite loads `.env`, so a developer's local `NODE_ENV=development` cannot leak React's development bundle into a release.
 
 2. Create `/opt/pahadi-roots/.env` from `.env.example` and set at minimum:
 

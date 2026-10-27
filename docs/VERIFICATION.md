@@ -1,7 +1,7 @@
 # Verification report
 
-Last verified: **26 October 2026**
-Environment: Windows, Node.js **24.21.0**, npm **11.19.0**, disposable SQLite databases (`data/pahadi-roots.db` for the dev server; temporary databases for tests, smoke and E2E).
+Last verified: **27 October 2026**
+Environment: Windows, Node.js **24.21.0**, npm **11.19.0**, Docker **29.6.1**, disposable SQLite databases (`data/pahadi-roots.db` for the dev server; temporary databases for tests, smoke and E2E).
 
 This report records what was actually executed. It separates automated coverage from manual checks and from integrations that could not be exercised without external accounts. Nothing below claims a live payment, email, courier or payout success.
 
@@ -12,8 +12,8 @@ This report records what was actually executed. It separates automated coverage 
 | `npm run typecheck` | Passed — client, server and test TypeScript projects |
 | `npm run lint` | Passed — 0 errors, 0 warnings |
 | `npm test` | Passed — **131 of 131** tests across **16** files |
-| `npm run build` | Passed — SPA in `dist/`, server in `dist-server/`, schema copied; Vite reports a >500 kB chunk warning |
-| `npm audit` | Passed — **0 vulnerabilities** after upgrading `nodemailer` to 10.2.1 and `vitest` to 5.0.5 |
+| `npm run build` | Passed — production SPA in `dist/`, server in `dist-server/`, schema copied; no source maps and no oversized-chunk warning |
+| `npm audit` | Passed — **0 vulnerabilities** after upgrading `nodemailer` to 10.2.1 and `vitest` to 5.0.5. A repeat audit on 27 October could not reach the npm registry (`ECONNRESET`); the lockfile did not change after the passing run |
 | `npm run smoke` | Passed — **28 of 28** non-admin live HTTP checks against the development API; admin checks were skipped without credentials (the full run with an administrator is 33 checks) |
 | `node scripts/e2e-seller-flow.mjs` | Passed — **53 of 53** live HTTP checks of the full seller lifecycle against the same disposable API |
 | `GET /api/health/ready` | `200` — `{"status":"ok","ready":true,"database":"up","schema":"current",…}` |
@@ -172,21 +172,42 @@ The script lives in `scripts/e2e-seller-flow.mjs` and requires `E2E_ADMIN_EMAIL`
 
 ## Build output
 
+`npm run build:web` now runs `scripts/build-web.mjs`, which sets `NODE_ENV=production` before Vite resolves its configuration. This prevents a developer's local `.env` (`NODE_ENV=development`, used by the API) from making a production build contain React's development bundle.
+
 | Asset | Size |
 | --- | ---: |
-| `index-*.js` (router/bootstrap) | 548.44 kB |
-| `AdminPages-*.js` | 465.27 kB |
-| `SellerPages-*.js` | 280.90 kB |
-| `PublicPages-*.js` | 198.42 kB |
-| `CheckoutPage-*.js` | 124.90 kB |
-| `AccountPages-*.js` | 93.05 kB |
-| `HomePage-*.js` | 74.89 kB |
-| `ProductPage-*.js` | 71.32 kB |
-| `vendor-react-*.js` | 70.00 kB |
-| `vendor-query-*.js` | 42.69 kB |
-| `index-*.css` | 124.90 kB |
+| `index-*.js` (router/bootstrap) | 282.72 kB |
+| `AdminPages-*.js` | 201.23 kB |
+| `SellerPages-*.js` | 123.89 kB |
+| `PublicPages-*.js` | 100.66 kB |
+| `CheckoutPage-*.js` | 60.95 kB |
+| `AccountPages-*.js` | 38.92 kB |
+| `HomePage-*.js` | 36.37 kB |
+| `ProductPage-*.js` | 31.02 kB |
+| `vendor-react-*.js` | 51.08 kB |
+| `vendor-query-*.js` | 35.77 kB |
+| `index-*.css` | 125.14 kB |
 
-The SPA uses route-level lazy loading; storefront, account, seller and admin areas load as separate chunks. Vite warns that the bootstrap chunk exceeds 500 kB; this is a size warning, not a build failure.
+The SPA uses route-level lazy loading; storefront, account, seller and admin areas load as separate chunks. The build finishes without the previous >500 kB chunk warning, and `dist/` contains no source maps.
+
+## Container deployment check
+
+The production image was built from the repository and exercised locally on 26 October 2026. This validates the deployment path, not a live hosted environment.
+
+| Check | Result |
+| --- | --- |
+| `docker compose build` | Passed — image `pahadi-roots:latest`, **124,201,271 bytes** |
+| Runtime user | uid **999** (`pahadi`), unprivileged |
+| Mode | `NODE_ENV=production`; `/api/config` reported `devMode:false`, `devAuthHelpers:false`, `googleEnabled:true` |
+| Readiness | `GET /api/health/ready` → `200`, `"ready":true`, `"schema":"current"` |
+| SPA | `/` and `/login` → `200`; `/api/auth/me` → `{"user":null}` without a session |
+| Administrator provisioning | `create-admin` succeeded; password login returned `200` and `HttpOnly; Secure; SameSite=Lax` session cookies |
+| Writable volumes | Database, uploads, private documents and backups writable by uid 999 |
+| Bundle hygiene | **0** source maps; no hardcoded administrator credentials or fake localStorage session keys in `dist/` |
+| Container backup | **712,704 bytes**, `integrity: ok`, 0 foreign-key violations, migrations `[1,2,3,4,5,6]` |
+| Cleanup | Test container, named volumes and temporary production env file removed |
+
+The image deliberately reports Razorpay and SMTP as unconfigured until real credentials are supplied. No live payment, email or Google browser sign-in was performed.
 
 ## Defects found and fixed during verification
 
@@ -206,6 +227,7 @@ The SPA uses route-level lazy loading; storefront, account, seller and admin are
 14. **Private seller documents ignored storage configuration.** `privateDocsDir` was hardcoded relative to the working directory, so automated tests wrote identity documents into the application's real private storage and deployments could not relocate the private volume independently. It now reads `PRIVATE_DOCS_DIR`, and Vitest points both public and private upload paths at a temporary directory.
 15. **Stale static catalogue JSON was still shipped publicly.** The seed wrote `static-products.json`, `static-product-details.json`, `static-categories.json` and several other `static-*.json` snapshots into `public/`, even though nothing read them after the fallback client was removed. They contained demo records and stale prices and were copied into every build. The export was removed from the seed and the files were deleted; the production bundle no longer contains them.
 16. **Authentication could be bypassed in the browser and lacked Google support.** Hardcoded admin credentials and localStorage identities were removed; the server now owns the session. Google Identity Services sign-in verifies signed ID tokens server-side, keys accounts on the Google `sub`, refuses invalid/expired/wrong-audience tokens, never auto-merges by email, issues a hashed single-use linking challenge, rotates sessions on sign-in, enforces idle and absolute expiry, refuses disabled accounts, and clears the session server-side on logout. Google-only accounts can set a password before unlinking. Covered by `server/test/google-auth.test.ts`.
+17. **Production builds could silently contain React's development bundle.** Vite reads `NODE_ENV` from `.env`; the local API `.env` sets `NODE_ENV=development`, so `npm run build` produced a 548 kB bootstrap chunk instead of the 282 kB production chunk. `scripts/build-web.mjs` now forces `NODE_ENV=production` in the parent process before Vite loads its config. The Docker build uses the same script. Verified by comparing bundle sizes, checking for development markers, and confirming no chunk-size warning.
 
 ## What this verification proves
 

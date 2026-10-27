@@ -58,6 +58,7 @@ Nothing below should be assumed complete merely because the software supports it
 ## D. Technical release
 
 - [ ] `npm run check` passes on the exact release commit.
+- [ ] `npm run build` uses `scripts/build-web.mjs`; the bundle is the production build (no React development markers) and `dist/` contains no source maps.
 - [ ] Production build starts with `NODE_ENV=production` and no development helper flags.
 - [ ] `APP_URL` is `https://www.dearhills.in` and `TRUST_PROXY=1` is set behind the reverse proxy.
 - [ ] DNS points `www.dearhills.in` at the Express host (not Vercel), the apex redirects to `https://www.dearhills.in`, and the old static Vercel domain has been detached.

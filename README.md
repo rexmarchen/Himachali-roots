@@ -163,7 +163,7 @@ Last verified on 26 October 2026 with Node 24.21.0:
 - `npm run typecheck` — passed
 - `npm run lint` — passed
 - `npm test` — 131 of 131 tests passed across 16 files, including Google sign-in/linking, session hardening, campaign, seller onboarding, admin products, checkout, refunds and legacy-migration suites
-- `npm run build` — passed; SPA and `dist-server/server/index.js` generated (Vite reports a >500 kB chunk warning)
+- `npm run build` - passed; production-sized SPA and `dist-server/server/index.js` generated, with no chunk-size warning and no source maps; `scripts/build-web.mjs` pins `NODE_ENV=production` so a local `.env` cannot ship React's development bundle
 - `npm run smoke` — 28 of 28 non-admin live HTTP checks passed against a running development API (33 checks when `SMOKE_ADMIN_EMAIL` and `SMOKE_ADMIN_PASSWORD` are supplied), including storefront, registration, checkout with the labelled development payment simulation, seller confirm → pack → ship → deliver, and the admin settlement hold guard
 - Seller lifecycle E2E — 53 of 53 live HTTP checks passed against a disposable API and database
 - `npm audit` — 0 vulnerabilities after upgrading `nodemailer` and `vitest`

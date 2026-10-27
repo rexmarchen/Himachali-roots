@@ -2,7 +2,7 @@
 
 This document separates what has been built and verified from what still requires external approvals, credentials, legal work or further engineering. It is intentionally conservative: a feature is not "done" because code exists, and an integration is not "configured" because environment variables have names.
 
-Last reviewed: 26 October 2026.
+Last reviewed: 27 October 2026.
 
 ## Verified in this build
 
@@ -22,6 +22,8 @@ Last reviewed: 26 October 2026.
 - Seller documents are private and protected by magic-byte checks, ownership authorization and `no-store` responses.
 - Manual settlements accept only an explicit bank/UPI reference before marked paid.
 - `npm run check` passes: typecheck, lint, the full test suite and production build.
+- `npm run build` produces the production SPA (282.72 kB bootstrap chunk, no source maps, no chunk-size warning). `scripts/build-web.mjs` forces `NODE_ENV=production` before Vite reads a local `.env`, so a developer setting cannot ship React's development bundle.
+- The Docker image builds and runs as an unprivileged user, serves the SPA and API on one origin, passes readiness with schema 6, accepts administrator login and produces a verified SQLite backup. This validates the deployment artifact locally, not the live host.
 - `npm run smoke` passes 28/28 non-admin live HTTP checks against a running development API (33 with admin credentials).
 - A seller-lifecycle E2E run passed 53/53 checks against a disposable API and database.
 - The legacy-migration test upgrades a pre-onboarding (v1–v2) database to version 6 with rows preserved; `integrity_check` and foreign-key checks are clean in the test database.

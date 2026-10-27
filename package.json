@@ -12,7 +12,7 @@
     "dev:api": "tsx watch server/index.ts",
     "dev:web": "vite",
     "build": "npm run build:web && npm run build:server",
-    "build:web": "vite build",
+    "build:web": "node scripts/build-web.mjs",
     "build:server": "tsc -p tsconfig.server.json && node scripts/copy-server-assets.mjs",
     "start": "node dist-server/server/index.js",
     "seed": "tsx server/seed.ts",
