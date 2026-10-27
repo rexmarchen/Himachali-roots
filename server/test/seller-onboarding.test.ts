@@ -179,6 +179,18 @@ describe('seller onboarding application', () => {
     expect(view.body.application.data.fullName).toBe('Shrayas');
   });
 
+  it('rejects malformed draft values as a client error instead of an opaque 500', async () => {
+    const applicant = await login(app, 'customer@test.local');
+    const saved = await saveDraft(
+      applicant,
+      { categorySlugs: [42], sellerType: 'not-a-maker-type' } as unknown as Record<string, unknown>,
+      2,
+    );
+    expect(saved.status).toBe(400);
+    expect(saved.body.error.code).toBe('invalid_request');
+    expect(saved.body.error.fields).toBeDefined();
+  });
+
   it('offers the full maker structure list, including artisan, farmer and home business', async () => {
     const applicant = await login(app, 'customer@test.local');
     const config = await applicant.get('/api/seller/config');

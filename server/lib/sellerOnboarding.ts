@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 import { execute, queryAll, queryOne, tx, type Db } from '../db.js';
 import type { SessionUser } from '../../shared/types.js';
 import { audit } from './audit.js';
@@ -425,13 +425,31 @@ export const draftDataSchema = z.object({
  * wizard contract, and rejects oversized payloads before they reach SQLite.
  */
 export function normaliseDraft(input: unknown): { currentStep: number; data: Partial<WizardData> } {
-  const parsed = draftInputSchema.parse(input);
-  const serialised = JSON.stringify(parsed.data);
-  if (serialised.length > 64_000) {
-    throw badRequest('This draft is too large to save. Remove long text or attachments.', { data: 'Draft too large.' });
+  try {
+    const parsed = draftInputSchema.parse(input);
+    const serialised = JSON.stringify(parsed.data);
+    if (serialised.length > 64_000) {
+      throw badRequest('This draft is too large to save. Remove long text or attachments.', {
+        data: 'Draft too large.',
+      });
+    }
+    const data = draftDataSchema.parse(parsed.data ?? {});
+    return { currentStep: parsed.currentStep ?? 1, data: data as Partial<WizardData> };
+  } catch (error) {
+    // A draft that is merely incomplete is normal; a draft carrying malformed
+    // values is a client error. Without this, the raw ZodError escapes to the
+    // error middleware and the maker only sees an opaque 500 "something went
+    // wrong" while their autosave silently keeps failing.
+    if (error instanceof ZodError) {
+      const fields: Record<string, string> = {};
+      for (const issue of error.issues) {
+        const key = issue.path.join('.') || 'form';
+        if (!fields[key]) fields[key] = issue.message;
+      }
+      throw badRequest('Some draft fields could not be saved. Check the highlighted fields.', fields);
+    }
+    throw error;
   }
-  const data = draftDataSchema.parse(parsed.data ?? {});
-  return { currentStep: parsed.currentStep ?? 1, data: data as Partial<WizardData> };
 }
 
 export function listDocuments(db: Db, sellerId: string): Array<{
