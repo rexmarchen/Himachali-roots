@@ -673,8 +673,9 @@ function validateStep(
     if (!form.agreements.commissionDisclosure) {
       errors['agreements.commissionDisclosure'] = 'Accept the commission disclosure.';
     }
-    if (!form.agreements.authenticityPolicy) errors['agreements.authenticityPolicy'] = 'Accept the authenticity policy.';
-    if (!form.agreements.privacyPolicy) errors['agreements.privacyPolicy'] = 'Accept the privacy notice.';
+    if (!form.agreements.authenticityPolicy || !form.agreements.privacyPolicy) {
+      errors['agreements.authenticityPolicy'] = 'Accept the authenticity and privacy terms.';
+    }
   }
   return errors;
 }
@@ -1914,77 +1915,181 @@ export function BecomeAMakerPage() {
     </div>
   );
 
-  const renderAgreementsStep = () => (
-    <div className="space-y-5">
-      <div className="border border-line bg-warm-paper p-5">
-        <p className="text-[11px] uppercase tracking-[0.14em] text-harvest">Commission disclosure</p>
-        <p className="font-display mt-2 text-3xl text-orchard">{percentFromBp(commissionBp)}</p>
-        <p className="mt-1 text-sm leading-relaxed text-bark">
-          The default marketplace commission on the item subtotal. Shipping and taxes are accounted for separately.
-        </p>
-        <p className="mt-3 text-xs leading-relaxed text-muted">
-          {config.data?.commission.note ??
-            siteConfig?.commissionBasisNote ??
-            'Commission is calculated on the server at the time of sale and shown in your earnings ledger. Final terms are confirmed during review.'}
+  const renderAgreementsStep = () => {
+    const commissionNote =
+      config.data?.commission.note ??
+      siteConfig?.commissionBasisNote ??
+      'Commission is calculated at the time of sale and shown in your earnings ledger. Final terms are confirmed during review.';
+    const confirmations = [
+      {
+        key: 'sellerAgreement',
+        index: '01',
+        title: 'Marketplace seller terms',
+        detail: 'Listing standards, dispatch expectations, returns and the operating terms for selling on PAHADI ROOTS.',
+        links: [{ label: 'Seller agreement', to: '/policies/seller-terms' }],
+        checked: form.agreements.sellerAgreement,
+        error: errors['agreements.sellerAgreement'],
+      },
+      {
+        key: 'commissionDisclosure',
+        index: '02',
+        title: 'Commission terms',
+        detail: `${percentFromBp(commissionBp)} of the item subtotal after discounts. Shipping and taxes are excluded, and refunds reverse commission proportionally.`,
+        links: [{ label: 'How commission works', to: '/policies/seller-terms' }],
+        checked: form.agreements.commissionDisclosure,
+        error: errors['agreements.commissionDisclosure'],
+      },
+      {
+        key: 'authenticityPolicy',
+        index: '03',
+        title: 'Authenticity & privacy',
+        detail:
+          'Provenance claims must be supportable, and your account, identity and payout data are handled under our privacy notice.',
+        links: [
+          { label: 'Authenticity policy', to: '/policies/authenticity' },
+          { label: 'Privacy notice', to: '/policies/privacy' },
+        ],
+        checked: form.agreements.authenticityPolicy && form.agreements.privacyPolicy,
+        error: errors['agreements.authenticityPolicy'] ?? errors['agreements.privacyPolicy'],
+      },
+    ];
+    const accepted = confirmations.filter((item) => item.checked).length;
+
+    return (
+      <div className="space-y-5">
+        <div className="border-b border-line pb-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-harvest">Sign-off</p>
+              <p className="mt-1 text-sm text-bark" aria-live="polite">
+                {accepted} of {confirmations.length} confirmations accepted
+              </p>
+            </div>
+            {accepted < confirmations.length ? (
+              <button
+                type="button"
+                className="text-xs font-medium text-forest underline underline-offset-2 transition-colors hover:text-orchard"
+                onClick={() =>
+                  patchAgreements({
+                    sellerAgreement: true,
+                    commissionDisclosure: true,
+                    authenticityPolicy: true,
+                    privacyPolicy: true,
+                  })
+                }
+              >
+                Accept all three
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-forest">
+                <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5" fill="none">
+                  <path d="m3 8.5 3 3 7-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                All accepted
+              </span>
+            )}
+          </div>
+          <div
+            className="mt-3 h-1 w-full overflow-hidden bg-line"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={confirmations.length}
+            aria-valuenow={accepted}
+            aria-label="Agreements accepted"
+          >
+            <div
+              className="h-full bg-forest transition-[width] duration-300"
+              style={{ width: `${(accepted / confirmations.length) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        <ol className="space-y-3">
+          {confirmations.map((item) => (
+            <li key={item.key}>
+              <div
+                className={`border px-4 py-4 transition-colors sm:px-5 ${
+                  item.checked
+                    ? 'border-forest/35 bg-forest/[0.045]'
+                    : 'border-line bg-warm-paper hover:border-orchard/30'
+                }`}
+              >
+                <input
+                  id={`agreement-${item.key}`}
+                  type="checkbox"
+                  className="peer sr-only"
+                  checked={item.checked}
+                  aria-invalid={Boolean(item.error) || undefined}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    if (item.key === 'sellerAgreement') {
+                      patchAgreements({ sellerAgreement: checked });
+                    } else if (item.key === 'commissionDisclosure') {
+                      patchAgreements({ commissionDisclosure: checked });
+                    } else {
+                      patchAgreements({ authenticityPolicy: checked, privacyPolicy: checked });
+                    }
+                  }}
+                />
+                <label
+                  htmlFor={`agreement-${item.key}`}
+                  className="flex cursor-pointer items-start gap-3.5 rounded-sm peer-focus-visible:ring-2 peer-focus-visible:ring-terra/40"
+                >
+                  <span
+                    aria-hidden
+                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10.5px] font-semibold transition-colors ${
+                      item.checked
+                        ? 'border-forest bg-forest text-warm-paper'
+                        : 'border-sand bg-surface text-muted'
+                    }`}
+                  >
+                    {item.checked ? (
+                      <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
+                        <path
+                          d="m3 8.5 3 3 7-7"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : (
+                      item.index
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-display text-lg leading-snug text-orchard">{item.title}</span>
+                    <span className="mt-1 block text-[13px] leading-relaxed text-bark">{item.detail}</span>
+                  </span>
+                </label>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 pl-[2.375rem] text-[11px]">
+                  {item.links.map((link) => (
+                    <Link
+                      key={link.to}
+                      to={link.to}
+                      className="font-medium text-forest underline decoration-forest/30 underline-offset-2 transition-colors hover:text-orchard hover:decoration-orchard/40"
+                    >
+                      {link.label} →
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              {item.error ? (
+                <p className="mt-1.5 text-xs text-terra" role="alert">
+                  {item.error}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+
+        <p className="text-[11px] leading-relaxed text-muted">
+          Agreement version {AGREEMENT_VERSION} · Your acceptance, the version and a timestamp are stored with this
+          application in the review audit trail. {commissionNote}
         </p>
       </div>
-
-      {[
-        {
-          key: 'sellerAgreement' as const,
-          label: 'Seller agreement',
-          detail: 'The operating terms for selling on PAHADI ROOTS.',
-          to: '/policies/seller-terms',
-        },
-        {
-          key: 'commissionDisclosure' as const,
-          label: 'Commission disclosure',
-          detail: 'How commission is calculated, when it applies and how refunds reverse it.',
-          to: '/policies/seller-terms',
-        },
-        {
-          key: 'authenticityPolicy' as const,
-          label: 'Authenticity and origin policy',
-          detail: 'Provenance claims must be supportable; misleading claims can lead to removal.',
-          to: '/policies/authenticity',
-        },
-        {
-          key: 'privacyPolicy' as const,
-          label: 'Privacy notice',
-          detail: 'How account, identity and payout data are stored and used.',
-          to: '/policies/privacy',
-        },
-      ].map((item) => (
-        <div key={item.key}>
-          <label className="flex items-start gap-2.5 text-[13px] leading-relaxed text-bark">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 accent-[#572B36]"
-              checked={form.agreements[item.key]}
-              onChange={(event) => patchAgreements({ [item.key]: event.target.checked })}
-            />
-            <span>
-              I have read and accept the{' '}
-              <Link to={item.to} className="underline underline-offset-2 hover:text-orchard">
-                {item.label}
-              </Link>
-              . <span className="text-muted">{item.detail}</span>
-            </span>
-          </label>
-          {errors[`agreements.${item.key}`] ? (
-            <p className="mt-1.5 text-xs text-terra" role="alert">
-              {errors[`agreements.${item.key}`]}
-            </p>
-          ) : null}
-        </div>
-      ))}
-
-      <p className="text-xs leading-relaxed text-muted">
-        Agreement version: {AGREEMENT_VERSION}. The version you accepted is stored with the application and in the audit
-        trail.
-      </p>
-    </div>
-  );
+    );
+  };
 
   const reviewRows = (rows: [string, string][]) => (
     <dl className="mt-2 space-y-1.5">
@@ -2085,9 +2190,13 @@ export function BecomeAMakerPage() {
       title: 'Agreements',
       rows: [
         ['Seller agreement', form.agreements.sellerAgreement ? 'Accepted' : 'Not accepted'],
-        ['Commission disclosure', form.agreements.commissionDisclosure ? 'Accepted' : 'Not accepted'],
-        ['Authenticity policy', form.agreements.authenticityPolicy ? 'Accepted' : 'Not accepted'],
-        ['Privacy notice', form.agreements.privacyPolicy ? 'Accepted' : 'Not accepted'],
+        ['Commission terms', form.agreements.commissionDisclosure ? 'Accepted' : 'Not accepted'],
+        [
+          'Authenticity & privacy',
+          form.agreements.authenticityPolicy && form.agreements.privacyPolicy
+            ? 'Accepted'
+            : 'Not accepted',
+        ],
         ['Version', form.agreements.version],
       ],
     },
