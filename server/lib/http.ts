@@ -48,6 +48,20 @@ export function errorMiddleware(error: unknown, req: Request, res: Response, _ne
     });
     return;
   }
+  // Last line of defence: a route that forgets to use parse()/safeParse() must
+  // not turn a field-level validation failure into an opaque 500. Report the
+  // offending fields so the client can highlight them.
+  if (error instanceof ZodError) {
+    const fields: Record<string, string> = {};
+    for (const issue of error.issues) {
+      const key = issue.path.join('.') || 'form';
+      if (!fields[key]) fields[key] = issue.message;
+    }
+    res.status(400).json({
+      error: { code: 'invalid_request', message: 'Please check the highlighted fields.', fields },
+    });
+    return;
+  }
   // Multer size/type errors
   if (typeof error === 'object' && error && 'code' in error) {
     const code = String((error as { code: unknown }).code);
