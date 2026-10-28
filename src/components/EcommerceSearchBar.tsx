@@ -177,20 +177,20 @@ export function EcommerceSearchBar({ className = '', inputId = 'site-search' }: 
       <form
         onSubmit={handleSubmit}
         role="search"
-        className={`group flex h-11 w-full items-center rounded-full border transition-all duration-200 ${
+        className={`group flex h-11 lg:h-12 w-full items-center rounded-full border transition-all duration-200 ${
           isOpen
             ? 'border-terra bg-white shadow-lg ring-2 ring-terra/25'
             : 'border-line bg-[#F2ECE1] text-ink shadow-xs hover:bg-[#ECE4D7]'
         }`}
       >
-        <div className="relative hidden h-full shrink-0 items-center rounded-l-full border-r border-line bg-[#EAE2D5] pl-3 pr-2 sm:flex">
+        <div className="relative hidden h-full shrink-0 items-center rounded-l-full border-r border-line bg-[#EAE2D5] pl-3.5 pr-2.5 sm:flex">
           <select
             value={selectedCategory}
             onChange={(event) => {
               setSelectedCategory(event.target.value);
               setActiveIndex(-1);
             }}
-            className="max-w-[112px] cursor-pointer appearance-none truncate bg-transparent pr-4 text-[11px] font-medium text-forest outline-none"
+            className="max-w-[115px] sm:max-w-[130px] lg:max-w-[145px] cursor-pointer appearance-none truncate bg-transparent pr-4 text-[11px] sm:text-xs lg:text-[13px] font-medium text-forest outline-none"
             aria-label="Filter search by category"
           >
             {categoryOptions.map((category) => (
@@ -204,7 +204,7 @@ export function EcommerceSearchBar({ className = '', inputId = 'site-search' }: 
           </svg>
         </div>
 
-        <div className="relative flex h-full flex-1 items-center px-3">
+        <div className="relative flex h-full flex-1 items-center px-3 sm:px-3.5">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="mr-2 h-4 w-4 shrink-0 text-[#8C8275] sm:hidden" aria-hidden>
             <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="1.8" />
             <path d="M12.5 12.5 17 17" strokeWidth="1.8" strokeLinecap="round" />
@@ -231,7 +231,7 @@ export function EcommerceSearchBar({ className = '', inputId = 'site-search' }: 
             aria-autocomplete="list"
             aria-activedescendant={activeIndex >= 0 ? `${inputId}-option-${activeIndex}` : undefined}
             aria-label="Search products, makers and categories"
-            className="w-full bg-transparent text-base text-ink outline-none placeholder:text-[#7A7163] sm:text-[13px] [&::-webkit-search-cancel-button]:hidden"
+            className="w-full bg-transparent text-base text-ink outline-none placeholder:text-[#7A7163] sm:text-[13.5px] lg:text-[14.5px] [&::-webkit-search-cancel-button]:hidden"
           />
 
           {query ? (
@@ -254,14 +254,14 @@ export function EcommerceSearchBar({ className = '', inputId = 'site-search' }: 
 
         <button
           type="submit"
-          className="flex h-full shrink-0 items-center justify-center rounded-r-full border-l border-white/15 bg-terra px-3.5 font-medium text-white transition-colors hover:bg-[#b9694c] sm:px-4"
+          className="flex h-full shrink-0 items-center justify-center rounded-r-full border-l border-white/15 bg-terra px-3.5 font-medium text-white transition-colors hover:bg-[#b9694c] sm:px-4 lg:px-5"
           aria-label="Submit search"
         >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4 lg:h-[18px] lg:w-[18px]" aria-hidden>
             <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="2" />
             <path d="M12.5 12.5 17 17" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          <span className="ml-1.5 hidden text-[11.5px] font-semibold tracking-wide sm:inline">Search</span>
+          <span className="ml-1.5 hidden text-[11.5px] sm:text-xs lg:text-[13px] font-semibold tracking-wide sm:inline">Search</span>
         </button>
       </form>
 

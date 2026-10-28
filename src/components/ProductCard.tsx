@@ -138,18 +138,18 @@ export function ProductCard({
 
         {/* Content */}
         <div className="mt-3.5 flex flex-col">
-          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-muted">
+          <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-[0.16em] text-muted">
             <span className="truncate max-w-[70%]">{product.sellerName}</span>
             {product.region ? <span className="shrink-0">{product.region}</span> : null}
           </div>
 
-          <h3 className="mt-1 line-clamp-2 font-serif text-[16px] leading-snug text-forest sm:text-[17px]">
+          <h3 className="mt-1 line-clamp-2 font-serif text-[16px] sm:text-[17.5px] lg:text-[18.5px] leading-snug text-forest">
             <Link to={`/shop/${product.slug}`} className="hover:text-terra transition-colors duration-150">
               {product.name}
             </Link>
           </h3>
 
-          <p className="mt-0.5 text-xs text-muted/90 truncate">
+          <p className="mt-0.5 text-xs sm:text-[13px] text-muted/90 truncate">
             {product.categoryName}
             {product.campaignName ? <span className="text-terra"> · {product.campaignName}</span> : null}
           </p>
@@ -158,8 +158,8 @@ export function ProductCard({
 
       <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 border-t border-line/50 pt-2.5">
         <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-          <span className="text-[14px] font-medium text-ink">{formatINR(product.pricePaise)}</span>
-          {strikePrice ? <span className="text-xs text-muted/80 line-through">{formatINR(strikePrice)}</span> : null}
+          <span className="text-[14px] sm:text-[15px] lg:text-base font-semibold text-ink">{formatINR(product.pricePaise)}</span>
+          {strikePrice ? <span className="text-xs sm:text-[13px] text-muted/80 line-through">{formatINR(strikePrice)}</span> : null}
         </div>
 
         {product.ratingCount > 0 && product.ratingAverage ? (
