@@ -36,7 +36,15 @@ function rememberSearch(term: string): string[] {
   return next;
 }
 
-export function EcommerceSearchBar({ className = '', inputId = 'site-search' }: { light?: boolean; className?: string; inputId?: string }) {
+export function EcommerceSearchBar({
+  light = false,
+  className = '',
+  inputId = 'site-search',
+}: {
+  light?: boolean;
+  className?: string;
+  inputId?: string;
+}) {
   const listboxId = `${inputId}-listbox`;
   const [query, setQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -179,18 +187,26 @@ export function EcommerceSearchBar({ className = '', inputId = 'site-search' }: 
         role="search"
         className={`group flex h-11 lg:h-12 w-full items-center rounded-full border transition-all duration-200 ${
           isOpen
-            ? 'border-terra bg-white shadow-lg ring-2 ring-terra/25'
-            : 'border-line bg-[#F2ECE1] text-ink shadow-xs hover:bg-[#ECE4D7]'
+            ? 'border-terra bg-white shadow-lg ring-2 ring-terra/25 text-ink'
+            : light
+              ? 'border-white/25 bg-white/15 text-white shadow-xs backdrop-blur-md hover:bg-white/25 hover:border-white/40'
+              : 'border-line bg-[#F2ECE1] text-ink shadow-xs hover:bg-[#ECE4D7]'
         }`}
       >
-        <div className="relative hidden h-full shrink-0 items-center rounded-l-full border-r border-line bg-[#EAE2D5] pl-3.5 pr-2.5 sm:flex">
+        <div
+          className={`relative hidden h-full shrink-0 items-center rounded-l-full border-r ${
+            light ? 'border-white/20 bg-white/10' : 'border-line bg-[#EAE2D5]'
+          } pl-3.5 pr-2.5 sm:flex`}
+        >
           <select
             value={selectedCategory}
             onChange={(event) => {
               setSelectedCategory(event.target.value);
               setActiveIndex(-1);
             }}
-            className="max-w-[115px] sm:max-w-[130px] lg:max-w-[145px] cursor-pointer appearance-none truncate bg-transparent pr-4 text-[11px] sm:text-xs lg:text-[13px] font-medium text-forest outline-none"
+            className={`max-w-[115px] sm:max-w-[130px] lg:max-w-[145px] cursor-pointer appearance-none truncate bg-transparent pr-4 text-[11px] sm:text-xs lg:text-[13px] font-medium ${
+              light ? 'text-white' : 'text-forest'
+            } outline-none`}
             aria-label="Filter search by category"
           >
             {categoryOptions.map((category) => (
@@ -199,13 +215,13 @@ export function EcommerceSearchBar({ className = '', inputId = 'site-search' }: 
               </option>
             ))}
           </select>
-          <svg viewBox="0 0 20 20" fill="currentColor" className="pointer-events-none absolute right-1.5 h-3 w-3 text-muted" aria-hidden>
+          <svg viewBox="0 0 20 20" fill="currentColor" className={`pointer-events-none absolute right-1.5 h-3 w-3 ${light ? 'text-white/70' : 'text-muted'}`} aria-hidden>
             <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
           </svg>
         </div>
 
         <div className="relative flex h-full flex-1 items-center px-3 sm:px-3.5">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="mr-2 h-4 w-4 shrink-0 text-[#8C8275] sm:hidden" aria-hidden>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className={`mr-2 h-4 w-4 shrink-0 ${light ? 'text-white/70' : 'text-[#8C8275]'} sm:hidden`} aria-hidden>
             <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="1.8" />
             <path d="M12.5 12.5 17 17" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
@@ -231,7 +247,13 @@ export function EcommerceSearchBar({ className = '', inputId = 'site-search' }: 
             aria-autocomplete="list"
             aria-activedescendant={activeIndex >= 0 ? `${inputId}-option-${activeIndex}` : undefined}
             aria-label="Search products, makers and categories"
-            className="w-full bg-transparent text-base text-ink outline-none placeholder:text-[#7A7163] sm:text-[13.5px] lg:text-[14.5px] [&::-webkit-search-cancel-button]:hidden"
+            className={`w-full bg-transparent text-base ${
+              isOpen
+                ? 'text-ink placeholder:text-muted'
+                : light
+                  ? 'text-white placeholder:text-white/75'
+                  : 'text-ink placeholder:text-[#7A7163]'
+            } outline-none sm:text-[13.5px] lg:text-[14.5px] [&::-webkit-search-cancel-button]:hidden`}
           />
 
           {query ? (
@@ -242,7 +264,9 @@ export function EcommerceSearchBar({ className = '', inputId = 'site-search' }: 
                 setActiveIndex(-1);
                 inputRef.current?.focus();
               }}
-              className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-sand/60 hover:text-ink"
+              className={`ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                light ? 'text-white/80 hover:bg-white/20 hover:text-white' : 'text-muted hover:bg-sand/60 hover:text-ink'
+              } transition-colors`}
               aria-label="Clear search"
             >
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5" aria-hidden>

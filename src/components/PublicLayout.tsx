@@ -33,7 +33,7 @@ function Wordmark({ compact = false, light = false }: { compact?: boolean; light
         {!compact ? (
           <span
             className={`mt-0.5 sm:mt-1 block text-[7.5px] sm:text-[8.5px] lg:text-[10px] xl:text-[10.5px] font-semibold uppercase tracking-[0.28em] transition-colors duration-200 ${
-              light ? 'text-white/70' : 'text-muted'
+              light ? 'text-white/75' : 'text-muted'
             }`}
           >
             Himachal Pradesh
@@ -44,7 +44,7 @@ function Wordmark({ compact = false, light = false }: { compact?: boolean; light
   );
 }
 
-function AccountMenu() {
+function AccountMenu({ light = false }: { light?: boolean }) {
   const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -77,7 +77,9 @@ function AccountMenu() {
     return (
       <Link
         to="/login"
-        className="inline-flex min-h-11 lg:min-h-12 items-center px-2.5 sm:px-3 text-[12.5px] sm:text-xs lg:text-[14px] font-medium text-ink transition-colors hover:text-terra"
+        className={`inline-flex min-h-11 lg:min-h-12 items-center px-2.5 sm:px-3 text-[12.5px] sm:text-xs lg:text-[14px] font-medium transition-colors ${
+          light ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
+        }`}
       >
         Sign in
       </Link>
@@ -89,12 +91,20 @@ function AccountMenu() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex min-h-11 lg:min-h-12 items-center gap-2 px-1.5 text-[12.5px] sm:text-xs lg:text-[14px] font-medium text-ink transition-colors hover:text-terra"
+        className={`flex min-h-11 lg:min-h-12 items-center gap-2 px-1.5 text-[12.5px] sm:text-xs lg:text-[14px] font-medium transition-colors ${
+          light ? 'text-white hover:text-sand' : 'text-ink hover:text-terra'
+        }`}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={`Account menu for ${user.fullName || user.email}`}
       >
-        <span className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full border border-forest/20 bg-forest/[0.06] text-[10px] sm:text-xs font-semibold text-forest">
+        <span
+          className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full border text-[10px] sm:text-xs font-semibold ${
+            light
+              ? 'border-white/40 bg-white/20 text-white'
+              : 'border-forest/20 bg-forest/[0.06] text-forest'
+          }`}
+        >
           {(user.fullName || user.email).slice(0, 1).toUpperCase()}
         </span>
         <span className="hidden max-w-28 truncate lg:block">{user.fullName.split(' ')[0] || 'Account'}</span>
@@ -172,27 +182,39 @@ function MenuLink({ to, children, onClick }: { to: string; children: ReactNode; 
   );
 }
 
-function HeritageAnnouncementBar({ customText }: { customText?: string }) {
+function HeritageAnnouncementBar({ customText, light = false }: { customText?: string; light?: boolean }) {
   const { config } = useAuth();
   const freeShippingThreshold = config?.shipping.freeThresholdPaise ?? 0;
 
   return (
     <div
-      className="border-b border-[#0F1614] bg-forest-deep text-paper"
+      className={`border-b transition-colors duration-300 ${
+        light ? 'bg-black/50 text-white/90 border-white/10' : 'border-[#0F1614] bg-forest-deep text-paper'
+      }`}
       aria-label="Dear Hills announcements"
     >
       <div className="mx-auto flex min-h-8 sm:min-h-9 lg:min-h-10 max-w-7xl lg:max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 py-1.5 sm:py-2 text-[11px] sm:text-xs lg:text-[13px] font-medium tracking-[0.02em]">
-        <p className="line-clamp-2 min-w-0 leading-snug sm:line-clamp-1">
-          <span className="mr-1.5 text-terra" aria-hidden>
-            ✦
-          </span>
-          {customText || 'Pure Himalayan goodness · Support local makers'}
-        </p>
+        <div className="flex items-center gap-2 min-w-0">
+          <Link
+            to="/offers/pahadi-festive-glow"
+            className="flex items-center gap-1.5 font-bold text-butter hover:text-white transition-colors shrink-0"
+          >
+            <span>🪔</span>
+            <span className="underline underline-offset-4 decoration-butter/60">Diwali Shubh Aarambh</span>
+          </Link>
+          <span className="opacity-40 hidden sm:inline" aria-hidden>·</span>
+          <p className="line-clamp-1 truncate">
+            {customText || 'Up to 30% Off Pure Himalayan Harvest & Handlooms · 0% Maker Commission'}
+          </p>
+        </div>
         {freeShippingThreshold > 0 ? (
-          <p className="hidden shrink-0 text-sand sm:block">Free shipping over {formatINR(freeShippingThreshold)}</p>
+          <p className="hidden shrink-0 text-sand xl:block">Free shipping over {formatINR(freeShippingThreshold)}</p>
         ) : null}
-        <Link to="/sourcing" className="hidden shrink-0 items-center gap-1.5 text-sand transition-colors hover:text-white md:flex">
-          From Himachal Pradesh <span aria-hidden>→</span>
+        <Link
+          to="/offers/pahadi-festive-glow"
+          className="hidden shrink-0 items-center gap-1.5 text-sand transition-colors hover:text-white md:flex font-semibold"
+        >
+          <span>Explore Diwali Offers</span> <span aria-hidden>→</span>
         </Link>
       </div>
     </div>
@@ -256,14 +278,20 @@ function Icon({ name, className = 'h-5 w-5' }: { name: 'search' | 'bag' | 'user'
   }
 }
 
-function CartLink({ count, compact = false }: { count: number; compact?: boolean }) {
+function CartLink({ count, compact = false, light = false }: { count: number; compact?: boolean; light?: boolean }) {
   return (
     <Link
       to="/cart"
       className={
         compact
-          ? 'relative inline-flex h-11 w-11 lg:h-12 lg:w-12 items-center justify-center text-ink transition-colors hover:text-terra'
-          : 'relative inline-flex min-h-11 lg:min-h-12 items-center gap-2 border border-line bg-surface px-3 sm:px-3.5 lg:px-4 text-[12px] sm:text-xs lg:text-sm font-medium text-ink transition-colors hover:border-forest/40'
+          ? `relative inline-flex h-11 w-11 lg:h-12 lg:w-12 items-center justify-center transition-colors ${
+              light ? 'text-white hover:text-sand' : 'text-ink hover:text-terra'
+            }`
+          : `relative inline-flex min-h-11 lg:min-h-12 items-center gap-2 border px-3 sm:px-3.5 lg:px-4 text-[12px] sm:text-xs lg:text-sm font-medium transition-colors ${
+              light
+                ? 'border-white/30 bg-white/15 text-white hover:border-white/50'
+                : 'border-line bg-surface text-ink hover:border-forest/40'
+            }`
       }
       aria-label={`Shopping bag with ${count} item${count === 1 ? '' : 's'}`}
     >
@@ -283,9 +311,11 @@ function CartLink({ count, compact = false }: { count: number; compact?: boolean
 }
 
 function Header() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, config } = useAuth();
   const location = useLocation();
+  const isHome = location.pathname === '/';
   const isCheckout = location.pathname.startsWith('/checkout');
+  const [scrolled, setScrolled] = useState(false);
   const cartCount = useCartCount();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -295,6 +325,24 @@ function Header() {
   const content = useSiteContent();
   const announcement = content.data?.content.announcement;
   const [menuPath, setMenuPath] = useState(location.pathname);
+
+  const isTransparent = isHome && !scrolled;
+
+  useEffect(() => {
+    if (!isHome) {
+      setScrolled(false);
+      return;
+    }
+    const onScroll = () => {
+      setScrolled(window.scrollY > 40);
+    };
+    const frame = window.requestAnimationFrame(onScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, [isHome]);
 
   // Close any open menu as soon as the route changes, without an effect round-trip.
   if (menuPath !== location.pathname) {
@@ -360,6 +408,12 @@ function Header() {
   if (isCheckout) {
     return (
       <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur-md">
+        {config?.devMode ? (
+          <div className="bg-[#b9694c] px-3 py-1 text-center text-[10px] font-medium tracking-[0.05em] text-white">
+            Development build · demonstration data
+            {config.payments.devPaymentsEnabled ? ' · simulated payments enabled' : ''}
+          </div>
+        ) : null}
         <div className="mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-3 px-4 sm:h-16 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Wordmark />
@@ -384,16 +438,33 @@ function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur-md">
-      <HeritageAnnouncementBar customText={announcement?.active && announcement.text ? announcement.text : undefined} />
+    <header
+      className={`${
+        isHome ? 'fixed top-0 left-0 right-0 z-40' : 'sticky top-0 z-40'
+      } transition-all duration-300 ${
+        isTransparent
+          ? 'bg-black/40 backdrop-blur-md border-b border-white/10 text-white'
+          : 'border-b border-line bg-paper/95 backdrop-blur-md text-ink shadow-2xs'
+      }`}
+    >
+      {config?.devMode ? (
+        <div className="bg-[#b9694c] px-3 py-1 text-center text-[10px] font-medium tracking-[0.05em] text-white">
+          Development build · demonstration data
+          {config.payments.devPaymentsEnabled ? ' · simulated payments enabled' : ''}
+        </div>
+      ) : null}
+      <HeritageAnnouncementBar
+        light={isTransparent}
+        customText={announcement?.active && announcement.text ? announcement.text : undefined}
+      />
 
       <div className="mx-auto flex h-14 sm:h-16 lg:h-20 max-w-7xl lg:max-w-[1440px] items-center gap-2 sm:gap-4 lg:gap-6 px-3 sm:px-6 lg:px-8">
         <div className="shrink-0">
-          <Wordmark />
+          <Wordmark light={isTransparent} />
         </div>
 
         <div className="mx-2 hidden flex-1 md:flex lg:mx-4 max-w-xl xl:max-w-2xl">
-          <EcommerceSearchBar inputId="site-search-desktop" />
+          <EcommerceSearchBar light={isTransparent} inputId="site-search-desktop" />
         </div>
 
         <nav className="hidden items-center gap-6 lg:flex xl:gap-8" aria-label="Primary">
@@ -404,19 +475,39 @@ function Header() {
                 key={item.to}
                 to={item.to}
                 className={`border-b-2 py-1.5 text-[13px] lg:text-[14.5px] xl:text-[15px] font-medium transition-colors ${
-                  active ? 'border-terra text-forest' : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
+                  active
+                    ? isTransparent
+                      ? 'border-butter text-butter font-semibold'
+                      : 'border-terra text-forest font-semibold'
+                    : isTransparent
+                      ? 'border-transparent text-white/90 hover:border-white/40 hover:text-white'
+                      : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
                 }`}
               >
                 {item.label}
               </Link>
             );
           })}
+
+          <Link
+            to="/offers/pahadi-festive-glow"
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs lg:text-[13px] font-bold tracking-wide transition-all ${
+              isTransparent
+                ? 'border border-butter/40 bg-butter/20 text-butter hover:bg-butter/30 shadow-xs'
+                : 'border border-terra/40 bg-terra/15 text-terra hover:bg-terra/25 shadow-xs'
+            }`}
+          >
+            <span>🪔</span>
+            <span>Diwali Offers</span>
+          </Link>
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2 lg:gap-3">
           <Link
             to="/account/wishlist"
-            className="hidden h-11 w-11 lg:h-12 lg:w-12 items-center justify-center text-ink transition-colors hover:text-terra sm:inline-flex"
+            className={`hidden h-11 w-11 lg:h-12 lg:w-12 items-center justify-center transition-colors sm:inline-flex ${
+              isTransparent ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
+            }`}
             aria-label="Saved items"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5 lg:h-[22px] lg:w-[22px]" aria-hidden>
@@ -430,29 +521,35 @@ function Header() {
           {user?.roles.includes('admin') ? (
             <Link
               to="/admin"
-              className="hidden items-center gap-1.5 border border-forest/25 bg-surface px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:bg-forest/5 xl:inline-flex"
+              className={`hidden items-center gap-1.5 rounded border px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider transition-colors xl:inline-flex ${
+                isTransparent
+                  ? 'border-white/30 bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm'
+                  : 'border-forest/25 bg-surface text-forest hover:bg-forest/5'
+              }`}
             >
               Admin
             </Link>
           ) : user?.roles.includes('seller') ? (
             <Link
               to="/seller"
-              className="hidden items-center gap-1.5 border border-terra/30 bg-terra/10 px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-terra transition-colors hover:bg-terra/20 xl:inline-flex"
+              className="hidden items-center gap-1.5 rounded border border-terra/30 bg-terra/20 px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-terra transition-colors hover:bg-terra/30 xl:inline-flex backdrop-blur-sm"
             >
               Seller Studio
             </Link>
           ) : null}
 
           <div className="hidden sm:block">
-            <AccountMenu />
+            <AccountMenu light={isTransparent} />
           </div>
 
-          <CartLink count={cartCount} compact />
+          <CartLink count={cartCount} compact light={isTransparent} />
 
           <button
             ref={menuButtonRef}
             type="button"
-            className="inline-flex h-11 w-11 items-center justify-center text-ink transition-colors hover:text-terra lg:hidden"
+            className={`inline-flex h-11 w-11 items-center justify-center transition-colors lg:hidden ${
+              isTransparent ? 'text-white hover:text-sand' : 'text-ink hover:text-terra'
+            }`}
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
             aria-expanded={mobileOpen}
@@ -464,20 +561,28 @@ function Header() {
       </div>
 
       <div className="px-3 pb-2.5 md:hidden">
-        <EcommerceSearchBar inputId="site-search-mobile" />
+        <EcommerceSearchBar light={isTransparent} inputId="site-search-mobile" />
       </div>
 
-      <div className="hidden border-t border-line bg-[#EFE9DD]/90 md:block">
+      <div
+        className={`hidden border-t md:block transition-colors duration-300 ${
+          isTransparent
+            ? 'border-white/10 bg-black/40 backdrop-blur-md text-white'
+            : 'border-line bg-[#EFE9DD]/90 text-ink'
+        }`}
+      >
         <div className="mx-auto flex max-w-7xl lg:max-w-[1440px] items-center px-4 sm:px-6 lg:px-8 py-2 sm:py-2.5 text-[12px] sm:text-[13px] lg:text-[13.5px] font-medium">
           <div className="no-scrollbar flex w-full items-center gap-1 lg:gap-1.5 overflow-x-auto whitespace-nowrap">
             <Link
               to="/shop"
-              className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-forest transition-colors hover:bg-forest/10"
+              className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-semibold transition-colors ${
+                isTransparent ? 'text-white hover:bg-white/15' : 'text-forest hover:bg-forest/10'
+              }`}
             >
               <Icon name="grid" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               All products
             </Link>
-            <span className="text-forest/25 mx-1" aria-hidden>
+            <span className={isTransparent ? 'text-white/30 mx-1' : 'text-forest/25 mx-1'} aria-hidden>
               |
             </span>
             {[
@@ -492,23 +597,46 @@ function Header() {
               <Link
                 key={item.slug}
                 to={`/shop?category=${item.slug}`}
-                className="shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 text-ink/80 transition-colors hover:bg-forest/10 hover:text-forest"
+                className={`shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 transition-colors ${
+                  isTransparent ? 'text-white/85 hover:bg-white/15 hover:text-white' : 'text-ink/80 hover:bg-forest/10 hover:text-forest'
+                }`}
               >
                 {item.label}
               </Link>
             ))}
             <Link
               to="/shop?category=gifting"
-              className="shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-terra transition-colors hover:bg-forest/10"
+              className={`shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-semibold transition-colors ${
+                isTransparent ? 'text-butter hover:bg-white/15' : 'text-terra hover:bg-forest/10'
+              }`}
             >
               Curated gifting
+            </Link>
+
+            <Link
+              to="/offers/pahadi-festive-glow"
+              className={`shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-bold transition-colors flex items-center gap-1.5 ${
+                isTransparent
+                  ? 'text-butter hover:bg-white/15'
+                  : 'text-[#C06041] hover:bg-terra/10'
+              }`}
+            >
+              <span>🪔</span>
+              <span>Diwali Offers</span>
+              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                isTransparent ? 'bg-butter/25 text-butter border border-butter/40' : 'bg-terra/20 text-terra border border-terra/30'
+              }`}>
+                30% off
+              </span>
             </Link>
 
             <div className="relative inline-block shrink-0" ref={moreRef}>
               <button
                 type="button"
                 onClick={() => setMoreOpen((value) => !value)}
-                className="flex items-center gap-1 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-medium text-ink/85 transition-colors hover:bg-forest/10 hover:text-forest"
+                className={`flex items-center gap-1 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-medium transition-colors ${
+                  isTransparent ? 'text-white/85 hover:bg-white/15 hover:text-white' : 'text-ink/85 hover:bg-forest/10 hover:text-forest'
+                }`}
                 aria-expanded={moreOpen}
                 aria-haspopup="menu"
                 aria-label="More categories and stories"
@@ -818,7 +946,7 @@ function Footer() {
   const { config } = useAuth();
   return (
     <footer className="mt-20 border-t border-forest-deep bg-forest text-paper">
-      <div className="mx-auto max-w-7xl lg:max-w-[1440px] px-4 py-16 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="grid gap-10 border-b border-paper/15 pb-14 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <Wordmark compact light />
@@ -826,13 +954,13 @@ function Footer() {
               A curated marketplace for products made and grown in Himachal Pradesh. Every listing names the store behind
               it, and every maker and product is reviewed before publication.
             </p>
-            <div className="mt-6 flex flex-wrap gap-2 text-[11px] sm:text-xs uppercase tracking-[0.16em] text-paper/50">
+            <div className="mt-6 flex flex-wrap gap-2 text-[10.5px] uppercase tracking-[0.16em] text-paper/50">
               <span>Mandi</span> · <span>Kullu</span> · <span>Kangra</span> · <span>Kinnaur</span> · <span>Lahaul</span> · <span>Chamba</span>
             </div>
           </div>
 
           <div>
-            <h3 className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-sand/80">Explore the shelves</h3>
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">Explore the shelves</h3>
             <ul className="mt-4 space-y-2.5 text-sm text-paper/75">
               <li><Link to="/shop" className="hover:text-sand transition-colors">All products</Link></li>
               <li><Link to="/shop?category=shawls-and-weaves" className="hover:text-sand transition-colors">Shawls & Handlooms</Link></li>
@@ -844,7 +972,7 @@ function Footer() {
           </div>
 
           <div>
-            <h3 className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-sand/80">Information & Trust</h3>
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">Information & Trust</h3>
             <ul className="mt-4 space-y-2.5 text-sm text-paper/75">
               <li><Link to="/about" className="hover:text-sand transition-colors">Our story & philosophy</Link></li>
               <li><Link to="/policies/shipping" className="hover:text-sand transition-colors">Shipping & delivery</Link></li>
@@ -918,19 +1046,12 @@ function ScrollToTop() {
 }
 
 export function PublicLayout() {
-  const { config } = useAuth();
   const { pathname } = useLocation();
   const isCheckout = pathname.startsWith('/checkout');
   const showTabBar = shouldShowTabBar(pathname);
   return (
     <div className="flex min-h-screen flex-col">
       <ScrollToTop />
-      {config?.devMode ? (
-        <div className="bg-[#b9694c] px-4 py-1.5 text-center text-[11px] sm:text-xs font-medium tracking-[0.05em] text-white">
-          Development build · demonstration data
-          {config.payments.devPaymentsEnabled ? ' · simulated payments enabled' : ''}
-        </div>
-      ) : null}
       <Header />
       <main className={`flex-1 ${showTabBar ? 'pb-safe-tabbar' : ''}`}>
         <Outlet />

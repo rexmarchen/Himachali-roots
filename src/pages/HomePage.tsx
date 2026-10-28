@@ -172,7 +172,7 @@ function CinematicHero() {
 
   return (
     <section
-      className="relative isolate flex min-h-[62svh] w-full flex-col justify-end overflow-hidden bg-[#101918] text-white lg:min-h-[82vh] xl:min-h-[86vh]"
+      className="relative isolate flex min-h-[62svh] w-full flex-col justify-end overflow-hidden bg-[#101918] text-white lg:min-h-[80vh]"
       aria-roledescription="carousel"
       aria-label="Photographs from Himachal Pradesh"
       onKeyDown={onKeyDown}
@@ -223,11 +223,24 @@ function CinematicHero() {
         />
       </div>
 
-      <div className="relative z-30 mx-auto flex w-full max-w-7xl lg:max-w-[1440px] flex-1 flex-col justify-end px-5 pb-8 pt-12 sm:px-8 sm:pb-14 sm:pt-24 lg:px-12 lg:pb-16 lg:pt-36">
+      <div className="relative z-30 mx-auto flex w-full max-w-7xl lg:max-w-[1440px] flex-1 flex-col justify-end px-5 pb-8 pt-28 sm:px-8 sm:pb-14 sm:pt-36 lg:px-12 lg:pb-16 lg:pt-44">
         <div className="max-w-2xl lg:max-w-3xl xl:max-w-4xl">
-          <div className="inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-black/40 px-3.5 py-1.5 sm:px-4 sm:py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/95 shadow-sm backdrop-blur-md sm:text-xs lg:text-[12.5px]">
-            <span className="h-2 w-2 rounded-full bg-terra" aria-hidden />
-            <span>Rooted in Himachal Pradesh</span>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-black/40 px-3.5 py-1.5 sm:px-4 sm:py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/95 shadow-sm backdrop-blur-md sm:text-xs lg:text-[12.5px]">
+              <span className="h-2 w-2 rounded-full bg-terra" aria-hidden />
+              <span>Rooted in Himachal Pradesh</span>
+            </div>
+
+            <Link
+              to="/offers/pahadi-festive-glow"
+              className="inline-flex items-center gap-1.5 rounded-full border border-butter/50 bg-black/50 px-3 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs lg:text-[12.5px] font-bold text-butter shadow-sm backdrop-blur-md transition-all hover:bg-black/75 hover:border-butter"
+            >
+              <span>🪔</span>
+              <span>Diwali Festive Offers</span>
+              <span className="rounded bg-terra px-1.5 py-0.2 text-[9px] font-extrabold uppercase tracking-wider text-white">
+                30% Off
+              </span>
+            </Link>
           </div>
 
           <h1 className="mt-4 font-serif text-[2.6rem] font-normal leading-[1.04] tracking-[-0.02em] text-white drop-shadow-md sm:mt-5 sm:text-5xl md:text-6xl lg:text-[4.6rem] xl:text-[5.4rem]">
@@ -252,6 +265,14 @@ function CinematicHero() {
             </LinkButton>
 
             <Link
+              to="/offers/pahadi-festive-glow"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-butter/60 bg-butter/20 px-5 py-3 sm:px-7 sm:py-4 text-sm sm:text-base font-semibold text-butter shadow-sm backdrop-blur-md transition-all hover:border-butter hover:bg-butter/30"
+            >
+              <span>🪔</span>
+              <span>Diwali Special Edition</span>
+            </Link>
+
+            <Link
               to="/makers"
               className="inline-flex min-h-11 items-center gap-2 rounded-md border border-white/40 bg-white/15 px-5 py-3 sm:px-7 sm:py-4 text-sm sm:text-base font-semibold text-white shadow-sm backdrop-blur-md transition-all hover:border-white hover:bg-white/25"
             >
@@ -259,23 +280,23 @@ function CinematicHero() {
             </Link>
           </div>
 
-          <ul className="mt-6 hidden flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/20 pt-4 text-[11.5px] font-medium text-white/90 sm:mt-9 sm:flex sm:gap-x-6 sm:pt-5 sm:text-xs lg:text-sm lg:gap-x-8">
+          <ul className="mt-6 hidden flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/20 pt-4 text-[11.5px] font-medium text-white/90 sm:mt-9 sm:flex sm:gap-x-6 sm:pt-5 sm:text-xs">
             <li className="flex items-center gap-2">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="h-4 w-4 shrink-0 stroke-[2.2] text-terra" aria-hidden>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="h-3.5 w-3.5 shrink-0 stroke-[2.2] text-terra" aria-hidden>
                 <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span>Every listing names its seller</span>
             </li>
             <li aria-hidden className="hidden h-3 w-px bg-white/25 sm:block" />
             <li className="flex items-center gap-2">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="h-4 w-4 shrink-0 stroke-[2.2] text-terra" aria-hidden>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="h-3.5 w-3.5 shrink-0 stroke-[2.2] text-terra" aria-hidden>
                 <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span>Origin badges only after review</span>
             </li>
             <li aria-hidden className="hidden h-3 w-px bg-white/25 sm:block" />
             <li className="flex items-center gap-2">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="h-4 w-4 shrink-0 stroke-[2.2] text-terra" aria-hidden>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="h-3.5 w-3.5 shrink-0 stroke-[2.2] text-terra" aria-hidden>
                 <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span>Dispatched by the maker</span>
@@ -285,20 +306,20 @@ function CinematicHero() {
       </div>
 
       <div className="relative z-30 border-t border-white/15 bg-black/45 pb-[calc(2rem+env(safe-area-inset-bottom))] backdrop-blur-md md:pb-0">
-        <div className="mx-auto flex w-full max-w-7xl lg:max-w-[1440px] flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12 lg:py-4">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
           <div className="min-w-0 flex items-center gap-2.5">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4 text-terra shrink-0 stroke-2" aria-hidden>
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" strokeLinejoin="round" />
               <circle cx="12" cy="9" r="2.5" />
             </svg>
             <div className="min-w-0">
-              <p className="font-serif text-[15px] sm:text-base lg:text-lg font-medium text-white/95">{slide.place}</p>
-              <p className="truncate text-xs sm:text-[13px] text-white/75">{slide.caption}</p>
+              <p className="font-serif text-[14px] font-medium text-white/95">{slide.place}</p>
+              <p className="truncate text-[11.5px] text-white/75">{slide.caption}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5" aria-label="Choose a photograph">
+            <div className="flex items-center gap-1" aria-label="Choose a photograph">
               {HERO_SLIDES.map((item, index) => (
                 <button
                   key={item.id}
@@ -309,8 +330,8 @@ function CinematicHero() {
                   className="group flex h-11 min-w-6 items-center justify-center px-0.5"
                 >
                   <span
-                    className={`relative block h-[3px] lg:h-[4px] overflow-hidden rounded-full transition-all duration-300 ${
-                      index === current ? 'w-12 lg:w-16 bg-white/30' : 'w-5 lg:w-7 bg-white/20 group-hover:bg-white/50'
+                    className={`relative block h-[3px] overflow-hidden rounded-full transition-all duration-300 ${
+                      index === current ? 'w-12 bg-white/30' : 'w-5 bg-white/20 group-hover:bg-white/50'
                     }`}
                   >
                     {index === current ? (
@@ -329,7 +350,7 @@ function CinematicHero() {
               ))}
             </div>
 
-            <p className="tabular-nums text-[11px] sm:text-xs lg:text-sm font-medium tracking-wider text-white/75">
+            <p className="tabular-nums text-[11px] font-medium tracking-wider text-white/75">
               {String(current + 1).padStart(2, '0')} / {String(HERO_SLIDES.length).padStart(2, '0')}
             </p>
 
@@ -339,14 +360,14 @@ function CinematicHero() {
                 onClick={() => setManualPause((value) => !value)}
                 aria-label={manualPause ? 'Resume the photograph sequence' : 'Pause the photograph sequence'}
                 aria-pressed={manualPause}
-                className="flex h-11 w-11 lg:h-12 lg:w-12 items-center justify-center rounded border border-white/30 text-white/80 transition-colors hover:border-white hover:text-white"
+                className="flex h-11 w-11 items-center justify-center rounded border border-white/30 text-white/80 transition-colors hover:border-white hover:text-white"
               >
                 {manualPause ? (
-                  <svg viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
+                  <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3" aria-hidden>
                     <path d="M4 3l9 5-9 5V3z" />
                   </svg>
                 ) : (
-                  <svg viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
+                  <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3" aria-hidden>
                     <path d="M4 3h2.5v10H4V3zm5.5 0H12v10H9.5V3z" />
                   </svg>
                 )}
@@ -382,38 +403,38 @@ function MountainStorySection() {
 
   return (
     <section className="border-b border-line bg-surface py-20 lg:py-28">
-      <div className="mx-auto grid max-w-[86rem] lg:max-w-[1440px] items-center gap-14 px-5 sm:px-8 lg:grid-cols-[1fr_0.9fr] lg:gap-20 lg:px-12">
+      <div className="mx-auto grid max-w-[86rem] items-center gap-14 px-5 sm:px-8 lg:grid-cols-[1fr_0.9fr] lg:gap-20 lg:px-12">
         <div>
-          <p className="flex items-center gap-3 text-[10.5px] sm:text-xs font-semibold uppercase tracking-[0.24em] text-terra">
+          <p className="flex items-center gap-3 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-terra">
             <span className="h-px w-8 bg-terra" aria-hidden />
             The mountain way
           </p>
-          <h2 className="mt-5 font-serif text-[2.1rem] leading-[1.08] text-forest sm:text-[2.6rem] lg:text-[3.2rem]">
+          <h2 className="mt-5 font-serif text-[2.1rem] leading-[1.08] text-forest sm:text-[2.6rem] lg:text-[2.9rem]">
             More than products.
             <span className="mt-1 block font-normal text-ink/70">A working landscape.</span>
           </h2>
 
-          <p className="mt-6 text-[15.5px] sm:text-base lg:text-[17px] leading-[1.85] text-ink/75">
+          <p className="mt-6 text-[15.5px] leading-[1.85] text-ink/75">
             In the high valleys of Himachal Pradesh, weaving, beekeeping and orchard work follow altitude and season rather
             than a factory clock. A Kullu weaver counts a border by hand; a Spiti household dries apricots on a roof; a
             Kangra garden picks tea in flushes.
           </p>
-          <p className="mt-4 text-[15.5px] sm:text-base lg:text-[17px] leading-[1.85] text-ink/75">
+          <p className="mt-4 text-[15.5px] leading-[1.85] text-ink/75">
             DEAR HILLS is a marketplace, not a factory shop. Each seller applies, is reviewed, and keeps their own
             storefront. What you buy is packed and dispatched by the workshop that made it.
           </p>
 
           <dl className="mt-9 grid gap-px border border-line bg-line sm:grid-cols-3">
             {facts.map((fact) => (
-              <div key={fact.title} className="bg-paper p-5 lg:p-6">
-                <dt className="font-serif text-[17px] sm:text-lg lg:text-xl text-forest">{fact.title}</dt>
-                <dd className="mt-1.5 text-[11.5px] sm:text-xs lg:text-[13px] leading-relaxed text-muted">{fact.body}</dd>
+              <div key={fact.title} className="bg-paper p-5">
+                <dt className="font-serif text-[17px] text-forest">{fact.title}</dt>
+                <dd className="mt-1.5 text-[11.5px] leading-relaxed text-muted">{fact.body}</dd>
               </div>
             ))}
           </dl>
 
           <div className="mt-8">
-            <Link to="/sourcing" className="link-underline font-serif text-[15px] sm:text-base text-forest">
+            <Link to="/sourcing" className="link-underline font-serif text-[15px] text-forest">
               Read how verification works →
             </Link>
           </div>
@@ -480,21 +501,21 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
 
   return (
     <section className="border-b border-line bg-paper py-12 sm:py-16 lg:py-20">
-      <div className="mx-auto max-w-7xl lg:max-w-[1440px] px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-7 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="flex items-center gap-2 text-[10.5px] sm:text-xs font-semibold uppercase tracking-[0.24em] text-terra">
+            <p className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-terra">
               <span className="h-px w-6 bg-terra" aria-hidden />
               Curated shelves
             </p>
-            <h2 className="mt-3 font-serif text-2xl font-normal text-forest sm:text-4xl lg:text-[2.6rem]">Shop by category</h2>
-            <p className="mt-2 text-sm sm:text-base text-muted">
+            <h2 className="mt-3 font-serif text-2xl font-normal text-forest sm:text-4xl">Shop by category</h2>
+            <p className="mt-2 text-sm text-muted">
               Organised by craft discipline — handloom woolens, teas, honey, and mountain pantry staples.
             </p>
           </div>
           <Link
             to="/shop"
-            className="self-start text-xs sm:text-sm font-semibold uppercase tracking-wider text-forest transition-colors hover:text-terra sm:self-auto"
+            className="self-start text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:text-terra sm:self-auto"
           >
             Browse all ({listingCount} listings) →
           </Link>
@@ -808,70 +829,70 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
   };
 
   return (
-    <section className="mx-auto max-w-7xl lg:max-w-[1440px] px-4 sm:px-6 lg:px-8 py-8 sm:py-12 border-b border-line/40">
+    <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10 border-b border-line/40">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">
         <div>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-muted">
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted">
               Featured Products
             </span>
             <span className="h-px w-8 bg-line" aria-hidden />
           </div>
-          <h2 className="mt-2 font-serif text-2xl sm:text-3xl lg:text-[2.2rem] font-medium text-forest">
+          <h2 className="mt-2 font-serif text-2xl sm:text-3xl lg:text-[2rem] font-medium text-forest">
             Handpicked from the Himalayas
           </h2>
-          <p className="mt-1.5 max-w-2xl text-xs sm:text-sm lg:text-base text-ink/75 leading-relaxed">
+          <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
             Discover authentic Himachali products crafted by local artisans, from cozy handlooms to pure mountain honey.
           </p>
         </div>
 
         {/* 4 Value Badges & Carousel Controls matching reference screenshot */}
         <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0">
-          <div className="hidden sm:flex items-center gap-3 xl:gap-5">
-            <div className="flex items-center gap-2 lg:gap-2.5">
-              <div className="flex h-9 w-9 lg:h-10 lg:w-10 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 lg:h-5 lg:w-5" aria-hidden>
+          <div className="hidden sm:flex items-center gap-3 xl:gap-4">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
                   <path d="m8 3 4 8 5-5 5 15H2L8 3z" strokeWidth="1.6" strokeLinejoin="round" />
                 </svg>
               </div>
-              <div className="text-[11px] sm:text-xs lg:text-[13px] font-medium leading-tight text-ink/80">
+              <div className="text-[11px] font-medium leading-tight text-ink/80">
                 <span className="block font-semibold text-forest">Authentic</span>
                 <span>Himachal</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 lg:gap-2.5">
-              <div className="flex h-9 w-9 lg:h-10 lg:w-10 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 lg:h-5 lg:w-5" aria-hidden>
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
                   <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12A10 10 0 0 1 12 2Z" strokeWidth="1.6" />
                   <path d="M12 6c-3.314 0-6 2.686-6 6 0 2.21 1.79 4 4 4 1.5 0 2.5-1 3-2" strokeWidth="1.6" strokeLinecap="round" />
                 </svg>
               </div>
-              <div className="text-[11px] sm:text-xs lg:text-[13px] font-medium leading-tight text-ink/80">
+              <div className="text-[11px] font-medium leading-tight text-ink/80">
                 <span className="block font-semibold text-forest">Supports</span>
                 <span>Local Artisans</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 lg:gap-2.5">
-              <div className="flex h-9 w-9 lg:h-10 lg:w-10 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 lg:h-5 lg:w-5" aria-hidden>
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeWidth="1.6" />
                 </svg>
               </div>
-              <div className="text-[11px] sm:text-xs lg:text-[13px] font-medium leading-tight text-ink/80">
+              <div className="text-[11px] font-medium leading-tight text-ink/80">
                 <span className="block font-semibold text-forest">Pure &</span>
                 <span>Natural</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 lg:gap-2.5">
-              <div className="flex h-9 w-9 lg:h-10 lg:w-10 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 lg:h-5 lg:w-5" aria-hidden>
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
                   <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" strokeWidth="1.6" />
                 </svg>
               </div>
-              <div className="text-[11px] sm:text-xs lg:text-[13px] font-medium leading-tight text-ink/80">
+              <div className="text-[11px] font-medium leading-tight text-ink/80">
                 <span className="block font-semibold text-forest">Sustainable</span>
                 <span>Choices</span>
               </div>
@@ -883,7 +904,7 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
             <button
               type="button"
               onClick={() => scroll('left')}
-              className="flex h-9 w-9 lg:h-10 lg:w-10 items-center justify-center rounded-full border border-line bg-surface text-ink/80 hover:bg-paper hover:text-forest transition-colors shadow-2xs"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 hover:bg-paper hover:text-forest transition-colors shadow-2xs"
               aria-label="Scroll featured products left"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
@@ -1024,11 +1045,30 @@ export function HomePage() {
       <CinematicHero />
 
       {/* 2. Seasonal Campaign Offer Banner */}
-      {data.campaign?.posterUrl ? (
-        <div className="py-4 sm:py-6 bg-sand/30 border-b border-line/40">
-          <CampaignBanner campaign={data.campaign} />
-        </div>
-      ) : null}
+      <div className="py-4 sm:py-6 bg-[#FAF5EE] border-b border-line/60">
+        <CampaignBanner
+          campaign={
+            data.campaign?.posterUrl
+              ? data.campaign
+              : {
+                  id: 'cmp_diwali_2026',
+                  name: 'Pahadi Festive Glow',
+                  slug: 'pahadi-festive-glow',
+                  description:
+                    'A Diwali collection from Himachali makers: handwoven wool, Kangra tea, orchard walnuts, wildflower honey and Chamba embroidery.',
+                  posterUrl: '/images/campaigns/pahadi-festive-glow-diwali-1672.webp',
+                  posterAlt:
+                    'Pahadi Festive Glow — Diwali in Himachal: festive poster with diya lights, mountain silhouettes and the Pahadi Roots wordmark.',
+                  status: 'active',
+                  startsAt: null,
+                  endsAt: null,
+                  maxDiscountBp: 3000,
+                  maxDiscountPercent: 30,
+                  productCount: 5,
+                }
+          }
+        />
+      </div>
 
       {/* 3. Shop by collection */}
       <CategoryCollectionSection categories={data.categories} />
