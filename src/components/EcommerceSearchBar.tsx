@@ -204,7 +204,7 @@ export function EcommerceSearchBar({
               setSelectedCategory(event.target.value);
               setActiveIndex(-1);
             }}
-            className={`max-w-[115px] sm:max-w-[130px] lg:max-w-[145px] cursor-pointer appearance-none truncate bg-transparent pr-4 text-[11px] sm:text-xs lg:text-[13px] font-medium ${
+            className={`max-w-[85px] sm:max-w-[105px] lg:max-w-[115px] xl:max-w-[130px] cursor-pointer appearance-none truncate bg-transparent pr-3.5 text-[11px] sm:text-xs lg:text-[12.5px] font-medium ${
               light ? 'text-white' : 'text-forest'
             } outline-none`}
             aria-label="Filter search by category"
@@ -220,7 +220,7 @@ export function EcommerceSearchBar({
           </svg>
         </div>
 
-        <div className="relative flex h-full flex-1 items-center px-3 sm:px-3.5">
+        <div className="relative flex h-full flex-1 min-w-[120px] items-center px-2.5 sm:px-3 lg:px-3.5">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className={`mr-2 h-4 w-4 shrink-0 ${light ? 'text-white/70' : 'text-[#8C8275]'} sm:hidden`} aria-hidden>
             <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="1.8" />
             <path d="M12.5 12.5 17 17" strokeWidth="1.8" strokeLinecap="round" />
@@ -247,7 +247,7 @@ export function EcommerceSearchBar({
             aria-autocomplete="list"
             aria-activedescendant={activeIndex >= 0 ? `${inputId}-option-${activeIndex}` : undefined}
             aria-label="Search products, makers and categories"
-            className={`w-full bg-transparent text-base ${
+            className={`w-full min-w-0 bg-transparent text-[13px] sm:text-[13.5px] lg:text-[14px] ${
               isOpen
                 ? 'text-ink placeholder:text-muted'
                 : light
@@ -278,7 +278,7 @@ export function EcommerceSearchBar({
 
         <button
           type="submit"
-          className="flex h-full shrink-0 items-center justify-center rounded-r-full border-l border-white/15 bg-terra px-3.5 font-medium text-white transition-colors hover:bg-[#b9694c] sm:px-4 lg:px-5"
+          className="flex h-full shrink-0 items-center justify-center rounded-r-full border-l border-white/15 bg-terra px-3.5 sm:px-4 font-medium text-white transition-colors hover:bg-[#b9694c]"
           aria-label="Submit search"
         >
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4 lg:h-[18px] lg:w-[18px]" aria-hidden>

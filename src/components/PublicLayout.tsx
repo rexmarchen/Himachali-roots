@@ -428,18 +428,18 @@ function Header() {
           <Wordmark />
         </div>
 
-        <div className="mx-2 hidden flex-1 md:flex lg:mx-3 max-w-xl lg:max-w-2xl xl:max-w-3xl">
+        <div className="mx-2 hidden flex-1 md:flex lg:mx-3 min-w-[260px] sm:min-w-[280px] lg:min-w-[320px] xl:min-w-[360px] max-w-xl lg:max-w-2xl xl:max-w-3xl">
           <EcommerceSearchBar inputId="site-search-desktop" />
         </div>
 
-        <nav className="hidden items-center gap-6 lg:flex xl:gap-8" aria-label="Primary">
+        <nav className="hidden items-center gap-3.5 xl:gap-5 2xl:gap-6 lg:flex" aria-label="Primary">
           {NAV.map((item) => {
             const active = item.to === '/shop' ? location.pathname.startsWith('/shop') : location.pathname === item.to;
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                className={`border-b-2 py-1.5 text-[13px] lg:text-[14.5px] xl:text-[15px] font-medium transition-colors ${
+                className={`border-b-2 py-1.5 text-[13px] lg:text-[13.5px] xl:text-[14px] font-medium transition-colors ${
                   active
                     ? 'border-terra text-forest font-semibold'
                     : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
@@ -452,14 +452,14 @@ function Header() {
 
           <Link
             to="/offers/pahadi-festive-glow"
-            className="inline-flex items-center gap-1.5 rounded-full border border-terra/30 bg-terra/10 px-3 py-1 text-xs lg:text-[13px] font-bold text-terra transition-all hover:bg-terra/20 shadow-xs"
+            className="hidden 2xl:inline-flex items-center gap-1.5 rounded-full border border-terra/30 bg-terra/10 px-3 py-1 text-xs lg:text-[13px] font-bold text-terra transition-all hover:bg-terra/20 shadow-xs"
           >
             <span>🪔</span>
             <span>Diwali Offers</span>
           </Link>
         </nav>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2 lg:gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5">
           <Link
             to="/account/wishlist"
             className="hidden h-11 w-11 lg:h-12 lg:w-12 items-center justify-center text-ink transition-colors hover:text-terra sm:inline-flex"
