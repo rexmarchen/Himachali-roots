@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { PomodoroState, StudyGoal } from '@shared/types';
 import { useLiveStudyRoom } from '@/lib/studyRealtime';
@@ -36,6 +36,7 @@ export function LiveStudyRoomPage() {
   const [goalInput, setGoalInput] = useState('');
   const [leaving, setLeaving] = useState(false);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+  const autoJoinAttemptRef = useRef<string | null>(null);
 
   // Live seconds ticker for room expiry countdown
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -67,7 +68,17 @@ export function LiveStudyRoomPage() {
 
   // Attempt automatic join if not already member and not full
   useEffect(() => {
-    if (!loading && detail && !isMember && !isFull && !isRoomClosed && !isRoomExpired) {
+    const attemptKey = `${roomId}:${profile.id}`;
+    if (
+      !loading &&
+      detail &&
+      !isMember &&
+      !isFull &&
+      !isRoomClosed &&
+      !isRoomExpired &&
+      autoJoinAttemptRef.current !== attemptKey
+    ) {
+      autoJoinAttemptRef.current = attemptKey;
       join()
         .then(() => {
           toast.push(`Joined study room: "${detail.room.name}"`, 'success');
@@ -76,7 +87,7 @@ export function LiveStudyRoomPage() {
           toast.push(err instanceof Error ? err.message : 'Room may be full or unavailable.', 'error');
         });
     }
-  }, [loading, detail, isMember, isFull, isRoomClosed, join, toast]);
+  }, [roomId, profile.id, loading, detail, isMember, isFull, isRoomClosed, isRoomExpired, join, toast]);
 
   // Handle Manual Leave
   const handleLeave = async () => {

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import type { StudyRoom } from '@shared/types';
 import { useStudyRoomsDiscovery } from '@/lib/studyRealtime';
@@ -29,6 +29,12 @@ export function StudyDiscoveryPage() {
   const [searchQuery, setSearchQuery] = useState(currentSearch);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [sortBy, setSortBy] = useState<'activity' | 'newest' | 'spots'>('activity');
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const { rooms, loading, error, connected, refetch } = useStudyRoomsDiscovery({
     subject: selectedSubject,
@@ -300,7 +306,7 @@ export function StudyDiscoveryPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {sortedRooms.map((room) => (
-                  <RoomCard key={room.id} room={room} currentUserId={profile.id} />
+                  <RoomCard key={room.id} room={room} currentUserId={profile.id} nowMs={nowMs} />
                 ))}
               </div>
             )}
@@ -314,14 +320,14 @@ export function StudyDiscoveryPage() {
   );
 }
 
-function RoomCard({ room, currentUserId }: { room: StudyRoom; currentUserId: string }) {
+function RoomCard({ room, currentUserId, nowMs }: { room: StudyRoom; currentUserId: string; nowMs: number }) {
   const navigate = useNavigate();
   const isFull = room.currentParticipants >= room.maxParticipants;
   const isHost = room.hostId === currentUserId;
   const percentFilled = Math.min(100, Math.round((room.currentParticipants / room.maxParticipants) * 100));
   const spotsLeft = room.maxParticipants - room.currentParticipants;
 
-  const diffMs = new Date(room.expiresAt).getTime() - Date.now();
+  const diffMs = new Date(room.expiresAt).getTime() - nowMs;
   const remainingMins = Math.max(0, Math.floor(diffMs / 60000));
   const isExpiringSoon = remainingMins > 0 && remainingMins <= 5;
   const isExpired = remainingMins <= 0;

@@ -11,7 +11,7 @@ import type {
   StudyRoomEvent,
 } from '@shared/types';
 import { api } from './api';
-import { getStoredStudentProfile } from './studentSession';
+import { useStudentProfile } from './studentSession';
 
 // Base API URL
 const configuredBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
@@ -120,6 +120,10 @@ export function useStudyRoomsDiscovery(options: {
  */
 export function useLiveStudyRoom(roomId: string) {
   const queryClient = useQueryClient();
+  // Use the same identity as creation and rendering. Falling back to the
+  // local guest identity here caused signed-in hosts to repeatedly "join"
+  // their own room because the membership check used a different user id.
+  const { profile } = useStudentProfile();
   const [connected, setConnected] = useState(false);
   const [isRoomClosed, setIsRoomClosed] = useState(false);
   const [closedReason, setClosedReason] = useState<string | null>(null);
@@ -143,11 +147,9 @@ export function useLiveStudyRoom(roomId: string) {
     let es: EventSource | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout>;
 
-    const student = getStoredStudentProfile();
-
     const connect = () => {
       try {
-        const studentId = encodeURIComponent(student.id);
+        const studentId = encodeURIComponent(profile.id);
         es = new EventSource(`${API_BASE}/study/rooms/${roomId}/stream?userId=${studentId}`);
 
         es.onopen = () => {
@@ -241,20 +243,19 @@ export function useLiveStudyRoom(roomId: string) {
       clearTimeout(reconnectTimeout);
       es?.close();
     };
-  }, [roomId, queryClient]);
+  }, [roomId, profile.id, queryClient]);
 
   // Periodic heartbeat every 10 seconds
   useEffect(() => {
     if (!roomId || isRoomClosed) return;
 
     const interval = setInterval(async () => {
-      const student = getStoredStudentProfile();
       try {
         await api(`/study/rooms/${roomId}/heartbeat`, {
           method: 'POST',
           body: {
-            userId: student.id,
-            userName: student.name,
+            userId: profile.id,
+            userName: profile.name,
           },
         });
       } catch {
@@ -263,17 +264,16 @@ export function useLiveStudyRoom(roomId: string) {
     }, 10_000);
 
     return () => clearInterval(interval);
-  }, [roomId, isRoomClosed]);
+  }, [roomId, isRoomClosed, profile.id, profile.name]);
 
   // Automatic leave beacon on window close/tab close
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (!roomId || isRoomClosed) return;
-      const student = getStoredStudentProfile();
       try {
         const payload = JSON.stringify({
-          userId: student.id,
-          userName: student.name,
+          userId: profile.id,
+          userName: profile.name,
           reason: 'Tab closed or navigated away',
         });
         navigator.sendBeacon(`${API_BASE}/study/rooms/${roomId}/leave`, payload);
@@ -286,50 +286,47 @@ export function useLiveStudyRoom(roomId: string) {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [roomId, isRoomClosed]);
+  }, [roomId, isRoomClosed, profile.id, profile.name]);
 
   // Join Room method
   const join = useCallback(async () => {
-    const currentStudent = getStoredStudentProfile();
     const result = await api<StudyRoomDetailView>(`/study/rooms/${roomId}/join`, {
       method: 'POST',
       body: {
-        userId: currentStudent.id,
-        userName: currentStudent.name,
-        userAvatar: currentStudent.avatarColor,
+        userId: profile.id,
+        userName: profile.name,
+        userAvatar: profile.avatarColor,
       },
     });
     queryClient.setQueryData(['study-room', roomId], result);
     return result;
-  }, [roomId, queryClient]);
+  }, [roomId, profile.id, profile.name, profile.avatarColor, queryClient]);
 
   // Leave Room method
   const leave = useCallback(async () => {
-    const currentStudent = getStoredStudentProfile();
     try {
       await api<{ closed: boolean; remaining: number }>(`/study/rooms/${roomId}/leave`, {
         method: 'POST',
         body: {
-          userId: currentStudent.id,
-          userName: currentStudent.name,
+          userId: profile.id,
+          userName: profile.name,
           reason: 'User clicked Leave Room',
         },
       });
     } catch {
       // ignore
     }
-  }, [roomId]);
+  }, [roomId, profile.id, profile.name]);
 
   // Update presence status (e.g. focusing, break, active)
   const setPresenceStatus = useCallback(
     async (status: MemberPresenceStatus) => {
-      const currentStudent = getStoredStudentProfile();
       try {
         await api(`/study/rooms/${roomId}/heartbeat`, {
           method: 'POST',
           body: {
-            userId: currentStudent.id,
-            userName: currentStudent.name,
+            userId: profile.id,
+            userName: profile.name,
             status,
           },
         });
@@ -338,7 +335,7 @@ export function useLiveStudyRoom(roomId: string) {
           return {
             ...prev,
             members: prev.members.map((m) =>
-              m.userId === currentStudent.id ? { ...m, status } : m,
+              m.userId === profile.id ? { ...m, status } : m,
             ),
           };
         });
@@ -346,7 +343,7 @@ export function useLiveStudyRoom(roomId: string) {
         // ignore
       }
     },
-    [roomId, queryClient],
+    [roomId, profile.id, profile.name, queryClient],
   );
 
   // Update collaborative tools (Pomodoro, shared notes, study goals)
@@ -356,12 +353,11 @@ export function useLiveStudyRoom(roomId: string) {
       sharedNotes?: string;
       studyGoals?: StudyGoal[];
     }) => {
-      const currentStudent = getStoredStudentProfile();
       const res = await api<{ collab: StudyRoomCollab }>(`/study/rooms/${roomId}/collab`, {
         method: 'POST',
         body: {
-          userId: currentStudent.id,
-          userName: currentStudent.name,
+          userId: profile.id,
+          userName: profile.name,
           ...updates,
         },
       });
@@ -370,18 +366,17 @@ export function useLiveStudyRoom(roomId: string) {
       );
       return res.collab;
     },
-    [roomId, queryClient],
+    [roomId, profile.id, profile.name, queryClient],
   );
 
   // Post chat / status message
   const postMessage = useCallback(
     async (content: string, eventType: 'message' | 'collab' | 'status' = 'message') => {
-      const currentStudent = getStoredStudentProfile();
       const res = await api<{ event: StudyRoomEvent }>(`/study/rooms/${roomId}/event`, {
         method: 'POST',
         body: {
-          userId: currentStudent.id,
-          userName: currentStudent.name,
+          userId: profile.id,
+          userName: profile.name,
           content,
           eventType,
         },
@@ -397,12 +392,11 @@ export function useLiveStudyRoom(roomId: string) {
       });
       return res.event;
     },
-    [roomId, queryClient],
+    [roomId, profile.id, profile.name, queryClient],
   );
 
-  const currentUser = getStoredStudentProfile();
-  const isMember = detail?.members.some((m) => m.userId === currentUser.id) ?? false;
-  const isHost = detail?.room.hostId === currentUser.id;
+  const isMember = detail?.members.some((m) => m.userId === profile.id) ?? false;
+  const isHost = detail?.room.hostId === profile.id;
   const isFull = (detail?.room.currentParticipants ?? 0) >= (detail?.room.maxParticipants ?? 5);
 
   const effectiveClosed = isRoomClosed || detail?.room.status === 'closed' || detail?.room.status === 'archived';
