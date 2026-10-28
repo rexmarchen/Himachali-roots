@@ -85,15 +85,6 @@ const PRINCIPLES = [
 /* Photographs verified free of embedded watermarks: mountains and apple garden landscapes */
 const HERO_SLIDES = [
   {
-    id: 'kotgarh-apple-orchard',
-    src: '/images/home/apple-orchard-1800.jpg',
-    srcSet:
-      '/images/home/apple-orchard-720.jpg 720w, /images/home/apple-orchard-1100.jpg 1100w, /images/home/apple-orchard-1800.jpg 1800w',
-    alt: 'Sunlit Himachali apple orchard in Kotgarh with ripe red apples overlooking snow-capped Himalayan peaks',
-    place: 'Kotgarh Valley, Shimla',
-    caption: 'Sunlit apple orchards overlooking the Great Himalayan peaks',
-  },
-  {
     id: 'kinner-kailash-sunrise',
     src: '/images/home/snow-peaks-1800.jpg',
     srcSet:
@@ -101,6 +92,15 @@ const HERO_SLIDES = [
     alt: 'Golden sunrise light illuminating snow-capped Himalayan peaks and pine forests in Kinnaur',
     place: 'Kinner Kailash Range, Kinnaur',
     caption: 'First light breaking over snow-covered Himalayan summits',
+  },
+  {
+    id: 'kotgarh-apple-orchard',
+    src: '/images/home/apple-orchard-1800.jpg',
+    srcSet:
+      '/images/home/apple-orchard-720.jpg 720w, /images/home/apple-orchard-1100.jpg 1100w, /images/home/apple-orchard-1800.jpg 1800w',
+    alt: 'Sunlit Himachali apple orchard in Kotgarh with ripe red apples overlooking snow-capped Himalayan peaks',
+    place: 'Kotgarh Valley, Shimla',
+    caption: 'Sunlit apple orchards overlooking the Great Himalayan peaks',
   },
   {
     id: 'kalpa-dawn',
@@ -172,7 +172,7 @@ function CinematicHero() {
 
   return (
     <section
-      className="relative isolate flex min-h-[62svh] w-full flex-col justify-end overflow-hidden bg-[#101918] text-white lg:min-h-[80vh]"
+      className="relative isolate flex min-h-[62svh] w-full flex-col justify-end overflow-hidden bg-[#101918] text-white lg:min-h-[82vh] xl:min-h-[86vh]"
       aria-roledescription="carousel"
       aria-label="Photographs from Himachal Pradesh"
       onKeyDown={onKeyDown}
@@ -223,7 +223,7 @@ function CinematicHero() {
         />
       </div>
 
-      <div className="relative z-30 mx-auto flex w-full max-w-7xl lg:max-w-[1440px] flex-1 flex-col justify-end px-5 pb-8 pt-28 sm:px-8 sm:pb-14 sm:pt-36 lg:px-12 lg:pb-16 lg:pt-44">
+      <div className="relative z-30 mx-auto flex w-full max-w-[88rem] flex-1 flex-col justify-end px-5 pb-8 pt-12 sm:px-8 sm:pb-14 sm:pt-24 lg:px-12 lg:pb-16 lg:pt-36">
         <div className="max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-black/40 px-3.5 py-1.5 sm:px-4 sm:py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/95 shadow-sm backdrop-blur-md sm:text-xs lg:text-[12.5px]">
@@ -237,7 +237,7 @@ function CinematicHero() {
             >
               <span>🪔</span>
               <span>Diwali Festive Offers</span>
-              <span className="rounded bg-terra px-1.5 py-0.2 text-[9px] font-extrabold uppercase tracking-wider text-white">
+              <span className="rounded bg-terra px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-white">
                 30% Off
               </span>
             </Link>
@@ -266,7 +266,7 @@ function CinematicHero() {
 
             <Link
               to="/offers/pahadi-festive-glow"
-              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-butter/60 bg-butter/20 px-5 py-3 sm:px-7 sm:py-4 text-sm sm:text-base font-semibold text-butter shadow-sm backdrop-blur-md transition-all hover:border-butter hover:bg-butter/30"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-butter/60 bg-black/50 px-5 py-3 sm:px-7 sm:py-4 text-sm sm:text-base font-semibold text-butter shadow-sm backdrop-blur-md transition-all hover:border-butter hover:bg-black/75"
             >
               <span>🪔</span>
               <span>Diwali Special Edition</span>
@@ -306,7 +306,7 @@ function CinematicHero() {
       </div>
 
       <div className="relative z-30 border-t border-white/15 bg-black/45 pb-[calc(2rem+env(safe-area-inset-bottom))] backdrop-blur-md md:pb-0">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
+        <div className="mx-auto flex w-full max-w-[88rem] flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10 xl:px-12">
           <div className="min-w-0 flex items-center gap-2.5">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4 text-terra shrink-0 stroke-2" aria-hidden>
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" strokeLinejoin="round" />
@@ -403,13 +403,13 @@ function MountainStorySection() {
 
   return (
     <section className="border-b border-line bg-surface py-20 lg:py-28">
-      <div className="mx-auto grid max-w-[86rem] items-center gap-14 px-5 sm:px-8 lg:grid-cols-[1fr_0.9fr] lg:gap-20 lg:px-12">
+      <div className="mx-auto grid max-w-[88rem] items-center gap-14 px-5 sm:px-8 lg:grid-cols-[1fr_0.9fr] lg:gap-20 lg:px-10 xl:px-12">
         <div>
           <p className="flex items-center gap-3 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-terra">
             <span className="h-px w-8 bg-terra" aria-hidden />
             The mountain way
           </p>
-          <h2 className="mt-5 font-serif text-[2.1rem] leading-[1.08] text-forest sm:text-[2.6rem] lg:text-[2.9rem]">
+          <h2 className="mt-5 font-serif text-[2.1rem] leading-[1.07] text-forest sm:text-[2.6rem] lg:text-[3rem]">
             More than products.
             <span className="mt-1 block font-normal text-ink/70">A working landscape.</span>
           </h2>
@@ -500,8 +500,8 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
   const listingCount = liveCategories.reduce((total, category) => total + (category.productCount ?? 0), 0);
 
   return (
-    <section className="border-b border-line bg-paper py-12 sm:py-16 lg:py-20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section className="border-b border-line bg-paper py-14 sm:py-18 lg:py-22">
+      <div className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="mb-7 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-terra">
@@ -578,7 +578,7 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
 function MakersCelebrationSection({ makers }: { makers: MakerSummary[] }) {
   return (
     <section className="border-b border-line bg-surface py-20 lg:py-28">
-      <div className="mx-auto max-w-[86rem] px-5 sm:px-8 lg:px-12">
+      <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
         <SectionHeading
           eyebrow="People, Not Labels"
           title="Made by hand. Rooted in the hills."
@@ -703,7 +703,7 @@ function GiftingSection({ gifting, content }: { gifting: ProductSummary[]; conte
   if (!gifting.length) return null;
   return (
     <section className="border-b border-line bg-[#efe7d9] py-20 lg:py-24">
-      <div className="mx-auto max-w-[86rem] px-5 sm:px-8 lg:px-12">
+      <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
         <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
           <div>
             <p className="eyebrow flex items-center gap-2">
@@ -741,7 +741,7 @@ function GiftingSection({ gifting, content }: { gifting: ProductSummary[]; conte
 function SourcingStandardSection() {
   return (
     <section className="border-b border-line bg-paper py-20 lg:py-28">
-      <div className="mx-auto max-w-[86rem] px-5 sm:px-8 lg:px-12">
+      <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
         <div className="grid gap-12 lg:grid-cols-[0.75fr_1.25fr]">
           <div>
             <p className="eyebrow flex items-center gap-2">
@@ -829,7 +829,7 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
   };
 
   return (
-    <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10 border-b border-line/40">
+    <section className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 py-10 sm:py-14 border-b border-line/40">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">
         <div>
           <div className="flex items-center gap-3">
@@ -838,7 +838,7 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
             </span>
             <span className="h-px w-8 bg-line" aria-hidden />
           </div>
-          <h2 className="mt-2 font-serif text-2xl sm:text-3xl lg:text-[2rem] font-medium text-forest">
+          <h2 className="mt-2 font-serif text-[1.65rem] sm:text-[2rem] lg:text-[2.25rem] font-medium text-forest">
             Handpicked from the Himalayas
           </h2>
           <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
@@ -932,7 +932,7 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {products.map((product, index) => (
-            <div key={product.id} className="w-[230px] sm:w-[260px] shrink-0">
+            <div key={product.id} className="w-[240px] sm:w-[280px] lg:w-[300px] shrink-0">
               <ProductCard product={product} priority={index < 4} />
             </div>
           ))}
@@ -952,11 +952,11 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
 
   return (
     <section className="border-b border-line bg-surface py-10 sm:py-14">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="mb-6 flex items-end justify-between gap-4">
           <div>
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-terra">Actually purchased</p>
-            <h2 className="mt-2 font-serif text-2xl text-forest sm:text-3xl">Bestsellers right now</h2>
+            <h2 className="mt-2 font-serif text-[1.65rem] sm:text-[2rem] text-forest">Bestsellers right now</h2>
             <p className="mt-1 text-xs text-muted">Ranked by paid units sold in the last 90 days.</p>
           </div>
           <Link to="/shop" className="shrink-0 text-xs font-semibold text-forest underline underline-offset-4 hover:text-terra">
@@ -1097,7 +1097,7 @@ export function HomePage() {
       {/* Verified Customer Reviews */}
       {data.reviews.length ? (
         <section className="border-b border-line bg-surface py-20">
-          <div className="mx-auto max-w-[86rem] px-5 sm:px-8 lg:px-12">
+          <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
             <SectionHeading eyebrow="Verified Purchases Only" title="Notes from Customers" />
             <div className="grid gap-8 sm:grid-cols-3">
               {data.reviews.map((review) => (
@@ -1121,7 +1121,7 @@ export function HomePage() {
       ) : null}
 
       {/* Seller Application Callout Banner */}
-      <section className="mx-auto max-w-[86rem] px-5 py-16 sm:px-8 lg:px-12">
+      <section className="mx-auto max-w-[88rem] px-5 py-16 sm:px-8 lg:px-10 xl:px-12">
         <div className="grid gap-10 border border-forest/20 bg-forest px-8 py-12 text-paper sm:px-12 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">For Makers & Growers</p>
@@ -1166,7 +1166,7 @@ export function HomePage() {
       </section>
 
       {/* Regional filter pills */}
-      <section className="mx-auto max-w-[86rem] px-5 pb-8 sm:px-8 lg:px-12">
+      <section className="mx-auto max-w-[88rem] px-5 pb-8 sm:px-8 lg:px-10 xl:px-12">
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line pt-6">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs uppercase tracking-wider text-muted font-semibold mr-2">Regions:</span>

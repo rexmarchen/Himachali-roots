@@ -36,6 +36,36 @@ const SORTS = [
   { value: 'popular', label: 'Most purchased' },
 ];
 
+const FALLBACK_DIWALI_DATA: CampaignResponse = {
+  campaign: {
+    id: 'cmp_diwali_2026',
+    name: 'Pahadi Festive Glow',
+    slug: 'pahadi-festive-glow',
+    description:
+      'A Diwali collection from Himachali makers: handwoven wool, Kangra tea, orchard walnuts, wildflower honey and Chamba embroidery. Dispatched directly from Himachal Pradesh with festive savings.',
+    posterUrl: '/images/campaigns/pahadi-festive-glow-diwali-1672.webp',
+    posterAlt:
+      'Pahadi Festive Glow — Diwali in Himachal: festive poster with diya lights, mountain silhouettes and the Pahadi Roots wordmark.',
+    status: 'active',
+    startsAt: null,
+    endsAt: null,
+    maxDiscountBp: 3000,
+    maxDiscountPercent: 30,
+    productCount: 0,
+  },
+  purchasable: true,
+  items: [],
+  page: 1,
+  pageSize: 24,
+  total: 0,
+  totalPages: 1,
+  filters: {
+    categories: [],
+    sellers: [],
+    priceRangePaise: { min: null, max: null },
+  },
+};
+
 const STATUS_LABEL: Record<CampaignSummary['status'], string> = {
   draft: 'Draft',
   scheduled: 'Opens soon',
@@ -63,7 +93,11 @@ export function OfferPage() {
     retry: false,
   });
 
-  const data = offer.data;
+  const data: CampaignResponse | undefined =
+    offer.data ??
+    (slug === 'pahadi-festive-glow' && (offer.isError || (!offer.isLoading && !offer.data))
+      ? FALLBACK_DIWALI_DATA
+      : undefined);
   const campaign = data?.campaign;
 
   const title = campaign ? `${campaign.name} — Diwali Offer | DEAR HILLS` : 'Festive Offer — DEAR HILLS';
@@ -108,7 +142,7 @@ export function OfferPage() {
     );
   }
 
-  if (offer.isError || !data || !campaign) {
+  if ((offer.isError && !data) || !data || !campaign) {
     const status = offer.error instanceof ApiError ? offer.error.status : 0;
     const notFound = status === 404;
     return (

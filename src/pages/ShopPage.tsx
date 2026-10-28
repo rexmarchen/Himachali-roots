@@ -96,7 +96,7 @@ export function ShopPage() {
   });
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+    <div className="mx-auto max-w-[88rem] px-4 py-8 sm:px-6 lg:px-8 xl:px-10 lg:py-12">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Shop' }]} />
       <PageHeader
         eyebrow={q ? `Search results for “${q}”` : activeCategory ? 'Category Collection' : 'The Catalogue'}

@@ -193,7 +193,7 @@ function HeritageAnnouncementBar({ customText, light = false }: { customText?: s
       }`}
       aria-label="Dear Hills announcements"
     >
-      <div className="mx-auto flex min-h-8 sm:min-h-9 lg:min-h-10 max-w-7xl lg:max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 py-1.5 sm:py-2 text-[11px] sm:text-xs lg:text-[13px] font-medium tracking-[0.02em]">
+      <div className="mx-auto flex min-h-8 sm:min-h-9 lg:min-h-10 max-w-[88rem] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 xl:px-10 py-1.5 sm:py-2 text-[11px] sm:text-xs lg:text-[13px] font-medium tracking-[0.02em]">
         <div className="flex items-center gap-2 min-w-0">
           <Link
             to="/offers/pahadi-festive-glow"
@@ -313,9 +313,7 @@ function CartLink({ count, compact = false, light = false }: { count: number; co
 function Header() {
   const { user, signOut, config } = useAuth();
   const location = useLocation();
-  const isHome = location.pathname === '/';
   const isCheckout = location.pathname.startsWith('/checkout');
-  const [scrolled, setScrolled] = useState(false);
   const cartCount = useCartCount();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -325,24 +323,6 @@ function Header() {
   const content = useSiteContent();
   const announcement = content.data?.content.announcement;
   const [menuPath, setMenuPath] = useState(location.pathname);
-
-  const isTransparent = isHome && !scrolled;
-
-  useEffect(() => {
-    if (!isHome) {
-      setScrolled(false);
-      return;
-    }
-    const onScroll = () => {
-      setScrolled(window.scrollY > 40);
-    };
-    const frame = window.requestAnimationFrame(onScroll);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', onScroll);
-    };
-  }, [isHome]);
 
   // Close any open menu as soon as the route changes, without an effect round-trip.
   if (menuPath !== location.pathname) {
@@ -438,33 +418,18 @@ function Header() {
   }
 
   return (
-    <header
-      className={`${
-        isHome ? 'fixed top-0 left-0 right-0 z-40' : 'sticky top-0 z-40'
-      } transition-all duration-300 ${
-        isTransparent
-          ? 'bg-black/40 backdrop-blur-md border-b border-white/10 text-white'
-          : 'border-b border-line bg-paper/95 backdrop-blur-md text-ink shadow-2xs'
-      }`}
-    >
-      {config?.devMode ? (
-        <div className="bg-[#b9694c] px-3 py-1 text-center text-[10px] font-medium tracking-[0.05em] text-white">
-          Development build · demonstration data
-          {config.payments.devPaymentsEnabled ? ' · simulated payments enabled' : ''}
-        </div>
-      ) : null}
+    <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur-md text-ink shadow-2xs">
       <HeritageAnnouncementBar
-        light={isTransparent}
         customText={announcement?.active && announcement.text ? announcement.text : undefined}
       />
 
-      <div className="mx-auto flex h-14 sm:h-16 lg:h-20 max-w-7xl lg:max-w-[1440px] items-center gap-2 sm:gap-4 lg:gap-6 px-3 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-14 sm:h-16 lg:h-[4.5rem] max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-5 px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="shrink-0">
-          <Wordmark light={isTransparent} />
+          <Wordmark />
         </div>
 
-        <div className="mx-2 hidden flex-1 md:flex lg:mx-4 max-w-xl xl:max-w-2xl">
-          <EcommerceSearchBar light={isTransparent} inputId="site-search-desktop" />
+        <div className="mx-2 hidden flex-1 md:flex lg:mx-3 max-w-xl lg:max-w-2xl xl:max-w-3xl">
+          <EcommerceSearchBar inputId="site-search-desktop" />
         </div>
 
         <nav className="hidden items-center gap-6 lg:flex xl:gap-8" aria-label="Primary">
@@ -476,12 +441,8 @@ function Header() {
                 to={item.to}
                 className={`border-b-2 py-1.5 text-[13px] lg:text-[14.5px] xl:text-[15px] font-medium transition-colors ${
                   active
-                    ? isTransparent
-                      ? 'border-butter text-butter font-semibold'
-                      : 'border-terra text-forest font-semibold'
-                    : isTransparent
-                      ? 'border-transparent text-white/90 hover:border-white/40 hover:text-white'
-                      : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
+                    ? 'border-terra text-forest font-semibold'
+                    : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
                 }`}
               >
                 {item.label}
@@ -491,11 +452,7 @@ function Header() {
 
           <Link
             to="/offers/pahadi-festive-glow"
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs lg:text-[13px] font-bold tracking-wide transition-all ${
-              isTransparent
-                ? 'border border-butter/40 bg-butter/20 text-butter hover:bg-butter/30 shadow-xs'
-                : 'border border-terra/40 bg-terra/15 text-terra hover:bg-terra/25 shadow-xs'
-            }`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-terra/30 bg-terra/10 px-3 py-1 text-xs lg:text-[13px] font-bold text-terra transition-all hover:bg-terra/20 shadow-xs"
           >
             <span>🪔</span>
             <span>Diwali Offers</span>
@@ -505,9 +462,7 @@ function Header() {
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2 lg:gap-3">
           <Link
             to="/account/wishlist"
-            className={`hidden h-11 w-11 lg:h-12 lg:w-12 items-center justify-center transition-colors sm:inline-flex ${
-              isTransparent ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
-            }`}
+            className="hidden h-11 w-11 lg:h-12 lg:w-12 items-center justify-center text-ink transition-colors hover:text-terra sm:inline-flex"
             aria-label="Saved items"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5 lg:h-[22px] lg:w-[22px]" aria-hidden>
@@ -521,35 +476,29 @@ function Header() {
           {user?.roles.includes('admin') ? (
             <Link
               to="/admin"
-              className={`hidden items-center gap-1.5 rounded border px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider transition-colors xl:inline-flex ${
-                isTransparent
-                  ? 'border-white/30 bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm'
-                  : 'border-forest/25 bg-surface text-forest hover:bg-forest/5'
-              }`}
+              className="hidden items-center gap-1.5 rounded border border-forest/25 bg-surface px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:bg-forest/5 xl:inline-flex"
             >
               Admin
             </Link>
           ) : user?.roles.includes('seller') ? (
             <Link
               to="/seller"
-              className="hidden items-center gap-1.5 rounded border border-terra/30 bg-terra/20 px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-terra transition-colors hover:bg-terra/30 xl:inline-flex backdrop-blur-sm"
+              className="hidden items-center gap-1.5 rounded border border-terra/30 bg-terra/20 px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-terra transition-colors hover:bg-terra/30 xl:inline-flex"
             >
               Seller Studio
             </Link>
           ) : null}
 
           <div className="hidden sm:block">
-            <AccountMenu light={isTransparent} />
+            <AccountMenu />
           </div>
 
-          <CartLink count={cartCount} compact light={isTransparent} />
+          <CartLink count={cartCount} compact />
 
           <button
             ref={menuButtonRef}
             type="button"
-            className={`inline-flex h-11 w-11 items-center justify-center transition-colors lg:hidden ${
-              isTransparent ? 'text-white hover:text-sand' : 'text-ink hover:text-terra'
-            }`}
+            className="inline-flex h-11 w-11 items-center justify-center text-ink transition-colors hover:text-terra lg:hidden"
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
             aria-expanded={mobileOpen}
@@ -561,28 +510,20 @@ function Header() {
       </div>
 
       <div className="px-3 pb-2.5 md:hidden">
-        <EcommerceSearchBar light={isTransparent} inputId="site-search-mobile" />
+        <EcommerceSearchBar inputId="site-search-mobile" />
       </div>
 
-      <div
-        className={`hidden border-t md:block transition-colors duration-300 ${
-          isTransparent
-            ? 'border-white/10 bg-black/40 backdrop-blur-md text-white'
-            : 'border-line bg-[#EFE9DD]/90 text-ink'
-        }`}
-      >
-        <div className="mx-auto flex max-w-7xl lg:max-w-[1440px] items-center px-4 sm:px-6 lg:px-8 py-2 sm:py-2.5 text-[12px] sm:text-[13px] lg:text-[13.5px] font-medium">
+      <div className="hidden border-t md:block border-line bg-[#EFE9DD]/90 text-ink">
+        <div className="mx-auto flex max-w-[88rem] items-center px-4 sm:px-6 lg:px-8 xl:px-10 py-2 sm:py-2.5 lg:py-3 text-[12px] sm:text-[13px] lg:text-[13.5px] font-medium">
           <div className="no-scrollbar flex w-full items-center gap-1 lg:gap-1.5 overflow-x-auto whitespace-nowrap">
             <Link
               to="/shop"
-              className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-semibold transition-colors ${
-                isTransparent ? 'text-white hover:bg-white/15' : 'text-forest hover:bg-forest/10'
-              }`}
+              className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-forest hover:bg-forest/10 transition-colors"
             >
               <Icon name="grid" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               All products
             </Link>
-            <span className={isTransparent ? 'text-white/30 mx-1' : 'text-forest/25 mx-1'} aria-hidden>
+            <span className="text-forest/25 mx-1" aria-hidden>
               |
             </span>
             {[
@@ -597,46 +538,33 @@ function Header() {
               <Link
                 key={item.slug}
                 to={`/shop?category=${item.slug}`}
-                className={`shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 transition-colors ${
-                  isTransparent ? 'text-white/85 hover:bg-white/15 hover:text-white' : 'text-ink/80 hover:bg-forest/10 hover:text-forest'
-                }`}
+                className="shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 text-ink/80 hover:bg-forest/10 hover:text-forest transition-colors"
               >
                 {item.label}
               </Link>
             ))}
             <Link
-              to="/shop?category=gifting"
-              className={`shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-semibold transition-colors ${
-                isTransparent ? 'text-butter hover:bg-white/15' : 'text-terra hover:bg-forest/10'
-              }`}
-            >
-              Curated gifting
-            </Link>
-
-            <Link
               to="/offers/pahadi-festive-glow"
-              className={`shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-bold transition-colors flex items-center gap-1.5 ${
-                isTransparent
-                  ? 'text-butter hover:bg-white/15'
-                  : 'text-[#C06041] hover:bg-terra/10'
-              }`}
+              className="shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-bold text-[#C06041] hover:bg-terra/10 transition-colors flex items-center gap-1.5"
             >
               <span>🪔</span>
               <span>Diwali Offers</span>
-              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                isTransparent ? 'bg-butter/25 text-butter border border-butter/40' : 'bg-terra/20 text-terra border border-terra/30'
-              }`}>
+              <span className="rounded-full bg-terra/20 border border-terra/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-terra">
                 30% off
               </span>
+            </Link>
+            <Link
+              to="/shop?category=gifting"
+              className="shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-terra hover:bg-forest/10 transition-colors"
+            >
+              Curated gifting
             </Link>
 
             <div className="relative inline-block shrink-0" ref={moreRef}>
               <button
                 type="button"
                 onClick={() => setMoreOpen((value) => !value)}
-                className={`flex items-center gap-1 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-medium transition-colors ${
-                  isTransparent ? 'text-white/85 hover:bg-white/15 hover:text-white' : 'text-ink/85 hover:bg-forest/10 hover:text-forest'
-                }`}
+                className="flex items-center gap-1 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-medium text-ink/85 hover:bg-forest/10 hover:text-forest transition-colors"
                 aria-expanded={moreOpen}
                 aria-haspopup="menu"
                 aria-label="More categories and stories"
@@ -946,7 +874,7 @@ function Footer() {
   const { config } = useAuth();
   return (
     <footer className="mt-20 border-t border-forest-deep bg-forest text-paper">
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[88rem] px-4 py-14 sm:px-6 lg:px-8 xl:px-10">
         <div className="grid gap-10 border-b border-paper/15 pb-14 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <Wordmark compact light />
