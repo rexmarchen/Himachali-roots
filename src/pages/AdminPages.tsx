@@ -7,6 +7,7 @@ import type { SiteContent } from '@shared/content';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
+import { usePageMeta } from '@/lib/usePageMeta';
 import { dateInputToIso, daysAgoInput, formatDate, formatDateTime, humanise, orderStatusLabel, percentFromBp, sellerOrderStatusLabel, todayInput } from '@/lib/format';
 import { AdminMetric, AdminPage, AdminQueueRow, AdminSection, ConfirmDialog } from '@/components/admin';
 import {
@@ -399,6 +400,8 @@ export function AdminLayout() {
     return match ?? ADMIN_NAV_ITEMS[0];
   }, [pathname]);
 
+  usePageMeta({ title: `${currentNav.label} · Admin · Dear Hills` });
+
   const queues = useMemo(
     () => [
       {
@@ -606,7 +609,7 @@ export function AdminLayout() {
           <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 focus-visible:outline-offset-4">
             <MountainLogoSvg />
             <span>
-              <span className="block font-serif text-[17px] font-semibold tracking-[0.1em] text-paper">PAHADI ROOTS</span>
+              <span className="block font-serif text-[17px] font-semibold tracking-[0.1em] text-paper">DEAR HILLS</span>
               <span className="mt-0.5 block text-[9px] font-medium uppercase tracking-[0.24em] text-butter/45">Marketplace admin</span>
             </span>
           </Link>
@@ -945,7 +948,7 @@ export function AdminLayout() {
 
         <footer className="border-t border-line px-4 py-4 sm:px-6 lg:px-8">
           <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-2 text-[10px] text-muted">
-            <p className="uppercase tracking-[0.16em]">PAHADI ROOTS · Marketplace operations console</p>
+            <p className="uppercase tracking-[0.16em]">DEAR HILLS · Marketplace operations console</p>
             <p>Server-enforced access · decisions audited</p>
           </div>
         </footer>

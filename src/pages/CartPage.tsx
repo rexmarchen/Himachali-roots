@@ -4,6 +4,7 @@ import { formatINR } from '@shared/types';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth, useCartQuery } from '@/lib/session';
 import { useToast } from '@/lib/toast';
+import { usePageMeta } from '@/lib/usePageMeta';
 import {
   Alert,
   Breadcrumbs,
@@ -42,9 +43,16 @@ export function CartPage() {
   const cart = cartQuery.data?.cart;
   const remainingForFreeShipping = cart ? Math.max(0, cart.freeShippingThresholdPaise - cart.subtotalPaise) : 0;
   const progress = cart ? Math.min(100, Math.round((cart.subtotalPaise / cart.freeShippingThresholdPaise) * 100)) : 0;
+  const hasLines = Boolean(cart && cart.lines.length > 0);
+
+  usePageMeta({
+    title: 'Your bag · Dear Hills',
+    description: 'Review the authentic Himachali products in your Dear Hills bag before checkout.',
+    canonicalPath: '/cart',
+  });
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+    <div className={`mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14 ${hasLines ? 'pb-32 lg:pb-14' : ''}`}>
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Bag' }]} />
       <PageHeader eyebrow="Your selection" title="The bag" lede="Stock is not reserved until you place the order. You can review delivery and payment on the next step." />
 
@@ -105,17 +113,18 @@ export function CartPage() {
                         type="button"
                         onClick={() => removeItem.mutate(line.productId)}
                         disabled={removeItem.isPending}
-                        className="mt-2 text-[11px] text-muted underline underline-offset-4 hover:text-terra"
+                        className="mt-1 inline-flex min-h-11 items-center text-[11px] text-muted underline underline-offset-4 hover:text-terra disabled:opacity-50"
                       >
                         Remove
                       </button>
                     </div>
                     <div className="flex items-center justify-between gap-4 sm:flex-col sm:items-end">
-                      <div className="flex h-9 items-center border border-sand bg-surface">
+                      <div className="flex h-11 items-center border border-sand bg-surface">
                         <button
                           type="button"
                           onClick={() => updateQuantity.mutate({ productId: line.productId, quantity: Math.max(1, line.quantity - 1) })}
-                          className="h-full px-3 text-muted hover:text-ink"
+                          className="h-full min-w-11 px-3 text-muted hover:text-ink disabled:opacity-40"
+                          disabled={updateQuantity.isPending || line.quantity <= 1}
                           aria-label={`Decrease quantity of ${line.name}`}
                         >
                           −
@@ -124,8 +133,8 @@ export function CartPage() {
                         <button
                           type="button"
                           onClick={() => updateQuantity.mutate({ productId: line.productId, quantity: Math.min(line.maxQuantity, line.quantity + 1) })}
-                          className="h-full px-3 text-muted hover:text-ink disabled:opacity-40"
-                          disabled={line.quantity >= line.maxQuantity}
+                          className="h-full min-w-11 px-3 text-muted hover:text-ink disabled:opacity-40"
+                          disabled={updateQuantity.isPending || line.quantity >= line.maxQuantity}
                           aria-label={`Increase quantity of ${line.name}`}
                         >
                           +
@@ -198,6 +207,30 @@ export function CartPage() {
           </aside>
         </div>
       )}
+
+      {hasLines && cart ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-xl lg:hidden">
+          <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                Estimated total · {cart.itemCount} item{cart.itemCount === 1 ? '' : 's'}
+              </p>
+              <p className="font-serif text-xl font-semibold text-forest">
+                {formatINR(cart.subtotalPaise + cart.shippingEstimatePaise)}
+              </p>
+            </div>
+            {user ? (
+              <LinkButton to="/checkout" size="md" className="shrink-0">
+                Checkout
+              </LinkButton>
+            ) : (
+              <LinkButton to={`/login?next=${encodeURIComponent('/checkout')}`} size="md" className="shrink-0">
+                Sign in
+              </LinkButton>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

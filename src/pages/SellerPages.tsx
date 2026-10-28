@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Category, ProductStatus, SellerProduct } from '@shared/types';
@@ -6,6 +6,7 @@ import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS
 import { COMPLIANCE_GUIDES, complianceGroupFor } from '@shared/productCompliance';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { useToast } from '@/lib/toast';
+import { usePageMeta } from '@/lib/usePageMeta';
 import { useAuth } from '@/lib/session';
 import { formatDate, formatDateTime, humanise, percentFromBp, sellerOrderStatusLabel } from '@/lib/format';
 import {
@@ -287,11 +288,64 @@ const SELLER_NAV_GROUPS = [
   },
 ];
 
+function sellerPageTitle(pathname: string) {
+  if (pathname === '/seller/products/new') return 'Add a product';
+  if (/^\/seller\/products\/[^/]+\/edit$/.test(pathname)) return 'Edit product';
+  if (/^\/seller\/orders\/[^/]+$/.test(pathname)) return 'Order details';
+  const items = SELLER_NAV_GROUPS.flatMap((group) => group.items);
+  const match = items.find(
+    (item) => item.to === pathname || (item.to !== '/seller' && pathname.startsWith(`${item.to}/`)),
+  );
+  return match?.label ?? 'Seller Studio';
+}
+
 export function SellerLayout() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const drawerTriggerRef = useRef<HTMLButtonElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
+
+  usePageMeta({ title: `${sellerPageTitle(location.pathname)} · Seller Studio · Dear Hills` });
+
+  useEffect(() => {
+    if (!mobileDrawerOpen) return;
+    const panel = drawerRef.current;
+    const trigger = drawerTriggerRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = window.setTimeout(() => {
+      panel?.querySelector<HTMLElement>('a, button')?.focus();
+    }, 0);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileDrawerOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = panel?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previousOverflow;
+      window.clearTimeout(focusTimer);
+      trigger?.focus();
+    };
+  }, [mobileDrawerOpen]);
 
   const application = useQuery({
     queryKey: ['seller-application'],
@@ -364,7 +418,7 @@ export function SellerLayout() {
               P
             </div>
             <div>
-              <p className="font-serif text-lg tracking-wide text-white group-hover:text-[#D98263] transition-colors">PAHADI ROOTS</p>
+              <p className="font-serif text-lg tracking-wide text-white group-hover:text-[#D98263] transition-colors">DEAR HILLS</p>
               <p className="text-[10px] uppercase tracking-[0.18em] text-[#D98263] font-medium">Maker Studio</p>
             </div>
           </Link>
@@ -401,7 +455,7 @@ export function SellerLayout() {
                           to={`/makers/${seller.slug}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center justify-between rounded-lg px-2.5 py-2 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                          className="flex min-h-11 items-center justify-between rounded-lg px-2.5 py-2 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors"
                         >
                           <div className="flex items-center gap-2.5">
                             <StudioNavIcon type={item.icon} className="h-4 w-4 text-[#D98263]" />
@@ -420,7 +474,7 @@ export function SellerLayout() {
                         end={'end' in item ? item.end : undefined}
                         onClick={() => setMobileDrawerOpen(false)}
                         className={({ isActive }) =>
-                          `flex items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-colors ${
+                          `flex min-h-11 items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-colors ${
                             isActive
                               ? 'bg-[#D98263] text-white font-medium shadow-sm'
                               : 'text-white/70 hover:bg-white/10 hover:text-white'
@@ -481,29 +535,37 @@ export function SellerLayout() {
             onClick={() => setMobileDrawerOpen(false)}
             aria-hidden="true"
           />
-          <div className="fixed inset-y-0 left-0 w-72 max-w-[85vw] shadow-2xl z-50">
+          <div
+            ref={drawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Seller Studio navigation"
+            className="fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] shadow-2xl"
+          >
             {sidebarContent}
           </div>
         </div>
       ) : null}
 
       {/* Main Workspace Area */}
-      <div className="flex flex-1 flex-col lg:pl-64">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
         {/* Studio Top Navigation Bar */}
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[#E4DACE] bg-[#F7F1E7]/90 px-4 sm:px-6 lg:px-8 backdrop-blur-md">
           <div className="flex items-center gap-3">
             <button
+              ref={drawerTriggerRef}
               type="button"
               onClick={() => setMobileDrawerOpen(true)}
-              className="rounded-lg p-2 text-[#172321] hover:bg-black/5 lg:hidden"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-[#172321] hover:bg-black/5 lg:hidden"
               aria-label="Open sidebar menu"
+              aria-expanded={mobileDrawerOpen}
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
             <div>
-              <p className="text-[10px] uppercase tracking-[0.14em] text-[#66745A] font-semibold">PAHADI ROOTS · Maker Studio</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-[#66745A] font-semibold">DEAR HILLS · Maker Studio</p>
               <h2 className="text-base font-serif text-[#172321]">{currentBreadcrumb}</h2>
             </div>
           </div>
@@ -3589,7 +3651,7 @@ export function SellerOrderDetailPage() {
           {/* Slip Header */}
           <div className="border-b border-[#E4DACE] pb-4 flex items-center justify-between">
             <div>
-              <p className="font-serif text-xl font-bold tracking-wide text-[#172321]">PAHADI ROOTS</p>
+              <p className="font-serif text-xl font-bold tracking-wide text-[#172321]">DEAR HILLS</p>
               <p className="text-[10px] uppercase tracking-widest text-[#66745A] font-semibold">Artisan Dispatch & Packing Slip</p>
             </div>
             <div className="text-right">

@@ -6,6 +6,7 @@ import type { PolicyDocument } from '@shared/content';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { useAuth, useSiteContent } from '@/lib/session';
 import { useToast } from '@/lib/toast';
+import { usePageMeta } from '@/lib/usePageMeta';
 import { ProductGrid } from '@/components/ProductCard';
 import {
   Alert,
@@ -59,6 +60,15 @@ export function MakerDetailPage() {
         products: { items: ProductSummary[] };
       }>(`/sellers/${encodeURIComponent(slug)}`),
     enabled: Boolean(slug),
+  });
+
+  usePageMeta({
+    title: detail.data?.seller.name ? `${detail.data.seller.name} · Dear Hills` : 'Maker · Dear Hills',
+    description:
+      detail.data?.seller.tagline ??
+      'Meet a verified Himachali maker and shop their products directly on Dear Hills.',
+    canonicalPath: `/makers/${slug}`,
+    image: detail.data?.seller.imageUrl ?? null,
   });
 
   if (detail.isLoading) {
@@ -362,6 +372,11 @@ export function MakerDetailPage() {
 export function AboutPage() {
   const content = useSiteContent();
   const about = content.data?.content.about;
+  usePageMeta({
+    title: 'Our story · Dear Hills',
+    description: about?.intro ?? 'Why Dear Hills exists: a marketplace built around Himachali makers, not anonymous listings.',
+    canonicalPath: '/about',
+  });
   return (
     <div>
       <div className="border-b border-line bg-surface">
@@ -369,7 +384,7 @@ export function AboutPage() {
           <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'About' }]} />
           <div className="grid gap-10 lg:grid-cols-[1fr_0.8fr] lg:items-end">
             <div>
-              <p className="eyebrow">About PAHADI ROOTS</p>
+              <p className="eyebrow">About DEAR HILLS</p>
               <h1 className="mt-3 max-w-3xl text-4xl leading-[1.05] sm:text-6xl">{about?.title ?? 'A marketplace with mud on its boots'}</h1>
               <p className="mt-6 max-w-2xl text-[15px] leading-[1.85] text-ink/75">{about?.intro}</p>
             </div>
@@ -416,6 +431,11 @@ export function AboutPage() {
 export function SourcingPage() {
   const content = useSiteContent();
   const sourcing = content.data?.content.sourcing;
+  usePageMeta({
+    title: 'How we source · Dear Hills',
+    description: sourcing?.intro ?? 'The verification standard every Dear Hills listing and maker must meet before publication.',
+    canonicalPath: '/sourcing',
+  });
   return (
     <div>
       <div className="border-b border-line">
@@ -472,6 +492,11 @@ export function FaqPage() {
   const content = useSiteContent();
   const faq = content.data?.content.faq;
   const [open, setOpen] = useState<number | null>(0);
+  usePageMeta({
+    title: 'FAQ · Dear Hills',
+    description: 'Answers about shipping, returns, maker verification and paying on Dear Hills.',
+    canonicalPath: '/faq',
+  });
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:py-16">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'FAQ' }]} />
@@ -517,6 +542,11 @@ export function ContactPage() {
   const [fields, setFields] = useState<Record<string, string>>({});
   const [reference, setReference] = useState<string | null>(null);
   const { config } = useAuth();
+  usePageMeta({
+    title: 'Contact & help · Dear Hills',
+    description: 'Reach the Dear Hills support desk about an order, a return or a maker application.',
+    canonicalPath: '/contact',
+  });
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -621,6 +651,11 @@ export function ContactPage() {
 export function CreditsPage() {
   const content = useSiteContent();
   const credits = content.data?.content.credits;
+  usePageMeta({
+    title: 'Image credits · Dear Hills',
+    description: 'Photography attribution and licences for images used on Dear Hills.',
+    canonicalPath: '/credits',
+  });
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:py-16">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Image credits' }]} />
@@ -660,6 +695,12 @@ export function PolicyPage() {
     queryKey: ['policy', key],
     queryFn: () => api<{ policy: PolicyDocument }>(`/policies/${encodeURIComponent(key)}`),
     enabled: Boolean(key),
+  });
+
+  usePageMeta({
+    title: policy.data?.policy.title ? `${policy.data.policy.title} · Dear Hills` : 'Policies · Dear Hills',
+    description: 'Shipping, returns, privacy and marketplace policy documents for Dear Hills.',
+    canonicalPath: `/policies/${key}`,
   });
 
   if (policy.isLoading) return <div className="mx-auto max-w-4xl px-4 py-20"><LoadingBlock rows={4} /></div>;
@@ -716,6 +757,7 @@ export function PolicyPage() {
 export { BecomeAMakerPage as SellPage } from './BecomeAMakerPage';
 
 export function NotFoundPage() {
+  usePageMeta({ title: 'Page not found · Dear Hills' });
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-4 py-20 text-center">
       <p className="eyebrow">404</p>

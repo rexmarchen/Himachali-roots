@@ -1,4 +1,4 @@
--- PAHADI ROOTS — SQLite schema (development / single-instance deployment)
+-- DEAR HILLS — SQLite schema (development / single-instance deployment)
 -- All money is stored as INTEGER paise. Timestamps are ISO-8601 UTC strings.
 -- This schema is the source of truth for the local database; docs/DATABASE.md
 -- describes the PostgreSQL/Supabase migration path and RLS equivalents.

@@ -69,7 +69,7 @@ export const env = {
     port: int(process.env.SMTP_PORT, 587),
     user: process.env.SMTP_USER ?? '',
     pass: process.env.SMTP_PASS ?? '',
-    from: process.env.EMAIL_FROM ?? 'PAHADI ROOTS <no-reply@pahadiroots.example>',
+    from: process.env.EMAIL_FROM ?? 'DEAR HILLS <no-reply@pahadiroots.example>',
     supportEmail: process.env.SUPPORT_EMAIL ?? 'hello@pahadiroots.example',
     get configured() {
       return Boolean(this.host && this.user && this.pass);
@@ -77,7 +77,7 @@ export const env = {
   },
   email: {
     resendApiKey: (process.env.RESEND_API_KEY ?? '').trim(),
-    from: process.env.EMAIL_FROM ?? 'PAHADI ROOTS <no-reply@pahadiroots.example>',
+    from: process.env.EMAIL_FROM ?? 'DEAR HILLS <no-reply@pahadiroots.example>',
     supportEmail: process.env.SUPPORT_EMAIL ?? 'hello@pahadiroots.example',
     adminNotificationEmail: (process.env.ADMIN_NOTIFICATION_EMAIL ?? process.env.SUPPORT_EMAIL ?? 'hello@pahadiroots.example').trim(),
     timeoutMs: int(process.env.EMAIL_TIMEOUT_MS, 10_000),

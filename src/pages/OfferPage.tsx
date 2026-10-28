@@ -66,7 +66,7 @@ export function OfferPage() {
   const data = offer.data;
   const campaign = data?.campaign;
 
-  const title = campaign ? `${campaign.name} — Diwali Offer | PAHADI ROOTS` : 'Festive Offer — PAHADI ROOTS';
+  const title = campaign ? `${campaign.name} — Diwali Offer | DEAR HILLS` : 'Festive Offer — DEAR HILLS';
   const description = campaign
     ? campaign.status === 'active' && campaign.maxDiscountPercent > 0
       ? `${campaign.name}: up to ${campaign.maxDiscountPercent}% off selected authentic Himachali products from reviewed local makers. Only eligible products are discounted.`
@@ -246,6 +246,34 @@ export function OfferPage() {
         </div>
       ) : null}
 
+      {/* Diwali Seller Launch Invitation Card */}
+      <section aria-labelledby="diwali-maker-invite-heading" className="mt-10 overflow-hidden rounded-xl border border-[#D4A373]/50 bg-gradient-to-br from-[#2B1B17] via-[#382017] to-[#1E1410] p-6 sm:p-8 text-paper shadow-lg">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#E07A5F]/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#F4D06F]">
+              <span>🪔</span> Diwali Maker &amp; Artisan Initiative
+            </div>
+            <h2 id="diwali-maker-invite-heading" className="mt-3 font-serif text-2xl sm:text-3xl font-medium text-white">
+              Craft or harvest in Himachal? Sell this Diwali with 0% Commission.
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-[#F7EBE1]/85">
+              We connect authentic weavers, woodcarvers, tea planters and orchardists directly with buyers across India. Join our inaugural maker cohort with zero upfront fees, free storytelling, and doorstep village pickup.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-4 text-xs text-[#F4D06F]">
+              <span className="flex items-center gap-1.5">✓ 0% Platform Commission</span>
+              <span className="flex items-center gap-1.5">✓ Free Artisan Photography &amp; Biography</span>
+              <span className="flex items-center gap-1.5">✓ Prime Homepage Festive Showcase</span>
+            </div>
+          </div>
+          <div className="shrink-0 flex flex-col sm:flex-row lg:flex-col gap-3">
+            <LinkButton to="/become-a-maker?offer=diwali" variant="terra" size="lg" className="whitespace-nowrap shadow-md">
+              Apply as a Maker &rarr;
+            </LinkButton>
+            <p className="text-[11px] text-center text-paper/60">No listing fees · Apply in 5 mins</p>
+          </div>
+        </div>
+      </section>
+
       <section id="offer-products" className="mt-10 scroll-mt-24" aria-labelledby="offer-products-heading">
         <div className="flex flex-col gap-3 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -350,10 +378,19 @@ export function OfferPage() {
         ) : purchasable ? (
           <div className="mt-6">
             <EmptyState
-              eyebrow="Nothing eligible yet"
-              title="The festive shelf is being prepared"
-              body="No products are eligible for this offer right now. Browse the full catalogue while the campaign is configured."
-              action={<LinkButton to="/shop">Browse the catalogue</LinkButton>}
+              eyebrow="Diwali Curation In Progress"
+              title="The festive shelf is welcoming its first mountain makers"
+              body="We are currently onboarding authentic Himachali artisans, weavers and growers for the festival of lights. If you make or grow authentic goods in Himachal, apply now to feature your creations here!"
+              action={
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <LinkButton to="/become-a-maker?offer=diwali" variant="terra">
+                    Join as a Diwali Maker (0% Commission) &rarr;
+                  </LinkButton>
+                  <LinkButton to="/shop" variant="secondary">
+                    Browse the catalogue
+                  </LinkButton>
+                </div>
+              }
             />
           </div>
         ) : (
@@ -369,7 +406,7 @@ export function OfferPage() {
       </section>
 
       <p className="mt-10 text-[11px] leading-relaxed text-muted">
-        Pahadi Roots lists products from reviewed Himachali sellers. Promotional prices are stored with the campaign and
+        DEAR HILLS lists products from reviewed Himachali sellers. Promotional prices are stored with the campaign and
         revalidated against the live catalogue before an order is created. If an offer closes while an item is in your bag,
         the current regular price is used and shown at checkout.{' '}
         <Link to="/policies/terms" className="underline underline-offset-4 hover:text-forest">

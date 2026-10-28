@@ -3,8 +3,10 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Category, CampaignSummary, ProductSummary } from '@shared/types';
+import { formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
 import { api } from '@/lib/api';
+import { usePageMeta } from '@/lib/usePageMeta';
 import { ProductCard } from '@/components/ProductCard';
 import { CampaignBanner } from '@/components/CampaignBanner';
 import {
@@ -170,7 +172,7 @@ function CinematicHero() {
 
   return (
     <section
-      className="relative isolate flex min-h-[90svh] w-full flex-col justify-end overflow-hidden bg-[#101918] text-white lg:min-h-[94vh]"
+      className="relative isolate flex min-h-[62svh] w-full flex-col justify-end overflow-hidden bg-[#101918] text-white lg:min-h-[80vh]"
       aria-roledescription="carousel"
       aria-label="Photographs from Himachal Pradesh"
       onKeyDown={onKeyDown}
@@ -221,29 +223,29 @@ function CinematicHero() {
         />
       </div>
 
-      <div className="relative z-30 mx-auto flex w-full max-w-7xl flex-1 flex-col justify-end px-5 pb-12 pt-40 sm:px-8 sm:pb-16 sm:pt-48 lg:px-12 lg:pt-52">
+      <div className="relative z-30 mx-auto flex w-full max-w-7xl flex-1 flex-col justify-end px-5 pb-6 pt-10 sm:px-8 sm:pb-12 sm:pt-24 lg:px-12 lg:pt-32">
         <div className="max-w-2xl">
-          <div className="inline-flex items-center gap-2.5 rounded-full bg-black/40 backdrop-blur-md border border-white/20 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-white/95 shadow-sm">
-            <span className="h-2 w-2 rounded-full bg-terra animate-pulse" aria-hidden />
+          <div className="inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-black/40 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/95 shadow-sm backdrop-blur-md sm:text-[11px]">
+            <span className="h-2 w-2 rounded-full bg-terra" aria-hidden />
             <span>Rooted in Himachal Pradesh</span>
           </div>
 
-          <h1 className="mt-5 font-serif text-4xl sm:text-5xl lg:text-[4.2rem] font-normal leading-[1.03] tracking-[-0.02em] text-white drop-shadow-md">
+          <h1 className="mt-4 font-serif text-[2.4rem] font-normal leading-[1.04] tracking-[-0.02em] text-white drop-shadow-md sm:mt-5 sm:text-5xl lg:text-[4.2rem]">
             From the Himalayas,
             <span className="mt-1 block font-normal italic text-butter">with heart.</span>
           </h1>
 
-          <p className="mt-5 max-w-xl text-base sm:text-lg leading-relaxed text-white/90 drop-shadow-xs font-light">
+          <p className="mt-4 max-w-xl text-[15px] font-light leading-relaxed text-white/90 drop-shadow-xs sm:mt-5 sm:text-lg">
             Mountain honey, handloom wool, Kangra tea, and woodcraft — listed by reviewed sellers and dispatched from their own workshops and orchards.
           </p>
 
-          <div className="mt-8 flex flex-wrap items-center gap-3.5 sm:gap-4">
+          <div className="mt-6 flex flex-wrap items-center gap-3 sm:mt-8 sm:gap-4">
             <LinkButton
               to="/shop"
               size="lg"
-              className="!border-terra !bg-terra !text-white shadow-lg hover:!bg-[#C97253] transition-all hover:scale-105 font-semibold px-7 py-3.5 rounded-md text-sm"
+              className="!border-terra !bg-terra !text-white shadow-lg transition-all hover:!bg-[#C97253] sm:px-7 sm:py-3.5 rounded-md text-sm font-semibold"
             >
-              Shop the Collection
+              Shop the collection
               <span aria-hidden className="ml-2">
                 →
               </span>
@@ -251,29 +253,29 @@ function CinematicHero() {
 
             <Link
               to="/makers"
-              className="inline-flex items-center gap-2 rounded-md border border-white/40 bg-white/15 backdrop-blur-md px-6 py-3.5 text-sm font-semibold text-white shadow-sm hover:border-white hover:bg-white/25 transition-all"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-white/40 bg-white/15 px-5 py-2.5 text-sm font-semibold text-white shadow-sm backdrop-blur-md transition-all hover:border-white hover:bg-white/25 sm:px-6 sm:py-3.5"
             >
-              Meet the Makers
+              Meet the makers
             </Link>
           </div>
 
-          <ul className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/20 pt-5 text-xs text-white/90 font-medium">
+          <ul className="mt-6 hidden flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/20 pt-4 text-[11.5px] font-medium text-white/90 sm:mt-9 sm:flex sm:gap-x-6 sm:pt-5 sm:text-xs">
             <li className="flex items-center gap-2">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="w-3.5 h-3.5 text-terra shrink-0 stroke-[2.2]" aria-hidden>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="h-3.5 w-3.5 shrink-0 stroke-[2.2] text-terra" aria-hidden>
                 <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span>Every listing names its seller</span>
             </li>
             <li aria-hidden className="hidden h-3 w-px bg-white/25 sm:block" />
             <li className="flex items-center gap-2">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="w-3.5 h-3.5 text-terra shrink-0 stroke-[2.2]" aria-hidden>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="h-3.5 w-3.5 shrink-0 stroke-[2.2] text-terra" aria-hidden>
                 <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span>Origin badges only after review</span>
             </li>
             <li aria-hidden className="hidden h-3 w-px bg-white/25 sm:block" />
             <li className="flex items-center gap-2">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="w-3.5 h-3.5 text-terra shrink-0 stroke-[2.2]" aria-hidden>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="h-3.5 w-3.5 shrink-0 stroke-[2.2] text-terra" aria-hidden>
                 <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span>Dispatched by the maker</span>
@@ -282,7 +284,7 @@ function CinematicHero() {
         </div>
       </div>
 
-      <div className="relative z-30 border-t border-white/15 bg-black/45 backdrop-blur-md">
+      <div className="relative z-30 border-t border-white/15 bg-black/45 pb-[calc(2rem+env(safe-area-inset-bottom))] backdrop-blur-md md:pb-0">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
           <div className="min-w-0 flex items-center gap-2.5">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4 text-terra shrink-0 stroke-2" aria-hidden>
@@ -296,7 +298,7 @@ function CinematicHero() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5" aria-label="Choose a photograph">
+            <div className="flex items-center gap-1" aria-label="Choose a photograph">
               {HERO_SLIDES.map((item, index) => (
                 <button
                   key={item.id}
@@ -304,21 +306,25 @@ function CinematicHero() {
                   aria-current={index === current ? 'true' : undefined}
                   aria-label={`${item.place}: ${item.caption}`}
                   onClick={() => goTo(index)}
-                  className={`relative h-[3px] overflow-hidden rounded-full transition-all duration-300 ${
-                    index === current ? 'w-12 bg-white/30' : 'w-5 bg-white/20 hover:bg-white/50'
-                  }`}
+                  className="group flex h-11 min-w-6 items-center justify-center px-0.5"
                 >
-                  {index === current ? (
-                    <span
-                      key={current}
-                      className="hero-progress absolute inset-y-0 left-0 bg-white"
-                      style={{
-                        animationDuration: `${HERO_INTERVAL_MS}ms`,
-                        animationPlayState: playing ? 'running' : 'paused',
-                      }}
-                      onAnimationEnd={() => goTo(current + 1)}
-                    />
-                  ) : null}
+                  <span
+                    className={`relative block h-[3px] overflow-hidden rounded-full transition-all duration-300 ${
+                      index === current ? 'w-12 bg-white/30' : 'w-5 bg-white/20 group-hover:bg-white/50'
+                    }`}
+                  >
+                    {index === current ? (
+                      <span
+                        key={current}
+                        className="hero-progress absolute inset-y-0 left-0 bg-white"
+                        style={{
+                          animationDuration: `${HERO_INTERVAL_MS}ms`,
+                          animationPlayState: playing ? 'running' : 'paused',
+                        }}
+                        onAnimationEnd={() => goTo(current + 1)}
+                      />
+                    ) : null}
+                  </span>
                 </button>
               ))}
             </div>
@@ -333,7 +339,7 @@ function CinematicHero() {
                 onClick={() => setManualPause((value) => !value)}
                 aria-label={manualPause ? 'Resume the photograph sequence' : 'Pause the photograph sequence'}
                 aria-pressed={manualPause}
-                className="flex h-7 w-7 items-center justify-center rounded border border-white/30 text-white/80 transition-colors hover:border-white hover:text-white"
+                className="flex h-11 w-11 items-center justify-center rounded border border-white/30 text-white/80 transition-colors hover:border-white hover:text-white"
               >
                 {manualPause ? (
                   <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3" aria-hidden>
@@ -393,7 +399,7 @@ function MountainStorySection() {
             Kangra garden picks tea in flushes.
           </p>
           <p className="mt-4 text-[15.5px] leading-[1.85] text-ink/75">
-            PAHADI ROOTS is a marketplace, not a factory shop. Each seller applies, is reviewed, and keeps their own
+            DEAR HILLS is a marketplace, not a factory shop. Each seller applies, is reviewed, and keeps their own
             storefront. What you buy is packed and dispatched by the workshop that made it.
           </p>
 
@@ -469,33 +475,34 @@ const CATEGORY_VISUALS: Record<string, { image: string; tag: string }> = {
 };
 
 function CategoryCollectionSection({ categories }: { categories: Category[] }) {
+  const liveCategories = categories.filter((category) => (category.productCount ?? 0) > 0);
+  const listingCount = liveCategories.reduce((total, category) => total + (category.productCount ?? 0), 0);
+
   return (
-    <section className="border-b border-line bg-paper py-16 lg:py-20">
+    <section className="border-b border-line bg-paper py-12 sm:py-16 lg:py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-10 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-7 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-terra">
               <span className="h-px w-6 bg-terra" aria-hidden />
-              Curated Shelves
+              Curated shelves
             </p>
-            <h2 className="mt-3 font-serif text-3xl sm:text-4xl text-forest font-normal">
-              Shop by category
-            </h2>
+            <h2 className="mt-3 font-serif text-2xl font-normal text-forest sm:text-4xl">Shop by category</h2>
             <p className="mt-2 text-sm text-muted">
-              Organised by craft discipline — explore handloom woolens, teas, honey, and mountain pantry staples.
+              Organised by craft discipline — handloom woolens, teas, honey, and mountain pantry staples.
             </p>
           </div>
           <Link
             to="/shop"
-            className="text-xs font-semibold uppercase tracking-wider text-forest hover:text-terra transition-colors self-start sm:self-auto"
+            className="self-start text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:text-terra sm:self-auto"
           >
-            Browse All ({categories.reduce((acc, c) => acc + (c.productCount ?? 0), 0)} listings) →
+            Browse all ({listingCount} listings) →
           </Link>
         </div>
 
-        {categories.length ? (
+        {liveCategories.length ? (
           <div className="grid grid-cols-2 gap-3.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
-            {categories.map((category) => {
+            {liveCategories.map((category) => {
               const visual = CATEGORY_VISUALS[category.slug] ?? {
                 image: '/images/editorial-terrace.jpg',
                 tag: 'Himachal',
@@ -602,6 +609,26 @@ function MakersCelebrationSection({ makers }: { makers: MakerSummary[] }) {
             </article>
           ))}
         </div>
+
+        {/* Diwali Maker Onboarding Invitation */}
+        <div className="mt-12 rounded-xl border border-[#D4A373]/40 bg-[#FAF5EE] p-6 sm:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6 shadow-xs">
+          <div className="max-w-2xl">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E07A5F]/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[#C06041]">
+              🪔 Diwali Maker Initiative
+            </span>
+            <h3 className="mt-2 font-serif text-2xl text-forest">
+              Are you crafting or harvesting in Himachal?
+            </h3>
+            <p className="mt-1 text-xs leading-relaxed text-ink/75 sm:text-sm">
+              Launch your festive storefront this Diwali with <strong>0% Commission for 6 months</strong>, free craft storytelling, and insured doorstep dispatch from all 12 districts.
+            </p>
+          </div>
+          <div className="shrink-0">
+            <LinkButton to="/become-a-maker?offer=diwali" variant="terra" size="md">
+              Sell on DEAR HILLS &rarr;
+            </LinkButton>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -705,7 +732,7 @@ function SourcingStandardSection() {
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-muted">
               A marketplace is only as trustworthy as its verification process. These four rules govern every shelf on
-              PAHADI ROOTS today.
+              DEAR HILLS today.
             </p>
             <div className="mt-8">
               <LinkButton to="/sourcing" variant="secondary" size="md">
@@ -899,11 +926,70 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
   );
 }
 
+function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestsellers'] }) {
+  if (!bestsellers.length) return null;
+
+  return (
+    <section className="border-b border-line bg-surface py-10 sm:py-14">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-6 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-terra">Actually purchased</p>
+            <h2 className="mt-2 font-serif text-2xl text-forest sm:text-3xl">Bestsellers right now</h2>
+            <p className="mt-1 text-xs text-muted">Ranked by paid units sold in the last 90 days.</p>
+          </div>
+          <Link to="/shop" className="shrink-0 text-xs font-semibold text-forest underline underline-offset-4 hover:text-terra">
+            Shop all →
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-4">
+          {bestsellers.map((item, index) => (
+            <Link key={item.slug} to={`/shop/${item.slug}`} className="group min-w-0">
+              <div className="relative aspect-square overflow-hidden border border-line bg-sand/30">
+                {item.imageUrl ? (
+                  <img
+                    src={item.imageUrl}
+                    alt={item.imageAlt ?? item.name}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-[11px] text-muted">No photograph</div>
+                )}
+                <span className="absolute left-2 top-2 border border-line bg-paper/95 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-forest">
+                  #{index + 1}
+                </span>
+              </div>
+              <p className="mt-2 truncate text-[9.5px] uppercase tracking-[0.14em] text-muted">{item.sellerName}</p>
+              <h3 className="mt-0.5 line-clamp-2 font-serif text-[15px] leading-snug text-forest transition-colors group-hover:text-terra sm:text-base">
+                {item.name}
+              </h3>
+              <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2">
+                <span className="text-[13px] font-medium text-ink">{formatINR(item.pricePaise)}</span>
+                <span className="text-[10px] text-muted">{item.unitsSold} sold</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function HomePage() {
   const home = useQuery({
     queryKey: ['home'],
     queryFn: () => api<HomeResponse>('/home'),
     staleTime: 60_000,
+  });
+
+  usePageMeta({
+    title: 'Dear Hills · From the Himalayas, with heart',
+    description:
+      'Shop shawls, Kangra tea, mountain honey, dry fruit and pantry staples made and grown in Himachal Pradesh, sold by the people who make them.',
+    canonicalPath: '/',
   });
 
   if (home.isLoading) {
@@ -944,25 +1030,28 @@ export function HomePage() {
         </div>
       ) : null}
 
-      {/* 3. Featured Products: Handpicked from the Himalayas */}
-      <FeaturedProductsSection products={data.featured} />
-
-      {/* Section A: Discover the Mountains */}
-      <MountainStorySection />
-
-      {/* Section B: Shop by Collection */}
+      {/* 3. Shop by collection */}
       <CategoryCollectionSection categories={data.categories} />
 
-      {/* Section E: The Feeling of Himachal (Atmospheric Interlude) */}
-      <MountainInterludeSection />
+      {/* 4. Featured products: handpicked from the Himalayas */}
+      <FeaturedProductsSection products={data.featured} />
 
-      {/* Section C: Meet the Makers */}
+      {/* 5. Real bestsellers from paid orders */}
+      <BestsellersSection bestsellers={data.bestsellers} />
+
+      {/* 6. Meet the makers */}
       <MakersCelebrationSection makers={data.makers} />
 
-      {/* Section F: Gifting & Seasonal Collections */}
+      {/* 7. Discover the mountains */}
+      <MountainStorySection />
+
+      {/* 8. Atmospheric interlude */}
+      <MountainInterludeSection />
+
+      {/* 9. Gifting & seasonal collections */}
       <GiftingSection gifting={data.gifting} content={content} />
 
-      {/* Section G: Our Promise & Verification Principles */}
+      {/* 10. Our promise & verification principles */}
       <SourcingStandardSection />
 
       {/* Verified Customer Reviews */}

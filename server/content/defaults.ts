@@ -25,7 +25,7 @@ export const DEFAULT_CONTENT: SiteContent = {
     editorial: {
       title: 'The slow work of a mountain winter',
       body: 'In many Himachali homes, winter is when the loom comes out. Wool is carded by the fire, patterns are remembered rather than written down, and a shawl takes weeks instead of minutes. We look for that pace — not because it is romantic, but because it changes how a thing wears.',
-      signature: 'Notes from the PAHADI ROOTS desk',
+      signature: 'Notes from the DEAR HILLS desk',
       image: '/images/weaving.jpg',
       imageAlt: 'Hands working a traditional wooden handloom',
       imageCredit: 'Photograph via Wikimedia Commons — see image credits',
@@ -41,7 +41,7 @@ export const DEFAULT_CONTENT: SiteContent = {
   about: {
     title: 'A marketplace with mud on its boots',
     intro:
-      'PAHADI ROOTS is a curated marketplace for products made and grown in Himachal Pradesh. We are building it so that small mountain businesses can reach customers across India without sanding off what makes them local.',
+      'DEAR HILLS is a curated marketplace for products made and grown in Himachal Pradesh. We are building it so that small mountain businesses can reach customers across India without sanding off what makes them local.',
     sections: [
       {
         heading: 'Why a marketplace, not a souvenir shop',
@@ -53,7 +53,7 @@ export const DEFAULT_CONTENT: SiteContent = {
       },
       {
         heading: 'What we are still building',
-        body: 'PAHADI ROOTS is a young business. Seller verification, payout operations, and policy documents are being formalised. Where a claim or certification has not been documented, we do not display it. Where a process is manual, we say so.',
+        body: 'DEAR HILLS is a young business. Seller verification, payout operations, and policy documents are being formalised. Where a claim or certification has not been documented, we do not display it. Where a process is manual, we say so.',
       },
       {
         heading: 'Business details',
@@ -118,7 +118,7 @@ export const DEFAULT_CONTENT: SiteContent = {
           'Not unless the listing explicitly says so and shows the evidence reviewed by us. We do not use certification badges by default. If you need documentation for a specific product, ask us before ordering.',
       },
       {
-        question: 'How do I sell on PAHADI ROOTS?',
+        question: 'How do I sell on DEAR HILLS?',
         answer:
           'Apply through the seller application. You will need identity and business details, your operating location, the categories you make, and applicable registrations. Applications are reviewed manually. Products cannot go live until the seller and the listing are approved.',
       },
@@ -136,7 +136,7 @@ export const DEFAULT_CONTENT: SiteContent = {
   },
   credits: {
     intro:
-      'Photography on this development build is illustrative and sourced from Wikimedia Commons under the licences listed below. Images do not depict specific PAHADI ROOTS sellers or imply that a product comes from the place shown. Replace these assets with original product photography before launch.',
+      'Photography on this development build is illustrative and sourced from Wikimedia Commons under the licences listed below. Images do not depict specific DEAR HILLS sellers or imply that a product comes from the place shown. Replace these assets with original product photography before launch.',
     items: [],
   },
   policies: {
@@ -251,11 +251,11 @@ export const DEFAULT_CONTENT: SiteContent = {
       title: 'Terms of service',
       status: 'draft',
       lastUpdated: 'Draft — legal review pending',
-      summary: 'The contract between you and PAHADI ROOTS when you use the marketplace.',
+      summary: 'The contract between you and DEAR HILLS when you use the marketplace.',
       sections: [
         {
           heading: 'The marketplace',
-          body: 'PAHADI ROOTS provides a platform for independent sellers to offer goods to customers in India. The seller is responsible for the product, its description, compliance, and dispatch. PAHADI ROOTS is responsible for operating the marketplace, processing payments, and administering its published policies.',
+          body: 'DEAR HILLS provides a platform for independent sellers to offer goods to customers in India. The seller is responsible for the product, its description, compliance, and dispatch. DEAR HILLS is responsible for operating the marketplace, processing payments, and administering its published policies.',
         },
         {
           heading: 'Accounts',
@@ -275,7 +275,7 @@ export const DEFAULT_CONTENT: SiteContent = {
         },
         {
           heading: 'Content and intellectual property',
-          body: 'Product photographs and text are provided by sellers and used with permission. The PAHADI ROOTS name, design, and original site content belong to the business. Do not reuse them commercially without permission.',
+          body: 'Product photographs and text are provided by sellers and used with permission. The DEAR HILLS name, design, and original site content belong to the business. Do not reuse them commercially without permission.',
         },
         {
           heading: 'Liability and governing law',
@@ -288,7 +288,7 @@ export const DEFAULT_CONTENT: SiteContent = {
       status: 'draft',
       lastUpdated: 'Draft — legal review pending',
       summary:
-        'The commercial terms for selling on PAHADI ROOTS, including commission, dispatch, refunds, settlements, and suspension.',
+        'The commercial terms for selling on DEAR HILLS, including commission, dispatch, refunds, settlements, and suspension.',
       sections: [
         {
           heading: 'Eligibility and approval',

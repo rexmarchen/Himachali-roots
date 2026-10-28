@@ -1,22 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import type { Paged, ProductSummary } from '@shared/types';
+import type { Category, Paged, ProductSummary } from '@shared/types';
 import { formatINR } from '@shared/types';
 import { api } from '@/lib/api';
 
-const CATEGORIES = [
-  { label: 'All Himachal', value: '' },
-  { label: 'Shawls & Weaves', value: 'shawls-and-weaves' },
-  { label: 'Kangra Tea', value: 'tea-and-infusions' },
-  { label: 'Dry Fruit & Nuts', value: 'dry-fruit-and-nuts' },
-  { label: 'Honey & Preserves', value: 'pantry-and-preserves' },
-  { label: 'Cold-Pressed Oils', value: 'cold-pressed-oils' },
-  { label: 'Mountain Pulses', value: 'pulses-and-staples' },
-  { label: 'Knitwear', value: 'knitwear' },
-  { label: 'Himachali Caps', value: 'caps-and-headwear' },
-  { label: 'Gifting Boxes', value: 'gifting' },
-];
+const RECENT_KEY = 'dear-hills-recent-searches';
 
 const TRENDING_SEARCHES = [
   'Kangra Orthodox Tea',
@@ -24,32 +13,86 @@ const TRENDING_SEARCHES = [
   'Lahaul Wildflower Honey',
   'Wild Apricot Kernel Oil',
   'Kinnaur Walnut Kernels',
-  'Pure Himalayan Shilajit',
   'Chamba Red Rajma',
 ];
 
-export function EcommerceSearchBar({
-  light = false,
-  className = '',
-}: {
-  light?: boolean;
-  className?: string;
-}) {
+function readRecentSearches(): string[] {
+  try {
+    const raw = window.localStorage.getItem(RECENT_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string').slice(0, 6) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberSearch(term: string): string[] {
+  const next = [term, ...readRecentSearches().filter((item) => item.toLowerCase() !== term.toLowerCase())].slice(0, 6);
+  try {
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    /* Storage can be unavailable in private modes; search still works. */
+  }
+  return next;
+}
+
+export function EcommerceSearchBar({ className = '', inputId = 'site-search' }: { light?: boolean; className?: string; inputId?: string }) {
+  const listboxId = `${inputId}-listbox`;
   const [query, setQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [recent, setRecent] = useState<string[]>(readRecentSearches);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
-  // Load products catalog for live autocomplete
-  const { data: productsData } = useQuery({
-    queryKey: ['products-all'],
-    queryFn: () => api<Paged<ProductSummary>>('/products'),
+  const productsQuery = useQuery({
+    queryKey: ['search-products'],
+    queryFn: () => api<Paged<ProductSummary>>('/products?pageSize=48'),
     staleTime: 5 * 60 * 1000,
   });
 
-  // Handle outside click to close dropdown
+  const categoriesQuery = useQuery({
+    queryKey: ['search-categories'],
+    queryFn: () => api<{ categories: Category[] }>('/categories'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const categoryOptions = useMemo(() => {
+    const live = (categoriesQuery.data?.categories ?? [])
+      .filter((category) => (category.productCount ?? 0) > 0)
+      .map((category) => ({ label: category.name, value: category.slug }));
+    return [{ label: 'All Himachal', value: '' }, ...live];
+  }, [categoriesQuery.data]);
+
+  const trimmedQuery = query.trim();
+
+  const matchingProducts = useMemo<ProductSummary[]>(() => {
+    if (!trimmedQuery || !productsQuery.data?.items) return [];
+    const q = trimmedQuery.toLowerCase();
+    return productsQuery.data.items
+      .filter((product) => {
+        const matchesCategory = !selectedCategory || product.categorySlug === selectedCategory;
+        const matchesText =
+          product.name.toLowerCase().includes(q) ||
+          product.shortDescription?.toLowerCase().includes(q) ||
+          product.categoryName?.toLowerCase().includes(q) ||
+          product.sellerName?.toLowerCase().includes(q) ||
+          product.region?.toLowerCase().includes(q);
+        return matchesCategory && matchesText;
+      })
+      .slice(0, 5);
+  }, [trimmedQuery, selectedCategory, productsQuery.data]);
+
+  const options = useMemo(() => {
+    if (!trimmedQuery) return [] as ({ kind: 'submit' } | { kind: 'product'; product: ProductSummary })[];
+    return [
+      { kind: 'submit' as const },
+      ...matchingProducts.map((product) => ({ kind: 'product' as const, product })),
+    ];
+  }, [trimmedQuery, matchingProducts]);
+
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -60,133 +103,135 @@ export function EcommerceSearchBar({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  // Filter products live
-  const matchingProducts = useMemo<ProductSummary[]>(() => {
-    const q = query.trim().toLowerCase();
-    if (!q || !productsData?.items) return [];
-
-    return productsData.items
-      .filter((p: ProductSummary) => {
-        const matchesCategory = !selectedCategory || p.categorySlug === selectedCategory;
-        const matchesText =
-          p.name.toLowerCase().includes(q) ||
-          p.shortDescription?.toLowerCase().includes(q) ||
-          p.categoryName?.toLowerCase().includes(q) ||
-          p.sellerName?.toLowerCase().includes(q) ||
-          p.region?.toLowerCase().includes(q);
-        return matchesCategory && matchesText;
-      })
-      .slice(0, 4);
-  }, [query, selectedCategory, productsData]);
-
-  const handleSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const trimmed = query.trim();
+  const handleSubmit = (event?: React.FormEvent) => {
+    event?.preventDefault();
     const params = new URLSearchParams();
-    if (trimmed) params.set('q', trimmed);
+    if (trimmedQuery) {
+      params.set('q', trimmedQuery);
+      setRecent(rememberSearch(trimmedQuery));
+    }
     if (selectedCategory) params.set('category', selectedCategory);
-
     const queryString = params.toString();
     navigate(queryString ? `/shop?${queryString}` : '/shop');
     setIsOpen(false);
+    setActiveIndex(-1);
     inputRef.current?.blur();
   };
 
   const handleSelectProduct = (slug: string) => {
-    navigate(`/products/${slug}`);
+    navigate(`/shop/${slug}`);
     setIsOpen(false);
+    setActiveIndex(-1);
+    inputRef.current?.blur();
   };
 
-  const handleSelectTrending = (term: string) => {
+  const handleSelectTerm = (term: string) => {
     setQuery(term);
-    navigate(`/shop?q=${encodeURIComponent(term)}`);
+    setRecent(rememberSearch(term));
+    const params = new URLSearchParams({ q: term });
+    if (selectedCategory) params.set('category', selectedCategory);
+    navigate(`/shop?${params.toString()}`);
     setIsOpen(false);
+    setActiveIndex(-1);
+    inputRef.current?.blur();
   };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      setIsOpen(false);
+      setActiveIndex(-1);
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setIsOpen(true);
+      if (!options.length) return;
+      setActiveIndex((index) => (index + 1 >= options.length ? 0 : index + 1));
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!options.length) return;
+      setActiveIndex((index) => (index <= 0 ? options.length - 1 : index - 1));
+      return;
+    }
+    if (event.key === 'Enter' && activeIndex >= 0 && options[activeIndex]) {
+      event.preventDefault();
+      const option = options[activeIndex];
+      if (option.kind === 'product') handleSelectProduct(option.product.slug);
+      else handleSubmit();
+    }
+  };
+
+  const showQueryPanel = Boolean(trimmedQuery);
+  const categoryLabel = categoryOptions.find((category) => category.value === selectedCategory)?.label ?? 'All Himachal';
 
   return (
-    <div ref={containerRef} className={`relative w-full ${className}`}>
-      {/* Search Input Box */}
+    <div
+      ref={containerRef}
+      className={`relative w-full ${className}`}
+      onBlur={(event) => {
+        if (!containerRef.current?.contains(event.relatedTarget as Node)) setIsOpen(false);
+      }}
+    >
       <form
         onSubmit={handleSubmit}
-        className={`group flex items-center h-[38px] w-full rounded-full transition-all duration-200 ${
+        role="search"
+        className={`group flex h-11 w-full items-center rounded-full border transition-all duration-200 ${
           isOpen
-            ? light
-              ? 'ring-2 ring-terra bg-[#101918]/95 border-terra/60 shadow-2xl'
-              : 'ring-2 ring-terra bg-white border-terra shadow-lg'
-            : light
-              ? 'bg-[#172321]/80 hover:bg-[#172321]/90 text-[#F7F3EB] border border-white/25 backdrop-blur-md shadow-md'
-              : 'bg-[#F2ECE1] hover:bg-[#ECE4D7] text-ink border border-[#D8CEBF] shadow-xs'
+            ? 'border-terra bg-white shadow-lg ring-2 ring-terra/25'
+            : 'border-line bg-[#F2ECE1] text-ink shadow-xs hover:bg-[#ECE4D7]'
         }`}
       >
-        {/* Category Dropdown */}
-        <div
-          className={`relative shrink-0 hidden sm:flex items-center h-full rounded-l-full pl-3 pr-2 text-xs transition-colors border-r ${
-            light
-              ? 'bg-white/10 hover:bg-white/15 text-white/90 border-white/20'
-              : 'bg-[#EAE2D5] hover:bg-[#E2D8C9] text-forest border-[#D8CEBF]'
-          }`}
-        >
+        <div className="relative hidden h-full shrink-0 items-center rounded-l-full border-r border-line bg-[#EAE2D5] pl-3 pr-2 sm:flex">
           <select
             value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className={`bg-transparent text-[11px] font-medium outline-none cursor-pointer pr-4 max-w-[105px] truncate appearance-none ${
-              light ? 'text-white' : 'text-forest'
-            }`}
+            onChange={(event) => {
+              setSelectedCategory(event.target.value);
+              setActiveIndex(-1);
+            }}
+            className="max-w-[112px] cursor-pointer appearance-none truncate bg-transparent pr-4 text-[11px] font-medium text-forest outline-none"
             aria-label="Filter search by category"
           >
-            {CATEGORIES.map((cat) => (
-              <option key={cat.value} value={cat.value} className="text-forest bg-[#F7F3EB]">
-                {cat.label}
+            {categoryOptions.map((category) => (
+              <option key={category.value} value={category.value} className="bg-paper text-forest">
+                {category.label}
               </option>
             ))}
           </select>
-          <svg
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className={`w-3 h-3 pointer-events-none absolute right-1.5 transition-colors ${
-              light ? 'text-white/70' : 'text-muted'
-            }`}
-            aria-hidden
-          >
-            <path
-              fillRule="evenodd"
-              d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-              clipRule="evenodd"
-            />
+          <svg viewBox="0 0 20 20" fill="currentColor" className="pointer-events-none absolute right-1.5 h-3 w-3 text-muted" aria-hidden>
+            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
           </svg>
         </div>
 
-        {/* Search Input Field */}
-        <div className="relative flex-1 flex items-center h-full px-3">
-          <svg
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            className={`h-3.5 w-3.5 shrink-0 mr-2 sm:hidden ${
-              light ? 'text-white/60' : 'text-[#8C8275]'
-            }`}
-            aria-hidden
-          >
+        <div className="relative flex h-full flex-1 items-center px-3">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="mr-2 h-4 w-4 shrink-0 text-[#8C8275] sm:hidden" aria-hidden>
             <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="1.8" />
             <path d="M12.5 12.5 17 17" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
 
           <input
             ref={inputRef}
-            type="text"
+            id={inputId}
+            type="search"
             value={query}
             onFocus={() => setIsOpen(true)}
-            onChange={(e) => {
-              setQuery(e.target.value);
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActiveIndex(-1);
               setIsOpen(true);
             }}
+            onKeyDown={handleKeyDown}
             placeholder="Search shawls, tea, honey…"
-            className={`w-full bg-transparent text-[12.5px] sm:text-[13px] outline-none transition-colors ${
-              light
-                ? 'text-[#F7F3EB] placeholder-white/55'
-                : 'text-ink placeholder-[#7A7163]'
-            }`}
+            autoComplete="off"
+            enterKeyHint="search"
+            role="combobox"
+            aria-expanded={isOpen}
+            aria-controls={listboxId}
+            aria-autocomplete="list"
+            aria-activedescendant={activeIndex >= 0 ? `${inputId}-option-${activeIndex}` : undefined}
             aria-label="Search products, makers and categories"
+            className="w-full bg-transparent text-base text-ink outline-none placeholder:text-[#7A7163] sm:text-[13px] [&::-webkit-search-cancel-button]:hidden"
           />
 
           {query ? (
@@ -194,154 +239,202 @@ export function EcommerceSearchBar({
               type="button"
               onClick={() => {
                 setQuery('');
+                setActiveIndex(-1);
                 inputRef.current?.focus();
               }}
-              className={`p-1 mr-1 text-[10px] rounded-full transition-colors ${
-                light
-                  ? 'text-white/60 hover:text-white hover:bg-white/15'
-                  : 'text-muted hover:text-ink hover:bg-sand/60'
-              }`}
+              className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-sand/60 hover:text-ink"
               aria-label="Clear search"
             >
-              ✕
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5" aria-hidden>
+                <path d="m5 5 10 10M15 5 5 15" strokeLinecap="round" />
+              </svg>
             </button>
           ) : null}
         </div>
 
-        {/* Search Submit Button */}
         <button
           type="submit"
-          className="h-full px-3.5 sm:px-4 flex items-center justify-center bg-terra hover:bg-[#B36347] text-white rounded-r-full font-medium transition-colors shrink-0 shadow-xs border-l border-white/15"
-          aria-label="Submit Search"
+          className="flex h-full shrink-0 items-center justify-center rounded-r-full border-l border-white/15 bg-terra px-3.5 font-medium text-white transition-colors hover:bg-[#b9694c] sm:px-4"
+          aria-label="Submit search"
         >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-3.5 w-3.5" aria-hidden>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
             <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="2" />
             <path d="M12.5 12.5 17 17" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          <span className="hidden sm:inline ml-1.5 text-[11.5px] font-semibold tracking-wide">Search</span>
+          <span className="ml-1.5 hidden text-[11.5px] font-semibold tracking-wide sm:inline">Search</span>
         </button>
       </form>
 
-      {/* Autocomplete Dropdown (Flipkart / Amazon attached dropdown) */}
       {isOpen ? (
-        <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl bg-white border border-[#E5DED2] shadow-2xl z-50 overflow-hidden divide-y divide-[#F0EAE1] animate-fade-in text-ink">
-          {query.trim() ? (
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[min(70vh,34rem)] overflow-y-auto rounded-xl border border-line bg-surface text-ink shadow-2xl fade-in">
+          {showQueryPanel ? (
             <div>
-              {/* Direct query search row */}
-              <button
-                type="button"
-                onClick={() => handleSubmit()}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#F9F6F0] transition-colors"
-              >
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-terra/10 text-terra shrink-0">
-                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-3.5 w-3.5" aria-hidden>
-                    <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="2" />
-                    <path d="M12.5 12.5 17 17" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-[13px] font-medium text-ink">
-                    Search for <span className="font-semibold text-terra font-serif text-sm">"{query}"</span>{' '}
-                    {selectedCategory ? `in ${CATEGORIES.find((c) => c.value === selectedCategory)?.label}` : 'in All Products'}
-                  </p>
-                </div>
-                <span className="text-xs text-muted shrink-0 font-medium">See all results →</span>
-              </button>
+              <div id={listboxId} role="listbox" aria-label="Search suggestions">
+                <button
+                  id={`${inputId}-option-0`}
+                  type="button"
+                  role="option"
+                  aria-selected={activeIndex === 0}
+                  onClick={() => handleSubmit()}
+                  onMouseEnter={() => setActiveIndex(0)}
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                    activeIndex === 0 ? 'bg-paper' : 'hover:bg-paper'
+                  }`}
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-terra/10 text-terra">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-3.5 w-3.5" aria-hidden>
+                      <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="2" />
+                      <path d="M12.5 12.5 17 17" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-medium text-ink">
+                      Search for <span className="font-semibold text-terra">“{trimmedQuery}”</span>
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-muted">in {categoryLabel}</span>
+                  </span>
+                  <span className="shrink-0 text-[11px] font-medium text-muted">See all →</span>
+                </button>
 
-              {/* Product Match Previews */}
-              {matchingProducts.length > 0 ? (
-                <div className="px-3 py-2 border-t border-[#F0EAE1]">
-                  <p className="px-2 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-muted">
-                    Matching Himachal Products
-                  </p>
-                  <div className="space-y-1 mt-1">
-                    {matchingProducts.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => handleSelectProduct(p.slug)}
-                        className="group flex w-full items-center gap-3.5 p-2 rounded-xl hover:bg-[#F7F3EB] transition-colors text-left"
-                      >
+                {matchingProducts.map((product, index) => {
+                  const optionIndex = index + 1;
+                  return (
+                    <button
+                      key={product.id}
+                      id={`${inputId}-option-${optionIndex}`}
+                      type="button"
+                      role="option"
+                      aria-selected={activeIndex === optionIndex}
+                      onClick={() => handleSelectProduct(product.slug)}
+                      onMouseEnter={() => setActiveIndex(optionIndex)}
+                      className={`flex w-full items-center gap-3 border-t border-line/60 px-4 py-2.5 text-left transition-colors ${
+                        activeIndex === optionIndex ? 'bg-paper' : 'hover:bg-paper'
+                      }`}
+                    >
+                      {product.imageUrl ? (
                         <img
-                          src={p.imageUrl ?? undefined}
-                          alt={p.name}
-                          className="h-11 w-11 rounded-lg object-cover bg-sand/30 shrink-0 border border-line"
+                          src={product.imageUrl}
+                          alt=""
+                          loading="lazy"
+                          className="h-11 w-11 shrink-0 rounded-md border border-line bg-sand/30 object-cover"
                         />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-serif text-[14px] font-medium text-ink group-hover:text-terra transition-colors truncate">
-                            {p.name}
-                          </p>
-                          <p className="text-[11px] text-muted truncate">
-                            {p.categoryName} · {p.region} Valley ({p.sellerName})
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <span className="text-xs sm:text-[13px] font-bold text-forest">
-                            {formatINR(p.pricePaise)}
-                          </span>
-                        </div>
+                      ) : (
+                        <span className="h-11 w-11 shrink-0 rounded-md border border-line bg-sand/30" aria-hidden />
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-serif text-[15px] font-medium text-ink">{product.name}</span>
+                        <span className="block truncate text-[11px] text-muted">
+                          {[product.categoryName, product.region, product.sellerName].filter(Boolean).join(' · ')}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[12px] font-semibold text-forest">{formatINR(product.pricePaise)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {productsQuery.isLoading ? (
+                <p className="border-t border-line/60 px-4 py-3 text-[11.5px] text-muted">Searching the shelves…</p>
+              ) : null}
+
+              {!productsQuery.isLoading && matchingProducts.length === 0 ? (
+                <div className="border-t border-line/60 px-4 py-5">
+                  <p className="text-[13px] font-medium text-ink">No products match “{trimmedQuery}”.</p>
+                  <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
+                    Try a shorter word, a craft name, or browse every approved listing.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate('/shop');
+                      setIsOpen(false);
+                    }}
+                    className="mt-3 inline-flex min-h-11 items-center border border-forest px-4 text-[11px] font-semibold uppercase tracking-wider text-forest hover:bg-forest hover:text-paper"
+                  >
+                    Browse all products
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="space-y-4 p-4">
+              {recent.length ? (
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted">Recent searches</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          window.localStorage.removeItem(RECENT_KEY);
+                        } catch {
+                          /* ignore */
+                        }
+                        setRecent([]);
+                      }}
+                      className="text-[11px] text-muted underline underline-offset-2 hover:text-forest"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {recent.map((term) => (
+                      <button
+                        key={term}
+                        type="button"
+                        onClick={() => handleSelectTerm(term)}
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-paper px-3 text-[11.5px] font-medium text-ink transition-colors hover:border-terra hover:text-terra"
+                      >
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-3 w-3 text-muted" aria-hidden>
+                          <circle cx="10" cy="10" r="7" />
+                          <path d="M10 6v4l2.5 1.5" strokeLinecap="round" />
+                        </svg>
+                        {term}
                       </button>
                     ))}
                   </div>
                 </div>
               ) : null}
-            </div>
-          ) : (
-            <div className="p-4 space-y-4">
-              {/* Trending Searches */}
+
               <div>
-                <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-terra" aria-hidden>
-                    <path
-                      fillRule="evenodd"
-                      d="M12.315 2c2.43 0 4.405 1.975 4.405 4.405 0 1.215-.494 2.316-1.293 3.114l-.08.077 3.36 3.36a.75.75 0 11-1.06 1.06l-3.36-3.36-.078.08a4.39 4.39 0 01-3.114 1.294 4.405 4.405 0 01-4.405-4.405C6.69 4.195 8.665 2.22 11.095 2.22c.414 0 .816.057 1.22.17V2zm-.08 1.5a2.905 2.905 0 100 5.81 2.905 2.905 0 000-5.81z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  <span>Trending Searches in Himachal</span>
-                </div>
+                <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted">Popular searches</p>
                 <div className="flex flex-wrap gap-2">
                   {TRENDING_SEARCHES.map((term) => (
                     <button
                       key={term}
                       type="button"
-                      onClick={() => handleSelectTrending(term)}
-                      className="inline-flex items-center gap-1 rounded-full border border-[#E2DAD0] bg-[#FAF8F5] px-3 py-1 text-xs font-medium text-ink hover:border-terra hover:text-terra hover:bg-white transition-all shadow-2xs"
+                      onClick={() => handleSelectTerm(term)}
+                      className="inline-flex min-h-9 items-center rounded-full border border-line bg-[#FAF8F5] px-3 text-[11.5px] font-medium text-ink transition-colors hover:border-terra hover:text-terra"
                     >
-                      <span>{term}</span>
+                      {term}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Quick Valleys */}
-              <div className="border-t border-[#F0EAE1] pt-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-2">
-                  Explore by Region
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div className="border-t border-line pt-3">
+                <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted">Explore by region</p>
+                <div className="grid grid-cols-2 gap-2 text-[11.5px] sm:grid-cols-4">
                   {[
                     { label: 'Kullu Valley', to: '/shop?region=Kullu' },
                     { label: 'Kangra Valley', to: '/shop?region=Kangra' },
                     { label: 'Lahaul & Spiti', to: '/shop?region=Lahaul%20and%20Spiti' },
-                    { label: 'Kinnaur & Chamba', to: '/shop?region=Kinnaur' },
-                  ].map((r) => (
+                    { label: 'Kinnaur', to: '/shop?region=Kinnaur' },
+                  ].map((region) => (
                     <button
-                      key={r.label}
+                      key={region.label}
                       type="button"
                       onClick={() => {
-                        navigate(r.to);
+                        navigate(region.to);
                         setIsOpen(false);
                       }}
-                      className="p-2 rounded-lg bg-[#FAF8F5] border border-[#EAE2D6] hover:bg-white hover:border-forest/40 text-left font-medium text-ink transition-colors"
+                      className="flex min-h-10 items-center gap-1.5 rounded-md border border-line bg-[#FAF8F5] px-2.5 text-left font-medium text-ink transition-colors hover:border-forest/40 hover:bg-white"
                     >
-                      <span className="flex items-center gap-1.5">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-3.5 h-3.5 text-terra shrink-0 stroke-2" aria-hidden>
-                          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" strokeLinejoin="round" />
-                          <circle cx="12" cy="9" r="2.5" />
-                        </svg>
-                        <span>{r.label}</span>
-                      </span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3.5 w-3.5 shrink-0 text-terra" strokeWidth="2" aria-hidden>
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" strokeLinejoin="round" />
+                        <circle cx="12" cy="9" r="2.5" />
+                      </svg>
+                      {region.label}
                     </button>
                   ))}
                 </div>
@@ -349,11 +442,10 @@ export function EcommerceSearchBar({
             </div>
           )}
 
-          {/* Bottom helper */}
-          <div className="flex items-center justify-between px-4 py-2.5 bg-[#FAF8F5] text-[11px] text-muted">
-            <span className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-forest" />
-              Seller-reviewed mountain goods — every product is moderated before listing
+          <div className="flex items-center justify-between gap-3 border-t border-line bg-[#FAF8F5] px-4 py-2.5 text-[10.5px] text-muted">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-forest" />
+              <span className="truncate">Every listing is reviewed before publication</span>
             </span>
             <button
               type="button"
@@ -361,9 +453,9 @@ export function EcommerceSearchBar({
                 navigate('/shop');
                 setIsOpen(false);
               }}
-              className="text-forest hover:text-terra font-medium underline"
+              className="shrink-0 font-medium text-forest underline underline-offset-2 hover:text-terra"
             >
-              Browse all items
+              Browse all
             </button>
           </div>
         </div>

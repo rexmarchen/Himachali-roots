@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, errorFields, errorMessage } from '@/lib/api';
+import { usePageMeta } from '@/lib/usePageMeta';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { Alert, Button, Field, Input } from '@/components/ui';
@@ -15,7 +16,7 @@ function AuthShell({
   footer,
   image = '/images/auth-orchard.jpg',
   imageAlt = 'Freshly harvested Kinnaur apples and mountain citrus in an alpine orchard',
-  imageCredit = 'Himalayan Orchard Harvest · Pahadi Roots',
+  imageCredit = 'Himalayan Orchard Harvest · DEAR HILLS',
 }: {
   eyebrow: string;
   title: string;
@@ -175,6 +176,7 @@ function GoogleAuthSection({
 }
 
 export function LoginPage() {
+  usePageMeta({ title: 'Sign in · Dear Hills' });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -252,7 +254,6 @@ export function LoginPage() {
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
-              tabIndex={-1}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? 'Hide' : 'Show'}
@@ -272,7 +273,7 @@ export function LoginPage() {
       <GoogleAuthSection text="signin_with" onAuthenticated={() => completeSignIn('Signed in with Google.')} />
 
       <p className="mt-6 text-center text-[11.5px] text-muted">
-        New to PAHADI ROOTS?{' '}
+        New to DEAR HILLS?{' '}
         <Link to="/register" className="text-forest underline underline-offset-4 hover:text-terra">
           Create an account
         </Link>
@@ -282,6 +283,7 @@ export function LoginPage() {
 }
 
 export function RegisterPage() {
+  usePageMeta({ title: 'Create your account · Dear Hills' });
   const [form, setForm] = useState({ fullName: '', email: '', password: '' });
   const [consent, setConsent] = useState(false);
   const [terms, setTerms] = useState(false);
@@ -512,6 +514,7 @@ function OtpBoxes({
 }
 
 export function ForgotPasswordPage() {
+  usePageMeta({ title: 'Reset your password · Dear Hills' });
   const [step, setStep] = useState<'request' | 'verify' | 'reset' | 'success'>('request');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -693,7 +696,6 @@ export function ForgotPasswordPage() {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
-                tabIndex={-1}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? 'Hide' : 'Show'}
@@ -714,7 +716,6 @@ export function ForgotPasswordPage() {
                 type="button"
                 onClick={() => setShowConfirm(!showConfirm)}
                 className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
-                tabIndex={-1}
                 aria-label={showConfirm ? 'Hide password' : 'Show password'}
               >
                 {showConfirm ? 'Hide' : 'Show'}
@@ -831,6 +832,7 @@ export function ForgotPasswordPage() {
 }
 
 export function ResetPasswordPage() {
+  usePageMeta({ title: 'Choose a new password · Dear Hills' });
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
   const [password, setPassword] = useState('');
@@ -893,7 +895,6 @@ export function ResetPasswordPage() {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
-                tabIndex={-1}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? 'Hide' : 'Show'}
@@ -914,7 +915,6 @@ export function ResetPasswordPage() {
                 type="button"
                 onClick={() => setShowConfirm(!showConfirm)}
                 className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
-                tabIndex={-1}
                 aria-label={showConfirm ? 'Hide password' : 'Show password'}
               >
                 {showConfirm ? 'Hide' : 'Show'}
@@ -929,6 +929,7 @@ export function ResetPasswordPage() {
 }
 
 export function VerifyEmailPage() {
+  usePageMeta({ title: 'Confirm your email · Dear Hills' });
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const token = params.get('token') ?? '';

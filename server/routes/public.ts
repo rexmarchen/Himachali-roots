@@ -184,7 +184,13 @@ export function publicRouter(db: Db): Router {
   });
 
   router.get('/campaigns/:slug', (req, res) => {
-    const campaign = getCampaignBySlug(db, String(req.params.slug));
+    const rawSlug = String(req.params.slug).toLowerCase();
+    let campaign = getCampaignBySlug(db, String(req.params.slug));
+    if (!campaign && ['diwali', 'diwali-offer', 'festive', 'festive-glow', 'pahadi-festive'].includes(rawSlug)) {
+      campaign =
+        getFeaturedCampaign(db) ??
+        queryOne<CampaignRow>(db, "SELECT * FROM campaigns WHERE status = 'active' ORDER BY created_at DESC LIMIT 1");
+    }
     // Draft and archived campaigns are editorial work in progress: they are not
     // publicly addressable at all. Scheduled and expired campaigns are visible
     // so a shared link does not silently break, but nothing is purchasable.

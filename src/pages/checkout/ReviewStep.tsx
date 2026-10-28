@@ -11,7 +11,7 @@ function EditButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="text-[11px] text-[#6B7269] underline decoration-[#C9BFB0] underline-offset-4 transition-colors hover:text-[#234638]"
+      className="text-[11px] text-muted underline decoration-line underline-offset-4 transition-colors hover:text-forest"
     >
       Edit
     </button>
@@ -63,13 +63,13 @@ export function ReviewStep({
       />
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <div className="border border-[#E3D9C9] p-4">
+        <div className="border border-line p-4">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A8179]">Delivery address</h3>
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Delivery address</h3>
             <EditButton onClick={onEditDelivery} />
           </div>
-          <p className="mt-2 text-[13px] font-medium text-[#234638]">{address.fullName}</p>
-          <p className="mt-1 text-[11.5px] leading-relaxed text-[#5E675F]">
+          <p className="mt-2 text-[13px] font-medium text-forest">{address.fullName}</p>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
             {address.line1}
             {address.line2 ? `, ${address.line2}` : ''}
             <br />
@@ -79,13 +79,13 @@ export function ReviewStep({
           </p>
         </div>
 
-        <div className="border border-[#E3D9C9] p-4">
+        <div className="border border-line p-4">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A8179]">Payment</h3>
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Payment</h3>
             <EditButton onClick={onEditPayment} />
           </div>
-          <p className="mt-2 text-[13px] font-medium text-[#234638]">{methodLabel}</p>
-          <p className="mt-1 text-[11.5px] leading-relaxed text-[#5E675F]">
+          <p className="mt-2 text-[13px] font-medium text-forest">{methodLabel}</p>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
             {method === 'razorpay'
               ? 'After the order is saved you will be asked to pay in Razorpay’s secure window. The order is confirmed only after server-side verification.'
               : 'The order is saved first, then marked paid through the local development simulation. This order is a demo, not a real sale.'}
@@ -93,50 +93,50 @@ export function ReviewStep({
         </div>
       </div>
 
-      <div className="mt-4 border border-[#E3D9C9]">
-        <div className="flex items-center justify-between gap-3 border-b border-[#EDE5D8] px-4 py-2.5">
-          <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A8179]">
+      <div className="mt-4 border border-line">
+        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
             Items · {cart.itemCount}
           </h3>
           <Link
             to="/cart"
-            className="text-[11px] text-[#6B7269] underline decoration-[#C9BFB0] underline-offset-4 hover:text-[#234638]"
+            className="text-[11px] text-muted underline decoration-line underline-offset-4 hover:text-forest"
           >
             Edit bag
           </Link>
         </div>
-        <ul className="divide-y divide-[#F0E9DE] px-4">
+        <ul className="divide-y divide-line px-4">
           {cart.lines.map((line) => (
             <li key={line.productId} className="flex items-baseline justify-between gap-4 py-2.5 text-[12px]">
               <span className="min-w-0">
-                <span className="block truncate text-[#234638]">{line.name}</span>
-                <span className="text-[10.5px] text-[#7A8179]">
+                <span className="block truncate text-forest">{line.name}</span>
+                <span className="text-[10.5px] text-muted">
                   {line.sellerName} · Qty {line.quantity}
                 </span>
               </span>
-              <span className="shrink-0 tabular-nums text-[#234638]">{formatINR(line.lineTotalPaise)}</span>
+              <span className="shrink-0 tabular-nums text-forest">{formatINR(line.lineTotalPaise)}</span>
             </li>
           ))}
         </ul>
       </div>
 
       {coupon ? (
-        <p className="mt-4 border border-[#234638]/20 bg-[#234638]/[0.04] px-4 py-2.5 text-[11.5px] text-[#234638]">
+        <p className="mt-4 border border-forest/20 bg-forest/[0.04] px-4 py-2.5 text-[11.5px] text-forest">
           Coupon <span className="font-semibold">{coupon.code}</span> applied — {formatINR(totals.discountPaise)} off. It will
           be checked once more on the server.
         </p>
       ) : null}
 
       {note ? (
-        <div className="mt-4 border-l-2 border-[#D98060] bg-[#FBF8F2] px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A8179]">Delivery instructions</p>
-          <p className="mt-1 whitespace-pre-line text-[11.5px] leading-relaxed text-[#5E675F]">{note}</p>
+        <div className="mt-4 border-l-2 border-terra bg-paper px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Delivery instructions</p>
+          <p className="mt-1 whitespace-pre-line text-[11.5px] leading-relaxed text-muted">{note}</p>
         </div>
       ) : null}
 
-      <div className="mt-4 flex items-baseline justify-between border border-[#E3D9C9] bg-[#FBF8F2] px-4 py-3">
-        <span className="text-[12.5px] text-[#5E675F]">Total payable</span>
-        <span className="font-serif text-[26px] leading-none text-[#234638]">{formatINR(totals.totalPaise)}</span>
+      <div className="mt-4 flex items-baseline justify-between border border-line bg-paper px-4 py-3">
+        <span className="text-[12.5px] text-muted">Total payable</span>
+        <span className="font-serif text-[26px] leading-none text-forest">{formatINR(totals.totalPaise)}</span>
       </div>
 
       {cartUnavailable ? (
@@ -165,7 +165,7 @@ export function ReviewStep({
         </div>
       ) : null}
 
-      <div className="mt-6 flex flex-col-reverse items-stretch gap-3 border-t border-[#EDE5D8] pt-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-6 flex flex-col-reverse items-stretch gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
         <BackLink onClick={onEditPayment}>Payment method</BackLink>
         <div className="w-full sm:w-auto">
           <CheckoutAction
@@ -182,13 +182,13 @@ export function ReviewStep({
         </div>
       </div>
 
-      <p className="mt-3 text-[10px] leading-relaxed text-[#7A8179]">
+      <p className="mt-3 text-[10px] leading-relaxed text-muted">
         By placing this order you accept the{' '}
-        <Link to="/policies/terms" className="underline underline-offset-2 hover:text-[#234638]">
+        <Link to="/policies/terms" className="underline underline-offset-2 hover:text-forest">
           terms
         </Link>{' '}
         and{' '}
-        <Link to="/policies/returns" className="underline underline-offset-2 hover:text-[#234638]">
+        <Link to="/policies/returns" className="underline underline-offset-2 hover:text-forest">
           returns policy
         </Link>
         . These documents are drafts pending legal review. Your order is confirmed only after the server records payment.

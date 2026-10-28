@@ -6,6 +6,7 @@ import { formatINR } from '@shared/types';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
+import { usePageMeta } from '@/lib/usePageMeta';
 import { formatDate, formatDateTime, orderStatusLabel, statusTone } from '@/lib/format';
 import {
   Alert,
@@ -39,6 +40,7 @@ const ACCOUNT_TABS = [
 
 export function AccountLayout() {
   const { user } = useAuth();
+  usePageMeta({ title: 'Your account · Dear Hills' });
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       <div className="flex flex-col gap-2 border-b border-line pb-6 sm:flex-row sm:items-end sm:justify-between">
@@ -54,14 +56,14 @@ export function AccountLayout() {
         </div>
       </div>
       <div className="mt-6 grid gap-8 lg:grid-cols-[210px_1fr]">
-        <nav className="flex gap-1 overflow-x-auto lg:flex-col" aria-label="Account sections">
+        <nav className="no-scrollbar flex gap-1 overflow-x-auto lg:flex-col" aria-label="Account sections">
           {ACCOUNT_TABS.map((tab) => (
             <NavLink
               key={tab.to}
               to={tab.to}
               end={tab.end}
               className={({ isActive }) =>
-                `whitespace-nowrap border-b-2 px-3 py-2.5 text-left text-[13px] transition-colors lg:border-b-0 lg:border-l-2 ${
+                `flex min-h-11 items-center whitespace-nowrap border-b-2 px-3 py-2.5 text-left text-[13px] transition-colors lg:border-b-0 lg:border-l-2 ${
                   isActive
                     ? 'border-forest font-medium text-forest'
                     : 'border-transparent text-muted hover:border-sand hover:text-ink'

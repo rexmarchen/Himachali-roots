@@ -37,7 +37,7 @@ export function PaymentStep({
       {!config ? (
         <div className="mt-5 space-y-3" aria-busy="true" aria-label="Checking payment availability">
           <div className="h-24 shimmer rounded-sm" />
-          <p className="text-[11px] text-[#7A8179]">Checking which payment methods are enabled…</p>
+          <p className="text-[11px] text-muted">Checking which payment methods are enabled…</p>
         </div>
       ) : options.available ? (
         <fieldset className="mt-5">
@@ -47,8 +47,8 @@ export function PaymentStep({
               <label
                 className={`flex cursor-pointer gap-3 border p-4 transition-colors ${
                   method === 'razorpay'
-                    ? 'border-[#234638] bg-[#234638]/[0.035]'
-                    : 'border-[#E3D9C9] bg-white hover:border-[#234638]/35'
+                    ? 'border-forest bg-forest/[0.035]'
+                    : 'border-line bg-white hover:border-forest/35'
                 }`}
               >
                 <input
@@ -57,21 +57,21 @@ export function PaymentStep({
                   value="razorpay"
                   checked={method === 'razorpay'}
                   onChange={() => onSelect('razorpay')}
-                  className="mt-1 h-4 w-4 shrink-0 accent-[#234638]"
+                  className="mt-1 h-4 w-4 shrink-0 accent-forest"
                 />
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-[13.5px] font-semibold text-[#234638]">Razorpay secure checkout</span>
-                    <span className="border border-[#234638]/20 bg-[#234638]/[0.06] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#234638]">
+                    <span className="text-[13.5px] font-semibold text-forest">Razorpay secure checkout</span>
+                    <span className="border border-forest/20 bg-forest/[0.06] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-forest">
                       {testMode ? 'Test mode' : 'Live'}
                     </span>
                   </span>
-                  <span className="mt-1 block text-[11.5px] leading-relaxed text-[#6B7269]">
+                  <span className="mt-1 block text-[11.5px] leading-relaxed text-muted">
                     Pay in Razorpay’s secure window. The cards, UPI, net-banking or wallet options you see there depend on
                     what the merchant account has enabled.
                   </span>
                   {testMode ? (
-                    <span className="mt-1.5 block text-[10.5px] leading-relaxed text-[#A85F3F]">
+                    <span className="mt-1.5 block text-[10.5px] leading-relaxed text-danger">
                       Razorpay test keys are configured. This is a real integration in test mode; no real money moves.
                     </span>
                   ) : null}
@@ -80,8 +80,8 @@ export function PaymentStep({
             ) : null}
 
             {options.development ? (
-              <div className="border border-[#D98060]/40 bg-[#FDF6F1] p-4">
-                <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-[#A5502F]">
+              <div className="border border-terra/40 bg-paper p-4">
+                <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-danger">
                   Development test payment
                 </p>
                 <label className="mt-2 flex cursor-pointer gap-3">
@@ -91,13 +91,13 @@ export function PaymentStep({
                     value="development"
                     checked={method === 'development'}
                     onChange={() => onSelect('development')}
-                    className="mt-1 h-4 w-4 shrink-0 accent-[#A5502F]"
+                    className="mt-1 h-4 w-4 shrink-0 accent-danger"
                   />
                   <span className="min-w-0">
-                    <span className="block text-[13.5px] font-semibold text-[#7D3D28]">
+                    <span className="block text-[13.5px] font-semibold text-danger">
                       Simulate a successful payment
                     </span>
-                    <span className="mt-1 block text-[11.5px] leading-relaxed text-[#7D3D28]/85">
+                    <span className="mt-1 block text-[11.5px] leading-relaxed text-danger/85">
                       Available only because Razorpay is unconfigured and simulated checkout is enabled outside production.
                       No money moves, no provider is contacted, and the order is marked as a demo. Never use this for a real
                       sale.
@@ -124,27 +124,27 @@ export function PaymentStep({
         </div>
       )}
 
-      <dl className="mt-6 grid gap-3 border-y border-[#EDE5D8] py-4 sm:grid-cols-3">
+      <dl className="mt-6 grid gap-3 border-y border-line py-4 sm:grid-cols-3">
         <div>
-          <dt className="text-[10px] uppercase tracking-[0.12em] text-[#7A8179]">Amount due</dt>
-          <dd className="mt-1 font-serif text-[22px] leading-none text-[#234638]">{formatINR(amountPaise)}</dd>
+          <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Amount due</dt>
+          <dd className="mt-1 font-serif text-[22px] leading-none text-forest">{formatINR(amountPaise)}</dd>
         </div>
         <div>
-          <dt className="text-[10px] uppercase tracking-[0.12em] text-[#7A8179]">Currency</dt>
-          <dd className="mt-1 text-[12.5px] text-[#234638]">Indian rupees (INR)</dd>
+          <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Currency</dt>
+          <dd className="mt-1 text-[12.5px] text-forest">Indian rupees (INR)</dd>
         </div>
         <div>
-          <dt className="text-[10px] uppercase tracking-[0.12em] text-[#7A8179]">Card data</dt>
-          <dd className="mt-1 text-[12px] leading-relaxed text-[#234638]">Never stored by PAHADI ROOTS</dd>
+          <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Card data</dt>
+          <dd className="mt-1 text-[12px] leading-relaxed text-forest">Never stored by DEAR HILLS</dd>
         </div>
       </dl>
 
-      <p className="mt-4 text-[10.5px] leading-relaxed text-[#7A8179]">
+      <p className="mt-4 text-[10.5px] leading-relaxed text-muted">
         The shipping charge shown in the summary follows the store’s current rule and is recalculated by the server when the
         order is created. An order is not paid until the server records provider confirmation.
       </p>
 
-      <div className="mt-6 flex flex-col-reverse items-stretch gap-3 border-t border-[#EDE5D8] pt-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-6 flex flex-col-reverse items-stretch gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
         <BackLink onClick={onBack}>Delivery details</BackLink>
         <div className="w-full sm:w-auto">
           <CheckoutAction

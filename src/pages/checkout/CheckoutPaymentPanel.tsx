@@ -157,22 +157,22 @@ export function CheckoutPaymentPanel({
 
   return (
     <div className="mx-auto max-w-2xl">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D98060]">Payment</p>
-      <h1 className="mt-1 font-serif text-[34px] leading-tight text-[#234638] sm:text-[40px]">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-terra">Payment</p>
+      <h1 className="mt-1 font-serif text-[34px] leading-tight text-forest sm:text-[40px]">
         Complete your payment
       </h1>
-      <p className="mt-2 text-[12.5px] leading-relaxed text-[#6B7269]">
-        Order <span className="font-semibold text-[#234638]">{order.orderNumber}</span> is saved and stock is reserved. It
+      <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+        Order <span className="font-semibold text-forest">{order.orderNumber}</span> is saved and stock is reserved. It
         is not a paid order until the server records confirmation from the payment provider.
       </p>
 
       <CheckoutPanel className="mt-6 p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.14em] text-[#7A8179]">Amount due</p>
-            <p className="mt-1 font-serif text-[34px] leading-none text-[#234638]">{formatINR(order.totalPaise)}</p>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-muted">Amount due</p>
+            <p className="mt-1 font-serif text-[34px] leading-none text-forest">{formatINR(order.totalPaise)}</p>
           </div>
-          <div className="text-right text-[10.5px] leading-relaxed text-[#7A8179]">
+          <div className="text-right text-[10.5px] leading-relaxed text-muted">
             <p>{order.email}</p>
             <p>
               {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.pincode}
@@ -180,7 +180,7 @@ export function CheckoutPaymentPanel({
             {expiresAt ? <p className="mt-1">Reservation active until {expiresAt}</p> : null}
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-[#EDE5D8] pt-3 text-[10.5px] text-[#7A8179]">
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-3 text-[10.5px] text-muted">
           <span>{orderItemCount(order)} item(s)</span>
           <span>·</span>
           <span>
@@ -233,8 +233,8 @@ export function CheckoutPaymentPanel({
               Pay {formatINR(order.totalPaise)} securely
             </CheckoutAction>
             {waiting ? (
-              <p className="mt-3 flex items-center justify-center gap-2 text-[11.5px] text-[#5E675F]">
-                <Spinner className="h-4 w-4 text-[#234638]" /> Razorpay window is open. Complete the payment there.
+              <p className="mt-3 flex items-center justify-center gap-2 text-[11.5px] text-muted">
+                <Spinner className="h-4 w-4 text-forest" /> Razorpay window is open. Complete the payment there.
               </p>
             ) : null}
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -242,13 +242,13 @@ export function CheckoutPaymentPanel({
                 type="button"
                 onClick={() => void checkStatus()}
                 disabled={busy !== null}
-                className="text-[11px] text-[#5E675F] underline decoration-[#C9BFB0] underline-offset-4 hover:text-[#234638] disabled:opacity-50"
+                className="text-[11px] text-muted underline decoration-line underline-offset-4 hover:text-forest disabled:opacity-50"
               >
                 Check payment status
               </button>
-              <p className="text-[10px] text-[#7A8179]">Card and CVV details are never stored by PAHADI ROOTS.</p>
+              <p className="text-[10px] text-muted">Card and CVV details are never stored by DEAR HILLS.</p>
             </div>
-            <p className="mt-4 border-t border-[#EDE5D8] pt-3 text-[10.5px] leading-relaxed text-[#7A8179]">
+            <p className="mt-4 border-t border-line pt-3 text-[10.5px] leading-relaxed text-muted">
               If the window closed, reopen it here. Do not pay twice. If money was deducted and the order still shows as
               unpaid after a short wait, contact support with order {order.orderNumber}.
             </p>
@@ -276,11 +276,11 @@ export function CheckoutPaymentPanel({
                 type="button"
                 onClick={() => void checkStatus()}
                 disabled={busy !== null}
-                className="text-[11px] text-[#5E675F] underline decoration-[#C9BFB0] underline-offset-4 hover:text-[#234638] disabled:opacity-50"
+                className="text-[11px] text-muted underline decoration-line underline-offset-4 hover:text-forest disabled:opacity-50"
               >
                 Check payment status
               </button>
-              <p className="text-[10px] text-[#7A8179]">DEMO ORDER — NOT A REAL PURCHASE</p>
+              <p className="text-[10px] text-muted">DEMO ORDER — NOT A REAL PURCHASE</p>
             </div>
           </CheckoutPanel>
         ) : (
@@ -289,7 +289,7 @@ export function CheckoutPaymentPanel({
               {payment?.message ??
                 'No online payment provider is configured on this deployment, so no payment can be taken.'}
             </Alert>
-            <p className="mt-3 text-[11.5px] leading-relaxed text-[#5E675F]">
+            <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
               The order remains awaiting payment and its stock reservation will expire. Configure{' '}
               <code className="text-[10.5px]">RAZORPAY_KEY_ID</code> and{' '}
               <code className="text-[10.5px]">RAZORPAY_KEY_SECRET</code> to enable online payment. Cash on delivery is not
@@ -298,7 +298,7 @@ export function CheckoutPaymentPanel({
             <div className="mt-4 flex flex-wrap items-center gap-4">
               <Link
                 to={`/account/orders/${encodeURIComponent(order.orderNumber)}`}
-                className="text-[12px] text-[#234638] underline decoration-[#C9BFB0] underline-offset-4 hover:decoration-[#234638]"
+                className="text-[12px] text-forest underline decoration-line underline-offset-4 hover:decoration-forest"
               >
                 View the saved order
               </Link>
@@ -306,7 +306,7 @@ export function CheckoutPaymentPanel({
                 type="button"
                 onClick={() => void checkStatus()}
                 disabled={busy !== null}
-                className="text-[11px] text-[#5E675F] underline decoration-[#C9BFB0] underline-offset-4 hover:text-[#234638] disabled:opacity-50"
+                className="text-[11px] text-muted underline decoration-line underline-offset-4 hover:text-forest disabled:opacity-50"
               >
                 Check payment status
               </button>
@@ -314,9 +314,9 @@ export function CheckoutPaymentPanel({
           </CheckoutPanel>
         )}
 
-        <p className="text-center text-[10px] leading-relaxed text-[#7A8179]">
+        <p className="text-center text-[10px] leading-relaxed text-muted">
           Need help with this order?{' '}
-          <Link to="/contact" className="underline underline-offset-2 hover:text-[#234638]">
+          <Link to="/contact" className="underline underline-offset-2 hover:text-forest">
             Contact support
           </Link>{' '}
           and include order {order.orderNumber}.
@@ -334,16 +334,16 @@ export function OrderConfirmation({ order }: { order: OrderView }) {
   return (
     <div className="mx-auto max-w-2xl">
       <CheckoutPanel className="p-6 text-center sm:p-8">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[#234638]/25 bg-[#234638]/[0.06]">
-          <svg viewBox="0 0 24 24" className="h-6 w-6 text-[#234638]" fill="none" aria-hidden>
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-forest/25 bg-forest/[0.06]">
+          <svg viewBox="0 0 24 24" className="h-6 w-6 text-forest" fill="none" aria-hidden>
             <path d="m5 12.5 4.5 4.5L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
-        <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D98060]">Payment confirmed</p>
-        <h1 className="mt-1 font-serif text-[36px] leading-tight text-[#234638] sm:text-[42px]">Order confirmed</h1>
-        <p className="mx-auto mt-2 max-w-md text-[12.5px] leading-relaxed text-[#6B7269]">
+        <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-terra">Payment confirmed</p>
+        <h1 className="mt-1 font-serif text-[36px] leading-tight text-forest sm:text-[42px]">Order confirmed</h1>
+        <p className="mx-auto mt-2 max-w-md text-[12.5px] leading-relaxed text-muted">
           Our server has recorded payment for order{' '}
-          <span className="font-semibold text-[#234638]">{order.orderNumber}</span>. Thank you for supporting Himalayan
+          <span className="font-semibold text-forest">{order.orderNumber}</span>. Thank you for supporting Himalayan
           makers.
         </p>
 
@@ -356,29 +356,29 @@ export function OrderConfirmation({ order }: { order: OrderView }) {
           </div>
         ) : null}
 
-        <dl className="mt-6 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-[#EDE5D8] py-4 text-left">
+        <dl className="mt-6 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-4 text-left">
           <div>
-            <dt className="text-[10px] uppercase tracking-[0.12em] text-[#7A8179]">Order number</dt>
-            <dd className="mt-0.5 text-[12.5px] font-medium text-[#234638]">{order.orderNumber}</dd>
+            <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Order number</dt>
+            <dd className="mt-0.5 text-[12.5px] font-medium text-forest">{order.orderNumber}</dd>
           </div>
           <div className="text-right">
-            <dt className="text-[10px] uppercase tracking-[0.12em] text-[#7A8179]">Amount paid</dt>
-            <dd className="mt-0.5 font-serif text-[22px] leading-none text-[#234638]">{formatINR(order.totalPaise)}</dd>
+            <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Amount paid</dt>
+            <dd className="mt-0.5 font-serif text-[22px] leading-none text-forest">{formatINR(order.totalPaise)}</dd>
           </div>
           <div>
-            <dt className="text-[10px] uppercase tracking-[0.12em] text-[#7A8179]">Updates</dt>
-            <dd className="mt-0.5 text-[12px] leading-relaxed text-[#5E675F]">{order.email}</dd>
+            <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Updates</dt>
+            <dd className="mt-0.5 text-[11px] leading-relaxed text-muted">{order.email}</dd>
           </div>
           <div className="text-right">
-            <dt className="text-[10px] uppercase tracking-[0.12em] text-[#7A8179]">Items</dt>
-            <dd className="mt-0.5 text-[12px] text-[#5E675F]">{orderItemCount(order)}</dd>
+            <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Items</dt>
+            <dd className="mt-0.5 text-[12px] text-muted">{orderItemCount(order)}</dd>
           </div>
         </dl>
 
-        <div className="mt-4 border border-[#E3D9C9] bg-[#FBF8F2] p-4 text-left">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A8179]">Delivering to</p>
-          <p className="mt-1 text-[12.5px] font-medium text-[#234638]">{address.fullName}</p>
-          <p className="mt-0.5 text-[11.5px] leading-relaxed text-[#5E675F]">
+        <div className="mt-4 border border-line bg-paper p-4 text-left">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Delivering to</p>
+          <p className="mt-1 text-[12.5px] font-medium text-forest">{address.fullName}</p>
+          <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">
             {address.line1}
             {address.line2 ? `, ${address.line2}` : ''}
             <br />
@@ -388,23 +388,23 @@ export function OrderConfirmation({ order }: { order: OrderView }) {
           </p>
         </div>
 
-        <ul className="mt-4 divide-y divide-[#F0E9DE] border border-[#E3D9C9] text-left">
+        <ul className="mt-4 divide-y divide-line border border-line text-left">
           {items.map((item) => (
             <li key={item.id} className="flex items-start justify-between gap-4 px-4 py-3">
               <span className="min-w-0">
-                <span className="block text-[12px] text-[#234638]">{item.name}</span>
-                <span className="text-[10.5px] text-[#7A8179]">
+                <span className="block text-[12px] text-forest">{item.name}</span>
+                <span className="text-[10.5px] text-muted">
                   {item.sellerName} · Qty {item.quantity}
                 </span>
               </span>
-              <span className="shrink-0 text-[12px] tabular-nums text-[#234638]">
+              <span className="shrink-0 text-[12px] tabular-nums text-forest">
                 {formatINR(item.lineSubtotalPaise)}
               </span>
             </li>
           ))}
         </ul>
 
-        <p className="mt-4 text-left text-[10.5px] leading-relaxed text-[#7A8179]">
+        <p className="mt-4 text-left text-[10.5px] leading-relaxed text-muted">
           Each seller packs and dispatches their own items, so parcels can arrive separately. Follow dispatch and tracking
           updates on your order page. This confirmation reflects the status recorded by our server, not a browser callback.
         </p>
@@ -412,13 +412,13 @@ export function OrderConfirmation({ order }: { order: OrderView }) {
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
           <Link
             to={`/account/orders/${encodeURIComponent(order.orderNumber)}`}
-            className="inline-flex h-11 items-center justify-center border border-[#234638] bg-[#234638] px-5 text-[13px] font-medium text-[#FDFBF7] transition-colors hover:bg-[#1B382D]"
+            className="inline-flex h-11 items-center justify-center border border-forest bg-forest px-5 text-[13px] font-medium text-paper transition-colors hover:bg-forest-deep"
           >
             View order details
           </Link>
           <Link
             to="/shop"
-            className="inline-flex h-11 items-center justify-center border border-[#234638]/25 bg-white px-5 text-[13px] font-medium text-[#234638] transition-colors hover:border-[#234638]"
+            className="inline-flex h-11 items-center justify-center border border-forest/25 bg-white px-5 text-[13px] font-medium text-forest transition-colors hover:border-forest"
           >
             Continue shopping
           </Link>

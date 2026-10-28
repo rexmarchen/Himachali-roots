@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { api, errorMessage } from '@/lib/api';
 import { formatINR } from '@shared/types';
@@ -15,7 +15,7 @@ const NAV = [
 
 function Wordmark({ compact = false, light = false }: { compact?: boolean; light?: boolean }) {
   return (
-    <Link to="/" className="group flex items-center gap-2.5" aria-label="PAHADI ROOTS home">
+    <Link to="/" className="group flex items-center gap-2.5" aria-label="DEAR HILLS home">
       <svg viewBox="0 0 48 48" className="h-8 w-8 shrink-0 drop-shadow-xs" aria-hidden>
         <rect width="48" height="48" rx="2" fill={light ? '#F7F3EB' : '#243D32'} />
         <path d="M9 35 20 15l5 11 4-6 9 15H9Z" fill={light ? '#243D32' : '#F7F3EB'} />
@@ -28,7 +28,7 @@ function Wordmark({ compact = false, light = false }: { compact?: boolean; light
             light ? 'text-[#FFFEFA] group-hover:text-sand' : 'text-forest group-hover:text-terra'
           }`}
         >
-          PAHADI ROOTS
+          DEAR HILLS
         </span>
         {!compact ? (
           <span
@@ -44,27 +44,40 @@ function Wordmark({ compact = false, light = false }: { compact?: boolean; light
   );
 }
 
-function AccountMenu({ light = false }: { light?: boolean }) {
+function AccountMenu() {
   const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const onClick = (event: MouseEvent) => {
       if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
     };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        ref.current?.querySelector<HTMLButtonElement>('button')?.focus();
+      }
+    };
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKeyDown);
+    const focusTimer = window.setTimeout(() => {
+      menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    }, 0);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKeyDown);
+      window.clearTimeout(focusTimer);
+    };
   }, [open]);
 
   if (!user) {
     return (
       <Link
         to="/login"
-        className={`text-[12.5px] font-medium transition-colors duration-200 ${
-          light ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
-        }`}
+        className="inline-flex min-h-11 items-center px-2 text-[12.5px] font-medium text-ink transition-colors hover:text-terra"
       >
         Sign in
       </Link>
@@ -76,27 +89,22 @@ function AccountMenu({ light = false }: { light?: boolean }) {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className={`flex items-center gap-1.5 text-[12.5px] font-medium transition-colors duration-200 ${
-          light ? 'text-white hover:text-sand' : 'text-ink hover:text-terra'
-        }`}
+        className="flex min-h-11 items-center gap-1.5 px-1 text-[12.5px] font-medium text-ink transition-colors hover:text-terra"
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label={`Account menu for ${user.fullName || user.email}`}
       >
-        <span
-          className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold ${
-            light
-              ? 'border border-white/40 bg-white/20 text-white'
-              : 'border border-forest/20 bg-forest/[0.06] text-forest'
-          }`}
-        >
+        <span className="flex h-7 w-7 items-center justify-center rounded-full border border-forest/20 bg-forest/[0.06] text-[10px] font-semibold text-forest">
           {(user.fullName || user.email).slice(0, 1).toUpperCase()}
         </span>
-        <span className="hidden max-w-24 truncate sm:block">{user.fullName.split(' ')[0] || 'Account'}</span>
+        <span className="hidden max-w-24 truncate lg:block">{user.fullName.split(' ')[0] || 'Account'}</span>
       </button>
       {open ? (
         <div
+          ref={menuRef}
           role="menu"
-          className="absolute right-0 top-9 z-50 w-56 border border-line bg-surface py-1 shadow-xl fade-up"
+          aria-label="Account"
+          className="absolute right-0 top-full z-50 mt-1 w-60 border border-line bg-surface py-1 shadow-xl fade-up"
         >
           <div className="border-b border-line px-4 py-3">
             <p className="truncate text-[13px] font-medium text-ink">{user.fullName || 'Account'}</p>
@@ -106,14 +114,14 @@ function AccountMenu({ light = false }: { light?: boolean }) {
             Your account
           </MenuLink>
           <MenuLink to="/account/orders" onClick={() => setOpen(false)}>
-            Orders & returns
+            Orders &amp; returns
           </MenuLink>
           <MenuLink to="/account/wishlist" onClick={() => setOpen(false)}>
             Saved items
           </MenuLink>
           {user.roles.includes('seller') && !user.roles.includes('admin') ? (
             <MenuLink to="/seller" onClick={() => setOpen(false)}>
-              Seller Studio (Dashboard)
+              Seller Studio
             </MenuLink>
           ) : null}
           {!user.roles.includes('seller') && !user.roles.includes('admin') ? (
@@ -126,7 +134,7 @@ function AccountMenu({ light = false }: { light?: boolean }) {
               to="/admin"
               role="menuitem"
               onClick={() => setOpen(false)}
-              className="flex items-center justify-between border-t border-line bg-forest/[0.05] px-4 py-2 text-[12px] font-semibold text-forest hover:bg-forest/10"
+              className="flex min-h-11 items-center justify-between border-t border-line bg-forest/[0.05] px-4 py-2 text-[12px] font-semibold text-forest hover:bg-forest/10"
             >
               <span>Administration</span>
               <span className="rounded bg-forest/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-forest">
@@ -141,7 +149,7 @@ function AccountMenu({ light = false }: { light?: boolean }) {
               setOpen(false);
               await signOut();
             }}
-            className="block w-full border-t border-line px-4 py-2.5 text-left text-[12.5px] text-muted hover:bg-paper hover:text-ink"
+            className="flex min-h-11 w-full items-center border-t border-line px-4 py-2.5 text-left text-[12.5px] text-muted hover:bg-paper hover:text-ink"
           >
             Sign out
           </button>
@@ -151,119 +159,154 @@ function AccountMenu({ light = false }: { light?: boolean }) {
   );
 }
 
-function MenuLink({ to, children, onClick }: { to: string; children: React.ReactNode; onClick: () => void }) {
+function MenuLink({ to, children, onClick }: { to: string; children: ReactNode; onClick: () => void }) {
   return (
     <Link
       to={to}
       role="menuitem"
       onClick={onClick}
-      className="block px-4 py-2 text-[12.5px] text-ink hover:bg-paper hover:text-forest"
+      className="flex min-h-11 items-center px-4 py-2 text-[12.5px] text-ink hover:bg-paper hover:text-forest"
     >
       {children}
     </Link>
   );
 }
 
-function HeritageAnnouncementBar({ customText, light = false }: { customText?: string; light?: boolean }) {
+function HeritageAnnouncementBar({ customText }: { customText?: string }) {
   const { config } = useAuth();
   const freeShippingThreshold = config?.shipping.freeThresholdPaise ?? 0;
 
   return (
     <div
-      className={`relative w-full overflow-hidden transition-colors duration-300 h-7 sm:h-7.5 ${
-        light
-          ? 'bg-black/40 text-white/90 border-b border-white/10'
-          : 'bg-[#16201D] text-[#F7F3EB] border-b border-[#0F1614]'
-      }`}
-      aria-label="Himachal Pradesh authentic heritage announcements"
+      className="border-b border-[#0F1614] bg-forest-deep text-paper"
+      aria-label="Dear Hills announcements"
     >
-      {/* Desktop static 3-part layout matching reference screenshot */}
-      <div className="hidden lg:flex mx-auto max-w-7xl h-full items-center justify-between px-4 sm:px-6 lg:px-8 text-[11px] font-medium tracking-[0.02em]">
-        <div className="flex items-center gap-2 text-white/90">
-          <span className="text-terra text-[10px]">✦</span>
-          <span>Pure Himalayan Goodness</span>
-          <span className="text-terra text-[10px]">✦</span>
-          <span>Support Local Makers</span>
-          <span className="text-terra text-[10px]">✦</span>
-          <span>Authentic Himachali Products</span>
-        </div>
-
-        <Link
-          to="/sourcing"
-          className="flex items-center gap-1.5 text-sand hover:text-white transition-colors"
-        >
-          <span>📍</span>
-          <span>From Himachal Pradesh →</span>
+      <div className="mx-auto flex min-h-8 max-w-7xl items-center justify-between gap-4 px-3 py-1.5 text-[10.5px] font-medium tracking-[0.02em] sm:px-6 lg:px-8">
+        <p className="line-clamp-2 min-w-0 leading-snug sm:line-clamp-1">
+          <span className="mr-1.5 text-terra" aria-hidden>
+            ✦
+          </span>
+          {customText || 'Pure Himalayan goodness · Support local makers'}
+        </p>
+        {freeShippingThreshold > 0 ? (
+          <p className="hidden shrink-0 text-sand sm:block">Free shipping over {formatINR(freeShippingThreshold)}</p>
+        ) : null}
+        <Link to="/sourcing" className="hidden shrink-0 items-center gap-1.5 text-sand transition-colors hover:text-white md:flex">
+          From Himachal Pradesh <span aria-hidden>→</span>
         </Link>
-
-        <div className="flex items-center gap-1.5 text-white/90">
-          <span>🌿</span>
-          <span>{customText || 'Every purchase supports local communities'}</span>
-        </div>
-      </div>
-
-      {/* Mobile / Tablet marquee with smooth loop and overflow-hidden */}
-      <div className="lg:hidden flex items-center h-full overflow-hidden whitespace-nowrap text-[10.5px] font-medium">
-        <div className="animate-marquee flex items-center shrink-0">
-          <span className="inline-flex items-center gap-1.5 px-3 text-white/95">
-            <span className="text-terra">✦</span> Pure Himalayan Goodness
-            <span className="text-terra">✦</span> Support Local Makers
-            <span className="text-terra">✦</span> Authentic Himachali Products
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-3 text-sand">
-            📍 From Himachal Pradesh
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-3 text-white/90">
-            🌿 Every purchase supports local communities
-          </span>
-          {freeShippingThreshold > 0 ? (
-            <span className="inline-flex items-center gap-1.5 px-3 text-white/90">
-              Free shipping over {formatINR(freeShippingThreshold)}
-            </span>
-          ) : null}
-        </div>
       </div>
     </div>
   );
 }
 
+function Icon({ name, className = 'h-5 w-5' }: { name: 'search' | 'bag' | 'user' | 'home' | 'grid' | 'menu'; className?: string }) {
+  const common = {
+    className,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.7,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  };
+  switch (name) {
+    case 'search':
+      return (
+        <svg {...common}>
+          <circle cx="11" cy="11" r="7" />
+          <path d="m16.5 16.5 4 4" />
+        </svg>
+      );
+    case 'bag':
+      return (
+        <svg {...common}>
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+          <path d="M3 6h18M16 10a4 4 0 0 1-8 0" />
+        </svg>
+      );
+    case 'user':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 21a8 8 0 0 1 16 0" />
+        </svg>
+      );
+    case 'home':
+      return (
+        <svg {...common}>
+          <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" />
+        </svg>
+      );
+    case 'grid':
+      return (
+        <svg {...common}>
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+        </svg>
+      );
+    case 'menu':
+      return (
+        <svg {...common}>
+          <path d="M4 7h16M4 12h16M4 17h10" />
+        </svg>
+      );
+  }
+}
+
+function CartLink({ count, compact = false }: { count: number; compact?: boolean }) {
+  return (
+    <Link
+      to="/cart"
+      className={
+        compact
+          ? 'relative inline-flex h-11 w-11 items-center justify-center text-ink transition-colors hover:text-terra'
+          : 'relative inline-flex min-h-11 items-center gap-1.5 border border-line bg-surface px-3 text-[12px] font-medium text-ink transition-colors hover:border-forest/40'
+      }
+      aria-label={`Shopping bag with ${count} item${count === 1 ? '' : 's'}`}
+    >
+      <Icon name="bag" className={compact ? 'h-5 w-5' : 'h-4 w-4'} />
+      {!compact ? <span className="hidden sm:inline">Bag</span> : null}
+      <span
+        className={
+          compact
+            ? 'absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-terra px-1 text-[9px] font-bold text-white'
+            : 'flex h-4 min-w-4 items-center justify-center rounded-full bg-terra px-1 text-[9px] font-bold text-white'
+        }
+      >
+        {count}
+      </span>
+    </Link>
+  );
+}
+
 function Header() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const location = useLocation();
-  const isHome = location.pathname === '/';
   const isCheckout = location.pathname.startsWith('/checkout');
-  const [scrolled, setScrolled] = useState(false);
   const cartCount = useCartCount();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobilePanelRef = useRef<HTMLDivElement>(null);
   const content = useSiteContent();
   const announcement = content.data?.content.announcement;
+  const [menuPath, setMenuPath] = useState(location.pathname);
 
-  const isTransparent = isHome && !scrolled;
+  // Close any open menu as soon as the route changes, without an effect round-trip.
+  if (menuPath !== location.pathname) {
+    setMenuPath(location.pathname);
+    setMobileOpen(false);
+    setMoreOpen(false);
+  }
 
-  useEffect(() => {
-    if (!isHome) return;
-    const onScroll = () => {
-      setScrolled(window.scrollY > 40);
-    };
-    // Reading the initial position in a frame avoids a synchronous state
-    // update inside the effect body while still settling before the paint.
-    const frame = window.requestAnimationFrame(onScroll);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', onScroll);
-    };
-  }, [isHome]);
-
-  // Handle outside clicks to close 'More' dropdown
   useEffect(() => {
     if (!moreOpen) return;
     const onClick = (event: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
-        setMoreOpen(false);
-      }
+      if (moreRef.current && !moreRef.current.contains(event.target as Node)) setMoreOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setMoreOpen(false);
@@ -276,39 +319,64 @@ function Header() {
     };
   }, [moreOpen]);
 
-  // Checkout keeps only the essentials: brand, account and bag. Search,
-  // announcements and category navigation would distract from the task.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = mobilePanelRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = window.setTimeout(() => {
+      panel?.querySelector<HTMLElement>('[data-menu-close]')?.focus();
+    }, 0);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = panel?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previousOverflow;
+      window.clearTimeout(focusTimer);
+      previouslyFocused?.focus();
+    };
+  }, [mobileOpen]);
+
   if (isCheckout) {
     return (
-      <header className="sticky top-0 z-40 border-b border-[#E3D9C9] bg-[#F6F0E6]/95 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-3 px-4 sm:h-16 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Wordmark />
-            <span className="hidden border-l border-[#DCD1C0] pl-3 text-[9.5px] font-semibold uppercase tracking-[0.2em] text-[#7A8179] sm:inline">
-              Checkout
+            <span className="hidden border-l border-line pl-3 text-[9.5px] font-semibold uppercase tracking-[0.2em] text-muted sm:inline">
+              Secure checkout
             </span>
           </div>
-          <div className="flex shrink-0 items-center gap-3 sm:gap-5">
-            <span className="hidden items-center gap-1.5 text-[10.5px] text-[#6B7269] md:inline-flex">
-              <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#234638]" fill="none" aria-hidden>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+            <span className="hidden items-center gap-1.5 text-[10.5px] text-muted md:inline-flex">
+              <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-forest" fill="none" aria-hidden>
                 <rect x="4" y="8.5" width="12" height="8.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
                 <path d="M7 8.5V6.4a3 3 0 0 1 6 0v2.1" stroke="currentColor" strokeWidth="1.4" />
               </svg>
-              Secure
+              Encrypted
             </span>
             <AccountMenu />
-            <Link
-              to="/cart"
-              className="inline-flex items-center gap-1.5 border border-[#234638]/25 bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#234638] transition-colors hover:border-[#234638]"
-              aria-label={`Shopping bag with ${cartCount} items`}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3.5 w-3.5" aria-hidden>
-                <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" strokeWidth="1.8" />
-                <path d="M3 6h18M16 10a4 4 0 0 1-8 0" strokeWidth="1.8" />
-              </svg>
-              <span>Bag</span>
-              <span className="font-semibold">{cartCount}</span>
-            </Link>
+            <CartLink count={cartCount} />
           </div>
         </div>
       </header>
@@ -316,243 +384,159 @@ function Header() {
   }
 
   return (
-    <header
-      className={`${
-        isHome ? 'fixed top-0 left-0 right-0 z-40' : 'sticky top-0 z-40'
-      } transition-all duration-300 ${
-        isTransparent
-          ? 'bg-black/35 backdrop-blur-md border-b border-white/10'
-          : 'bg-[#F7F3EB]/95 backdrop-blur-md border-b border-[#E5DED2] shadow-2xs'
-      }`}
-    >
-      <HeritageAnnouncementBar
-        light={isTransparent}
-        customText={announcement?.active && announcement.text ? announcement.text : undefined}
-      />
+    <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur-md">
+      <HeritageAnnouncementBar customText={announcement?.active && announcement.text ? announcement.text : undefined} />
 
-      <div className="mx-auto flex h-[58px] sm:h-[62px] max-w-7xl items-center justify-between gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8">
-        {/* Brand Logo */}
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-3 sm:h-16 sm:gap-4 sm:px-6 lg:px-8">
         <div className="shrink-0">
-          <Wordmark light={isTransparent} />
+          <Wordmark />
         </div>
 
-        {/* Central Production Ecommerce Search Bar */}
-        <div className="hidden md:flex flex-1 max-w-[390px] lg:max-w-[460px] mx-2 lg:mx-4">
-          <EcommerceSearchBar light={isTransparent} />
+        <div className="mx-2 hidden flex-1 md:flex lg:mx-4">
+          <EcommerceSearchBar inputId="site-search-desktop" />
         </div>
 
-        {/* User Actions & Navigation */}
-        <div className="flex items-center gap-2 sm:gap-3 lg:gap-3.5 shrink-0">
+        <nav className="hidden items-center gap-5 lg:flex" aria-label="Primary">
+          {NAV.map((item) => {
+            const active = item.to === '/shop' ? location.pathname.startsWith('/shop') : location.pathname === item.to;
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`border-b-2 py-1 text-[12.5px] font-medium transition-colors ${
+                  active ? 'border-terra text-forest' : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
           <Link
             to="/account/wishlist"
-            className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors ${
-              isTransparent ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
-            }`}
-            title="Saved items"
+            className="hidden h-11 w-11 items-center justify-center text-ink transition-colors hover:text-terra sm:inline-flex"
             aria-label="Saved items"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5" aria-hidden>
               <path
                 d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                strokeWidth="1.7"
+                strokeWidth="1.6"
               />
             </svg>
-            <span className="hidden lg:inline">Saved</span>
           </Link>
 
-          <Link
-            to="/makers"
-            className={`hidden xl:inline-flex text-[12.5px] font-medium transition-colors ${
-              isTransparent ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
-            }`}
-          >
-            Makers
-          </Link>
-
-          {/* Admin Panel button: Shown for users who have admin role */}
           {user?.roles.includes('admin') ? (
             <Link
               to="/admin"
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold tracking-wider uppercase transition-all shadow-2xs ${
-                isTransparent
-                  ? 'border-white/30 bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm'
-                  : 'border-forest/25 bg-[#E8E2D6] text-forest hover:bg-[#DFD8CB]'
-              }`}
+              className="hidden items-center gap-1.5 border border-forest/25 bg-surface px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-forest transition-colors hover:bg-forest/5 xl:inline-flex"
             >
-              <span className={`h-2 w-2 rounded-full ${isTransparent ? 'bg-terra' : 'bg-forest'}`} />
-              <span>ADMIN PANEL</span>
+              Admin
             </Link>
           ) : user?.roles.includes('seller') ? (
             <Link
               to="/seller"
-              className="inline-flex items-center gap-1.5 rounded-full border border-terra/30 bg-terra/20 px-3 py-1 text-[11px] font-semibold tracking-wider uppercase text-terra hover:bg-terra/30 transition-all shadow-2xs backdrop-blur-sm"
+              className="hidden items-center gap-1.5 border border-terra/30 bg-terra/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-terra transition-colors hover:bg-terra/20 xl:inline-flex"
             >
-              <span className="h-2 w-2 rounded-full bg-terra animate-pulse" />
-              <span>SELLER STUDIO</span>
+              Seller Studio
             </Link>
           ) : null}
 
           <div className="hidden sm:block">
-            <AccountMenu light={isTransparent} />
+            <AccountMenu />
           </div>
 
-          <Link
-            to="/cart"
-            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-medium transition-all shadow-2xs ${
-              isTransparent
-                ? 'border-white/30 bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm'
-                : 'border-line/80 bg-[#E8E2D6] text-ink hover:bg-[#DFD8CB]'
-            }`}
-            aria-label={`Shopping bag with ${cartCount} items`}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
-              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" strokeWidth="1.8" />
-              <line x1="3" y1="6" x2="21" y2="6" strokeWidth="1.8" />
-              <path d="M16 10a4 4 0 0 1-8 0" strokeWidth="1.8" />
-            </svg>
-            <span className="hidden sm:inline">Bag</span>
-            <span className="font-semibold">{cartCount}</span>
-          </Link>
+          <CartLink count={cartCount} compact />
 
           <button
+            ref={menuButtonRef}
             type="button"
-            className="flex flex-col justify-center gap-1.5 p-1.5 md:hidden"
-            onClick={() => setMobileOpen((value) => !value)}
+            className="inline-flex h-11 w-11 items-center justify-center text-ink transition-colors hover:text-terra lg:hidden"
+            onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
             aria-expanded={mobileOpen}
+            aria-controls="mobile-menu"
           >
-            <span className={`h-0.5 w-5 ${isTransparent ? 'bg-white' : 'bg-ink'}`} />
-            <span className={`h-0.5 w-5 ${isTransparent ? 'bg-white' : 'bg-ink'}`} />
-            <span className={`h-0.5 w-3.5 ${isTransparent ? 'bg-white' : 'bg-ink'}`} />
+            <Icon name="menu" className="h-5 w-5" />
           </button>
         </div>
       </div>
 
-      {/* Mobile Search Bar Row */}
-      <div className="md:hidden px-4 pb-3">
-        <EcommerceSearchBar light={isTransparent} />
+      <div className="px-3 pb-2.5 md:hidden">
+        <EcommerceSearchBar inputId="site-search-mobile" />
       </div>
 
-      {/* Category Navigation Ribbon with More Dropdown */}
-      <div
-        className={`border-t transition-colors duration-200 ${
-          isTransparent
-            ? 'border-white/10 bg-black/25 backdrop-blur-md text-white/90'
-            : 'border-[#E5DED2] bg-[#EFE9DD]/95 backdrop-blur-md text-ink'
-        }`}
-      >
-        <div className="mx-auto flex max-w-7xl items-center px-4 sm:px-6 lg:px-8 py-1.5 text-[11px] sm:text-[11.5px] font-medium">
-          <div
-            className="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap py-0.5 w-full"
-            style={{
-              scrollbarWidth: 'none',
-              msOverflowStyle: 'none',
-            }}
-          >
+      <div className="hidden border-t border-line bg-[#EFE9DD]/90 md:block">
+        <div className="mx-auto flex max-w-7xl items-center px-3 py-1.5 text-[11.5px] font-medium sm:px-6 lg:px-8">
+          <div className="no-scrollbar flex w-full items-center gap-0.5 overflow-x-auto whitespace-nowrap">
             <Link
               to="/shop"
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors font-semibold shrink-0 ${
-                isTransparent
-                  ? 'hover:bg-white/15 text-white'
-                  : 'hover:bg-forest/10 text-forest'
-              }`}
+              className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-2 font-semibold text-forest transition-colors hover:bg-forest/10"
             >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5" aria-hidden>
-                <path fillRule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10zm0 5.25a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75z" clipRule="evenodd" />
-              </svg>
-              <span>All Products</span>
+              <Icon name="grid" className="h-3.5 w-3.5" />
+              All products
             </Link>
-            <span className={isTransparent ? 'opacity-30 text-white' : 'opacity-25 text-forest/40'}>|</span>
-            <Link to="/shop?category=shawls-and-weaves" className={`px-2 py-1 rounded-md transition-colors shrink-0 ${isTransparent ? 'hover:bg-white/15 hover:text-white' : 'hover:bg-forest/10 hover:text-forest'}`}>
-              Shawls & Handlooms
-            </Link>
-            <Link to="/shop?category=tea-and-infusions" className={`px-2 py-1 rounded-md transition-colors shrink-0 ${isTransparent ? 'hover:bg-white/15 hover:text-white' : 'hover:bg-forest/10 hover:text-forest'}`}>
-              Kangra Orthodox Tea
-            </Link>
-            <Link to="/shop?category=dry-fruit-and-nuts" className={`px-2 py-1 rounded-md transition-colors shrink-0 ${isTransparent ? 'hover:bg-white/15 hover:text-white' : 'hover:bg-forest/10 hover:text-forest'}`}>
-              Dry Fruit & Nuts
-            </Link>
-            <Link to="/shop?category=pantry-and-preserves" className={`px-2 py-1 rounded-md transition-colors shrink-0 ${isTransparent ? 'hover:bg-white/15 hover:text-white' : 'hover:bg-forest/10 hover:text-forest'}`}>
-              Wild Honey & Preserves
-            </Link>
-            <Link to="/shop?category=cold-pressed-oils" className={`px-2 py-1 rounded-md transition-colors shrink-0 ${isTransparent ? 'hover:bg-white/15 hover:text-white' : 'hover:bg-forest/10 hover:text-forest'}`}>
-              Cold-Pressed Oils
-            </Link>
-            <Link to="/shop?category=knitwear" className={`px-2 py-1 rounded-md transition-colors shrink-0 ${isTransparent ? 'hover:bg-white/15 hover:text-white' : 'hover:bg-forest/10 hover:text-forest'}`}>
-              Warm Knitwear
-            </Link>
-            <Link to="/shop?category=caps-and-headwear" className={`px-2 py-1 rounded-md transition-colors shrink-0 ${isTransparent ? 'hover:bg-white/15 hover:text-white' : 'hover:bg-forest/10 hover:text-forest'}`}>
-              Himachali Caps
-            </Link>
-            <Link to="/shop?category=gifting" className={`px-2 py-1 rounded-md transition-colors font-semibold text-terra shrink-0 ${isTransparent ? 'hover:bg-white/15' : 'hover:bg-forest/10'}`}>
-              Curated Gifting
+            <span className="text-forest/25" aria-hidden>
+              |
+            </span>
+            {[
+              { label: 'Shawls & handlooms', slug: 'shawls-and-weaves' },
+              { label: 'Kangra tea', slug: 'tea-and-infusions' },
+              { label: 'Dry fruit & nuts', slug: 'dry-fruit-and-nuts' },
+              { label: 'Honey & preserves', slug: 'pantry-and-preserves' },
+              { label: 'Cold-pressed oils', slug: 'cold-pressed-oils' },
+              { label: 'Knitwear', slug: 'knitwear' },
+              { label: 'Himachali caps', slug: 'caps-and-headwear' },
+            ].map((item) => (
+              <Link
+                key={item.slug}
+                to={`/shop?category=${item.slug}`}
+                className="shrink-0 rounded-md px-2 py-2 text-ink/80 transition-colors hover:bg-forest/10 hover:text-forest"
+              >
+                {item.label}
+              </Link>
+            ))}
+            <Link
+              to="/shop?category=gifting"
+              className="shrink-0 rounded-md px-2 py-2 font-semibold text-terra transition-colors hover:bg-forest/10"
+            >
+              Curated gifting
             </Link>
 
-            {/* Dropdown for More categories / links */}
             <div className="relative inline-block shrink-0" ref={moreRef}>
               <button
                 type="button"
-                onClick={() => setMoreOpen((v) => !v)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-colors font-medium ${
-                  isTransparent
-                    ? 'text-white/85 hover:text-white hover:bg-white/15'
-                    : 'text-ink/85 hover:text-forest hover:bg-forest/10'
-                }`}
+                onClick={() => setMoreOpen((value) => !value)}
+                className="flex items-center gap-1 rounded-md px-2.5 py-2 font-medium text-ink/85 transition-colors hover:bg-forest/10 hover:text-forest"
                 aria-expanded={moreOpen}
                 aria-haspopup="menu"
                 aria-label="More categories and stories"
               >
-                <span>More</span>
-                <svg viewBox="0 0 20 20" fill="currentColor" className={`w-3 h-3 transition-transform ${moreOpen ? 'rotate-180' : ''}`} aria-hidden>
+                More
+                <svg viewBox="0 0 20 20" fill="currentColor" className={`h-3 w-3 transition-transform ${moreOpen ? 'rotate-180' : ''}`} aria-hidden>
                   <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                 </svg>
               </button>
               {moreOpen ? (
-                <div
-                  role="menu"
-                  className="absolute right-0 top-full mt-1.5 z-50 w-56 rounded-lg border border-[#D5CCC0] bg-[#FAF7F2] py-1.5 shadow-xl text-ink"
-                >
-                  <Link
-                    to="/shop?category=pulses-and-staples"
-                    role="menuitem"
-                    onClick={() => setMoreOpen(false)}
-                    className="block px-4 py-2 text-[12px] font-medium text-forest hover:bg-forest/10 transition-colors"
-                  >
-                    Mountain Pulses & Staples
-                  </Link>
-                  <div className="border-t border-[#E5DED2] my-1" />
-                  <Link
-                    to="/makers"
-                    role="menuitem"
-                    onClick={() => setMoreOpen(false)}
-                    className="block px-4 py-2 text-[12px] text-ink hover:bg-forest/10 hover:text-forest transition-colors"
-                  >
-                    Meet the Makers
-                  </Link>
-                  <Link
-                    to="/sourcing"
-                    role="menuitem"
-                    onClick={() => setMoreOpen(false)}
-                    className="block px-4 py-2 text-[12px] text-ink hover:bg-forest/10 hover:text-forest transition-colors"
-                  >
-                    The Sourcing Standard
-                  </Link>
-                  <Link
-                    to="/about"
-                    role="menuitem"
-                    onClick={() => setMoreOpen(false)}
-                    className="block px-4 py-2 text-[12px] text-ink hover:bg-forest/10 hover:text-forest transition-colors"
-                  >
-                    Our Story & Heritage
-                  </Link>
-                  <Link
-                    to="/policies/authenticity"
-                    role="menuitem"
-                    onClick={() => setMoreOpen(false)}
-                    className="block px-4 py-2 text-[12px] text-ink hover:bg-forest/10 hover:text-forest transition-colors"
-                  >
-                    Authenticity & Proof
-                  </Link>
+                <div role="menu" className="absolute left-0 top-full z-50 mt-1.5 w-60 border border-line bg-surface py-1.5 text-ink shadow-xl">
+                  {[
+                    { label: 'Mountain pulses & staples', to: '/shop?category=pulses-and-staples' },
+                    { label: 'Meet the makers', to: '/makers' },
+                    { label: 'The sourcing standard', to: '/sourcing' },
+                    { label: 'Our story & heritage', to: '/about' },
+                    { label: 'Authenticity & proof', to: '/policies/authenticity' },
+                  ].map((item) => (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      role="menuitem"
+                      onClick={() => setMoreOpen(false)}
+                      className="flex min-h-11 items-center px-4 py-2 text-[12px] text-ink transition-colors hover:bg-paper hover:text-forest"
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
                 </div>
               ) : null}
             </div>
@@ -561,74 +545,201 @@ function Header() {
       </div>
 
       {mobileOpen ? (
-        <div className="fixed inset-0 top-[72px] z-50 flex flex-col bg-surface/98 backdrop-blur-md px-6 py-6 lg:hidden fade-in overflow-y-auto">
-          <nav className="flex flex-col space-y-1" aria-label="Mobile">
-            {NAV.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                onClick={() => setMobileOpen(false)}
-                className="border-b border-line/70 py-4 font-serif text-2xl text-forest hover:text-terra transition-colors"
-              >
-                {item.label}
-              </Link>
-            ))}
-            <div className="pt-6 space-y-4">
-              <Link
-                to="/account/wishlist"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center justify-between text-sm font-medium text-ink py-2"
-              >
-                <span>Saved items</span>
-                <span className="text-xs text-muted">View wishlist →</span>
-              </Link>
-              <Link
-                to="/account"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center justify-between text-sm font-medium text-ink py-2"
-              >
-                <span>Customer Account</span>
-                <span className="text-xs text-muted">Orders & addresses →</span>
-              </Link>
-              {user?.roles.includes('seller') && !user?.roles.includes('admin') ? (
+        <div
+          ref={mobilePanelRef}
+          id="mobile-menu"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu"
+          className="fixed inset-0 z-50 flex flex-col bg-paper lg:hidden"
+        >
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
+            <Wordmark />
+            <button
+              type="button"
+              data-menu-close
+              onClick={() => setMobileOpen(false)}
+              className="inline-flex h-11 w-11 items-center justify-center text-ink transition-colors hover:text-terra"
+              aria-label="Close menu"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden>
+                <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-5 pb-10 pt-4">
+            <nav aria-label="Mobile primary">
+              {NAV.map((item) => (
                 <Link
-                  to="/seller"
+                  key={item.to}
+                  to={item.to}
                   onClick={() => setMobileOpen(false)}
-                  className="flex items-center justify-between text-sm font-semibold text-terra bg-terra/10 rounded px-3 py-2 border border-terra/30"
+                  className="flex min-h-12 items-center justify-between border-b border-line/70 py-3 font-serif text-2xl text-forest transition-colors hover:text-terra"
                 >
-                  <span>Seller Studio</span>
-                  <span className="text-xs text-terra">Dashboard →</span>
+                  <span>{item.label}</span>
+                  <span aria-hidden className="text-base text-muted">
+                    →
+                  </span>
+                </Link>
+              ))}
+              <Link
+                to="/shop"
+                onClick={() => setMobileOpen(false)}
+                className="flex min-h-12 items-center justify-between border-b border-line/70 py-3 font-serif text-2xl text-forest transition-colors hover:text-terra"
+              >
+                <span>All products</span>
+                <span aria-hidden className="text-base text-muted">
+                  →
+                </span>
+              </Link>
+            </nav>
+
+            <div className="mt-6 space-y-1">
+              <Link to="/account" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between py-2 text-sm font-medium text-ink">
+                <span>{user ? 'Your account' : 'Sign in or create an account'}</span>
+                <span aria-hidden className="text-muted">→</span>
+              </Link>
+              <Link to="/account/orders" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between py-2 text-sm text-ink/85">
+                <span>Orders &amp; returns</span>
+                <span aria-hidden className="text-muted">→</span>
+              </Link>
+              <Link to="/account/wishlist" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between py-2 text-sm text-ink/85">
+                <span>Saved items</span>
+                <span aria-hidden className="text-muted">→</span>
+              </Link>
+              <Link to="/contact" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between py-2 text-sm text-ink/85">
+                <span>Help &amp; contact</span>
+                <span aria-hidden className="text-muted">→</span>
+              </Link>
+            </div>
+
+            <div className="mt-6 space-y-2 border-t border-line pt-5">
+              {user?.roles.includes('admin') ? (
+                <Link to="/admin" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between border border-forest/20 bg-forest/5 px-3 py-2 text-sm font-semibold text-forest">
+                  <span>Administration</span>
+                  <span aria-hidden>→</span>
                 </Link>
               ) : null}
-              {user?.roles.includes('admin') ? (
-                <Link
-                  to="/admin"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center justify-between text-sm font-semibold text-forest bg-forest/5 rounded px-3 py-2 border border-forest/20"
-                >
-                  <span>Administration Portal</span>
-                  <span className="text-xs text-forest">Dashboard →</span>
+              {user?.roles.includes('seller') && !user?.roles.includes('admin') ? (
+                <Link to="/seller" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between border border-terra/30 bg-terra/10 px-3 py-2 text-sm font-semibold text-terra">
+                  <span>Seller Studio</span>
+                  <span aria-hidden>→</span>
                 </Link>
               ) : null}
               {!user?.roles.includes('seller') && !user?.roles.includes('admin') ? (
-                <Link
-                  to="/sell"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center justify-between text-sm font-medium text-terra py-2"
-                >
-                  <span>Sell on PAHADI ROOTS</span>
-                  <span className="text-xs text-terra">Apply to join →</span>
+                <Link to="/sell" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between px-1 py-2 text-sm font-medium text-terra">
+                  <span>Sell on Dear Hills</span>
+                  <span aria-hidden>→</span>
                 </Link>
               ) : null}
+              {user ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setMobileOpen(false);
+                    await signOut();
+                  }}
+                  className="flex min-h-11 w-full items-center px-1 py-2 text-left text-sm text-muted hover:text-ink"
+                >
+                  Sign out
+                </button>
+              ) : null}
             </div>
-            <div className="pt-8 mt-auto border-t border-line text-xs text-muted">
-              <p>PAHADI ROOTS — Rooted in Himachal Pradesh</p>
-              <p className="mt-1">Crafted with care for authentic mountain goods.</p>
-            </div>
-          </nav>
+
+            <p className="mt-8 border-t border-line pt-5 text-[11px] leading-relaxed text-muted">
+              Dear Hills · A curated marketplace for products made and grown in Himachal Pradesh.
+            </p>
+          </div>
         </div>
       ) : null}
     </header>
+  );
+}
+
+const AUTH_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
+
+function shouldShowTabBar(pathname: string): boolean {
+  if (pathname === '/cart') return false;
+  if (pathname.startsWith('/shop/')) return false;
+  if (pathname.startsWith('/checkout') || pathname.startsWith('/seller') || pathname.startsWith('/admin')) return false;
+  if (pathname === '/sell' || pathname.startsWith('/become-a-maker')) return false;
+  if (AUTH_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) return false;
+  return ['/', '/shop', '/makers', '/about', '/sourcing', '/faq', '/contact', '/credits', '/offers', '/policies', '/account'].some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+}
+
+function MobileTabBar() {
+  const { pathname } = useLocation();
+  const { user } = useAuth();
+  const cartCount = useCartCount();
+  if (!shouldShowTabBar(pathname)) return null;
+
+  const tabs = [
+    { label: 'Home', to: '/', icon: 'home' as const, active: pathname === '/' },
+    { label: 'Shop', to: '/shop', icon: 'grid' as const, active: pathname === '/shop' },
+    { label: 'Search', to: '/shop', icon: 'search' as const, active: false },
+    { label: 'Account', to: user ? '/account' : '/login', icon: 'user' as const, active: pathname.startsWith('/account') },
+    { label: 'Bag', to: '/cart', icon: 'bag' as const, active: pathname === '/cart', count: cartCount },
+  ];
+
+  return (
+    <nav
+      aria-label="Mobile shopping navigation"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/98 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+    >
+      <ul className="mx-auto grid max-w-lg grid-cols-5">
+        {tabs.map((tab) => {
+          const content = (
+            <>
+              <span className="relative">
+                <Icon name={tab.icon} className="h-5 w-5" />
+                {'count' in tab && tab.count ? (
+                  <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-terra px-1 text-[9px] font-bold text-white">
+                    {tab.count}
+                  </span>
+                ) : null}
+              </span>
+              <span className="text-[10px] font-medium leading-none">{tab.label}</span>
+            </>
+          );
+          const classes = `flex h-14 flex-col items-center justify-center gap-1 transition-colors ${
+            tab.active ? 'text-terra' : 'text-ink/70 hover:text-forest'
+          }`;
+          return (
+            <li key={tab.label}>
+              {tab.label === 'Search' ? (
+                <button
+                  type="button"
+                  className={`w-full ${classes}`}
+                  onClick={() => {
+                    // Two search inputs exist (compact mobile header, desktop bar);
+                    // focus whichever one is actually rendered at this breakpoint.
+                    const inputs = Array.from(
+                      document.querySelectorAll<HTMLInputElement>('input[id^="site-search"]'),
+                    );
+                    const input = inputs.find((candidate) => candidate.offsetParent !== null);
+                    if (input) {
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      input.focus({ preventScroll: true });
+                      input.select();
+                    }
+                  }}
+                  aria-label="Search products"
+                >
+                  {content}
+                </button>
+              ) : (
+                <Link to={tab.to} className={classes} aria-current={tab.active ? 'page' : undefined} aria-label={tab.label}>
+                  {content}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }
 
@@ -695,7 +806,7 @@ function Newsletter() {
               onChange={(event) => setConsent(event.target.checked)}
               className="mt-0.5 accent-terra"
             />
-            I agree to receive occasional dispatches from PAHADI ROOTS.
+            I agree to receive occasional dispatches from DEAR HILLS.
           </label>
         </form>
       )}
@@ -751,7 +862,7 @@ function Footer() {
         <div className="flex flex-col gap-4 pt-8 text-[11px] leading-relaxed text-paper/50 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl space-y-1.5">
             <p>
-              © {new Date().getFullYear()} PAHADI ROOTS. Demonstration build — policy documents are drafts pending legal
+              © {new Date().getFullYear()} DEAR HILLS. Demonstration build — policy documents are drafts pending legal
               review. Product and seller records in this environment are labelled demo data.
             </p>
             <p>
@@ -778,7 +889,7 @@ function CheckoutFooter() {
   return (
     <footer className="border-t border-[#E3D9C9] bg-[#F6F0E6]">
       <div className="mx-auto flex max-w-[1200px] flex-col gap-3 px-4 py-6 text-[10.5px] leading-relaxed text-[#7A8179] sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-        <p>© {new Date().getFullYear()} PAHADI ROOTS. Handmade and grown in Himachal Pradesh.</p>
+        <p>© {new Date().getFullYear()} DEAR HILLS. Handmade and grown in Himachal Pradesh.</p>
         <nav aria-label="Checkout help" className="flex flex-wrap gap-x-5 gap-y-2">
           <Link to="/policies/shipping" className="transition-colors hover:text-[#234638]">
             Shipping
@@ -810,6 +921,7 @@ export function PublicLayout() {
   const { config } = useAuth();
   const { pathname } = useLocation();
   const isCheckout = pathname.startsWith('/checkout');
+  const showTabBar = shouldShowTabBar(pathname);
   return (
     <div className="flex min-h-screen flex-col">
       <ScrollToTop />
@@ -820,10 +932,11 @@ export function PublicLayout() {
         </div>
       ) : null}
       <Header />
-      <main className="flex-1">
+      <main className={`flex-1 ${showTabBar ? 'pb-safe-tabbar' : ''}`}>
         <Outlet />
       </main>
       {isCheckout ? <CheckoutFooter /> : <Footer />}
+      <MobileTabBar />
     </div>
   );
 }

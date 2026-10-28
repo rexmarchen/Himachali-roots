@@ -21,6 +21,12 @@
   --color-harvest: #d98263;
   --color-warm-paper: #f7f1e7;
   --color-olive: #66745a;
+  --color-success: #2f6b4f;
+  --color-success-soft: #e7f1ea;
+  --color-warning: #9a6a1c;
+  --color-warning-soft: #fbf3e0;
+  --color-danger: #9b3d2d;
+  --color-danger-soft: #f8e9e5;
   --font-serif: 'Cormorant Garamond Variable', 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
   --font-sans: 'Manrope Variable', 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Cormorant Garamond Variable', 'Cormorant Garamond', Georgia, serif;
@@ -95,6 +101,48 @@
 
   img {
     color: transparent;
+  }
+
+  /* Long marketplace names, addresses and prices must wrap instead of
+     forcing a page-level horizontal scrollbar on narrow phones. */
+  h1,
+  h2,
+  h3,
+  p,
+  dd,
+  dt,
+  a,
+  span {
+    overflow-wrap: break-word;
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .pb-safe-tabbar {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 768px) {
+    .pb-safe-tabbar {
+      padding-bottom: 0;
+    }
+  }
+
+  .bottom-safe {
+    bottom: env(safe-area-inset-bottom);
+  }
+
+  .touch-target {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+
+  .min-h-dvh {
+    min-height: 100dvh;
   }
 }
 

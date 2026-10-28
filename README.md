@@ -1,4 +1,4 @@
-# PAHADI ROOTS
+# DEAR HILLS
 
 A multi-vendor marketplace for products made and grown in Himachal Pradesh — storefront, customer accounts, seller workspace and administrator console in one application.
 

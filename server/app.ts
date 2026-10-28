@@ -123,9 +123,11 @@ export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.E
     }),
   );
 
-  // Production: serve the built SPA. Development uses Vite on :5173.
-  if (env.isProduction) {
-    const dist = path.resolve(process.cwd(), 'dist');
+  // Serve the built SPA from dist if present (in production or when built).
+  const dist = path.resolve(process.cwd(), 'dist');
+  const distExists = fs.existsSync(path.join(dist, 'index.html'));
+
+  if (env.isProduction || distExists) {
     // Immutable fingerprinted JS/CSS chunks: 1 year cache
     app.use(
       '/assets',
@@ -162,6 +164,15 @@ export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.E
       }
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       res.sendFile(indexPath);
+    });
+  } else {
+    // Development fallback when dist is not built yet: redirect browser requests to Vite dev server
+    app.use((req, res, next) => {
+      if ((req.method !== 'GET' && req.method !== 'HEAD') || req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+        next();
+        return;
+      }
+      res.redirect(env.appUrl + req.originalUrl);
     });
   }
 

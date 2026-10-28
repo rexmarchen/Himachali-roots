@@ -208,7 +208,7 @@ async function issueVerification(db: Db, user: { id: string; email: string; full
     userId: user.id,
     email: user.email,
     type: 'verify_email',
-    subject: 'Confirm your PAHADI ROOTS account',
+    subject: 'Confirm your DEAR HILLS account',
     body: `<p>Hello ${user.fullName || 'there'},</p><p>Please confirm your email address to finish setting up your account.</p>
       <p><a href="${link}" style="display:inline-block;background:#243D32;color:#F7F3EB;padding:12px 20px;text-decoration:none">Confirm email</a></p>
       <p style="font-size:13px;color:#6B6F68">If you did not create this account, you can ignore this message.</p>`,

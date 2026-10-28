@@ -5,7 +5,7 @@ import { Alert, Modal } from '@/components/ui';
 /* Shared presentation primitives for the operations console. */
 
 export function AdminPage({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`space-y-6 ${className}`}>{children}</div>;
+  return <div className={`min-w-0 space-y-6 ${className}`}>{children}</div>;
 }
 
 export function AdminSection({
@@ -26,7 +26,7 @@ export function AdminSection({
   id?: string;
 }) {
   return (
-    <section id={id} className={`border border-line bg-surface ${className}`}>
+    <section id={id} className={`min-w-0 border border-line bg-surface ${className}`}>
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
         <div className="min-w-0">
           <h2 className="text-xl leading-tight">{title}</h2>

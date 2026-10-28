@@ -66,7 +66,7 @@ export async function openRazorpay(options: {
     key: options.keyId,
     amount: options.amountPaise,
     currency: 'INR',
-    name: 'PAHADI ROOTS',
+    name: 'DEAR HILLS',
     description: `Order ${options.orderNumber}`,
     order_id: options.providerOrderId,
     prefill: {

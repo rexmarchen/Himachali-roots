@@ -23,7 +23,7 @@ export function CampaignBanner({
       <div className="mx-auto w-full max-w-3xl sm:max-w-4xl lg:max-w-[860px] xl:max-w-[900px] px-4 sm:px-6">
         <Link
           to={href}
-          aria-label={`${campaign.name}: View Pahadi Festive Glow Diwali offers and authentic Himachali collection`}
+          aria-label={`${campaign.name}: view the festive Himachali collection`}
           className="group relative block w-full overflow-hidden rounded-xl sm:rounded-2xl border border-[#2D241C]/25 bg-[#14120E] shadow-xl transition-all duration-300 hover:border-terra/40 hover:shadow-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terra"
         >
           <img
@@ -39,6 +39,17 @@ export function CampaignBanner({
             className="block h-auto w-full aspect-[1672/941] object-contain transition-transform duration-500 ease-out group-hover:scale-[1.008]"
           />
         </Link>
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
+          <p className="text-bark/80">
+            <span className="font-semibold text-terra">✨ Diwali Maker Special:</span> Selling mountain craft or harvest?
+          </p>
+          <Link
+            to="/become-a-maker?offer=diwali"
+            className="font-medium text-forest hover:text-terra underline underline-offset-4 transition-colors"
+          >
+            Apply to sell this festive season &rarr;
+          </Link>
+        </div>
       </div>
     </section>
   );

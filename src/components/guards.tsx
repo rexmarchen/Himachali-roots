@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/session';
 import { Spinner } from '@/components/ui';
@@ -52,10 +51,6 @@ export function RequireAdmin() {
 export function RequireSellerAccount() {
   const { user, loading } = useAuth();
   const location = useLocation();
-
-  useEffect(() => {
-    document.title = 'Seller portal — PAHADI ROOTS';
-  }, []);
 
   if (loading) return <FullPageLoader label="Opening your seller workspace…" />;
 

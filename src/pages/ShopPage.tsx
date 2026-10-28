@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Category, Paged, ProductSummary } from '@shared/types';
 import { formatINR } from '@shared/types';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/session';
+import { usePageMeta } from '@/lib/usePageMeta';
 import { ProductGrid } from '@/components/ProductCard';
 import {
   Badge,
@@ -14,6 +15,7 @@ import {
   ErrorState,
   Input,
   LoadingBlock,
+  Modal,
   Pagination,
   PageHeader,
   Select,
@@ -42,6 +44,7 @@ export function ShopPage() {
   const { config } = useAuth();
   const freeShippingThreshold = config?.shipping.freeThresholdPaise ?? 0;
   const [params, setParams] = useSearchParams();
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const queryString = params.toString();
   const products = useQuery({
     queryKey: ['products', queryString],
@@ -74,6 +77,24 @@ export function ShopPage() {
     return filters?.categories.find((item) => item.slug === category);
   }, [filters, category]);
 
+  const liveCategories = useMemo(
+    () => (filters?.categories ?? []).filter((item) => (item.productCount ?? 0) > 0),
+    [filters],
+  );
+
+  usePageMeta({
+    title: q
+      ? `Search results for “${q}” · Dear Hills`
+      : activeCategory
+        ? `${activeCategory.name} · Dear Hills`
+        : 'Shop all products · Dear Hills',
+    description:
+      activeCategory?.description ??
+      'Browse authentic Himachali shawls, tea, honey, dry fruit, oils and pantry staples from reviewed local makers.',
+    canonicalPath: '/shop',
+    image: activeCategory?.imageUrl ?? null,
+  });
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Shop' }]} />
@@ -87,44 +108,41 @@ export function ShopPage() {
         }
       />
 
-      {/* Production Category Quick-Pills Filter Bar */}
-      {filters?.categories?.length ? (
-        <div className="mt-6 -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto no-scrollbar pb-1">
-          <div className="flex items-center gap-2 min-w-max py-1">
+      {/* Category quick filters: only shelves with live listings are shown. */}
+      {liveCategories.length ? (
+        <div className="no-scrollbar -mx-4 mt-6 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+          <div className="flex min-w-max items-center gap-2 py-1">
             <button
               type="button"
               onClick={() => update('category', null)}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all ${
+              className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
                 !category
-                  ? 'border-forest bg-forest text-paper shadow-xs font-semibold'
+                  ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
                   : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
               }`}
             >
-              <span>All Shelves</span>
-              <span className={`text-[10.5px] px-1.5 py-0.2 rounded-full font-mono ${!category ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
-                {filters.categories.reduce((acc, c) => acc + (c.productCount ?? 0), 0)}
+              <span>All shelves</span>
+              <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10.5px] ${!category ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
+                {liveCategories.reduce((total, item) => total + (item.productCount ?? 0), 0)}
               </span>
             </button>
 
-            {filters.categories.map((c) => {
-              const isSelected = category === c.slug;
+            {liveCategories.map((item) => {
+              const isSelected = category === item.slug;
               return (
                 <button
-                  key={c.id}
+                  key={item.id}
                   type="button"
-                  onClick={() => update('category', isSelected ? null : c.slug)}
-                  className={`inline-flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                  onClick={() => update('category', isSelected ? null : item.slug)}
+                  className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
                     isSelected
-                      ? 'border-forest bg-forest text-paper shadow-xs font-semibold'
+                      ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
                       : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
                   }`}
                 >
-                  {c.imageUrl ? (
-                    <img src={c.imageUrl} alt="" className="w-5 h-5 rounded-full object-cover shrink-0 border border-white/20" />
-                  ) : null}
-                  <span>{c.name}</span>
-                  <span className={`text-[10.5px] px-1.5 py-0.2 rounded-full font-mono ${isSelected ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
-                    {c.productCount ?? 0}
+                  <span>{item.name}</span>
+                  <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10.5px] ${isSelected ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
+                    {item.productCount ?? 0}
                   </span>
                 </button>
               );
@@ -151,11 +169,11 @@ export function ShopPage() {
                   >
                     <span>All shelves</span>
                     <span className="text-[10px] font-mono text-muted">
-                      {filters?.categories ? filters.categories.reduce((acc, c) => acc + (c.productCount ?? 0), 0) : ''}
+                      {liveCategories.reduce((total, item) => total + (item.productCount ?? 0), 0)}
                     </span>
                   </button>
                 </li>
-                {filters?.categories.map((item) => {
+                {liveCategories.map((item) => {
                   const isSelected = category === item.slug;
                   return (
                     <li key={item.id}>
@@ -335,15 +353,42 @@ export function ShopPage() {
           </div>
 
           <div className="mb-5 flex flex-wrap gap-2 lg:hidden">
-            <Select value={category ?? ''} onChange={(event) => update('category', event.target.value || null)} aria-label="Category" className="h-9 w-auto text-xs">
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => setFiltersOpen(true)}
+              className="gap-2"
+              aria-haspopup="dialog"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4" aria-hidden>
+                <path d="M4 6h16M7 12h10M10 18h4" strokeLinecap="round" />
+              </svg>
+              Filters
+              {activeCount > 0 ? (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-terra px-1 text-[10px] font-bold text-white">
+                  {activeCount}
+                </span>
+              ) : null}
+            </Button>
+            <Select
+              value={category ?? ''}
+              onChange={(event) => update('category', event.target.value || null)}
+              aria-label="Category"
+              className="h-11 w-auto max-w-[190px] text-xs"
+            >
               <option value="">All categories</option>
-              {filters?.categories.map((item) => (
+              {liveCategories.map((item) => (
                 <option key={item.id} value={item.slug}>
                   {item.name}
                 </option>
               ))}
             </Select>
-            <Select value={region ?? ''} onChange={(event) => update('region', event.target.value || null)} aria-label="Region" className="h-9 w-auto text-xs">
+            <Select
+              value={region ?? ''}
+              onChange={(event) => update('region', event.target.value || null)}
+              aria-label="Region"
+              className="h-11 w-auto max-w-[160px] text-xs"
+            >
               <option value="">All regions</option>
               {filters?.regions.map((item) => (
                 <option key={item.region} value={item.region}>
@@ -393,6 +438,150 @@ export function ShopPage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="Filter & sort"
+        footer={
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => {
+                clearAll();
+                setFiltersOpen(false);
+              }}
+            >
+              Reset
+            </Button>
+            <Button className="flex-1" onClick={() => setFiltersOpen(false)}>
+              Show results
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-6">
+          <div>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Category</p>
+            <div className="grid gap-1">
+              <button
+                type="button"
+                onClick={() => update('category', null)}
+                className={`flex min-h-11 items-center justify-between rounded-md border px-3 text-left text-[13px] ${
+                  !category ? 'border-forest bg-forest text-paper' : 'border-line bg-surface text-ink'
+                }`}
+              >
+                <span>All shelves</span>
+                <span className="text-[11px]">{liveCategories.reduce((total, item) => total + (item.productCount ?? 0), 0)}</span>
+              </button>
+              {liveCategories.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => update('category', category === item.slug ? null : item.slug)}
+                  className={`flex min-h-11 items-center justify-between rounded-md border px-3 text-left text-[13px] ${
+                    category === item.slug ? 'border-forest bg-forest text-paper' : 'border-line bg-surface text-ink'
+                  }`}
+                >
+                  <span className="truncate">{item.name}</span>
+                  <span className="ml-2 text-[11px]">{item.productCount ?? 0}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {filters?.regions.length ? (
+            <div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Region</p>
+              <div className="flex flex-wrap gap-2">
+                {filters.regions.map((item) => (
+                  <button
+                    key={item.region}
+                    type="button"
+                    onClick={() => update('region', region === item.region ? null : item.region)}
+                    className={`min-h-10 border px-3 text-[12px] ${
+                      region === item.region ? 'border-forest bg-forest text-paper' : 'border-line bg-surface text-ink'
+                    }`}
+                  >
+                    {item.region}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {filters?.sellers.length ? (
+            <div>
+              <label htmlFor="mobile-maker" className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                Maker
+              </label>
+              <Select id="mobile-maker" value={seller ?? ''} onChange={(event) => update('seller', event.target.value || null)}>
+                <option value="">All makers</option>
+                {filters.sellers.map((item) => (
+                  <option key={item.slug} value={item.slug}>
+                    {item.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
+
+          <div>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Price (₹)</p>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                inputMode="numeric"
+                placeholder={filters?.priceRangePaise.min ? String(Math.floor(filters.priceRangePaise.min / 100)) : 'Min'}
+                defaultValue={params.get('minPrice') ? String(Number(params.get('minPrice')) / 100) : ''}
+                onBlur={(event) => {
+                  const value = event.target.value.trim();
+                  update('minPrice', value ? String(Math.round(Number(value) * 100)) : null);
+                }}
+                aria-label="Minimum price in rupees"
+              />
+              <span className="text-muted">–</span>
+              <Input
+                type="number"
+                min={0}
+                inputMode="numeric"
+                placeholder={filters?.priceRangePaise.max ? String(Math.ceil(filters.priceRangePaise.max / 100)) : 'Max'}
+                defaultValue={params.get('maxPrice') ? String(Number(params.get('maxPrice')) / 100) : ''}
+                onBlur={(event) => {
+                  const value = event.target.value.trim();
+                  update('maxPrice', value ? String(Math.round(Number(value) * 100)) : null);
+                }}
+                aria-label="Maximum price in rupees"
+              />
+            </div>
+          </div>
+
+          <label className="flex min-h-11 items-center gap-3 text-[13px] text-ink">
+            <input
+              type="checkbox"
+              checked={params.get('inStock') === 'true'}
+              onChange={(event) => update('inStock', event.target.checked ? 'true' : null)}
+              className="h-4 w-4 accent-forest"
+            />
+            In stock only
+          </label>
+
+          <div>
+            <label htmlFor="mobile-sort" className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+              Sort by
+            </label>
+            <Select id="mobile-sort" value={sort} onChange={(event) => update('sort', event.target.value)}>
+              {SORTS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

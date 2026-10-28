@@ -497,7 +497,7 @@ function hydrateForm(response: ApplicationResponse | undefined, user: { fullName
   return {
     ...form,
     fullName: asString(data.fullName) || user.fullName || '',
-    phone: asString(data.phone) || asString(asRecord(seller?.operatingAddress).phone),
+    phone: asString(data.phone) || asString(application?.phone) || asString(asRecord(seller?.operatingAddress).phone),
     businessName: asString(data.businessName) || seller?.businessName || '',
     sellerType: asString(data.sellerType) || seller?.sellerType || 'individual',
     sellerCategory: (asString(data.sellerCategory) || seller?.sellerCategory || '') as SellerCategoryId | '',
@@ -901,6 +901,12 @@ export function BecomeAMakerPage() {
   };
 
   const jumpTo = (target: number) => {
+    if (!user && target > 1) {
+      toast.push('Create your maker account or sign in first to save your progress.', 'info');
+      setStep(1);
+      focusHeading();
+      return;
+    }
     setErrors({});
     setStep(target);
     focusHeading();
@@ -1925,7 +1931,7 @@ export function BecomeAMakerPage() {
         key: 'sellerAgreement',
         index: '01',
         title: 'Marketplace seller terms',
-        detail: 'Listing standards, dispatch expectations, returns and the operating terms for selling on PAHADI ROOTS.',
+        detail: 'Listing standards, dispatch expectations, returns and the operating terms for selling on DEAR HILLS.',
         links: [{ label: 'Seller agreement', to: '/policies/seller-terms' }],
         checked: form.agreements.sellerAgreement,
         error: errors['agreements.sellerAgreement'],
@@ -1933,8 +1939,8 @@ export function BecomeAMakerPage() {
       {
         key: 'commissionDisclosure',
         index: '02',
-        title: 'Commission terms',
-        detail: `${percentFromBp(commissionBp)} of the item subtotal after discounts. Shipping and taxes are excluded, and refunds reverse commission proportionally.`,
+        title: 'Commission terms (0% Diwali Launch Offer)',
+        detail: `✨ Festive Launch Benefit: 0% marketplace commission for your first 6 months! (Standard ${percentFromBp(commissionBp)} platform fee is fully waived so you keep 100% of your earnings). Shipping and taxes are excluded, and refunds reverse commission proportionally.`,
         links: [{ label: 'How commission works', to: '/policies/seller-terms' }],
         checked: form.agreements.commissionDisclosure,
         error: errors['agreements.commissionDisclosure'],
@@ -2477,12 +2483,37 @@ export function BecomeAMakerPage() {
 
   return (
     <div className="bg-warm-paper">
+      {/* Diwali Shubh Aarambh Maker Launch Banner */}
+      <section className="border-b border-[#D4A373]/30 bg-gradient-to-r from-[#2B1B17] via-[#3D2219] to-[#2B1B17] text-paper py-3.5 px-4 sm:px-6 shadow-inner">
+        <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E07A5F]/20 text-[#E07A5F] text-lg shrink-0">
+              🪔
+            </span>
+            <div>
+              <p className="text-xs font-bold tracking-wider text-[#F4D06F] uppercase">
+                Diwali Shubh Aarambh · Maker Launch Initiative
+              </p>
+              <p className="text-[13px] text-[#F7EBE1]/90">
+                Join our founding Himachal artisan cohort: <strong>0% Commission for 6 months</strong>, free craft storytelling, and guaranteed homepage Diwali spotlight!
+              </p>
+            </div>
+          </div>
+          <a
+            href="#diwali-perks"
+            className="inline-flex shrink-0 items-center justify-center rounded-sm bg-[#E07A5F] px-4 py-1.5 text-xs font-semibold text-white transition-all hover:bg-[#D96B4E] shadow-xs"
+          >
+            Explore Diwali Perks &darr;
+          </a>
+        </div>
+      </section>
+
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-line">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(203,142,139,0.18),transparent_45%)]" aria-hidden />
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 pb-16 pt-12 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 lg:px-8 lg:pb-24 lg:pt-20">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-harvest">Sell on Pahadi Roots</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-harvest">Sell on DEAR HILLS</p>
             <h1 className="mt-5 font-display text-[clamp(2.9rem,6vw,4.7rem)] leading-[0.98] text-orchard">
               Your roots. Your craft. <span className="italic text-[#8a4a52]">Your story.</span>
             </h1>
@@ -2533,6 +2564,80 @@ export function BecomeAMakerPage() {
         </div>
       </section>
 
+      {/* Diwali Maker Incentive Package */}
+      <section id="diwali-perks" className="border-b border-line bg-[#FAF5EE] py-14 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center max-w-2xl mx-auto">
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#C06041]">
+              Festive Season Launch Offer
+            </p>
+            <h2 className="mt-2 font-display text-3xl text-orchard sm:text-4xl">
+              Why Himachal Makers Are Joining This Diwali
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted">
+              We know building the first shelf takes trust. That's why we are waiving platform fees and providing end-to-end launch support for our first 50 verified mountain workshops and growers.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="border border-line bg-surface p-6 rounded-sm shadow-xs transition-shadow hover:shadow-md">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E07A5F]/15 text-[#E07A5F] text-xl mb-4">
+                🏷️
+              </div>
+              <h3 className="font-display text-xl text-orchard">0% Commission</h3>
+              <p className="mt-2 text-xs leading-relaxed text-muted">
+                Enjoy 0% platform fee for 6 full months. Every rupee paid by customers for your craft goes directly into your bank account.
+              </p>
+            </div>
+
+            <div className="border border-line bg-surface p-6 rounded-sm shadow-xs transition-shadow hover:shadow-md">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-forest/15 text-forest text-xl mb-4">
+                ✍️
+              </div>
+              <h3 className="font-display text-xl text-orchard">Free Storytelling</h3>
+              <p className="mt-2 text-xs leading-relaxed text-muted">
+                Our editorial team visits or video-calls you to document your loom, orchard or workshop, crafting a museum-quality biography.
+              </p>
+            </div>
+
+            <div className="border border-line bg-surface p-6 rounded-sm shadow-xs transition-shadow hover:shadow-md">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-harvest/20 text-harvest text-xl mb-4">
+                ✨
+              </div>
+              <h3 className="font-display text-xl text-orchard">Diwali Spotlight</h3>
+              <p className="mt-2 text-xs leading-relaxed text-muted">
+                Your listings are given prime billing in our &quot;Pahadi Festive Glow&quot; Diwali collection, showcased to mindful shoppers nationwide.
+              </p>
+            </div>
+
+            <div className="border border-line bg-surface p-6 rounded-sm shadow-xs transition-shadow hover:shadow-md">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sage/30 text-forest text-xl mb-4">
+                📦
+              </div>
+              <h3 className="font-display text-xl text-orchard">Doorstep Pickup</h3>
+              <p className="mt-2 text-xs leading-relaxed text-muted">
+                Insured doorstep courier dispatch from all 12 Himachal districts, plus eco-friendly packaging starter support.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 rounded-sm border border-[#D4A373]/40 bg-[#F5EBE1] p-4 text-center sm:text-left sm:flex sm:items-center sm:justify-between sm:gap-6">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl shrink-0">🎁</span>
+              <p className="text-xs text-bark">
+                <strong>Foundational Cohort Benefit:</strong> ₹1,500 shipping credits credited upon store approval, plus a verified GI / Heritage Mountain Maker badge.
+              </p>
+            </div>
+            <a
+              href="#apply"
+              className="mt-3 inline-block sm:mt-0 shrink-0 text-xs font-semibold text-[#8a4a52] hover:text-orchard underline underline-offset-4"
+            >
+              Start Your Application &rarr;
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* Provenance */}
       <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-16">
@@ -2543,7 +2648,7 @@ export function BecomeAMakerPage() {
             </h2>
             <p className="mt-5 text-sm leading-relaxed text-muted">
               Himachal's best products are not anonymous. They come from named orchards, kitchens, looms and workshops.
-              PAHADI ROOTS asks for that detail up front so buyers can understand what they are buying and makers are not
+              DEAR HILLS asks for that detail up front so buyers can understand what they are buying and makers are not
               reduced to a generic Himalayan backdrop.
             </p>
             <ul className="mt-6 space-y-3 text-sm leading-relaxed text-bark">
@@ -2811,7 +2916,7 @@ export function BecomeAMakerPage() {
       {/* Final CTA */}
       <section className="relative overflow-hidden bg-orchard px-4 py-20 text-center sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-apple-blossom">Pahadi Roots</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-apple-blossom">DEAR HILLS</p>
           <h2 className="mt-4 font-display text-4xl leading-tight text-warm-paper sm:text-5xl">
             Make the first draft today.
           </h2>

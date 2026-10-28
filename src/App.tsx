@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { PublicLayout } from '@/components/PublicLayout';
 import { RequireAdmin, RequireAuth, RequireSellerAccount } from '@/components/guards';
 
@@ -179,6 +179,8 @@ export function App() {
         <Route index element={<HomePage />} />
         <Route path="shop" element={<ShopPage />} />
         <Route path="shop/:slug" element={<ProductPage />} />
+        <Route path="offers" element={<Navigate to="/offers/pahadi-festive-glow" replace />} />
+        <Route path="diwali" element={<Navigate to="/offers/pahadi-festive-glow" replace />} />
         <Route path="offers/:slug" element={<OfferPage />} />
         <Route path="products/:slug" element={<ProductPage />} />
         <Route path="cart" element={<CartPage />} />

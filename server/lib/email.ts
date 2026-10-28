@@ -156,11 +156,11 @@ export function escapeHtml(value: string): string {
 function shell(subject: string, body: string): string {
   return `<!doctype html><html><body style="margin:0;background:#F7F3EB;font-family:Arial,Helvetica,sans-serif;color:#20231F">
   <div style="max-width:560px;margin:0 auto;padding:32px 24px">
-    <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#243D32;font-weight:700">Pahadi Roots</div>
+    <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#243D32;font-weight:700">DEAR HILLS</div>
     <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:500;font-size:26px;line-height:1.25;color:#243D32;margin:16px 0">${escapeHtml(subject)}</h1>
     <div style="font-size:15px;line-height:1.7;color:#3A3E38">${body}</div>
     <hr style="border:none;border-top:1px solid #DCD2C2;margin:28px 0" />
-    <p style="font-size:12px;color:#6B6F68;line-height:1.6">From the Himalayas, with heart.<br/>This is a transactional message from PAHADI ROOTS. Support: ${escapeHtml(env.email.supportEmail)}</p>
+    <p style="font-size:12px;color:#6B6F68;line-height:1.6">From the Himalayas, with heart.<br/>This is a transactional message from DEAR HILLS. Support: ${escapeHtml(env.email.supportEmail)}</p>
   </div></body></html>`;
 }
 

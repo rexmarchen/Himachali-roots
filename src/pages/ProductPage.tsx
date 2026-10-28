@@ -6,6 +6,7 @@ import { formatINR } from '@shared/types';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
+import { usePageMeta } from '@/lib/usePageMeta';
 import { ProductGrid } from '@/components/ProductCard';
 import {
   Alert,
@@ -93,6 +94,7 @@ export function ProductPage() {
   const [activeTab, setActiveTab] = useState<DetailTab>('story');
   const [showStickyBar, setShowStickyBar] = useState(false);
   const buyBoxRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef<number | null>(null);
 
   const queryClient = useQueryClient();
   const { user, config } = useAuth();
@@ -161,6 +163,14 @@ export function ProductPage() {
       toast.push(saved ? 'Removed from saved items.' : 'Saved for later.');
     },
     onError: (error) => toast.push(errorMessage(error), 'error'),
+  });
+
+  const metaProduct = productQuery.data?.product;
+  usePageMeta({
+    title: metaProduct ? `${metaProduct.name} · Dear Hills` : 'Product · Dear Hills',
+    description: metaProduct?.shortDescription ?? 'An authentic Himachali product from a reviewed local maker.',
+    canonicalPath: metaProduct ? `/shop/${metaProduct.slug}` : '/shop',
+    image: metaProduct?.images[0]?.url ?? null,
   });
 
   if (productQuery.isLoading) {
@@ -236,7 +246,7 @@ export function ProductPage() {
   ].filter((fact): fact is { label: string; value: string } => Boolean(fact));
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+    <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12 ${showStickyBar ? 'pb-28 md:pb-24' : ''}`}>
       <Breadcrumbs
         items={[
           { label: 'Home', to: '/' },
@@ -249,9 +259,29 @@ export function ProductPage() {
       <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
         {/* Left column: gallery and real listing facts */}
         <div>
-          <div className="relative aspect-[4/5] overflow-hidden rounded-sm border border-line bg-sand/40 shadow-xs">
+          <div
+            className="relative aspect-square overflow-hidden rounded-sm border border-line bg-sand/30 shadow-xs sm:aspect-[4/5]"
+            onTouchStart={(event) => {
+              touchStartX.current = event.touches[0]?.clientX ?? null;
+            }}
+            onTouchEnd={(event) => {
+              if (touchStartX.current === null || product.images.length < 2) return;
+              const delta = (event.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+              touchStartX.current = null;
+              if (Math.abs(delta) < 40) return;
+              setSelectedImage((index) =>
+                (index + (delta < 0 ? 1 : -1) + product.images.length) % product.images.length,
+              );
+            }}
+          >
             {image ? (
-              <img src={image.url} alt={image.alt} className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
+              <img
+                src={image.url}
+                alt={image.alt}
+                loading="eager"
+                fetchPriority="high"
+                className="h-full w-full object-contain transition-transform duration-500 sm:object-cover sm:hover:scale-[1.02]"
+              />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted">No photograph</div>
             )}
@@ -270,16 +300,19 @@ export function ProductPage() {
           </div>
 
           {product.images.length > 1 ? (
-            <div className="mt-3 flex gap-2 overflow-x-auto">
+            <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
               {product.images.map((item, index) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => setSelectedImage(index)}
-                  className={`h-20 w-16 shrink-0 overflow-hidden rounded-sm border ${index === selectedImage ? 'border-forest ring-1 ring-forest' : 'border-line opacity-75 hover:opacity-100'}`}
-                  aria-label={`View image ${index + 1}`}
+                  aria-label={`View image ${index + 1} of ${product.images.length}`}
+                  aria-pressed={index === selectedImage}
+                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-sm border transition-opacity ${
+                    index === selectedImage ? 'border-forest ring-1 ring-forest' : 'border-line opacity-70 hover:opacity-100'
+                  }`}
                 >
-                  <img src={item.url} alt={item.alt} className="h-full w-full object-cover" />
+                  <img src={item.url} alt="" loading="lazy" className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>
@@ -419,7 +452,7 @@ export function ProductPage() {
                     <button
                       type="button"
                       onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-                      className="h-full px-4 text-lg text-muted transition-colors hover:text-ink disabled:opacity-40"
+                      className="h-full min-w-11 px-4 text-lg text-muted transition-colors hover:text-ink disabled:opacity-40"
                       disabled={quantity <= 1}
                       aria-label="Decrease quantity"
                     >
@@ -429,7 +462,7 @@ export function ProductPage() {
                     <button
                       type="button"
                       onClick={() => setQuantity((value) => Math.min(maxQuantity, value + 1))}
-                      className="h-full px-4 text-lg text-muted transition-colors hover:text-ink disabled:opacity-40"
+                      className="h-full min-w-11 px-4 text-lg text-muted transition-colors hover:text-ink disabled:opacity-40"
                       disabled={quantity >= maxQuantity}
                       aria-label="Increase quantity"
                     >
@@ -825,34 +858,37 @@ export function ProductPage() {
 
       {/* Sticky buy bar */}
       {showStickyBar && !soldOut && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-white/95 px-4 py-3 shadow-xl backdrop-blur-md transition-all duration-300">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-white/97 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-xl backdrop-blur-md transition-all duration-300 sm:px-4">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               {image && (
-                <img src={image.url} alt={product.name} className="h-12 w-12 rounded-sm border border-line object-cover" />
+                <img src={image.url} alt="" className="hidden h-12 w-12 rounded-sm border border-line object-cover sm:block" />
               )}
-              <div className="hidden sm:block">
-                <p className="line-clamp-1 text-xs font-semibold text-forest">{product.name}</p>
-                <p className="text-[11px] text-muted">{product.unit}{product.weightG ? ` · ${product.weightG} g` : ''} · {formatINR(currentItemPrice)}</p>
+              <div className="min-w-0">
+                <p className="line-clamp-1 hidden text-xs font-semibold text-forest sm:block">{product.name}</p>
+                <p className="text-sm font-semibold text-forest sm:text-[11px] sm:font-normal sm:text-muted">
+                  {formatINR(currentItemPrice)}
+                  <span className="hidden sm:inline"> · {product.unit}{product.weightG ? ` · ${product.weightG} g` : ''}</span>
+                </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 items-center rounded-sm border border-sand bg-surface">
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="hidden h-10 items-center rounded-sm border border-sand bg-surface sm:flex">
                 <button
                   type="button"
                   onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-                  className="h-full px-3 text-sm text-muted hover:text-ink disabled:opacity-40"
+                  className="h-full min-w-10 px-2 text-sm text-muted hover:text-ink disabled:opacity-40"
                   disabled={quantity <= 1}
                   aria-label="Decrease quantity"
                 >
                   −
                 </button>
-                <span className="w-8 text-center text-xs font-semibold tabular-nums">{quantity}</span>
+                <span className="w-7 text-center text-xs font-semibold tabular-nums">{quantity}</span>
                 <button
                   type="button"
                   onClick={() => setQuantity((value) => Math.min(maxQuantity, value + 1))}
-                  className="h-full px-3 text-sm text-muted hover:text-ink disabled:opacity-40"
+                  className="h-full min-w-10 px-2 text-sm text-muted hover:text-ink disabled:opacity-40"
                   disabled={quantity >= maxQuantity}
                   aria-label="Increase quantity"
                 >
@@ -864,22 +900,26 @@ export function ProductPage() {
                 size="sm"
                 loading={addToCart.isPending}
                 onClick={() => addToCart.mutate()}
-                className="flex items-center gap-1.5 bg-forest font-medium text-paper hover:bg-forest-deep"
+                className="flex h-11 items-center gap-1.5 bg-forest font-medium text-paper hover:bg-forest-deep"
               >
                 <ShoppingBagIcon className="h-3.5 w-3.5" />
-                <span>Add to Bag</span>
+                <span className="hidden sm:inline">Add to Bag</span>
+                <span className="sm:hidden">Add</span>
               </Button>
 
               <button
                 type="button"
                 disabled={buyNow.isPending}
                 onClick={() => buyNow.mutate()}
-                className="flex h-9 items-center gap-1.5 rounded-sm bg-terra px-4 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#b9694c]"
+                className="flex h-11 items-center gap-1.5 rounded-sm bg-terra px-4 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#b9694c] disabled:opacity-60"
               >
-                {buyNow.isPending ? <Spinner className="h-3 w-3" /> : (
+                {buyNow.isPending ? (
+                  <Spinner className="h-3 w-3" />
+                ) : (
                   <>
                     <FlashIcon className="h-3.5 w-3.5" />
-                    <span>Buy Now ({formatINR(calculatedTotal)})</span>
+                    <span className="hidden sm:inline">Buy Now ({formatINR(calculatedTotal)})</span>
+                    <span className="sm:hidden">Buy</span>
                   </>
                 )}
               </button>

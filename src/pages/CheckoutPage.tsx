@@ -44,7 +44,7 @@ function normalizeAddressFields(fields: Record<string, string>): FieldErrors {
 
 function CheckoutShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#F6F0E6]">
+    <div className="min-h-screen bg-paper">
       <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:py-14">{children}</div>
     </div>
   );
@@ -52,7 +52,7 @@ function CheckoutShell({ children }: { children: ReactNode }) {
 
 export function CheckoutPage() {
   usePageMeta({
-    title: 'Checkout — PAHADI ROOTS',
+    title: 'Checkout · Dear Hills',
     description: 'A secure checkout for authentic Himachali goods, shipped across India by the makers themselves.',
     canonicalPath: '/checkout',
   });
@@ -401,8 +401,8 @@ export function CheckoutPage() {
       return (
         <CheckoutShell>
           <div className="mx-auto max-w-2xl">
-            <h1 className="font-serif text-3xl text-[#234638]">Loading your order</h1>
-            <p className="mt-2 text-[12.5px] text-[#6B7269]">Checking the payment status of order {resumeOrderNumber}…</p>
+            <h1 className="font-serif text-3xl text-forest">Loading your order</h1>
+            <p className="mt-2 text-[12.5px] text-muted">Checking the payment status of order {resumeOrderNumber}…</p>
             <div className="mt-6">
               <LoadingBlock rows={3} label="Loading order" />
             </div>
@@ -424,15 +424,15 @@ export function CheckoutPage() {
               {resumeUnauthorized ? (
                 <Link
                   to={`/login?next=${encodeURIComponent(`/checkout?resume=${resumeOrderNumber}`)}`}
-                  className="text-[#234638] underline underline-offset-4"
+                  className="text-forest underline underline-offset-4"
                 >
                   Sign in again
                 </Link>
               ) : null}
-              <Link to="/account/orders" className="text-[#234638] underline underline-offset-4">
+              <Link to="/account/orders" className="text-forest underline underline-offset-4">
                 Your orders
               </Link>
-              <Link to="/cart" className="text-[#234638] underline underline-offset-4">
+              <Link to="/cart" className="text-forest underline underline-offset-4">
                 Your bag
               </Link>
             </div>
@@ -454,8 +454,8 @@ export function CheckoutPage() {
         return (
           <CheckoutShell>
             <div className="mx-auto max-w-2xl">
-              <h1 className="font-serif text-3xl text-[#234638]">Preparing secure payment</h1>
-              <p className="mt-2 text-[12.5px] text-[#6B7269]">Reopening payment for order {resumePendingOrder.orderNumber}…</p>
+              <h1 className="font-serif text-3xl text-forest">Preparing secure payment</h1>
+              <p className="mt-2 text-[12.5px] text-muted">Reopening payment for order {resumePendingOrder.orderNumber}…</p>
               <div className="mt-6">
                 <LoadingBlock rows={2} label="Preparing payment" />
               </div>
@@ -502,14 +502,14 @@ export function CheckoutPage() {
               {resumePaymentUnauthorized ? (
                 <Link
                   to={`/login?next=${encodeURIComponent(`/checkout?resume=${resumeOrderNumber}`)}`}
-                  className="text-[12px] text-[#234638] underline underline-offset-4"
+                  className="text-[12px] text-forest underline underline-offset-4"
                 >
                   Sign in again
                 </Link>
               ) : null}
               <Link
                 to={`/account/orders/${encodeURIComponent(resumePendingOrder.orderNumber)}`}
-                className="text-[12px] text-[#234638] underline underline-offset-4"
+                className="text-[12px] text-forest underline underline-offset-4"
               >
                 View the saved order
               </Link>
@@ -544,12 +544,12 @@ export function CheckoutPage() {
               : `Order ${statusOrder.orderNumber} is currently marked “${statusOrder.status.replaceAll('_', ' ')}”, so there is no payment to complete.`}
           </Alert>
           <div className="mt-4 flex flex-wrap gap-4 text-[12px]">
-            <Link to="/cart" className="text-[#234638] underline underline-offset-4">
+            <Link to="/cart" className="text-forest underline underline-offset-4">
               Return to your bag
             </Link>
             <Link
               to={`/account/orders/${encodeURIComponent(statusOrder.orderNumber)}`}
-              className="text-[#234638] underline underline-offset-4"
+              className="text-forest underline underline-offset-4"
             >
               View order details
             </Link>
@@ -582,15 +582,15 @@ export function CheckoutPage() {
   if (cart.lines.length === 0) {
     return (
       <CheckoutShell>
-        <div className="mx-auto max-w-xl border border-[#E3D9C9] bg-white p-8 text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D98060]">Checkout</p>
-          <h1 className="mt-2 font-serif text-[34px] text-[#234638]">Your bag is empty</h1>
-          <p className="mx-auto mt-2 max-w-sm text-[12.5px] leading-relaxed text-[#6B7269]">
+        <div className="mx-auto max-w-xl border border-line bg-white p-8 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-terra">Checkout</p>
+          <h1 className="mt-2 font-serif text-[34px] text-forest">Your bag is empty</h1>
+          <p className="mx-auto mt-2 max-w-sm text-[12.5px] leading-relaxed text-muted">
             Add something from the catalogue before checking out. Saved addresses and your account stay exactly as they are.
           </p>
           <Link
             to="/shop"
-            className="mt-6 inline-flex h-11 items-center justify-center border border-[#234638] bg-[#234638] px-5 text-[13px] font-medium text-[#FDFBF7] transition-colors hover:bg-[#1B382D]"
+            className="mt-6 inline-flex h-11 items-center justify-center border border-forest bg-forest px-5 text-[13px] font-medium text-paper transition-colors hover:bg-forest-deep"
           >
             Browse the catalogue
           </Link>
@@ -604,19 +604,19 @@ export function CheckoutPage() {
   const cartEmpty = cart.lines.length === 0;
 
   return (
-    <div className="min-h-screen bg-[#F6F0E6]">
+    <div className="min-h-screen bg-paper">
       <div className="mx-auto w-full max-w-[1200px] px-4 pb-28 pt-7 sm:px-6 lg:px-8 lg:pb-16 lg:pt-10">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D98060]">Secure checkout</p>
-            <h1 className="mt-1 font-serif text-[34px] leading-none text-[#234638] sm:text-[42px]">Checkout</h1>
-            <p className="mt-2 max-w-xl text-[12px] leading-relaxed text-[#6B7269]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-terra">Secure checkout</p>
+            <h1 className="mt-1 font-serif text-[34px] leading-none text-forest sm:text-[42px]">Checkout</h1>
+            <p className="mt-2 max-w-xl text-[12px] leading-relaxed text-muted">
               Three short steps. The maker dispatches directly, and every total is checked again by the server before your
               order is created.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-[10.5px] text-[#6B7269]">
-            <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#234638]" fill="none" aria-hidden>
+          <div className="flex items-center gap-2 text-[10.5px] text-muted">
+            <svg viewBox="0 0 20 20" className="h-4 w-4 text-forest" fill="none" aria-hidden>
               <rect x="4" y="8.5" width="12" height="8.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
               <path d="M7 8.5V6.4a3 3 0 0 1 6 0v2.1" stroke="currentColor" strokeWidth="1.4" />
             </svg>
@@ -714,11 +714,11 @@ export function CheckoutPage() {
       </div>
 
       {totals ? (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#DCD1C0] bg-[#F6F0E6]/97 px-4 py-3 backdrop-blur lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/97 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:hidden">
           <div className="mx-auto flex max-w-[1200px] items-center gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-[9.5px] uppercase tracking-[0.14em] text-[#7A8179]">Total payable</p>
-              <p className="font-serif text-[21px] leading-tight text-[#234638]">{formatINR(totals.totalPaise)}</p>
+              <p className="text-[9.5px] uppercase tracking-[0.14em] text-muted">Total payable</p>
+              <p className="font-serif text-[21px] leading-tight text-forest">{formatINR(totals.totalPaise)}</p>
             </div>
             {stage === 1 ? (
               <CheckoutAction
@@ -791,12 +791,12 @@ export function CheckoutPage() {
             }}
             idPrefix="edit-address"
           />
-          <label className="flex cursor-pointer items-start gap-2.5 text-[11.5px] leading-relaxed text-[#5E675F]">
+          <label className="flex cursor-pointer items-start gap-2.5 text-[11.5px] leading-relaxed text-muted">
             <input
               type="checkbox"
               checked={editDraft.isDefault}
               onChange={(event) => setEditDraft((current) => ({ ...current, isDefault: event.target.checked }))}
-              className="mt-0.5 h-4 w-4 accent-[#234638]"
+              className="mt-0.5 h-4 w-4 accent-forest"
             />
             Make this my default delivery address.
           </label>

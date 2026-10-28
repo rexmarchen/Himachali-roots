@@ -120,10 +120,10 @@ export function ProductCard({
               toggleWishlist.mutate(isSaved);
             }}
             aria-label={isSaved ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`}
-            className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border transition-all duration-200 ${
+            className={`absolute right-2.5 top-2.5 flex h-10 w-10 items-center justify-center rounded-full border transition-all duration-200 sm:h-9 sm:w-9 ${
               isSaved
                 ? 'border-terra bg-terra text-white shadow-sm'
-                : 'border-line/70 bg-paper/85 text-ink/70 hover:bg-paper hover:text-terra hover:scale-105'
+                : 'border-line/70 bg-paper/90 text-ink/70 hover:bg-paper hover:text-terra'
             }`}
           >
             <svg viewBox="0 0 20 20" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" className="h-4 w-4">
@@ -157,7 +157,7 @@ export function ProductCard({
       </div>
 
       <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 border-t border-line/50 pt-2.5">
-        <div className="flex items-baseline gap-2">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-2">
           <span className="text-[14px] font-medium text-ink">{formatINR(product.pricePaise)}</span>
           {strikePrice ? <span className="text-xs text-muted/80 line-through">{formatINR(strikePrice)}</span> : null}
         </div>
@@ -168,6 +168,8 @@ export function ProductCard({
             <span className="font-medium text-ink">{product.ratingAverage.toFixed(1)}</span>
             <span className="text-muted/60">({product.ratingCount})</span>
           </div>
+        ) : !soldOut && product.stock <= 3 ? (
+          <span className="text-[10.5px] font-medium text-warning">Only {product.stock} left</span>
         ) : null}
       </div>
 
@@ -187,7 +189,7 @@ export function ProductCard({
 
 export function ProductGrid({ products, showAddToCart = false }: { products: ProductSummary[]; showAddToCart?: boolean }) {
   return (
-    <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-7 sm:gap-y-12 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-x-4 gap-y-9 sm:gap-x-6 sm:gap-y-11 md:grid-cols-3 xl:grid-cols-4">
       {products.map((product, index) => (
         <ProductCard key={product.id} product={product} priority={index < 4} showAddToCart={showAddToCart} />
       ))}

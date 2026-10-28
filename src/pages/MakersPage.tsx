@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { PublicMaker, MakersQueryResponse } from '@shared/types';
 import { api } from '@/lib/api';
+import { usePageMeta } from '@/lib/usePageMeta';
 import { Breadcrumbs, Button, LinkButton } from '@/components/ui';
 
 const CATEGORY_CHIPS = [
@@ -55,6 +56,13 @@ const CRAFT_STORIES = [
 export function MakersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [, startTransition] = useTransition();
+
+  usePageMeta({
+    title: 'Meet the makers · Dear Hills',
+    description:
+      'The growers, weavers and workshop owners of Himachal Pradesh who sell directly on Dear Hills.',
+    canonicalPath: '/makers',
+  });
 
   // Read state from URL search params
   const searchQuery = searchParams.get('q') || '';
@@ -121,6 +129,24 @@ export function MakersPage() {
       {/* Editorial Navigation Breadcrumbs */}
       <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
         <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Makers & Artisans' }]} />
+      </div>
+
+      {/* Diwali Maker Cohort Invitation Banner */}
+      <div className="mx-auto max-w-7xl px-4 pt-3 sm:px-6 lg:px-8">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-md border border-[#D4A373]/50 bg-gradient-to-r from-[#2B1B17] via-[#382017] to-[#2B1B17] px-4 py-3 text-paper shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="text-base">🪔</span>
+            <p className="text-xs text-[#F7EBE1]">
+              <strong className="text-[#F4D06F]">Diwali Maker Initiative:</strong> Are you crafting or growing in Himachal? Sell this Diwali with <strong>0% Commission</strong> &amp; free storytelling.
+            </p>
+          </div>
+          <Link
+            to="/become-a-maker?offer=diwali"
+            className="shrink-0 text-xs font-semibold text-[#F4D06F] hover:text-white underline underline-offset-2 transition-colors"
+          >
+            Join as a Maker &rarr;
+          </Link>
+        </div>
       </div>
 
       {/* =========================================================================
@@ -500,8 +526,8 @@ export function MakersPage() {
                   Clear all filters
                 </Button>
               ) : (
-                <LinkButton to="/sell" variant="terra" size="sm">
-                  Become a Maker
+                <LinkButton to="/become-a-maker?offer=diwali" variant="terra" size="sm">
+                  Join as a Maker (0% Commission Diwali Offer) &rarr;
                 </LinkButton>
               )}
             </div>

@@ -463,8 +463,8 @@ export function adminRouter(db: Db): Router {
     const account = sellerUser(db, seller.id);
     if (account) {
       const subjects: Record<string, string> = {
-        approve: 'Your PAHADI ROOTS maker account is approved',
-        reject: 'Update on your PAHADI ROOTS maker application',
+        approve: 'Your DEAR HILLS maker account is approved',
+        reject: 'Update on your DEAR HILLS maker application',
         request_changes: 'Changes requested on your maker application',
         start_review: 'Your maker application is under review',
         suspend: 'Your seller account has been suspended',
@@ -740,7 +740,7 @@ export function adminRouter(db: Db): Router {
               : `Listing rejected: ${product.name}`,
         body: `<p>${
           input.decision === 'approve'
-            ? 'Your product is now live on PAHADI ROOTS.'
+            ? 'Your product is now live on DEAR HILLS.'
             : isChanges
               ? 'We need changes before this listing can go live.'
               : 'We could not approve this listing.'

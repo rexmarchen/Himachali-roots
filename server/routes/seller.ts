@@ -615,7 +615,7 @@ export function sellerRouter(db: Db): Router {
       type: 'seller_application_received',
       subject: 'We have received your seller application',
       body: `<p>Hello ${escapeHtml(req.user!.fullName || 'there')},</p>
-        <p>Thank you for applying to sell on PAHADI ROOTS. Our team reviews applications manually and may request clarification or documents.</p>
+        <p>Thank you for applying to sell on DEAR HILLS. Our team reviews applications manually and may request clarification or documents.</p>
         <p><strong>Business:</strong> ${escapeHtml(validated.businessName)}</p>
         <p>You can follow the status in your seller application. Products cannot be published until the application is approved.</p>`,
       dedupeKey: `seller-application:${current.id}:${nextRevision}`,

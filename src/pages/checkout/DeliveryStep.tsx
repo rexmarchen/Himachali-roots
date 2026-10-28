@@ -31,7 +31,7 @@ export function AddressFields({
 
       <Field label="Mobile number" required error={errors.phone} hint="+91">
         <div className="flex">
-          <span className="inline-flex items-center border border-r-0 border-sand bg-[#F6F0E6] px-3 text-[13px] text-[#6B7269]">
+          <span className="inline-flex items-center border border-r-0 border-sand bg-paper px-3 text-[13px] text-muted">
             +91
           </span>
           <Input
@@ -166,7 +166,7 @@ export function DeliveryStep({
         action={
           <Link
             to="/account/addresses"
-            className="text-[11px] text-[#6B7269] underline decoration-[#C9BFB0] underline-offset-4 hover:text-[#234638]"
+            className="text-[11px] text-muted underline decoration-line underline-offset-4 hover:text-forest"
           >
             Manage addresses
           </Link>
@@ -194,29 +194,29 @@ export function DeliveryStep({
               <div
                 key={address.id}
                 className={`relative border transition-colors ${
-                  selected ? 'border-[#234638] bg-[#234638]/[0.035]' : 'border-[#E3D9C9] bg-white hover:border-[#234638]/35'
+                  selected ? 'border-forest bg-forest/[0.035]' : 'border-line bg-white hover:border-forest/35'
                 }`}
               >
                 <label className="flex cursor-pointer gap-3 p-4 pr-16">
                   <input
                     type="radio"
                     name="delivery-address"
-                    className="mt-1 h-4 w-4 shrink-0 accent-[#234638]"
+                    className="mt-1 h-4 w-4 shrink-0 accent-forest"
                     checked={selected}
                     onChange={() => onSelect(address.id)}
                   />
-                  <span className="min-w-0 text-[12px] leading-relaxed text-[#5E675F]">
+                  <span className="min-w-0 text-[12px] leading-relaxed text-muted">
                     <span className="flex flex-wrap items-center gap-2">
-                      <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[#234638]">
+                      <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-forest">
                         {address.label}
                       </span>
                       {address.isDefault ? (
-                        <span className="border border-[#D8CDBC] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-[#7A8179]">
+                        <span className="border border-line px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-muted">
                           Default
                         </span>
                       ) : null}
                     </span>
-                    <span className="mt-1 block font-medium text-[#234638]">{address.fullName}</span>
+                    <span className="mt-1 block font-medium text-forest">{address.fullName}</span>
                     <span className="block">
                       {address.line1}
                       {address.line2 ? `, ${address.line2}` : ''}
@@ -224,13 +224,13 @@ export function DeliveryStep({
                     <span className="block">
                       {address.city}, {address.state} {address.pincode}
                     </span>
-                    <span className="mt-0.5 block text-[11px] text-[#7A8179]">+91 {address.phone}</span>
+                    <span className="mt-0.5 block text-[11px] text-muted">+91 {address.phone}</span>
                   </span>
                 </label>
                 <button
                   type="button"
                   onClick={() => onEditAddress(address)}
-                  className="absolute right-3 top-3 border border-[#E3D9C9] bg-white px-2 py-1 text-[10.5px] text-[#5E675F] transition-colors hover:border-[#234638]/40 hover:text-[#234638]"
+                  className="absolute right-3 top-3 border border-line bg-white px-2 py-1 text-[10.5px] text-muted transition-colors hover:border-forest/40 hover:text-forest"
                 >
                   Edit
                 </button>
@@ -244,8 +244,8 @@ export function DeliveryStep({
             aria-pressed={selectedId === 'new'}
             className={`flex min-h-[124px] items-center justify-center gap-2 border border-dashed px-4 py-5 text-[12px] transition-colors ${
               selectedId === 'new'
-                ? 'border-[#234638] bg-[#234638]/[0.035] text-[#234638]'
-                : 'border-[#CFC3B1] text-[#5E675F] hover:border-[#234638]/50 hover:text-[#234638]'
+                ? 'border-forest bg-forest/[0.035] text-forest'
+                : 'border-line text-muted hover:border-forest/50 hover:text-forest'
             }`}
           >
             <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
@@ -257,14 +257,14 @@ export function DeliveryStep({
       ) : null}
 
       {enteringNew && !addressesLoading ? (
-        <div className="mt-5 border border-[#E3D9C9] bg-[#FBF8F2] p-4 sm:p-5">
+        <div className="mt-5 border border-line bg-paper p-4 sm:p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="font-serif text-[19px] text-[#234638]">New delivery address</h3>
+            <h3 className="font-serif text-[19px] text-forest">New delivery address</h3>
             {addresses.length > 0 ? (
               <button
                 type="button"
                 onClick={() => onSelect(addresses[0].id)}
-                className="text-[11px] text-[#6B7269] underline underline-offset-4 hover:text-[#234638]"
+                className="text-[11px] text-muted underline underline-offset-4 hover:text-forest"
               >
                 Use a saved address instead
               </button>
@@ -273,16 +273,16 @@ export function DeliveryStep({
           <div className="mt-4">
             <AddressFields draft={draft} errors={errors} onChange={onChangeDraft} />
           </div>
-          <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-[11.5px] leading-relaxed text-[#5E675F]">
+          <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-[11.5px] leading-relaxed text-muted">
             <input
               type="checkbox"
               checked={saveNewAddress}
               onChange={(event) => onSaveNewAddressChange(event.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-[#234638]"
+              className="mt-0.5 h-4 w-4 accent-forest"
             />
             <span>
               Save this address to my account for future orders.
-              <span className="block text-[10.5px] text-[#7A8179]">
+              <span className="block text-[10.5px] text-muted">
                 You can edit or remove saved addresses from your account at any time.
               </span>
             </span>
@@ -290,11 +290,11 @@ export function DeliveryStep({
         </div>
       ) : null}
 
-      <div className="mt-6 border-t border-[#EDE5D8] pt-5">
-        <label htmlFor="checkout-note" className="text-[13px] font-medium text-[#234638]">
-          Delivery instructions <span className="font-normal text-[#7A8179]">(optional)</span>
+      <div className="mt-6 border-t border-line pt-5">
+        <label htmlFor="checkout-note" className="text-[13px] font-medium text-forest">
+          Delivery instructions <span className="font-normal text-muted">(optional)</span>
         </label>
-        <p className="mt-1 text-[11px] leading-relaxed text-[#7A8179]">
+        <p className="mt-1 text-[11px] leading-relaxed text-muted">
           Anything the maker or courier should know. Do not include card, UPI or password details.
         </p>
         <Textarea
@@ -305,11 +305,11 @@ export function DeliveryStep({
           onChange={(event) => onNoteChange(event.target.value)}
           placeholder="Landmark, preferred delivery window, or a note for the maker"
         />
-        <p className="mt-1 text-right text-[10px] text-[#8A8F87]">{note.length}/500</p>
+        <p className="mt-1 text-right text-[10px] text-muted">{note.length}/500</p>
       </div>
 
-      <div className="mt-6 flex flex-col-reverse items-stretch gap-3 border-t border-[#EDE5D8] pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[10.5px] leading-relaxed text-[#7A8179]">
+      <div className="mt-6 flex flex-col-reverse items-stretch gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[10.5px] leading-relaxed text-muted">
           We deliver within India only. Shipping charges are confirmed in the summary.
         </p>
         <CheckoutAction type="button" onClick={onContinue} loading={saving || addressesLoading} className="w-full sm:w-auto">
