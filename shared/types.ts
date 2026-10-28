@@ -414,3 +414,96 @@ export interface MakersQueryResponse {
   };
 }
 
+// ----------------------------------------------------------------------------
+// STUDY GROUP ROOM FINDER TYPES
+// ----------------------------------------------------------------------------
+
+export type StudyMode = 'pomodoro' | 'focus' | 'discussion' | 'cram';
+export type MemberPresenceStatus = 'active' | 'focusing' | 'break' | 'away';
+export type RoomLifecycleStatus = 'active' | 'closed' | 'archived';
+
+export interface StudyRoom {
+  id: string;
+  name: string;
+  subject: string;
+  description: string | null;
+  hostId: string;
+  hostName: string;
+  maxParticipants: number;
+  currentParticipants: number;
+  visibility: 'public' | 'unlisted';
+  status: RoomLifecycleStatus;
+  studyMode: StudyMode;
+  durationMinutes: number;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+  closedReason: string | null;
+}
+
+export interface StudyRoomMember {
+  roomId: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string | null;
+  isHost: boolean;
+  joinedAt: string;
+  lastHeartbeat: string;
+  status: MemberPresenceStatus;
+}
+
+export interface StudyRoomEvent {
+  id: number;
+  roomId: string;
+  userId: string;
+  userName: string;
+  eventType: 'join' | 'leave' | 'status' | 'pomodoro' | 'message' | 'collab' | 'system';
+  content: string;
+  createdAt: string;
+}
+
+export interface PomodoroState {
+  status: 'idle' | 'running' | 'paused' | 'completed';
+  mode: 'focus' | 'shortBreak' | 'longBreak';
+  remainingSeconds: number;
+  durationSeconds: number;
+  cycle: number;
+  updatedAt: string;
+}
+
+export interface StudyGoal {
+  id: string;
+  text: string;
+  completed: boolean;
+  authorName: string;
+}
+
+export interface StudyRoomCollab {
+  roomId: string;
+  pomodoroState: PomodoroState;
+  sharedNotes: string;
+  studyGoals: StudyGoal[];
+  updatedAt: string;
+}
+
+export interface StudyRoomDetailView {
+  room: StudyRoom;
+  members: StudyRoomMember[];
+  collab: StudyRoomCollab;
+  recentEvents: StudyRoomEvent[];
+}
+
+export interface RoomStreamMessage {
+  type: 'room_list_update' | 'room_update' | 'member_joined' | 'member_left' | 'member_status' | 'room_closed' | 'collab_update' | 'new_event' | 'heartbeat_ack';
+  roomId?: string;
+  room?: StudyRoom;
+  member?: StudyRoomMember;
+  userId?: string;
+  event?: StudyRoomEvent;
+  collab?: StudyRoomCollab;
+  reason?: string;
+  timestamp: string;
+}
+
+

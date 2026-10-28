@@ -807,3 +807,64 @@ CREATE TABLE IF NOT EXISTS integration_settings (
   metadata_json TEXT,
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- ============================================================================
+-- STUDY GROUP ROOM FINDER — REAL-TIME COLLABORATIVE STUDY ROOM SCHEMA
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS study_rooms (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  description TEXT,
+  host_id TEXT NOT NULL,
+  host_name TEXT NOT NULL,
+  max_participants INTEGER NOT NULL DEFAULT 5 CHECK (max_participants BETWEEN 2 AND 50),
+  current_participants INTEGER NOT NULL DEFAULT 0,
+  visibility TEXT NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'unlisted')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed', 'archived')),
+  study_mode TEXT NOT NULL DEFAULT 'pomodoro' CHECK (study_mode IN ('pomodoro', 'focus', 'discussion', 'cram')),
+  duration_minutes INTEGER NOT NULL DEFAULT 60 CHECK (duration_minutes BETWEEN 5 AND 720),
+  expires_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+60 minutes')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  closed_at TEXT,
+  closed_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_study_rooms_status ON study_rooms(status, visibility, created_at);
+CREATE INDEX IF NOT EXISTS idx_study_rooms_expires ON study_rooms(status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_study_rooms_subject ON study_rooms(subject, status);
+
+CREATE TABLE IF NOT EXISTS study_room_members (
+  room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  user_avatar TEXT,
+  is_host INTEGER NOT NULL DEFAULT 0,
+  joined_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  last_heartbeat TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'focusing', 'break', 'away')),
+  PRIMARY KEY (room_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_study_room_members_room ON study_room_members(room_id);
+CREATE INDEX IF NOT EXISTS idx_study_room_members_heartbeat ON study_room_members(last_heartbeat);
+
+CREATE TABLE IF NOT EXISTS study_room_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  event_type TEXT NOT NULL CHECK (event_type IN ('join', 'leave', 'status', 'pomodoro', 'message', 'collab', 'system')),
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_study_room_events_room ON study_room_events(room_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS study_room_collab (
+  room_id TEXT PRIMARY KEY REFERENCES study_rooms(id) ON DELETE CASCADE,
+  pomodoro_state TEXT NOT NULL DEFAULT '{"status":"idle","mode":"focus","remainingSeconds":1500,"durationSeconds":1500,"cycle":1,"updatedAt":""}',
+  shared_notes TEXT NOT NULL DEFAULT '',
+  study_goals TEXT NOT NULL DEFAULT '[]',
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+

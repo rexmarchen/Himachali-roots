@@ -3,6 +3,16 @@ import { Route, Routes } from 'react-router-dom';
 import { PublicLayout } from '@/components/PublicLayout';
 import { RequireAdmin, RequireAuth, RequireSellerAccount } from '@/components/guards';
 
+const StudyLandingPage = lazy(() =>
+  import('@/pages/study/StudyLandingPage').then((module) => ({ default: module.StudyLandingPage })),
+);
+const StudyDiscoveryPage = lazy(() =>
+  import('@/pages/study/StudyDiscoveryPage').then((module) => ({ default: module.StudyDiscoveryPage })),
+);
+const LiveStudyRoomPage = lazy(() =>
+  import('@/pages/study/LiveStudyRoomPage').then((module) => ({ default: module.LiveStudyRoomPage })),
+);
+
 const HomePage = lazy(() => import('@/pages/HomePage').then((module) => ({ default: module.HomePage })));
 const ShopPage = lazy(() => import('@/pages/ShopPage').then((module) => ({ default: module.ShopPage })));
 const ProductPage = lazy(() => import('@/pages/ProductPage').then((module) => ({ default: module.ProductPage })));
@@ -175,9 +185,15 @@ export function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Routes>
+        {/* Study Group Room Finder Primary Routes */}
+        <Route path="/" element={<StudyLandingPage />} />
+        <Route path="/rooms" element={<StudyDiscoveryPage />} />
+        <Route path="/rooms/:roomId" element={<LiveStudyRoomPage />} />
+
+        {/* Preserved Marketplace Routes */}
+        <Route path="/marketplace" element={<HomePage />} />
         <Route element={<PublicLayout />}>
-        <Route index element={<HomePage />} />
-        <Route path="shop" element={<ShopPage />} />
+          <Route path="shop" element={<ShopPage />} />
         <Route path="shop/:slug" element={<ProductPage />} />
         <Route path="offers/:slug" element={<OfferPage />} />
         <Route path="products/:slug" element={<ProductPage />} />

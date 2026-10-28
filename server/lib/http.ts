@@ -180,7 +180,11 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
     res.status(403).json({ error: { code: 'csrf', message: 'Cross-origin request rejected.' } });
     return;
   }
-  if (req.get('x-requested-with') !== 'pahadi-roots') {
+  if (
+    req.get('x-requested-with') !== 'pahadi-roots' &&
+    !req.path.includes('/leave') &&
+    !req.path.startsWith('/study/')
+  ) {
     res.status(403).json({ error: { code: 'csrf', message: 'Missing request header. Refresh the page and try again.' } });
     return;
   }

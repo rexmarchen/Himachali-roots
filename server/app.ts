@@ -15,6 +15,7 @@ import { shopRouter } from './routes/shop.js';
 import { accountRouter } from './routes/account.js';
 import { sellerRouter } from './routes/seller.js';
 import { adminRouter } from './routes/admin.js';
+import { studyRoomsRouter } from './routes/studyRooms.js';
 
 export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.Express {
   const app = express();
@@ -109,6 +110,7 @@ export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.E
   app.use('/api/account', accountRouter(db));
   app.use('/api/seller', sellerRouter(db));
   app.use('/api/admin', adminRouter(db));
+  app.use('/api/study', studyRoomsRouter(db));
   app.use('/', sitemapRouter(db));
 
   app.use(
