@@ -469,6 +469,9 @@ export function joinStudyRoom(
 
     const room = mapRoomRow(roomRow);
     if (room.status !== 'active') {
+      if (room.closedReason?.toLowerCase().includes('expired') || new Date(room.expiresAt).getTime() <= Date.now()) {
+        throw new Error('ROOM_EXPIRED');
+      }
       throw new Error('ROOM_CLOSED');
     }
 

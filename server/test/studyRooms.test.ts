@@ -280,4 +280,51 @@ describe('Study Group Room Finder API & Lifecycle', () => {
     expect(collabRes.body.collab.studyGoals).toHaveLength(1);
     expect(collabRes.body.collab.pomodoroState.status).toBe('running');
   });
+
+  it('initializes room expiry countdown and automatically closes room when timer expires', async () => {
+    // 1. Create a room with 45 minutes duration
+    const createRes = await request(app)
+      .post('/api/study/rooms')
+      .set('x-requested-with', 'pahadi-roots')
+      .send({
+        name: 'Timed Sprint Group',
+        subject: 'Engineering',
+        maxParticipants: 4,
+        durationMinutes: 45,
+        userId: 'student_sprint',
+        userName: 'Sprint Host',
+      });
+
+    expect(createRes.status).toBe(201);
+    const room = createRes.body.room;
+    expect(room.durationMinutes).toBe(45);
+    expect(room.expiresAt).toBeDefined();
+
+    const roomId = room.id;
+
+    // 2. Simulate countdown expiry by advancing expires_at into the past
+    const pastTime = new Date(Date.now() - 60_000).toISOString();
+    execute(db, 'UPDATE study_rooms SET expires_at = ? WHERE id = ?', pastTime, roomId);
+
+    // 3. Attempting to get room detail triggers automatic closure
+    const detailRes = await request(app)
+      .get(`/api/study/rooms/${roomId}`)
+      .set('x-requested-with', 'pahadi-roots');
+
+    expect(detailRes.body.room.status).toBe('closed');
+    expect(detailRes.body.room.closedReason).toContain('expired');
+
+    // 4. Attempting to join expired room is rejected with 410 room_expired
+    const joinRes = await request(app)
+      .post(`/api/study/rooms/${roomId}/join`)
+      .set('x-requested-with', 'pahadi-roots')
+      .send({
+        userId: 'late_student',
+        userName: 'Late Student',
+      });
+
+    expect(joinRes.status).toBe(410);
+    expect(joinRes.body.error.code).toBe('room_expired');
+  });
 });
+
