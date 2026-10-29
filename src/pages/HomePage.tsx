@@ -1137,7 +1137,7 @@ export function HomePage() {
                 Apply to Sell
               </LinkButton>
               <Link to="/policies/seller-terms" className="text-xs text-sand underline underline-offset-4 hover:text-paper">
-                Read seller KYC & commission terms →
+                Read seller KYC & platform fee terms →
               </Link>
             </div>
           </div>

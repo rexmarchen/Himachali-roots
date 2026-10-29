@@ -137,7 +137,7 @@ export function MakersPage() {
           <div className="flex items-center gap-2.5">
             <span className="text-base">🪔</span>
             <p className="text-xs text-[#F7EBE1]">
-              <strong className="text-[#F4D06F]">Diwali Maker Initiative:</strong> Are you crafting or growing in Himachal? Sell this Diwali with <strong>0% Commission</strong> &amp; free storytelling.
+              <strong className="text-[#F4D06F]">Diwali Maker Initiative:</strong> Are you crafting or growing in Himachal? Sell this Diwali with <strong>0% Platform Fee</strong> &amp; free storytelling.
             </p>
           </div>
           <Link
@@ -527,7 +527,7 @@ export function MakersPage() {
                 </Button>
               ) : (
                 <LinkButton to="/become-a-maker?offer=diwali" variant="terra" size="sm">
-                  Join as a Maker (0% Commission Diwali Offer) &rarr;
+                  Join as a Maker (0% Platform Fee Diwali Offer) &rarr;
                 </LinkButton>
               )}
             </div>

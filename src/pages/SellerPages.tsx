@@ -814,7 +814,7 @@ export function SellerApplicationPage() {
             </dl>
           </div>
           <div className="border border-line bg-paper p-5 text-[11.5px] leading-relaxed text-muted">
-            <p className="font-medium text-ink">Commission</p>
+            <p className="font-medium text-ink">Platform Fee</p>
             <p className="mt-1">{data.commissionNote}</p>
             <p className="mt-2">{data.payoutProvider?.message ?? 'Payouts are settled manually after review; no provider is connected in this environment.'}</p>
           </div>
@@ -1326,7 +1326,7 @@ export function SellerDashboardPage() {
         </div>
 
         <div className="rounded-xl border border-[#E4DACE] bg-white p-5 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#172321]/50">Marketplace Commission</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#172321]/50">Marketplace Platform Fee (12%)</p>
           <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]/80">−{formatINR(data.finances?.commissionPaise ?? data.sales.commission)}</p>
           <p className="mt-1.5 text-xs text-[#172321]/60">On product value after discounts</p>
         </div>
@@ -1669,7 +1669,7 @@ export function SellerDashboardPage() {
 
           {/* Commission transparency note */}
           <div className="rounded-xl border border-[#66745A]/25 bg-[#FAF7F2] p-4 text-[11px] leading-relaxed text-[#172321]/70">
-            <p className="font-serif font-bold text-[#172321] text-xs">Commission & settlement</p>
+            <p className="font-serif font-bold text-[#172321] text-xs">Platform fee & settlement</p>
             <p className="mt-1">{data.commissionNote}</p>
             <p className="mt-2 text-[10.5px] text-[#66745A]">
               Settlement figures in the ledger reflect recorded entries only. Bank/UPI payout details are reviewed manually;
@@ -3032,7 +3032,7 @@ export function SellerProductEditorPage() {
                 </div>
 
                 <div className="rounded-xl border border-[#E4DACE] bg-white p-3 shadow-xs">
-                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Marketplace Share ({percentFromBp(commissionBp)})</p>
+                  <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Platform Fee ({percentFromBp(commissionBp)})</p>
                   <p className="mt-1 font-serif text-lg font-bold text-[#172321]/70">
                     −₹{commissionNum.toFixed(2)}
                   </p>
@@ -3566,14 +3566,14 @@ export function SellerOrderDetailPage() {
             </ul>
           </section>
           <section className="border border-line bg-surface p-5">
-            <h2 className="text-lg">Payment & commission</h2>
+            <h2 className="text-lg">Payment & platform fee</h2>
             <dl className="mt-4 space-y-2 text-[12.5px]">
               <div className="flex justify-between"><dt className="text-muted">Product value</dt><dd>{formatINR(data.subtotalPaise)}</dd></div>
               {data.discountPaise ? <div className="flex justify-between"><dt className="text-muted">Discount</dt><dd>−{formatINR(data.discountPaise)}</dd></div> : null}
               <div className="flex justify-between"><dt className="text-muted">Shipping (marketplace)</dt><dd>{formatINR(data.shippingPaise)}</dd></div>
               {data.taxPaise ? <div className="flex justify-between"><dt className="text-muted">Tax included</dt><dd>{formatINR(data.taxPaise)}</dd></div> : null}
               <div className="flex justify-between border-t border-line pt-2"><dt className="text-muted">Buyer paid</dt><dd>{formatINR(data.totalPaise)}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Commission ({percentFromBp(data.commissionRateBp)})</dt><dd>−{formatINR(data.commissionPaise)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Platform Fee ({percentFromBp(data.commissionRateBp)})</dt><dd>−{formatINR(data.commissionPaise)}</dd></div>
               <div className="flex justify-between border-t border-line pt-2 font-medium"><dt>Your earning</dt><dd>{formatINR(data.earningPaise)}</dd></div>
             </dl>
             <p className="mt-3 text-[11px] leading-relaxed text-muted">{data.commissionNote}</p>
@@ -3875,7 +3875,7 @@ export function SellerEarningsPage() {
         <Pagination page={page} totalPages={data.pagination.totalPages} onChange={setPage} />
       </section>
       <section className="border border-line bg-surface p-5">
-        <h2 className="text-xl">Commission entries</h2>
+        <h2 className="text-xl">Platform fee entries</h2>
         <p className="mt-1 text-[11px] text-muted">{data.commissionNote}</p>
         {data.commissions.length ? (
           <ul className="mt-4 divide-y divide-line text-[12.5px]">
@@ -4214,7 +4214,7 @@ export function SellerProfilePage() {
         </form>
       </section>
       <div className="border border-line bg-paper p-5 text-[11.5px] leading-relaxed text-muted">
-        <p className="font-medium text-ink">Commission on file</p>
+        <p className="font-medium text-ink">Platform fee on file</p>
         <p className="mt-1">{application.data.commissionNote}</p>
         <p className="mt-2">Contact support if your business details, ownership or registrations change. Suspension can follow inaccurate verification information.</p>
       </div>

@@ -1152,7 +1152,7 @@ export function AdminOverviewPage() {
           to="/admin/orders?isDemo=false"
         />
         <AdminMetric
-          label="Commission · 30 days"
+          label="Platform Fee · 30 days"
           value={formatINR(m.commission ?? 0)}
           note="Booked on paid orders, excluding cancelled seller shipments"
           icon={<NavIcon type="commissions" className="h-4 w-4" />}
@@ -2068,10 +2068,10 @@ export function AdminSellerDetailPage() {
           <section className="border border-line bg-surface p-5">
             <h2 className="text-lg">Ledger</h2>
             <dl className="mt-3 space-y-2 text-[12.5px]">
-              <div className="flex justify-between"><dt className="text-muted">Commission</dt><dd>{formatINR(metrics.commission ?? 0)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Platform Fee</dt><dd>{formatINR(metrics.commission ?? 0)}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">Eligible</dt><dd>{formatINR(metrics.eligible ?? 0)}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">Settled</dt><dd>{formatINR(metrics.settled ?? 0)}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Commission rule</dt><dd>{data.commissionRules ? percentFromBp(data.commissionRules.rate_bp) : 'Default 15%'}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Platform fee rule</dt><dd>{data.commissionRules ? percentFromBp(data.commissionRules.rate_bp) : 'Default 12%'}</dd></div>
             </dl>
           </section>
           <section className="border border-line bg-surface p-5">
@@ -4264,7 +4264,7 @@ export function AdminOrderDetailPage() {
               <div className="grid gap-2 border-t border-line px-5 py-3 text-[11.5px] sm:grid-cols-2">
                 <span>Product value {formatINR(sellerOrder.subtotalPaise)}</span>
                 <span>Shipping {formatINR(sellerOrder.shippingPaise)}</span>
-                <span>Commission {formatINR(sellerOrder.commissionPaise ?? 0)}</span>
+                <span>Platform Fee {formatINR(sellerOrder.commissionPaise ?? 0)}</span>
                 <span>Seller earning {formatINR(sellerOrder.sellerEarningPaise ?? 0)}</span>
               </div>
               <div className="flex flex-wrap gap-2 border-t border-line px-5 py-3">
@@ -5005,11 +5005,11 @@ export function AdminCommissionsPage() {
     <div className="space-y-7">
       <PageHeader
         eyebrow="Take rate"
-        title="Commissions"
-        lede="Commission is charged on product value after discounts, excluding shipping and tax. Seller rules override category rules, which override the global default. Rates are snapshotted on each order."
+        title="Platform Fees"
+        lede="Platform fee (12%) is charged on product value after discounts, excluding shipping and tax. Seller rules override category rules, which override the global default. Rates are snapshotted on each order."
       />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Commission booked" value={formatINR(summary?.booked ?? 0)} note={`${summary?.count ?? 0} seller shipments`} />
+        <Stat label="Platform fee booked" value={formatINR(summary?.booked ?? 0)} note={`${summary?.count ?? 0} seller shipments`} />
         <Stat label="Reversed on refunds" value={formatINR(summary?.reversed ?? 0)} tone="warning" />
         <Stat label="Active rules" value={data.data?.rules.filter((rule) => rule.is_active).length ?? 0} />
         <Stat label="Default rate" value={percentFromBp(data.data?.defaultRateBp ?? 0)} note="Server default, overridden by rules" />
@@ -5078,12 +5078,12 @@ export function AdminCommissionsPage() {
       </div>
 
       <section className="border border-line bg-surface">
-        <div className="border-b border-line px-5 py-4"><h2 className="text-lg">Recent commission entries</h2><p className="mt-1 text-[11px] text-muted">Snapshotted when a payment is verified. Refund reversals are separate ledger entries.</p></div>
+        <div className="border-b border-line px-5 py-4"><h2 className="text-lg">Recent platform fee entries</h2><p className="mt-1 text-[11px] text-muted">Snapshotted when a payment is verified. Refund reversals are separate ledger entries.</p></div>
         {data.data?.entries.length ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-[12.5px]">
               <thead className="bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
-                <tr><th className="px-4 py-2.5">Order</th><th className="px-4 py-2.5">Seller</th><th className="px-4 py-2.5">Basis</th><th className="px-4 py-2.5">Rate</th><th className="px-4 py-2.5">Commission</th><th className="px-4 py-2.5">Created</th></tr>
+                <tr><th className="px-4 py-2.5">Order</th><th className="px-4 py-2.5">Seller</th><th className="px-4 py-2.5">Basis</th><th className="px-4 py-2.5">Rate</th><th className="px-4 py-2.5">Platform Fee</th><th className="px-4 py-2.5">Created</th></tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {data.data.entries.map((entry) => (
@@ -5286,7 +5286,7 @@ export function AdminSettlementsPage() {
             </div>
             <dl className="grid gap-2 border border-line bg-paper p-3 text-[12px] sm:grid-cols-2">
               <div className="flex justify-between"><dt className="text-muted">Sales</dt><dd>{formatINR(detail.data.settlement.gross_paise)}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Commission</dt><dd>{formatINR(-detail.data.settlement.commission_paise)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Platform Fee</dt><dd>{formatINR(-detail.data.settlement.commission_paise)}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">Refund deductions</dt><dd>{formatINR(-detail.data.settlement.refunds_paise)}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">Adjustments</dt><dd>{formatINR(detail.data.settlement.adjustments_paise)}</dd></div>
               <div className="flex justify-between border-t border-line pt-2 font-medium sm:col-span-2"><dt>Net</dt><dd>{formatINR(detail.data.settlement.net_paise)}</dd></div>

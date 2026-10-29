@@ -40,7 +40,7 @@ const STEPS = [
   { number: 6, title: 'Identity & verification', short: 'Documents', hint: 'Private evidence' },
   { number: 7, title: 'Shipping & packaging', short: 'Shipping', hint: 'How you dispatch' },
   { number: 8, title: 'Getting paid (after approval)', short: 'Payouts', hint: 'Separate, secured setup later' },
-  { number: 9, title: 'Agreements & commission', short: 'Agreements', hint: 'Terms and disclosure' },
+  { number: 9, title: 'Agreements & platform fee', short: 'Agreements', hint: 'Terms and disclosure' },
   { number: 10, title: 'Review & submit', short: 'Review', hint: 'Check and send' },
 ] as const;
 
@@ -671,7 +671,7 @@ function validateStep(
   if (step === 9) {
     if (!form.agreements.sellerAgreement) errors['agreements.sellerAgreement'] = 'Accept the seller agreement.';
     if (!form.agreements.commissionDisclosure) {
-      errors['agreements.commissionDisclosure'] = 'Accept the commission disclosure.';
+      errors['agreements.commissionDisclosure'] = 'Accept the platform fee disclosure.';
     }
     if (!form.agreements.authenticityPolicy || !form.agreements.privacyPolicy) {
       errors['agreements.authenticityPolicy'] = 'Accept the authenticity and privacy terms.';
@@ -1939,9 +1939,9 @@ export function BecomeAMakerPage() {
       {
         key: 'commissionDisclosure',
         index: '02',
-        title: 'Commission terms (0% Diwali Launch Offer)',
-        detail: `✨ Festive Launch Benefit: 0% marketplace commission for your first 6 months! (Standard ${percentFromBp(commissionBp)} platform fee is fully waived so you keep 100% of your earnings). Shipping and taxes are excluded, and refunds reverse commission proportionally.`,
-        links: [{ label: 'How commission works', to: '/policies/seller-terms' }],
+        title: 'Platform fee terms (0% Diwali Launch Offer)',
+        detail: `✨ Festive Launch Benefit: 0% marketplace platform fee for your first 6 months! (Standard 12% platform fee is fully waived so you keep 100% of your earnings). Shipping and taxes are excluded, and refunds reverse platform fee proportionally.`,
+        links: [{ label: 'How platform fee works', to: '/policies/seller-terms' }],
         checked: form.agreements.commissionDisclosure,
         error: errors['agreements.commissionDisclosure'],
       },
@@ -2196,7 +2196,7 @@ export function BecomeAMakerPage() {
       title: 'Agreements',
       rows: [
         ['Seller agreement', form.agreements.sellerAgreement ? 'Accepted' : 'Not accepted'],
-        ['Commission terms', form.agreements.commissionDisclosure ? 'Accepted' : 'Not accepted'],
+        ['Platform fee terms', form.agreements.commissionDisclosure ? 'Accepted' : 'Not accepted'],
         [
           'Authenticity & privacy',
           form.agreements.authenticityPolicy && form.agreements.privacyPolicy
@@ -2886,7 +2886,7 @@ export function BecomeAMakerPage() {
               {
                 question: 'What does it cost to apply?',
                 answer:
-                  'No payment is taken during the application. The marketplace commission is disclosed in step 9 and in the seller agreement before you submit. Final commercial terms are confirmed during review.',
+                  'No payment is taken during the application. The 12% marketplace platform fee is disclosed in step 9 and in the seller agreement before you submit. Final commercial terms are confirmed during review.',
               },
               {
                 question: 'Who can see my identity documents?',

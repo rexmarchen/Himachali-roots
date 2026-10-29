@@ -123,9 +123,9 @@ export const DEFAULT_CONTENT: SiteContent = {
           'Apply through the seller application. You will need identity and business details, your operating location, the categories you make, and applicable registrations. Applications are reviewed manually. Products cannot go live until the seller and the listing are approved.',
       },
       {
-        question: 'What commission do you charge sellers?',
+        question: 'What platform fee do you charge sellers?',
         answer:
-          'The default commission is 12% of product value after discounts, excluding shipping and taxes. Commission rules can differ by category or seller and are shown in the seller dashboard before products are submitted. Each order stores the rate that applied at the time of sale.',
+          'The default platform fee is 12% of product value after discounts, excluding shipping and taxes. Platform fee rules can differ by category or seller and are shown in the seller dashboard before products are submitted. Each order stores the rate that applied at the time of sale.',
       },
       {
         question: 'How do sellers get paid?',
@@ -288,15 +288,15 @@ export const DEFAULT_CONTENT: SiteContent = {
       status: 'draft',
       lastUpdated: 'Draft — legal review pending',
       summary:
-        'The commercial terms for selling on DEAR HILLS, including commission, dispatch, refunds, settlements, and suspension.',
+        'The commercial terms for selling on DEAR HILLS, including platform fee, dispatch, refunds, settlements, and suspension.',
       sections: [
         {
           heading: 'Eligibility and approval',
           body: 'Sellers must provide accurate identity, business, address, and category information, plus applicable registrations. Submitting an application does not guarantee approval. Listings remain invisible until both the seller and the product are approved. Material changes may require re-review.',
         },
         {
-          heading: 'Commission',
-          body: 'The default commission is 12% of product value after discounts, excluding shipping and taxes. A different rate may apply by category or seller and is visible in the dashboard. The applicable rate is snapshotted on each order; later rule changes do not rewrite historical orders.',
+          heading: 'Platform Fee',
+          body: 'The default platform fee is 12% of product value after discounts, excluding shipping and taxes. A different rate may apply by category or seller and is visible in the dashboard. The applicable rate is snapshotted on each order; later rule changes do not rewrite historical orders.',
         },
         {
           heading: 'Dispatch and packaging',
@@ -308,11 +308,11 @@ export const DEFAULT_CONTENT: SiteContent = {
         },
         {
           heading: 'Refunds and returns',
-          body: 'Approved refunds are deducted from your ledger, and the proportional commission is reversed. Returned goods remain your responsibility to inspect. Repeated quality or dispatch failures can lead to suspension.',
+          body: 'Approved refunds are deducted from your ledger, and the proportional platform fee is reversed. Returned goods remain your responsibility to inspect. Repeated quality or dispatch failures can lead to suspension.',
         },
         {
           heading: 'Settlements',
-          body: 'Delivered earnings become eligible after the 7-day return window. Statements account for commission, refunds, and adjustments. Payouts are made only after a reviewed statement and a recorded bank/UPI reference. Bank, tax, and KYC details must match the business.',
+          body: 'Delivered earnings become eligible after the 7-day return window. Statements account for platform fee, refunds, and adjustments. Payouts are made only after a reviewed statement and a recorded bank/UPI reference. Bank, tax, and KYC details must match the business.',
         },
         {
           heading: 'Taxes and invoicing',

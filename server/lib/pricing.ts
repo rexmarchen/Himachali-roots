@@ -128,6 +128,6 @@ export function commissionOn(basisPaise: number, rateBp: number): number {
   return Math.max(0, Math.round((basisPaise * rateBp) / 10000));
 }
 
-/** Human-readable commission basis explanation used across seller UI and docs. */
+/** Human-readable platform fee basis explanation used across seller UI and docs. */
 export const COMMISSION_BASIS_NOTE =
-  'Commission is calculated on the product value after discounts, excluding shipping and taxes.';
+  'Platform fee (12%) is calculated on the product value after discounts, excluding shipping and taxes.';

@@ -204,7 +204,7 @@ function HeritageAnnouncementBar({ customText, light = false }: { customText?: s
           </Link>
           <span className="opacity-40 hidden sm:inline" aria-hidden>·</span>
           <p className="line-clamp-1 truncate">
-            {customText || 'Up to 30% Off Pure Himalayan Harvest & Handlooms · 0% Maker Commission'}
+            {customText || 'Up to 30% Off Pure Himalayan Harvest & Handlooms · 0% Platform Fee'}
           </p>
         </div>
         {freeShippingThreshold > 0 ? (

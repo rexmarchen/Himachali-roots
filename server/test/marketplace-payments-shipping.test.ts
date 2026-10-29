@@ -92,7 +92,7 @@ describe('Centralized 12% Commission Engine', () => {
     // categoryRates and defaultBp must NOT be exposed in seller config
     expect(configRes.body.commission.categoryRates).toBeUndefined();
     expect(configRes.body.commission.defaultBp).toBeUndefined();
-    expect(configRes.body.commission.note).toContain('Commission is calculated on the product value');
+    expect(configRes.body.commission.note).toContain('Platform fee (12%) is calculated on the product value');
 
     // Check seller /earnings
     const earningsRes = await mutate(seller.get('/api/seller/earnings'));

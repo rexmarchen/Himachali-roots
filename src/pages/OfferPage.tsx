@@ -288,13 +288,13 @@ export function OfferPage() {
               <span>🪔</span> Diwali Maker &amp; Artisan Initiative
             </div>
             <h2 id="diwali-maker-invite-heading" className="mt-3 font-serif text-2xl sm:text-3xl font-medium text-white">
-              Craft or harvest in Himachal? Sell this Diwali with 0% Commission.
+              Craft or harvest in Himachal? Sell this Diwali with 0% Platform Fee.
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-[#F7EBE1]/85">
               We connect authentic weavers, woodcarvers, tea planters and orchardists directly with buyers across India. Join our inaugural maker cohort with zero upfront fees, free storytelling, and doorstep village pickup.
             </p>
             <div className="mt-4 flex flex-wrap gap-4 text-xs text-[#F4D06F]">
-              <span className="flex items-center gap-1.5">✓ 0% Platform Commission</span>
+              <span className="flex items-center gap-1.5">✓ 0% Platform Fee</span>
               <span className="flex items-center gap-1.5">✓ Free Artisan Photography &amp; Biography</span>
               <span className="flex items-center gap-1.5">✓ Prime Homepage Festive Showcase</span>
             </div>
@@ -418,7 +418,7 @@ export function OfferPage() {
               action={
                 <div className="flex flex-wrap items-center justify-center gap-3">
                   <LinkButton to="/become-a-maker?offer=diwali" variant="terra">
-                    Join as a Diwali Maker (0% Commission) &rarr;
+                    Join as a Diwali Maker (0% Platform Fee) &rarr;
                   </LinkButton>
                   <LinkButton to="/shop" variant="secondary">
                     Browse the catalogue
