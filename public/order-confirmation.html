@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Confirmed | Dear Hills</title>
+    
+    <!-- Google Fonts: Inter for UI, Playfair Display for main headings -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif'],
+                    },
+                    colors: {
+                        beige: {
+                            DEFAULT: '#F7F5F0',
+                            dark: '#EBE8DF'
+                        },
+                        brand: {
+                            rust: '#C46C56',
+                            text: '#2D2D2D',
+                            muted: '#6B7280',
+                            forest: '#2C3E35'
+                        },
+                        success: {
+                            DEFAULT: '#10B981',
+                            light: '#D1FAE5'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom Keyframe Animations */
+        @keyframes popInBounce {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            60% {
+                transform: scale(1.15);
+                opacity: 1;
+            }
+            80% {
+                transform: scale(0.95);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-pop {
+            animation: popInBounce 0.75s cubic-bezier(0.28, 0.84, 0.42, 1) forwards;
+            opacity: 0;
+            transform: scale(0);
+        }
+
+        .animate-fade-up {
+            animation: fadeIn 0.6s ease-out 0.25s forwards;
+            opacity: 0;
+        }
+
+        .animate-fade-up-delayed {
+            animation: fadeIn 0.6s ease-out 0.45s forwards;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body class="bg-beige text-brand-text min-h-screen flex flex-col font-sans antialiased selection:bg-brand-rust selection:text-white">
+
+    <!-- Navigation Header -->
+    <header class="w-full px-4 sm:px-8 py-4 sm:py-5 border-b border-black/5 flex justify-between items-center bg-beige sticky top-0 z-20">
+        <!-- Left: Logo & Context -->
+        <div class="flex items-center gap-4 sm:gap-6">
+            <a href="/" class="flex items-center gap-3 group">
+                <!-- Abstract Mountain Logo -->
+                <div class="w-10 h-10 bg-[#2C3E35] rounded-sm flex items-end justify-center relative overflow-hidden shadow-xs">
+                    <svg viewBox="0 0 100 100" class="w-full h-full text-brand-rust absolute bottom-0" aria-hidden="true">
+                        <polygon points="10,100 50,40 90,100" fill="currentColor"/>
+                        <polygon points="30,100 65,50 100,100" fill="#E8DCCB" opacity="0.8"/>
+                        <!-- Sun -->
+                        <circle cx="25" cy="35" r="8" fill="#E8DCCB"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="font-serif text-[17px] sm:text-lg leading-none tracking-wide text-gray-900 group-hover:text-brand-rust transition-colors">DEAR HILLS</h1>
+                    <p class="text-[9px] tracking-[0.2em] text-gray-500 uppercase mt-1 font-semibold">Himachal Pradesh</p>
+                </div>
+            </a>
+            
+            <div class="hidden md:block w-px h-8 bg-gray-300/80"></div>
+            
+            <span class="hidden md:block text-xs font-semibold tracking-[0.16em] text-gray-500 uppercase">
+                Secure Checkout
+            </span>
+        </div>
+
+        <!-- Right: Actions & User -->
+        <div class="flex items-center gap-3 sm:gap-5">
+            <!-- Encrypted Notice -->
+            <div class="hidden sm:flex items-center gap-1.5 text-gray-500 text-xs font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true">
+                    <path d="M208,88H176V56a48,48,0,0,0-96,0V88H48a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V104A16,16,0,0,0,208,88ZM96,56a32,32,0,0,1,64,0V88H96ZM208,208H48V104H208V208Zm-68-52a12,12,0,1,1-12-12A12,12,0,0,1,140,156Z"></path>
+                </svg>
+                Encrypted
+            </div>
+
+            <!-- User Profile -->
+            <div class="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+                <div class="w-8 h-8 rounded-full border border-gray-300 bg-white/70 flex items-center justify-center text-xs font-semibold text-gray-800 shadow-2xs">
+                    A
+                </div>
+                <span class="text-sm font-medium hidden sm:block text-gray-800">Anshu</span>
+            </div>
+
+            <!-- Bag -->
+            <a href="/cart" class="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded bg-white hover:bg-gray-50 transition-colors shadow-2xs" aria-label="Shopping bag">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true">
+                    <path d="M216,64H176a48,48,0,0,0-96,0H40A16,16,0,0,0,24,80V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V80A16,16,0,0,0,216,64ZM128,32a32,32,0,0,1,32,32H96A32,32,0,0,1,128,32Zm88,168H40V80H80V104a8,8,0,0,0,16,0V80h64v24a8,8,0,0,0,16,0V80h40Z"></path>
+                </svg>
+                <span class="text-sm font-medium hidden sm:block text-gray-800">Bag</span>
+                <span class="flex items-center justify-center w-5 h-5 bg-brand-rust text-white text-[10px] font-bold rounded-full">
+                    0
+                </span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow w-full px-4 py-8 sm:py-12 flex items-center justify-center">
+        <div class="max-w-[720px] w-full bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 p-6 sm:p-10 md:p-12 transition-all">
+            
+            <!-- Header Section (Animated) -->
+            <div class="flex flex-col items-center mb-8 sm:mb-10 text-center">
+                <!-- Animated Success Tick -->
+                <div class="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-success flex items-center justify-center mb-5 animate-pop shadow-lg shadow-success/25 ring-8 ring-success-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                </div>
+
+                <p class="text-[10px] sm:text-xs font-semibold tracking-[0.2em] text-brand-rust uppercase mb-2 animate-fade-up">
+                    Payment Confirmed
+                </p>
+                <h2 class="text-3xl sm:text-4xl md:text-[2.65rem] font-serif text-gray-900 mb-4 animate-fade-up font-normal tracking-tight" style="animation-delay: 0.35s;">
+                    Order confirmed
+                </h2>
+                <p class="text-[13px] sm:text-sm text-gray-500 text-center max-w-md leading-relaxed animate-fade-up" style="animation-delay: 0.45s;">
+                    Our server has recorded payment for order <strong class="text-gray-900 font-semibold">PR-261029-RJX59N</strong>. Thank you for supporting Himalayan makers.
+                </p>
+            </div>
+
+            <!-- Order Details Grid -->
+            <div class="border-y border-gray-100 py-6 mb-7 animate-fade-up-delayed">
+                <div class="grid grid-cols-2 gap-y-6 gap-x-4">
+                    <!-- Column 1 -->
+                    <div>
+                        <p class="text-[10px] font-semibold text-gray-400 tracking-[0.14em] uppercase mb-1">Order Number</p>
+                        <p class="text-sm text-gray-900 font-medium">PR-261029-RJX59N</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[10px] font-semibold text-gray-400 tracking-[0.14em] uppercase mb-1">Amount Paid</p>
+                        <p class="text-lg sm:text-xl font-serif text-gray-900 font-medium">₹2</p>
+                    </div>
+                    
+                    <!-- Column 2 -->
+                    <div>
+                        <p class="text-[10px] font-semibold text-gray-400 tracking-[0.14em] uppercase mb-1">Updates</p>
+                        <p class="text-sm text-gray-600 truncate max-w-[220px] sm:max-w-none">anshuar9065@gmail.com</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[10px] font-semibold text-gray-400 tracking-[0.14em] uppercase mb-1">Items</p>
+                        <p class="text-sm text-gray-600">2</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delivery Box -->
+            <div class="bg-[#FAF9F7] border border-[#EFE9DD] rounded-lg p-5 sm:p-6 mb-7 animate-fade-up-delayed" style="animation-delay: 0.55s;">
+                <p class="text-[10px] font-semibold text-gray-400 tracking-[0.14em] uppercase mb-2">Delivering To</p>
+                <div class="text-sm text-gray-700 leading-relaxed">
+                    <p class="font-medium text-gray-900 mb-1">Anshu</p>
+                    <p>Himachal pardesh distt - Kangra PIN - 176095</p>
+                    <p>jaisinghpur, Himachal Pradesh 176095</p>
+                    <p class="mt-1 font-medium text-gray-800">+91 9317932859</p>
+                </div>
+            </div>
+
+            <!-- Items List -->
+            <div class="border-b border-gray-100 pb-6 mb-8 animate-fade-up-delayed" style="animation-delay: 0.65s;">
+                <div class="flex justify-between items-start">
+                    <div class="flex items-start gap-3">
+                        <div class="w-11 h-11 rounded-md bg-[#FAF9F7] border border-gray-200/80 flex items-center justify-center text-xl shrink-0">
+                            🍌
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-900 font-medium mb-0.5">Fresh Banana</p>
+                            <p class="text-xs text-gray-500">Kullu Loom Collective (demo) · Qty 2</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-900 font-semibold font-sans">₹2</p>
+                </div>
+            </div>
+
+            <!-- NEW FEATURE: Action Button -->
+            <div class="flex justify-center mb-8 animate-fade-up-delayed" style="animation-delay: 0.75s;">
+                <a href="/shop" class="group inline-flex items-center justify-center px-8 py-3.5 bg-[#2C3E35] hover:bg-[#1f2b25] text-white text-sm font-medium rounded-lg shadow-sm transition-all duration-200 ease-out hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2C3E35] w-full sm:w-auto">
+                    <span>Continue Shopping</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-2 transition-transform duration-200 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Footer Disclaimer -->
+            <p class="text-[11px] text-gray-400 text-center sm:text-left leading-relaxed animate-fade-up-delayed" style="animation-delay: 0.85s;">
+                Each seller packs and dispatches their own items, so parcels can arrive separately. Follow dispatch and tracking updates on your order page. This confirmation reflects the status recorded by our server, not a browser callback.
+            </p>
+
+        </div>
+    </main>
+
+</body>
+</html>

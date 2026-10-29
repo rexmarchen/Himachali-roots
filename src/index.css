@@ -369,3 +369,15 @@
 }
 
 
+
+
+@keyframes popInBounce {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  80% { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-pop {
+  animation: popInBounce 0.75s cubic-bezier(0.28, 0.84, 0.42, 1) forwards;
+}

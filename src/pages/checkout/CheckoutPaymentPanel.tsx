@@ -334,8 +334,8 @@ export function OrderConfirmation({ order }: { order: OrderView }) {
   return (
     <div className="mx-auto max-w-2xl">
       <CheckoutPanel className="p-6 text-center sm:p-8">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-forest/25 bg-forest/[0.06]">
-          <svg viewBox="0 0 24 24" className="h-6 w-6 text-forest" fill="none" aria-hidden>
+        <span className="animate-pop mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 ring-8 ring-emerald-100">
+          <svg viewBox="0 0 24 24" className="h-7 w-7 text-white" fill="none" aria-hidden>
             <path d="m5 12.5 4.5 4.5L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
@@ -409,18 +409,21 @@ export function OrderConfirmation({ order }: { order: OrderView }) {
           updates on your order page. This confirmation reflects the status recorded by our server, not a browser callback.
         </p>
 
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <Link
-            to={`/account/orders/${encodeURIComponent(order.orderNumber)}`}
-            className="inline-flex h-11 items-center justify-center border border-forest bg-forest px-5 text-[13px] font-medium text-paper transition-colors hover:bg-forest-deep"
-          >
-            View order details
-          </Link>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link
             to="/shop"
-            className="inline-flex h-11 items-center justify-center border border-forest/25 bg-white px-5 text-[13px] font-medium text-forest transition-colors hover:border-forest"
+            className="group inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#2C3E35] px-8 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-[#1f2b25] hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#2C3E35] focus:ring-offset-2"
           >
-            Continue shopping
+            <span>Continue Shopping</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </Link>
+          <Link
+            to={`/account/orders/${encodeURIComponent(order.orderNumber)}`}
+            className="inline-flex h-12 items-center justify-center rounded-lg border border-line bg-white px-6 text-sm font-medium text-forest transition-colors hover:bg-[#FAF9F7]"
+          >
+            View order details
           </Link>
         </div>
       </CheckoutPanel>
