@@ -172,7 +172,12 @@ export function corsMiddleware(req: Request, res: Response, next: NextFunction):
  * Webhooks are exempt because they are authenticated by provider signatures.
  */
 export function csrfGuard(req: Request, res: Response, next: NextFunction): void {
-  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.path.startsWith('/webhooks/')) {
+  if (
+    ['GET', 'HEAD', 'OPTIONS'].includes(req.method) ||
+    req.path.startsWith('/webhooks/') ||
+    req.path === '/create-order' ||
+    req.path === '/verify-payment'
+  ) {
     next();
     return;
   }

@@ -20,6 +20,7 @@ interface RazorpayOptions {
 
 interface RazorpayInstance {
   open: () => void;
+  on?: (event: string, handler: (response: unknown) => void) => void;
 }
 
 declare global {
@@ -80,4 +81,87 @@ export async function openRazorpay(options: {
     modal: { ondismiss: options.onDismiss },
   });
   instance.open();
+}
+
+/**
+ * Standard Web Checkout helper.
+ * 1. Calls /api/create-order
+ * 2. Opens Razorpay modal
+ * 3. Sends received signature to /api/verify-payment
+ */
+export async function standardRazorpayCheckout(params: {
+  amountPaise: number;
+  name?: string;
+  description?: string;
+  customer?: { name?: string; email?: string; contact?: string };
+  onSuccess?: (verifyResult: { success: boolean; message: string; payment_id?: string; order_id?: string }) => void;
+  onError?: (error: Error) => void;
+  onDismiss?: () => void;
+}): Promise<void> {
+  const keyId = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_test_TteMaYpK4DXgNw';
+
+  // 1. Call backend /api/create-order
+  const res = await fetch('/api/create-order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      amount: params.amountPaise,
+      currency: 'INR',
+    }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || 'Failed to create Razorpay order.');
+  }
+  const orderData = (await res.json()) as { order_id: string; amount: number; currency: string };
+
+  // 2. Open Razorpay modal
+  await loadScript();
+  if (!window.Razorpay) throw new Error('Razorpay Checkout failed to initialize.');
+
+  const rzp = new window.Razorpay({
+    key: keyId,
+    amount: orderData.amount,
+    currency: orderData.currency,
+    name: params.name || 'DEAR HILLS',
+    description: params.description || 'Himalayan Artisanal Products',
+    order_id: orderData.order_id,
+    prefill: params.customer,
+    theme: { color: '#234638' },
+    handler: async (response: RazorpaySuccess) => {
+      try {
+        // 3. Send to verify endpoint
+        const verifyRes = await fetch('/api/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          }),
+        });
+        const verifyData = (await verifyRes.json()) as { success: boolean; message: string; error?: string };
+        if (!verifyRes.ok || !verifyData.success) {
+          throw new Error(verifyData.error || 'Payment signature verification failed.');
+        }
+        params.onSuccess?.(verifyData);
+      } catch (err: unknown) {
+        params.onError?.(err instanceof Error ? err : new Error(String(err)));
+      }
+    },
+    modal: {
+      ondismiss: () => {
+        params.onDismiss?.();
+      },
+    },
+  });
+
+  if (rzp.on) {
+    rzp.on('payment.failed', (response: unknown) => {
+      const err = response as { error?: { description?: string; code?: string } };
+      params.onError?.(new Error(err.error?.description || 'Payment failed'));
+    });
+  }
+
+  rzp.open();
 }

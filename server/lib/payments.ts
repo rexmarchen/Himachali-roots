@@ -1,6 +1,26 @@
 import crypto from 'node:crypto';
+import Razorpay from 'razorpay';
 import { env } from '../env.js';
 import { AppError } from './http.js';
+
+let razorpayClient: Razorpay | null = null;
+
+export function getRazorpayClient(): Razorpay {
+  if (!env.razorpay.configured) {
+    throw new AppError(
+      503,
+      'payment_not_configured',
+      'Online payments are not configured. Add Razorpay test keys to enable checkout.',
+    );
+  }
+  if (!razorpayClient) {
+    razorpayClient = new Razorpay({
+      key_id: env.razorpay.keyId,
+      key_secret: env.razorpay.keySecret,
+    });
+  }
+  return razorpayClient;
+}
 
 const RAZORPAY_API = 'https://api.razorpay.com/v1';
 
@@ -44,12 +64,25 @@ export interface RazorpayOrder {
 export async function createRazorpayOrder(
   amountPaise: number,
   receipt: string,
-  notes: Record<string, string>,
+  notes: Record<string, string> = {},
+  currency: string = 'INR',
 ): Promise<RazorpayOrder> {
-  return razorpayRequest<RazorpayOrder>('/orders', {
-    method: 'POST',
-    body: JSON.stringify({ amount: amountPaise, currency: 'INR', receipt, notes, payment_capture: 1 }),
-  });
+  const rzp = getRazorpayClient();
+  try {
+    const order = await rzp.orders.create({
+      amount: amountPaise,
+      currency,
+      receipt,
+      notes,
+      payment_capture: true,
+    });
+    return order as unknown as RazorpayOrder;
+  } catch (err: unknown) {
+    const errorObj = err as { statusCode?: number; error?: { description?: string }; message?: string };
+    const description = errorObj.error?.description ?? errorObj.message ?? 'Razorpay order creation failed.';
+    const status = errorObj.statusCode === 401 ? 401 : 502;
+    throw new AppError(status, 'payment_provider_error', description);
+  }
 }
 
 export interface RazorpayRefund {

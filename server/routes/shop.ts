@@ -7,7 +7,7 @@ import { addToCart, CART_COOKIE, ensureCart, getCartView, removeCartItem, setCar
 import { badRequest, conflict, notFound, parse, unauthorized } from '../lib/http.js';
 import { createOrder, getOrderView, initializeOrderPayment, markOrderPaid, notifyOrderPaid } from '../lib/orders.js';
 import { evaluateCoupon } from '../lib/pricing.js';
-import { verifyCheckoutSignature, verifyWebhookSignature } from '../lib/payments.js';
+import { createRazorpayOrder, verifyCheckoutSignature, verifyWebhookSignature } from '../lib/payments.js';
 import { notify } from '../lib/email.js';
 
 const addressSchema = z.object({
@@ -179,6 +179,88 @@ export function shopRouter(db: Db): Router {
     });
     await notifyOrderPaid(db, payment.order_id);
     res.json({ order: getOrderView(db, payment.order_id), alreadyProcessed: false });
+  });
+
+  /**
+   * Standard Razorpay Order Creation endpoint
+   * POST /api/create-order
+   * Body: { amount (paise), currency?, receipt?, notes? }
+   */
+  router.post('/create-order', async (req, res) => {
+    if (!env.razorpay.configured) {
+      return res.status(503).json({ error: 'Razorpay keys are not configured.' });
+    }
+    const amount = Number(req.body?.amount);
+    if (!amount || isNaN(amount) || amount < 100) {
+      return res.status(400).json({ error: 'Amount must be at least 100 paise.' });
+    }
+    const currency = typeof req.body?.currency === 'string' ? req.body.currency : 'INR';
+    const receipt = typeof req.body?.receipt === 'string' ? req.body.receipt : `rcpt_${Date.now()}`;
+    const notes = typeof req.body?.notes === 'object' && req.body.notes ? req.body.notes : {};
+
+    try {
+      const order = await createRazorpayOrder(Math.round(amount), receipt, notes, currency);
+      return res.status(200).json({
+        order_id: order.id,
+        amount: order.amount,
+        currency: order.currency,
+      });
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status === 401 ? 401 : 500;
+      const message = (err as { message?: string })?.message || 'Failed to create Razorpay order.';
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  /**
+   * Standard Razorpay Signature Verification endpoint
+   * POST /api/verify-payment
+   * Body: { razorpay_order_id, razorpay_payment_id, razorpay_signature }
+   */
+  router.post('/verify-payment', async (req, res) => {
+    const order_id = (req.body?.order_id ?? req.body?.razorpay_order_id ?? req.body?.razorpayOrderId) as string | undefined;
+    const payment_id = (req.body?.payment_id ?? req.body?.razorpay_payment_id ?? req.body?.razorpayPaymentId) as string | undefined;
+    const signature = (req.body?.signature ?? req.body?.razorpay_signature ?? req.body?.razorpaySignature) as string | undefined;
+
+    if (!order_id || !payment_id || !signature) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required payment verification fields (order_id, payment_id, signature).',
+      });
+    }
+
+    if (!verifyCheckoutSignature(order_id, payment_id, signature)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment signature verification failed. Signature mismatch.',
+      });
+    }
+
+    const payment = queryOne<{ order_id: string; amount_paise: number; status: string }>(
+      db,
+      'SELECT order_id, amount_paise, status FROM payments WHERE provider_order_id = ?',
+      order_id,
+    );
+    if (payment && payment.status !== 'paid') {
+      markOrderPaid(db, {
+        orderId: payment.order_id,
+        provider: 'razorpay',
+        providerEventId: `checkout:${payment_id}`,
+        providerPaymentId: payment_id,
+        providerOrderId: order_id,
+        amountPaise: payment.amount_paise,
+        method: 'checkout',
+        summary: { source: 'standard_checkout_verification' },
+      });
+      await notifyOrderPaid(db, payment.order_id).catch(() => {});
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Payment verified successfully',
+      order_id,
+      payment_id,
+    });
   });
 
   // Development-only simulation. Explicitly gated; never available in production.
