@@ -9,6 +9,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
+ENV NODE_OPTIONS="--max-old-space-size=450"
 RUN npm run build \
     && npm prune --omit=dev
 
