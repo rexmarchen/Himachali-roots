@@ -8,7 +8,7 @@ import type { SiteContent } from '../../shared/content.js';
 export const DEFAULT_CONTENT: SiteContent = {
   announcement: {
     active: true,
-    text: 'Complimentary shipping on orders over ₹1,499 · Dispatched from Himachal within 2 working days',
+    text: 'Complimentary shipping on orders over ₹699 · Dispatched from Himachal within 2 working days',
     href: '/policies/shipping',
   },
   homepage: {
@@ -153,7 +153,7 @@ export const DEFAULT_CONTENT: SiteContent = {
         },
         {
           heading: 'Charges',
-          body: 'A flat shipping fee of ₹79 applies to orders below ₹1,499 after discounts. Orders of ₹1,499 or more ship free. The exact charge is shown before payment. We do not add handling fees at checkout.',
+          body: 'A flat shipping fee of ₹29 applies to orders below ₹699 after discounts. Orders of ₹699 or more ship free. The exact charge is shown before payment. We do not add handling fees at checkout.',
         },
         {
           heading: 'Delivery estimates',

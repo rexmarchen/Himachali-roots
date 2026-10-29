@@ -3055,6 +3055,16 @@ export function SellerProductEditorPage() {
                   </p>
                 </div>
               </div>
+
+              {/* Heavy Produce & Harvest Crate Guidance */}
+              <div className="mt-4 rounded-xl border border-[#66745A]/25 bg-white/70 p-3.5 text-[11px] leading-relaxed text-[#172321]/75">
+                <p className="font-semibold text-[#172321] flex items-center gap-1.5">
+                  <span>🍎</span> Fresh Harvest &amp; Heavy Goods Strategy (Apples, Walnuts, Pulses)
+                </p>
+                <p className="mt-1">
+                  For fresh orchard produce and heavy goods, list in standard farm-fresh packs (e.g. 2.5 kg trial box at ₹699 or 5 kg harvest crate at ₹1,299) with built-in protective packaging. Customers enjoy complimentary delivery over ₹699 while preserving strong farm margins.
+                </p>
+              </div>
             </div>
           </section>
         )}

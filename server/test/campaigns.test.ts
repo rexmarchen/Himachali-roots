@@ -267,7 +267,7 @@ describe('seasonal campaigns', () => {
     });
     expect(tampered.status).toBe(201);
     expect(tampered.body.order.subtotalPaise).toBe(70_000);
-    expect(tampered.body.order.totalPaise).toBe(77_900);
+    expect(tampered.body.order.totalPaise).toBe(70_000);
 
     const orderLine = queryOne<{ unit_price_paise: number; original_unit_price_paise: number | null }>(
       db,
@@ -296,7 +296,7 @@ describe('seasonal campaigns', () => {
     const order = await checkout(app, customer);
     expect(order.status).toBe(201);
     expect(order.body.order.subtotalPaise).toBe(100_000);
-    expect(order.body.order.totalPaise).toBe(107_900);
+    expect(order.body.order.totalPaise).toBe(100_000);
   });
 
   it('prevents the same product from being promised to two live campaigns', async () => {

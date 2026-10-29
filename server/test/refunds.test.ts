@@ -59,7 +59,7 @@ describe('cancellations and refunds', () => {
       'SELECT id, amount_paise, status FROM refunds WHERE seller_order_id = ?',
       sellerOrder!.id,
     );
-    expect(refund).toMatchObject({ amount_paise: 107_900, status: 'requested' });
+    expect(refund).toMatchObject({ amount_paise: 100_000, status: 'requested' });
 
     const admin = await login(app, 'admin@test.local');
     const withoutMethod = await mutate(admin.post(`/api/admin/refunds/${refund!.id}/decide`)).send({

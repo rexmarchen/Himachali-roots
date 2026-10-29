@@ -58,8 +58,8 @@ describe('checkout', () => {
     expect(response.status).toBe(201);
     expect(response.body.order.status).toBe('pending_payment');
     expect(response.body.order.subtotalPaise).toBe(100_000);
-    expect(response.body.order.shippingPaise).toBe(7_900);
-    expect(response.body.order.totalPaise).toBe(107_900);
+    expect(response.body.order.shippingPaise).toBe(0);
+    expect(response.body.order.totalPaise).toBe(100_000);
     expect(response.body.payment.provider).toBe('unconfigured');
     expect(response.body.payment.devPaymentsEnabled).toBe(true);
 
@@ -77,7 +77,7 @@ describe('checkout', () => {
     const response = await checkout(app, customer);
     expect(response.status).toBe(201);
     expect(response.body.order.subtotalPaise).toBe(120_000);
-    expect(response.body.order.totalPaise).toBe(127_900);
+    expect(response.body.order.totalPaise).toBe(120_000);
     expect(sellerOrderFor(db, response.body.order.orderNumber)?.commission_paise).toBe(14_400);
   });
 
@@ -153,7 +153,7 @@ describe('checkout', () => {
 
     expect(response.status).toBe(201);
     expect(response.body.order.discountPaise).toBe(10_000);
-    expect(response.body.order.totalPaise).toBe(97_900);
+    expect(response.body.order.totalPaise).toBe(90_000);
     expect(sellerOrderFor(db, response.body.order.orderNumber)?.commission_paise).toBe(10_800);
     expect(
       queryOne<{ count: number }>(db, "SELECT COUNT(*) AS count FROM coupon_redemptions WHERE coupon_id = 'cpn_test'")?.count,
@@ -174,7 +174,7 @@ describe('checkout', () => {
 
     expect(response.status).toBe(201);
     expect(response.body.order.taxPaise).toBe(12_000);
-    expect(response.body.order.totalPaise).toBe(119_900);
+    expect(response.body.order.totalPaise).toBe(112_000);
     expect(sellerOrderFor(db, response.body.order.orderNumber)?.commission_paise).toBe(13_440);
   });
 
@@ -258,18 +258,18 @@ describe('checkout', () => {
       `INSERT INTO coupons (id, code, description, type, value, min_order_paise, per_user_limit)
        VALUES ('cpn_shipping', 'SHIP10', 'Ten percent off', 'percent', 10, 0, 1)`,
     );
-    execute(db, 'UPDATE products SET price_paise = 150_000 WHERE id = ?', IDS.product);
+    execute(db, 'UPDATE products SET price_paise = 75_000 WHERE id = ?', IDS.product);
     const customer = await login(app, 'customer@test.local');
     await addToCart(app, customer, IDS.product, 1);
     const response = await checkout(app, customer, { couponCode: 'SHIP10' });
 
     expect(response.status).toBe(201);
-    expect(response.body.order.subtotalPaise).toBe(150_000);
-    expect(response.body.order.discountPaise).toBe(15_000);
-    // ₹1,500 pre-discount would qualify for free shipping, but ₹1,350 after
-    // the discount does not. The server must charge the flat rate.
-    expect(response.body.order.shippingPaise).toBe(7_900);
-    expect(response.body.order.totalPaise).toBe(142_900);
+    expect(response.body.order.subtotalPaise).toBe(75_000);
+    expect(response.body.order.discountPaise).toBe(7_500);
+    // ₹750 pre-discount qualifies for free shipping, but ₹675 after
+    // the discount drops below ₹699. The server must charge flat ₹29.
+    expect(response.body.order.shippingPaise).toBe(2_900);
+    expect(response.body.order.totalPaise).toBe(70_400);
   });
 
   it('reinitializes payment for a pending order without creating a duplicate order', async () => {

@@ -308,9 +308,9 @@ export interface ApiErrorShape {
   error: { code: string; message: string; fields?: Record<string, string> };
 }
 
-export const FREE_SHIPPING_THRESHOLD_PAISE = 149900;
-export const FLAT_SHIPPING_PAISE = 7900;
-export const DEFAULT_COMMISSION_BP = 1500;
+export const FREE_SHIPPING_THRESHOLD_PAISE = 69900;
+export const FLAT_SHIPPING_PAISE = 2900;
+export const DEFAULT_COMMISSION_BP = 1200;
 
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending_payment: 'Awaiting payment',

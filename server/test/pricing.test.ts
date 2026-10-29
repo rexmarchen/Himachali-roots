@@ -24,8 +24,8 @@ describe('money helpers', () => {
 
   it('charges flat shipping below the threshold and nothing above it', () => {
     expect(shippingFor(0)).toBe(0);
-    expect(shippingFor(1)).toBe(7_900);
-    expect(shippingFor(149_900)).toBe(0);
+    expect(shippingFor(1)).toBe(2_900);
+    expect(shippingFor(69_900)).toBe(0);
     expect(shippingFor(500_000)).toBe(0);
   });
 });

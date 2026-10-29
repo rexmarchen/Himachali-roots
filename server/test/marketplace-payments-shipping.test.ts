@@ -140,7 +140,7 @@ describe('Automated Shipping & Courier Lifecycle', () => {
       provider: 'razorpay',
       providerEventId: `test_evt_${Date.now()}`,
       providerPaymentId: `pay_test_${Date.now()}`,
-      amountPaise: 107_900,
+      amountPaise: orderRes.body.order.totalPaise,
     });
 
     const so = queryOne<{ id: string }>(db, 'SELECT id FROM seller_orders WHERE order_id = ?', orderId);
@@ -165,7 +165,7 @@ describe('Automated Shipping & Courier Lifecycle', () => {
       provider: 'razorpay',
       providerEventId: `test_evt_${Date.now()}`,
       providerPaymentId: `pay_test_${Date.now()}`,
-      amountPaise: 107_900,
+      amountPaise: orderRes.body.order.totalPaise,
     });
 
     const so = queryOne<{ id: string }>(db, 'SELECT id FROM seller_orders WHERE order_id = ?', orderId);
