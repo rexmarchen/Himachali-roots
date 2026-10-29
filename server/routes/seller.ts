@@ -2472,5 +2472,115 @@ export function sellerRouter(db: Db): Router {
     res.json({ ok: true });
   });
 
+  
+  router.get('/payout-details', (req, res) => {
+    const id = sellerId(req);
+    const seller = queryOne<{ payout_details_json: string | null; payout_status: string }>(
+      db,
+      'SELECT payout_details_json, payout_status FROM seller_profiles WHERE id = ?',
+      id,
+    );
+    if (!seller) throw notFound('Seller profile not found.');
+
+    let details: Record<string, unknown> | null = null;
+    if (seller.payout_details_json) {
+      try {
+        details = JSON.parse(seller.payout_details_json);
+      } catch {
+        details = null;
+      }
+    }
+    if (!details) {
+      const app = latestApplication(db, id);
+      if (app?.payout_json) {
+        try {
+          details = JSON.parse(app.payout_json);
+        } catch {
+          details = null;
+        }
+      }
+    }
+
+    res.json({
+      configured: Boolean(details && (details.accountNumber || details.accountLast4 || details.upiId)),
+      payoutStatus: seller.payout_status,
+      details: details
+        ? {
+            beneficiaryName: details.beneficiaryName || details.accountHolderName || '',
+            bankName: details.bankName || '',
+            accountNumberMasked: details.accountNumber
+              ? '••••••••' + String(details.accountNumber).slice(-4)
+              : (details.accountLast4 ? '••••••••' + details.accountLast4 : ''),
+            ifscCode: details.ifscCode || details.ifsc || '',
+            accountType: details.accountType || 'savings',
+            upiId: details.upiId || details.upiIdMasked || '',
+          }
+        : null,
+    });
+  });
+
+  router.post('/payout-details', (req, res) => {
+    const id = sellerId(req);
+    const input = parse(
+      z.object({
+        beneficiaryName: z.string().trim().min(2, 'Enter account holder name.').max(120),
+        bankName: z.string().trim().min(2, 'Enter bank name.').max(120),
+        accountNumber: z.string().trim().regex(/^\d{9,18}$/, 'Enter a valid 9 to 18-digit bank account number.'),
+        ifscCode: z.string().trim().regex(/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/, 'Enter a valid 11-character Indian IFSC code.'),
+        accountType: z.enum(['savings', 'current']).default('savings'),
+        upiId: z.string().trim().max(80).optional(),
+      }),
+      req.body,
+    );
+
+    const existing = queryOne<{ business_name: string; payout_details_json: string | null }>(
+      db,
+      'SELECT business_name, payout_details_json FROM seller_profiles WHERE id = ?',
+      id,
+    );
+    if (!existing) throw notFound('Seller profile not found.');
+
+    const cleanDetails = {
+      beneficiaryName: input.beneficiaryName,
+      bankName: input.bankName,
+      accountNumber: input.accountNumber,
+      accountLast4: input.accountNumber.slice(-4),
+      ifscCode: input.ifscCode.toUpperCase(),
+      accountType: input.accountType,
+      upiId: input.upiId ? input.upiId.trim() : null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    execute(
+      db,
+      `UPDATE seller_profiles
+          SET payout_details_json = ?, payout_status = 'verified', updated_at = ?
+        WHERE id = ?`,
+      JSON.stringify(cleanDetails),
+      new Date().toISOString(),
+      id,
+    );
+
+    audit(db, req.user!, 'seller.payout_details_updated', 'seller', id, null, {
+      beneficiaryName: input.beneficiaryName,
+      bankName: input.bankName,
+      accountLast4: input.accountNumber.slice(-4),
+      ifscCode: input.ifscCode.toUpperCase(),
+    });
+
+    res.json({
+      ok: true,
+      message: 'Bank payout details updated successfully for manual settlements.',
+      details: {
+        beneficiaryName: cleanDetails.beneficiaryName,
+        bankName: cleanDetails.bankName,
+        accountNumberMasked: '••••••••' + cleanDetails.accountLast4,
+        ifscCode: cleanDetails.ifscCode,
+        accountType: cleanDetails.accountType,
+        upiId: cleanDetails.upiId,
+      },
+    });
+  });
+
   return router;
 }

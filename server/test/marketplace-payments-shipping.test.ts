@@ -273,4 +273,49 @@ describe('Admin Payout Controls & Holds', () => {
 
     expect(unauthorizedRes.status).toBe(403);
   });
+
+  it('allows a seller to save bank payout details and verifies Indian bank format', async () => {
+    const seller = await login(app, 'seller@test.local');
+
+    // 1. Initially check payout details
+    const initialRes = await seller.get('/api/seller/payout-details');
+    expect(initialRes.status).toBe(200);
+
+    // 2. Reject invalid IFSC
+    const badIfscRes = await mutate(seller.post('/api/seller/payout-details')).send({
+      beneficiaryName: 'Kullu Artisan',
+      bankName: 'State Bank of India',
+      accountNumber: '123456789012',
+      ifscCode: 'INVALID_IFSC',
+    });
+    expect(badIfscRes.status).toBe(400);
+
+    // 3. Save valid Indian bank details
+    const saveRes = await mutate(seller.post('/api/seller/payout-details')).send({
+      beneficiaryName: 'Kullu Shawl Artisan',
+      bankName: 'State Bank of India',
+      accountNumber: '304918273645',
+      ifscCode: 'SBIN0001234',
+      accountType: 'savings',
+      upiId: 'artisan@sbi',
+    });
+    expect(saveRes.status).toBe(200);
+    expect(saveRes.body.ok).toBe(true);
+    expect(saveRes.body.details.accountNumberMasked).toBe('••••••••3645');
+    expect(saveRes.body.details.ifscCode).toBe('SBIN0001234');
+
+    // 4. Retrieve saved details as seller
+    const getRes = await seller.get('/api/seller/payout-details');
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.configured).toBe(true);
+    expect(getRes.body.details.beneficiaryName).toBe('Kullu Shawl Artisan');
+
+    // 5. Admin retrieves full payout details for settlement
+    const admin = await login(app, 'admin@test.local');
+    const adminSellerRes = await admin.get(`/api/admin/sellers/${IDS.seller}`);
+    expect(adminSellerRes.status).toBe(200);
+    expect(adminSellerRes.body.seller.payoutDetails).toBeDefined();
+    expect(adminSellerRes.body.seller.payoutDetails.accountNumber).toBe('304918273645');
+    expect(adminSellerRes.body.seller.payoutDetails.ifscCode).toBe('SBIN0001234');
+  });
 });
