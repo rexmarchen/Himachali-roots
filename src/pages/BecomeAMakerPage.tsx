@@ -1099,7 +1099,7 @@ export function BecomeAMakerPage() {
     return Object.keys(validateStep(entry.number, form, { missingDocuments, hasUser: Boolean(user) })).length === 0;
   }).length;
 
-  const commissionBp = config.data?.commission.defaultBp ?? 1500;
+  const commissionBp = config.data?.commission.defaultBp ?? 1200;
 
   const renderAccountStep = () => {
     if (!user) {
@@ -1940,7 +1940,7 @@ export function BecomeAMakerPage() {
         key: 'commissionDisclosure',
         index: '02',
         title: 'Platform fee terms (0% Diwali Launch Offer)',
-        detail: `✨ Festive Launch Benefit: 0% marketplace platform fee for your first 6 months! (Standard 12% platform fee is fully waived so you keep 100% of your earnings). Shipping and taxes are excluded, and refunds reverse platform fee proportionally.`,
+        detail: `✨ Festive Launch Benefit: 0% marketplace platform fee for your first 6 months! (Standard ${percentFromBp(commissionBp)} platform fee is fully waived so you keep 100% of your earnings). Shipping and taxes are excluded, and refunds reverse platform fee proportionally.`,
         links: [{ label: 'How platform fee works', to: '/policies/seller-terms' }],
         checked: form.agreements.commissionDisclosure,
         error: errors['agreements.commissionDisclosure'],
