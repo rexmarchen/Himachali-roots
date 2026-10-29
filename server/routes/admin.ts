@@ -1969,7 +1969,82 @@ export function adminRouter(db: Db): Router {
     res.status(201).json({ id, rateBp: input.rateBp });
   });
 
-  /* ----------------------------- Settlements --------------------------- */
+  /* ----------------------------- Settlements & Payouts --------------------------- */
+
+  router.get('/payouts/overview', async (_req, res) => {
+    const metrics = queryOne<{
+      pendingAllocationsPaise: number;
+      ordersAwaitingDelivery: number;
+      ordersInReturnWindow: number;
+      eligibleReviewPaise: number;
+      approvedBatchesPaise: number;
+      settledPaise: number;
+      reversedPaise: number;
+      totalPlatformCommissionPaise: number;
+    }>(
+      db,
+      `SELECT
+        (SELECT COALESCE(SUM(amount_paise), 0) FROM seller_ledger_entries WHERE status = 'pending') AS pendingAllocationsPaise,
+        (SELECT COUNT(*) FROM seller_orders WHERE status IN ('pending', 'confirmed', 'packed', 'shipped')) AS ordersAwaitingDelivery,
+        (SELECT COUNT(*) FROM seller_orders WHERE status = 'delivered' AND delivered_at > datetime('now', '-7 days')) AS ordersInReturnWindow,
+        (SELECT COALESCE(SUM(amount_paise), 0) FROM seller_ledger_entries WHERE status = 'eligible' AND settlement_id IS NULL AND (available_at IS NULL OR available_at <= datetime('now'))) AS eligibleReviewPaise,
+        (SELECT COALESCE(SUM(net_paise), 0) FROM settlement_batches WHERE status = 'draft') AS approvedBatchesPaise,
+        (SELECT COALESCE(SUM(net_paise), 0) FROM settlement_batches WHERE status = 'paid') AS settledPaise,
+        (SELECT COALESCE(SUM(ABS(amount_paise)), 0) FROM seller_ledger_entries WHERE type IN ('reversal', 'adjustment') OR status = 'reversed') AS reversedPaise,
+        (SELECT COALESCE(SUM(amount_paise), 0) FROM commission_entries) AS totalPlatformCommissionPaise`,
+    );
+
+    const eligibleQueue = queryAll<{
+      id: string;
+      seller_id: string;
+      seller_name: string;
+      order_id: string;
+      order_number: string;
+      amount_paise: number;
+      available_at: string | null;
+      created_at: string;
+      hold_reason: string | null;
+    }>(
+      db,
+      `SELECT l.id, l.seller_id, sp.business_name AS seller_name, l.order_id, o.order_number,
+              l.amount_paise, l.available_at, l.created_at, l.hold_reason
+         FROM seller_ledger_entries l
+         JOIN seller_profiles sp ON sp.id = l.seller_id
+         LEFT JOIN orders o ON o.id = l.order_id
+        WHERE l.status = 'eligible' AND l.settlement_id IS NULL
+        ORDER BY l.available_at ASC LIMIT 50`,
+    );
+
+    res.json({
+      metrics: metrics ?? {
+        pendingAllocationsPaise: 0,
+        ordersAwaitingDelivery: 0,
+        ordersInReturnWindow: 0,
+        eligibleReviewPaise: 0,
+        approvedBatchesPaise: 0,
+        settledPaise: 0,
+        reversedPaise: 0,
+        totalPlatformCommissionPaise: 0,
+      },
+      eligibleQueue: eligibleQueue.map((row) => ({
+        id: row.id,
+        sellerId: row.seller_id,
+        sellerName: row.seller_name,
+        orderId: row.order_id,
+        orderNumber: row.order_number,
+        amountPaise: row.amount_paise,
+        availableAt: row.available_at,
+        createdAt: row.created_at,
+        isHeld: Boolean(row.hold_reason),
+        holdReason: row.hold_reason,
+      })),
+      policy: {
+        returnWindowDays: 7,
+        standardCommissionBp: env.defaultCommissionBp,
+        payoutModel: 'Admin-reviewed bank/UPI settlements after delivery + 7-day return inspection window.',
+      },
+    });
+  });
 
   router.get('/settlements', async (_req, res) => {
     const rows = queryAll<Record<string, unknown>>(

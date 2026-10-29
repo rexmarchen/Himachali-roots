@@ -478,7 +478,12 @@ export function OrderDetailPage() {
                 {data.canRequestReturn && sellerOrder.status === 'delivered' ? (
                   <Button size="sm" variant="secondary" onClick={() => openReturn(sellerOrder.id)}>Request return</Button>
                 ) : null}
-                {!data.canCancel && !data.canRequestReturn ? <span className="text-[11px] text-muted">No actions available for this shipment.</span> : null}
+                {sellerOrder.status === 'delivered' && !data.canRequestReturn ? (
+                  <div className="text-[11.5px] text-muted leading-relaxed">
+                    <p>Your standard 7-day return period has ended. For a defective, incorrect, or otherwise disputed order, please <a href="mailto:support@dearhills.in" className="text-forest underline underline-offset-2">contact Dear Hills support</a> for an exceptional review.</p>
+                  </div>
+                ) : null}
+                {!data.canCancel && !data.canRequestReturn && sellerOrder.status !== 'delivered' ? <span className="text-[11px] text-muted">No actions available for this shipment.</span> : null}
               </div>
             </section>
           ))}

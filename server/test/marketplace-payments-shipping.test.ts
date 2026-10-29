@@ -318,4 +318,21 @@ describe('Admin Payout Controls & Holds', () => {
     expect(adminSellerRes.body.seller.payoutDetails.accountNumber).toBe('304918273645');
     expect(adminSellerRes.body.seller.payoutDetails.ifscCode).toBe('SBIN0001234');
   });
+
+  it('admin can view comprehensive payouts overview metrics and eligible review queue', async () => {
+    const admin = await login(app, 'admin@test.local');
+
+    const overviewRes = await admin.get('/api/admin/payouts/overview');
+    expect(overviewRes.status).toBe(200);
+    expect(overviewRes.body.metrics).toBeDefined();
+    expect(typeof overviewRes.body.metrics.pendingAllocationsPaise).toBe('number');
+    expect(typeof overviewRes.body.metrics.ordersAwaitingDelivery).toBe('number');
+    expect(typeof overviewRes.body.metrics.ordersInReturnWindow).toBe('number');
+    expect(typeof overviewRes.body.metrics.eligibleReviewPaise).toBe('number');
+    expect(typeof overviewRes.body.metrics.settledPaise).toBe('number');
+    expect(typeof overviewRes.body.metrics.totalPlatformCommissionPaise).toBe('number');
+    expect(Array.isArray(overviewRes.body.eligibleQueue)).toBe(true);
+    expect(overviewRes.body.policy.returnWindowDays).toBe(7);
+    expect(overviewRes.body.policy.standardCommissionBp).toBe(1200);
+  });
 });
