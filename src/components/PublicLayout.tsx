@@ -284,7 +284,7 @@ function CartLink({ count, compact = false, light = false }: { count: number; co
       to="/cart"
       className={
         compact
-          ? `relative inline-flex h-11 w-11 lg:h-12 lg:w-12 items-center justify-center transition-colors ${
+          ? `relative inline-flex h-9.5 w-9.5 lg:h-10 lg:w-10 items-center justify-center transition-colors ${
               light ? 'text-white hover:text-sand' : 'text-ink hover:text-terra'
             }`
           : `relative inline-flex min-h-11 lg:min-h-12 items-center gap-2 border px-3 sm:px-3.5 lg:px-4 text-[12px] sm:text-xs lg:text-sm font-medium transition-colors ${
@@ -295,7 +295,7 @@ function CartLink({ count, compact = false, light = false }: { count: number; co
       }
       aria-label={`Shopping bag with ${count} item${count === 1 ? '' : 's'}`}
     >
-      <Icon name="bag" className={compact ? 'h-5 w-5 lg:h-6 lg:w-6' : 'h-4 w-4 lg:h-5 lg:w-5'} />
+      <Icon name="bag" className={compact ? 'h-4.5 w-4.5 lg:h-5 lg:w-5' : 'h-4 w-4 lg:h-5 lg:w-5'} />
       {!compact ? <span className="hidden sm:inline">Bag</span> : null}
       <span
         className={
@@ -423,23 +423,23 @@ function Header() {
         customText={announcement?.active && announcement.text ? announcement.text : undefined}
       />
 
-      <div className="mx-auto flex h-14 sm:h-16 lg:h-[4.5rem] max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-5 px-4 sm:px-6 lg:px-8 xl:px-10">
+      <div className="mx-auto flex h-13 sm:h-14 lg:h-16 max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-4 px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="shrink-0">
           <Wordmark />
         </div>
 
-        <div className="mx-2 hidden flex-1 md:flex lg:mx-3 min-w-[260px] sm:min-w-[280px] lg:min-w-[320px] xl:min-w-[360px] max-w-xl lg:max-w-2xl xl:max-w-3xl">
+        <div className="mx-2 hidden flex-1 md:flex lg:mx-3 min-w-[200px] sm:min-w-[220px] lg:min-w-[260px] xl:min-w-[300px] max-w-lg lg:max-w-xl xl:max-w-2xl">
           <EcommerceSearchBar inputId="site-search-desktop" />
         </div>
 
-        <nav className="hidden items-center gap-3.5 xl:gap-5 2xl:gap-6 lg:flex" aria-label="Primary">
+        <nav className="hidden items-center gap-2.5 xl:gap-3.5 2xl:gap-4 lg:flex" aria-label="Primary">
           {NAV.map((item) => {
             const active = item.to === '/shop' ? location.pathname.startsWith('/shop') : location.pathname === item.to;
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                className={`border-b-2 py-1.5 text-[13px] lg:text-[13.5px] xl:text-[14px] font-medium transition-colors ${
+                className={`border-b-2 py-1.5 text-[12.5px] lg:text-[13px] xl:text-[13.5px] font-medium transition-colors ${
                   active
                     ? 'border-terra text-forest font-semibold'
                     : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
@@ -452,7 +452,7 @@ function Header() {
 
           <Link
             to="/offers/pahadi-festive-glow"
-            className="hidden 2xl:inline-flex items-center gap-1.5 rounded-full border border-terra/30 bg-terra/10 px-3 py-1 text-xs lg:text-[13px] font-bold text-terra transition-all hover:bg-terra/20 shadow-xs"
+            className="hidden 2xl:inline-flex items-center gap-1 rounded-full border border-terra/30 bg-terra/10 px-2.5 py-0.5 text-[11px] lg:text-xs font-bold text-terra transition-all hover:bg-terra/20 shadow-xs"
           >
             <span>🪔</span>
             <span>Diwali Offers</span>
@@ -462,10 +462,10 @@ function Header() {
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5">
           <Link
             to="/account/wishlist"
-            className="hidden h-11 w-11 lg:h-12 lg:w-12 items-center justify-center text-ink transition-colors hover:text-terra sm:inline-flex"
+            className="hidden h-9.5 w-9.5 lg:h-10 lg:w-10 items-center justify-center text-ink transition-colors hover:text-terra sm:inline-flex"
             aria-label="Saved items"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5 lg:h-[22px] lg:w-[22px]" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-[18px] w-[18px] lg:h-5 lg:w-5" aria-hidden>
               <path
                 d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
                 strokeWidth="1.6"
@@ -514,11 +514,11 @@ function Header() {
       </div>
 
       <div className="hidden border-t md:block border-line bg-[#EFE9DD]/90 text-ink">
-        <div className="mx-auto flex max-w-[88rem] items-center px-4 sm:px-6 lg:px-8 xl:px-10 py-2 sm:py-2.5 lg:py-3 text-[12px] sm:text-[13px] lg:text-[13.5px] font-medium">
+        <div className="mx-auto flex max-w-[88rem] items-center px-4 sm:px-6 lg:px-8 xl:px-10 py-1.5 sm:py-2 text-[11.5px] sm:text-xs lg:text-[13px] font-medium">
           <div className="no-scrollbar flex w-full items-center gap-1 lg:gap-1.5 overflow-x-auto whitespace-nowrap">
             <Link
               to="/shop"
-              className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-forest hover:bg-forest/10 transition-colors"
+              className="flex shrink-0 items-center gap-1.5 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-semibold text-forest hover:bg-forest/10 transition-colors"
             >
               <Icon name="grid" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               All products
@@ -538,14 +538,14 @@ function Header() {
               <Link
                 key={item.slug}
                 to={`/shop?category=${item.slug}`}
-                className="shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 text-ink/80 hover:bg-forest/10 hover:text-forest transition-colors"
+                className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 text-ink/80 hover:bg-forest/10 hover:text-forest transition-colors"
               >
                 {item.label}
               </Link>
             ))}
             <Link
               to="/offers/pahadi-festive-glow"
-              className="shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-bold text-[#C06041] hover:bg-terra/10 transition-colors flex items-center gap-1.5"
+              className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-bold text-[#C06041] hover:bg-terra/10 transition-colors flex items-center gap-1.5"
             >
               <span>🪔</span>
               <span>Diwali Offers</span>
@@ -555,7 +555,7 @@ function Header() {
             </Link>
             <Link
               to="/shop?category=gifting"
-              className="shrink-0 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-terra hover:bg-forest/10 transition-colors"
+              className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-semibold text-terra hover:bg-forest/10 transition-colors"
             >
               Curated gifting
             </Link>
@@ -564,7 +564,7 @@ function Header() {
               <button
                 type="button"
                 onClick={() => setMoreOpen((value) => !value)}
-                className="flex items-center gap-1 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 font-medium text-ink/85 hover:bg-forest/10 hover:text-forest transition-colors"
+                className="flex items-center gap-1 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-medium text-ink/85 hover:bg-forest/10 hover:text-forest transition-colors"
                 aria-expanded={moreOpen}
                 aria-haspopup="menu"
                 aria-label="More categories and stories"
