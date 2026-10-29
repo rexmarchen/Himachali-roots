@@ -138,7 +138,7 @@ describe('seller ledger and settlements', () => {
 
     const earnings = await seller.get('/api/seller/earnings');
     expect(earnings.status).toBe(200);
-    expect(earnings.body.totals.eligible).toBe(85_000);
+    expect(earnings.body.totals.eligible).toBe(88_000);
     expect(earnings.body.totals.pending).toBe(0);
     expect(earnings.body.entries).toHaveLength(2);
 
@@ -167,7 +167,7 @@ describe('seller ledger and settlements', () => {
       ...period,
     });
     expect(created.status).toBe(201);
-    expect(created.body.netPaise).toBe(85_000);
+    expect(created.body.netPaise).toBe(88_000);
     expect(created.body.entryCount).toBe(2);
 
     const paid = await mutate(admin.post(`/api/admin/settlements/${created.body.batchId}/pay`)).send({
@@ -186,7 +186,7 @@ describe('seller ledger and settlements', () => {
     expect(detail.body.settlement.provider_reference).toBe('BANK-REF-1234');
 
     const settled = await seller.get('/api/seller/earnings');
-    expect(settled.body.totals.settled).toBe(85_000);
+    expect(settled.body.totals.settled).toBe(88_000);
     expect(settled.body.totals.eligible).toBe(0);
 
     expect(

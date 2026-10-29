@@ -462,5 +462,24 @@ export function shopRouter(db: Db): Router {
     }
   });
 
+  
+  // Courier tracking webhook (Shiprocket / Logistics provider)
+  router.post(['/webhooks/shipping', '/webhooks/shiprocket'], async (req, res) => {
+    try {
+      const { processShippingWebhook } = await import('../lib/shipping.js');
+      const result = await processShippingWebhook(db, req.body as Record<string, unknown>);
+      res.json(result);
+    } catch (err: unknown) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'shipping_webhook_failed',
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      res.status(500).json({ error: 'Shipping webhook processing failed.' });
+    }
+  });
+
   return router;
 }

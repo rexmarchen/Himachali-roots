@@ -20,7 +20,7 @@ export default defineConfig({
       RAZORPAY_WEBHOOK_SECRET: 'test_webhook_secret',
       FLAT_SHIPPING_PAISE: '7900',
       FREE_SHIPPING_THRESHOLD_PAISE: '149900',
-      DEFAULT_COMMISSION_BP: '1500',
+      DEFAULT_COMMISSION_BP: '1200',
     },
     testTimeout: 20_000,
     hookTimeout: 20_000,

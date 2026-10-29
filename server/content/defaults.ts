@@ -125,7 +125,7 @@ export const DEFAULT_CONTENT: SiteContent = {
       {
         question: 'What commission do you charge sellers?',
         answer:
-          'The default commission is 15% of product value after discounts, excluding shipping and taxes. Commission rules can differ by category or seller and are shown in the seller dashboard before products are submitted. Each order stores the rate that applied at the time of sale.',
+          'The default commission is 12% of product value after discounts, excluding shipping and taxes. Commission rules can differ by category or seller and are shown in the seller dashboard before products are submitted. Each order stores the rate that applied at the time of sale.',
       },
       {
         question: 'How do sellers get paid?',
@@ -296,7 +296,7 @@ export const DEFAULT_CONTENT: SiteContent = {
         },
         {
           heading: 'Commission',
-          body: 'The default commission is 15% of product value after discounts, excluding shipping and taxes. A different rate may apply by category or seller and is visible in the dashboard. The applicable rate is snapshotted on each order; later rule changes do not rewrite historical orders.',
+          body: 'The default commission is 12% of product value after discounts, excluding shipping and taxes. A different rate may apply by category or seller and is visible in the dashboard. The applicable rate is snapshotted on each order; later rule changes do not rewrite historical orders.',
         },
         {
           heading: 'Dispatch and packaging',

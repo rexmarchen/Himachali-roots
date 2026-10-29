@@ -198,7 +198,7 @@ describe('cancellations and refunds', () => {
       IDS.seller,
     );
     expect(refundEntry?.amount_paise).toBe(-100_000);
-    expect(commissionReversal?.amount_paise).toBe(15_000);
+    expect(commissionReversal?.amount_paise).toBe(12_000);
   });
 
   it('supports a partial return by quantity and refuses to over-return the same item', async () => {

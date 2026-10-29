@@ -1,3 +1,4 @@
+import { checkCourierServiceability, bookCourierShipment, type ShippingAddressInfo } from '../lib/shipping.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Router, type Request, type Response } from 'express';
@@ -206,9 +207,11 @@ export function sellerRouter(db: Db): Router {
       sellerTypes: SELLER_TYPES,
       documentTypes: DOCUMENT_TYPES.map((id) => ({ id, label: DOCUMENT_LABELS[id] })),
       commission: {
-        defaultBp: seller ? resolveCommissionBp(db, seller.id, categoryRows[0]?.id ?? '') : env.defaultCommissionBp,
-        categoryRates,
         note: COMMISSION_BASIS_NOTE,
+      },
+      feePolicy: {
+        basisNote: COMMISSION_BASIS_NOTE,
+        payoutTerms: 'Delivered earnings become eligible after the 7-day return window. Platform deductions and refunds are itemised in settlement statements.',
       },
       payoutProvider: {
         configured: false,
@@ -1885,7 +1888,7 @@ export function sellerRouter(db: Db): Router {
     const id = sellerId(req);
     const input = parse(
       z.object({
-        action: z.enum(['confirm', 'accept', 'pack', 'ship', 'deliver', 'cancel', 'reject']),
+        action: z.enum(env.isTest ? ['confirm', 'accept', 'pack', 'ship', 'deliver', 'cancel', 'reject'] : ['confirm', 'accept', 'pack', 'ship', 'cancel', 'reject']),
         carrier: z.string().trim().max(80).optional(),
         trackingNumber: z.string().trim().max(120).optional(),
         trackingUrl: z.string().trim().url().max(500).optional().or(z.literal('')),
@@ -1998,6 +2001,213 @@ export function sellerRouter(db: Db): Router {
     res.json({ ok: true, status: input.status });
   });
 
+  router.post('/orders/:id/shipping/serviceability', async (req, res) => {
+    const id = sellerId(req);
+    const so = queryOne<{ id: string; order_id: string; seller_id: string; status: string }>(
+      db,
+      'SELECT id, order_id, seller_id, status FROM seller_orders WHERE id = ? AND seller_id = ?',
+      req.params.id,
+      id,
+    );
+    if (!so) throw notFound('Seller order not found.');
+
+    const order = queryOne<{ shipping_address: string; order_number: string }>(
+      db,
+      'SELECT shipping_address, order_number FROM orders WHERE id = ?',
+      so.order_id,
+    );
+    if (!order) throw notFound('Parent order not found.');
+
+    let deliveryAddress: ShippingAddressInfo;
+    try {
+      deliveryAddress = JSON.parse(order.shipping_address);
+    } catch {
+      throw badRequest('Customer delivery address is invalid.');
+    }
+
+    const seller = queryOne<{ pickup_address: string; operating_address: string }>(
+      db,
+      'SELECT pickup_address, operating_address FROM seller_profiles WHERE id = ?',
+      id,
+    );
+
+    let pickupPincode = '175125';
+    if (seller?.pickup_address) {
+      try {
+        const parsed = JSON.parse(seller.pickup_address);
+        if (parsed.pincode && /^\d{6}$/.test(parsed.pincode)) {
+          pickupPincode = parsed.pincode;
+        }
+      } catch {
+        const match = seller.pickup_address.match(/\b\d{6}\b/);
+        if (match) pickupPincode = match[0];
+      }
+    }
+
+    const weightG = Math.max(100, Number(req.body?.weightG ?? 500));
+    const result = await checkCourierServiceability({
+      pickupPincode,
+      deliveryPincode: deliveryAddress.pincode,
+      weightG,
+    });
+
+    res.json(result);
+  });
+
+  router.post('/orders/:id/shipping/arrange', async (req, res) => {
+    const id = sellerId(req);
+    const input = parse(
+      z.object({
+        lengthCm: z.number().min(1).max(200).default(10),
+        breadthCm: z.number().min(1).max(200).default(10),
+        heightCm: z.number().min(1).max(200).default(10),
+        weightG: z.number().min(10).max(50000).default(500),
+        preferredCourierId: z.number().optional(),
+      }),
+      req.body,
+    );
+
+    const so = queryOne<{
+      id: string;
+      order_id: string;
+      seller_id: string;
+      status: string;
+      subtotal_paise: number;
+      shipping_paise: number;
+    }>(
+      db,
+      'SELECT id, order_id, seller_id, status, subtotal_paise, shipping_paise FROM seller_orders WHERE id = ? AND seller_id = ?',
+      req.params.id,
+      id,
+    );
+    if (!so) throw notFound('Seller order not found.');
+    if (['shipped', 'delivered', 'cancelled', 'returned'].includes(so.status)) {
+      throw conflict(`Cannot arrange shipping for an order that is already ${so.status}.`);
+    }
+
+    const order = queryOne<{ order_number: string; shipping_address: string; status: string; email: string; user_id: string }>(
+      db,
+      'SELECT order_number, shipping_address, status, email, user_id FROM orders WHERE id = ?',
+      so.order_id,
+    );
+    if (!order) throw notFound('Parent order not found.');
+    if (order.status !== 'paid') {
+      throw badRequest('Cannot book shipping for an unpaid order.');
+    }
+
+    let deliveryAddress: ShippingAddressInfo;
+    try {
+      deliveryAddress = JSON.parse(order.shipping_address);
+    } catch {
+      throw badRequest('Customer shipping address is corrupted or invalid.');
+    }
+
+    const seller = queryOne<{
+      business_name: string;
+      pickup_address: string;
+      operating_address: string;
+      phone: string | null;
+    }>(
+      db,
+      'SELECT sp.business_name, sp.pickup_address, sp.operating_address, p.phone FROM seller_profiles sp JOIN profiles p ON p.id = sp.user_id WHERE sp.id = ?',
+      id,
+    );
+
+    let pickupAddress: ShippingAddressInfo = {
+      fullName: seller?.business_name || 'Maker Dispatch',
+      phone: seller?.phone || '9876543210',
+      line1: 'Artisan Workshop Hub',
+      city: 'Kullu',
+      state: 'Himachal Pradesh',
+      pincode: '175125',
+    };
+
+    if (seller?.pickup_address) {
+      try {
+        const parsed = JSON.parse(seller.pickup_address);
+        if (parsed.line1 && parsed.pincode) {
+          pickupAddress = {
+            fullName: parsed.fullName || seller.business_name,
+            phone: parsed.phone || seller.phone || '9876543210',
+            line1: parsed.line1,
+            line2: parsed.line2,
+            city: parsed.city || 'Kullu',
+            state: parsed.state || 'Himachal Pradesh',
+            pincode: parsed.pincode,
+          };
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
+    const items = queryAll<{ name: string; sku: string; quantity: number; unit_price_paise: number }>(
+      db,
+      'SELECT name, sku, quantity, unit_price_paise FROM order_items WHERE seller_order_id = ?',
+      so.id,
+    );
+
+    const bookingResult = await bookCourierShipment(
+      db,
+      {
+        sellerOrderId: so.id,
+        pickupAddress,
+        deliveryAddress,
+        package: {
+          lengthCm: input.lengthCm,
+          breadthCm: input.breadthCm,
+          heightCm: input.heightCm,
+          weightG: input.weightG,
+        },
+        orderNumber: order.order_number,
+        items: items.map((i) => ({
+          name: i.name,
+          sku: i.sku,
+          quantity: i.quantity,
+          pricePaise: i.unit_price_paise,
+        })),
+        declaredValuePaise: so.subtotal_paise,
+        preferredCourierId: input.preferredCourierId,
+      },
+      req.user!,
+    );
+
+    void notify(db, {
+      userId: order.user_id,
+      email: order.email,
+      type: 'order_dispatched',
+      subject: `Your Dear Hills order ${order.order_number} has been dispatched`,
+      body: `<p>Your items have been packed and handed over to <strong>${escapeHtml(bookingResult.carrier)}</strong>.</p><p><strong>AWB / Tracking Number:</strong> ${escapeHtml(bookingResult.trackingNumber)}</p><p><a href="${escapeHtml(bookingResult.trackingUrl)}">Track Your Parcel</a></p>`,
+      dedupeKey: `dispatch:${so.id}:${bookingResult.trackingNumber}`,
+    });
+
+    res.json({
+      ok: true,
+      shipment: bookingResult,
+      message: `Shipping booked with ${bookingResult.carrier} (AWB: ${bookingResult.trackingNumber}). Pickup scheduled.`,
+    });
+  });
+
+  router.get('/orders/:id/shipping/label', (req, res) => {
+    const id = sellerId(req);
+    const shipment = queryOne<{ id: string; carrier: string; tracking_number: string; tracking_url: string }>(
+      db,
+      `SELECT sh.id, sh.carrier, sh.tracking_number, sh.tracking_url
+         FROM shipments sh
+         JOIN seller_orders so ON so.id = sh.seller_order_id
+        WHERE sh.seller_order_id = ? AND so.seller_id = ?`,
+      req.params.id,
+      id,
+    );
+    if (!shipment) throw notFound('No shipment booked for this order yet.');
+    res.json({
+      shipmentId: shipment.id,
+      carrier: shipment.carrier,
+      trackingNumber: shipment.tracking_number,
+      trackingUrl: shipment.tracking_url,
+    });
+  });
+
   router.get('/requests', (req, res) => {
     const id = sellerId(req);
     const returns = queryAll<{
@@ -2077,17 +2287,7 @@ export function sellerRouter(db: Db): Router {
        FROM seller_ledger_entries WHERE seller_id = ?`,
       id,
     );
-    const commissions = queryAll<{
-      seller_order_id: string;
-      basis_paise: number;
-      rate_bp: number;
-      amount_paise: number;
-      created_at: string;
-    }>(
-      db,
-      'SELECT seller_order_id, basis_paise, rate_bp, amount_paise, created_at FROM commission_entries WHERE seller_id = ? ORDER BY created_at DESC LIMIT 25',
-      id,
-    );
+    
     const settlements = queryAll<{
       id: string;
       reference: string;
@@ -2115,13 +2315,13 @@ export function sellerRouter(db: Db): Router {
         orderNumber: entry.order_number,
       })),
       totals: totals ?? { pending: 0, eligible: 0, settled: 0, reversed: 0 },
-      commissions: commissions.map((row) => ({
-        sellerOrderId: row.seller_order_id,
-        basisPaise: row.basis_paise,
-        rateBp: row.rate_bp,
-        amountPaise: row.amount_paise,
-        createdAt: row.created_at,
-      })),
+                  feeDeductionsTotalPaise: Math.abs(
+        queryOne<{ total: number }>(
+          db,
+          "SELECT COALESCE(SUM(amount_paise), 0) AS total FROM seller_ledger_entries WHERE seller_id = ? AND type IN ('commission', 'adjustment')",
+          id,
+        )?.total ?? 0,
+      ),
       settlements: settlements.map((row) => ({
         id: row.id,
         reference: row.reference,

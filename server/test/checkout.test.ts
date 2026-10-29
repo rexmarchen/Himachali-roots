@@ -65,8 +65,8 @@ describe('checkout', () => {
 
     expect(inventory(IDS.product)).toMatchObject({ quantity: 10, reserved_quantity: 1 });
     const sellerOrder = sellerOrderFor(db, response.body.order.orderNumber);
-    expect(sellerOrder?.commission_paise).toBe(15_000);
-    expect(sellerOrder?.seller_earning_paise).toBe(85_000);
+    expect(sellerOrder?.commission_paise).toBe(12_000);
+    expect(sellerOrder?.seller_earning_paise).toBe(88_000);
   });
 
   it('recalculates the price at checkout instead of trusting the cart view', async () => {
@@ -78,7 +78,7 @@ describe('checkout', () => {
     expect(response.status).toBe(201);
     expect(response.body.order.subtotalPaise).toBe(120_000);
     expect(response.body.order.totalPaise).toBe(127_900);
-    expect(sellerOrderFor(db, response.body.order.orderNumber)?.commission_paise).toBe(18_000);
+    expect(sellerOrderFor(db, response.body.order.orderNumber)?.commission_paise).toBe(14_400);
   });
 
   it('returns the same order for a repeated idempotency key without reserving twice', async () => {
@@ -135,7 +135,7 @@ describe('checkout', () => {
         WHERE o.order_number = ?`,
       response.body.order.orderNumber,
     ).map((row) => row.commission_paise);
-    expect(storedCommissions.sort((a, b) => a - b)).toEqual([7_500, 15_000]);
+    expect(storedCommissions.sort((a, b) => a - b)).toEqual([6_000, 12_000]);
     // Internal margins are staff-only data and must never reach a customer response.
     expect(sellerOrders.every((row) => row.commissionPaise === undefined)).toBe(true);
     expect(sellerOrders.every((row) => row.sellerEarningPaise === undefined)).toBe(true);
@@ -154,7 +154,7 @@ describe('checkout', () => {
     expect(response.status).toBe(201);
     expect(response.body.order.discountPaise).toBe(10_000);
     expect(response.body.order.totalPaise).toBe(97_900);
-    expect(sellerOrderFor(db, response.body.order.orderNumber)?.commission_paise).toBe(13_500);
+    expect(sellerOrderFor(db, response.body.order.orderNumber)?.commission_paise).toBe(10_800);
     expect(
       queryOne<{ count: number }>(db, "SELECT COUNT(*) AS count FROM coupon_redemptions WHERE coupon_id = 'cpn_test'")?.count,
     ).toBe(1);
@@ -175,7 +175,7 @@ describe('checkout', () => {
     expect(response.status).toBe(201);
     expect(response.body.order.taxPaise).toBe(12_000);
     expect(response.body.order.totalPaise).toBe(119_900);
-    expect(sellerOrderFor(db, response.body.order.orderNumber)?.commission_paise).toBe(16_800);
+    expect(sellerOrderFor(db, response.body.order.orderNumber)?.commission_paise).toBe(13_440);
   });
 
   it('does not expose another customer’s order', async () => {
@@ -209,7 +209,7 @@ describe('checkout', () => {
       IDS.seller,
     );
     expect(entries?.count).toBe(2);
-    expect(entries?.total).toBe(85_000);
+    expect(entries?.total).toBe(88_000);
     expect(
       queryOne<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM commission_entries WHERE seller_id = ?', IDS.seller)?.count,
     ).toBe(1);

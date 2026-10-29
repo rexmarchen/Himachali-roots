@@ -2078,6 +2078,82 @@ export function adminRouter(db: Db): Router {
     res.status(201).json({ id });
   });
 
+
+  router.post('/sellers/:id/payouts/hold', (req, res) => {
+    const input = parse(
+      z.object({
+        reason: z.string().trim().min(5, 'Provide a valid reason for placing a payout hold.').max(500),
+      }),
+      req.body,
+    );
+    const seller = queryOne<{ id: string; business_name: string }>(
+      db,
+      'SELECT id, business_name FROM seller_profiles WHERE id = ?',
+      req.params.id,
+    );
+    if (!seller) throw notFound('Seller not found.');
+
+    const now = new Date().toISOString();
+    tx(db, () => {
+      execute(
+        db,
+        "UPDATE seller_profiles SET payout_status = 'blocked' WHERE id = ?",
+        seller.id,
+      );
+      execute(
+        db,
+        `UPDATE seller_ledger_entries
+            SET hold_reason = ?, held_at = ?, held_by = ?
+          WHERE seller_id = ? AND status IN ('pending', 'eligible')`,
+        input.reason,
+        now,
+        req.user!.id,
+        seller.id,
+      );
+      audit(db, req.user!, 'seller.payout_hold_placed', 'seller_profile', seller.id, null, {
+        reason: input.reason,
+        heldAt: now,
+      });
+    });
+
+    res.json({ ok: true, message: `Payout hold placed for ${seller.business_name}.` });
+  });
+
+  router.post('/sellers/:id/payouts/release', (req, res) => {
+    const input = parse(
+      z.object({
+        note: z.string().trim().max(500).optional(),
+      }),
+      req.body,
+    );
+    const seller = queryOne<{ id: string; business_name: string }>(
+      db,
+      'SELECT id, business_name FROM seller_profiles WHERE id = ?',
+      req.params.id,
+    );
+    if (!seller) throw notFound('Seller not found.');
+
+    tx(db, () => {
+      execute(
+        db,
+        "UPDATE seller_profiles SET payout_status = 'verified' WHERE id = ?",
+        seller.id,
+      );
+      execute(
+        db,
+        `UPDATE seller_ledger_entries
+            SET hold_reason = NULL, held_at = NULL, held_by = NULL
+          WHERE seller_id = ?`,
+        seller.id,
+      );
+      audit(db, req.user!, 'seller.payout_hold_released', 'seller_profile', seller.id, null, {
+        note: input.note,
+      });
+    });
+
+    res.json({ ok: true, message: `Payout hold released for ${seller.business_name}.` });
+  });
+
   /* ------------------------------ Customers ---------------------------- */
 
   router.get('/customers', (req, res) => {
@@ -2799,7 +2875,11 @@ export function adminRouter(db: Db): Router {
           supportEmail: env.email.supportEmail,
           adminNotificationEmail: env.email.adminNotificationEmail,
         },
-        shipping: { provider: 'manual', shiprocketConfigured: env.shiprocket.configured },
+        shipping: {
+          provider: env.shiprocket.configured ? 'shiprocket' : 'manual',
+          configured: env.shiprocket.configured,
+          pickupLocation: env.shiprocket.pickupLocation || 'Primary',
+        },
         monitoring: { sentryConfigured: Boolean(env.sentryDsn) },
       },
       configIssues: assertProductionConfig(),

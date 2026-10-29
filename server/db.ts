@@ -297,7 +297,28 @@ export function openDatabase(filename: string): Db {
   // suspended only for the duration of the swap.
   migrateApplicationWithdrawal(db);
   markMigration(db, 9);
+
+  migrateShippingAndLedger(db);
+  markMigration(db, 10);
   return db;
+}
+
+
+function migrateShippingAndLedger(db: Db): void {
+  if (tableExists(db, 'shipments')) {
+    addColumn(db, 'shipments', 'provider_shipment_id', 'TEXT');
+    addColumn(db, 'shipments', 'label_url', 'TEXT');
+    addColumn(db, 'shipments', 'pickup_scheduled_at', 'TEXT');
+    addColumn(db, 'shipments', 'pickup_token', 'TEXT');
+  }
+  if (tableExists(db, 'seller_ledger_entries')) {
+    addColumn(db, 'seller_ledger_entries', 'hold_reason', 'TEXT');
+    addColumn(db, 'seller_ledger_entries', 'held_at', 'TEXT');
+    addColumn(db, 'seller_ledger_entries', 'held_by', 'TEXT');
+  }
+  if (tableExists(db, 'seller_profiles')) {
+    addColumn(db, 'seller_profiles', 'payout_details_json', 'TEXT');
+  }
 }
 
 function migrateApplicationWithdrawal(db: Db): void {

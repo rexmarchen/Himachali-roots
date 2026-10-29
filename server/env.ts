@@ -49,7 +49,7 @@ export const env = {
   /** Extra browser origins allowed to call the API with credentials (split frontend/API deployments). */
   allowedOrigins: list(process.env.ALLOWED_ORIGINS),
   googleClientId: (process.env.GOOGLE_CLIENT_ID ?? '').trim(),
-  defaultCommissionBp: int(process.env.DEFAULT_COMMISSION_BP, 1500),
+  defaultCommissionBp: int(process.env.DEFAULT_COMMISSION_BP, 1200),
   freeShippingThresholdPaise: int(process.env.FREE_SHIPPING_THRESHOLD_PAISE, 149900),
   flatShippingPaise: int(process.env.FLAT_SHIPPING_PAISE, 7900),
   reservationMinutes: int(process.env.RESERVATION_MINUTES, 30),
@@ -57,8 +57,8 @@ export const env = {
   simulatedCheckoutEnabled: bool(process.env.SIMULATED_CHECKOUT_ENABLED ?? process.env.ALLOW_DEV_PAYMENTS, false) && !isProduction,
   allowDevAuthHelpers: bool(process.env.ALLOW_DEV_AUTH_HELPERS, false) && !isProduction,
   razorpay: {
-    keyId: process.env.RAZORPAY_KEY_ID ?? '',
-    keySecret: process.env.RAZORPAY_KEY_SECRET ?? '',
+    keyId: nodeEnv === 'test' ? (process.env.TEST_RAZORPAY_KEY_ID ?? '') : (process.env.RAZORPAY_KEY_ID ?? ''),
+    keySecret: nodeEnv === 'test' ? (process.env.TEST_RAZORPAY_KEY_SECRET ?? '') : (process.env.RAZORPAY_KEY_SECRET ?? ''),
     webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET ?? '',
     get configured() {
       return Boolean(this.keyId && this.keySecret);

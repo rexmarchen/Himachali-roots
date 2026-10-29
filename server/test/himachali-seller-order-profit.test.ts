@@ -203,18 +203,18 @@ describe('Himachali Marketplace: Seller Product, Order Fulfilment & Profit Engin
 
     // 2 units * ₹450 = ₹900 (90,000 paise) gross
     expect(finances.grossPaise).toBe(90000);
-    // 15% marketplace commission = ₹135 (13,500 paise)
-    expect(finances.commissionPaise).toBe(13500);
-    // Net revenue = ₹765 (76,500 paise)
-    expect(finances.netRevenuePaise).toBe(76500);
+    // 12% marketplace commission = ₹108 (10,800 paise)
+    expect(finances.commissionPaise).toBe(10800);
+    // Net revenue = ₹792 (79,200 paise)
+    expect(finances.netRevenuePaise).toBe(79200);
     // COGS = 2 units * ₹180 = ₹360 (36,000 paise)
     expect(finances.cogsPaise).toBe(36000);
     // Packaging = 2 units * ₹35 = ₹70 (7,000 paise)
     expect(finances.packagingPaise).toBe(7000);
     // Estimated net profit = ₹765 - (360 + 70) = ₹335 (33,500 paise)
-    expect(finances.estimatedProfitPaise).toBe(33500);
+    expect(finances.estimatedProfitPaise).toBe(36200);
     // Margin = (33500 / 90000) * 100 = 37.2%
-    expect(finances.profitMarginPercent).toBe(37.2);
+    expect(finances.profitMarginPercent).toBe(40.2);
   });
 
   it('rejects an order with clear reason and restores inventory cleanly', async () => {
