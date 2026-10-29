@@ -98,8 +98,6 @@ export async function standardRazorpayCheckout(params: {
   onError?: (error: Error) => void;
   onDismiss?: () => void;
 }): Promise<void> {
-  const keyId = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_test_TteMaYpK4DXgNw';
-
   // 1. Call backend /api/create-order
   const res = await fetch('/api/create-order', {
     method: 'POST',
@@ -113,7 +111,8 @@ export async function standardRazorpayCheckout(params: {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error || 'Failed to create Razorpay order.');
   }
-  const orderData = (await res.json()) as { order_id: string; amount: number; currency: string };
+  const orderData = (await res.json()) as { order_id: string; amount: number; currency: string; key_id?: string };
+  const keyId = orderData.key_id || (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || '';
 
   // 2. Open Razorpay modal
   await loadScript();

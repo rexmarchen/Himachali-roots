@@ -204,6 +204,7 @@ export function shopRouter(db: Db): Router {
         order_id: order.id,
         amount: order.amount,
         currency: order.currency,
+        key_id: env.razorpay.keyId,
       });
     } catch (err: unknown) {
       const status = (err as { status?: number })?.status === 401 ? 401 : 500;
