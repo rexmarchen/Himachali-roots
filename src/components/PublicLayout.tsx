@@ -1,7 +1,6 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { api, errorMessage } from '@/lib/api';
-import { formatINR } from '@shared/types';
 import { useAuth, useCartCount, useSiteContent } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { EcommerceSearchBar } from './EcommerceSearchBar';
@@ -12,6 +11,29 @@ const NAV = [
   { label: 'How we source', to: '/sourcing' },
   { label: 'Our Story', to: '/about' },
 ];
+
+const CATEGORY_NAV = [
+  { label: 'Shawls & handlooms', slug: 'shawls-and-weaves' },
+  { label: 'Kangra orthodox tea', slug: 'tea-and-infusions' },
+  { label: 'Dry fruit & nuts', slug: 'dry-fruit-and-nuts' },
+  { label: 'Honey & preserves', slug: 'pantry-and-preserves' },
+  { label: 'Cold-pressed oils', slug: 'cold-pressed-oils' },
+  { label: 'Mountain pulses', slug: 'pulses-and-staples' },
+  { label: 'Warm knitwear', slug: 'knitwear' },
+  { label: 'Himachali caps', slug: 'caps-and-headwear' },
+  { label: 'Curated gifting', slug: 'gifting' },
+  { label: 'All products', slug: '' },
+];
+
+function Diya({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
+      <path d="M12 3.2c1.6 1.5 2.4 2.7 2.4 3.9a2.4 2.4 0 0 1-4.8 0c0-1.2.8-2.4 2.4-3.9Z" />
+      <path d="M3.6 12.4h16.8c-.9 2.9-4.2 4.6-8.4 4.6s-7.5-1.7-8.4-4.6Z" strokeLinejoin="round" />
+      <path d="M9.6 20.4h4.8" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function Wordmark({ compact = false, light = false }: { compact?: boolean; light?: boolean }) {
   return (
@@ -77,7 +99,7 @@ function AccountMenu({ light = false }: { light?: boolean }) {
     return (
       <Link
         to="/login"
-        className={`inline-flex min-h-11 lg:min-h-12 items-center px-2.5 sm:px-3 text-[12.5px] sm:text-xs lg:text-[14px] font-medium transition-colors ${
+        className={`inline-flex min-h-11 items-center whitespace-nowrap px-2.5 text-[12.5px] font-medium transition-colors sm:px-3 sm:text-xs lg:min-h-12 lg:text-[14px] ${
           light ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
         }`}
       >
@@ -183,38 +205,24 @@ function MenuLink({ to, children, onClick }: { to: string; children: ReactNode; 
 }
 
 function HeritageAnnouncementBar({ customText, light = false }: { customText?: string; light?: boolean }) {
-  const { config } = useAuth();
-  const freeShippingThreshold = config?.shipping.freeThresholdPaise ?? 0;
-
   return (
     <div
       className={`border-b transition-colors duration-300 ${
-        light ? 'bg-black/50 text-white/90 border-white/10' : 'border-[#0F1614] bg-forest-deep text-paper'
+        light ? 'border-white/10 bg-black/50 text-white/90' : 'border-[#0F1614] bg-forest-deep text-paper'
       }`}
       aria-label="Dear Hills announcements"
     >
-      <div className="mx-auto flex min-h-8 sm:min-h-9 lg:min-h-10 max-w-[88rem] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 xl:px-10 py-1.5 sm:py-2 text-[11px] sm:text-xs lg:text-[13px] font-medium tracking-[0.02em]">
-        <div className="flex items-center gap-2 min-w-0">
-          <Link
-            to="/offers/pahadi-festive-glow"
-            className="flex items-center gap-1.5 font-bold text-butter hover:text-white transition-colors shrink-0"
-          >
-            <span>🪔</span>
-            <span className="underline underline-offset-4 decoration-butter/60">Diwali Shubh Aarambh</span>
-          </Link>
-          <span className="opacity-40 hidden sm:inline" aria-hidden>·</span>
-          <p className="line-clamp-1 truncate">
-            {customText || 'Up to 30% Off Pure Himalayan Harvest & Handlooms · 0% Platform Fee'}
-          </p>
-        </div>
-        {freeShippingThreshold > 0 ? (
-          <p className="hidden shrink-0 text-sand xl:block">Free shipping over {formatINR(freeShippingThreshold)}</p>
-        ) : null}
+      <div className="shell flex h-9 items-center justify-center gap-2.5 overflow-hidden text-[10px] font-medium uppercase tracking-[0.16em] sm:h-10 sm:text-[10.5px]">
+        <Diya className="h-3.5 w-3.5 shrink-0 text-butter" />
+        <Link to="/offers/pahadi-festive-glow" className="min-w-0 truncate transition-colors hover:text-butter">
+          {customText || 'Festive harvest · up to 30% off · 0% platform fee'}
+        </Link>
         <Link
           to="/offers/pahadi-festive-glow"
-          className="hidden shrink-0 items-center gap-1.5 text-sand transition-colors hover:text-white md:flex font-semibold"
+          className="hidden shrink-0 items-center gap-1.5 font-semibold text-butter underline decoration-butter/50 underline-offset-4 transition-colors hover:text-white md:inline-flex"
         >
-          <span>Explore Diwali Offers</span> <span aria-hidden>→</span>
+          Diwali offers
+          <span aria-hidden>→</span>
         </Link>
       </div>
     </div>
@@ -316,8 +324,10 @@ function Header() {
   const isCheckout = location.pathname.startsWith('/checkout');
   const cartCount = useCartCount();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
+  const [shopOpen, setShopOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const shopRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mobilePanelRef = useRef<HTMLDivElement>(null);
   const content = useSiteContent();
@@ -328,16 +338,17 @@ function Header() {
   if (menuPath !== location.pathname) {
     setMenuPath(location.pathname);
     setMobileOpen(false);
-    setMoreOpen(false);
+    setShopOpen(false);
+    setSearchOpen(false);
   }
 
   useEffect(() => {
-    if (!moreOpen) return;
+    if (!shopOpen) return;
     const onClick = (event: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(event.target as Node)) setMoreOpen(false);
+      if (shopRef.current && !shopRef.current.contains(event.target as Node)) setShopOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMoreOpen(false);
+      if (event.key === 'Escape') setShopOpen(false);
     };
     document.addEventListener('mousedown', onClick);
     document.addEventListener('keydown', onKeyDown);
@@ -345,7 +356,25 @@ function Header() {
       document.removeEventListener('mousedown', onClick);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [moreOpen]);
+  }, [shopOpen]);
+
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const el = document.documentElement;
+        const max = el.scrollHeight - el.clientHeight;
+        setProgress(max > 0 ? Math.min(1, el.scrollTop / max) : 0);
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -418,54 +447,115 @@ function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur-md text-ink shadow-2xs">
+    <header className="sticky top-0 z-40 border-b border-line/80 bg-paper/95 text-ink backdrop-blur-md">
       <HeritageAnnouncementBar
         customText={announcement?.active && announcement.text ? announcement.text : undefined}
       />
 
-      <div className="mx-auto flex h-13 sm:h-14 lg:h-16 max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-4 px-4 sm:px-6 lg:px-8 xl:px-10">
+      <div className="shell flex h-16 items-center gap-3 lg:h-[76px] lg:gap-6">
         <div className="shrink-0">
           <Wordmark />
         </div>
 
-        <div className="mx-2 hidden flex-1 md:flex lg:mx-3 min-w-[200px] sm:min-w-[220px] lg:min-w-[260px] xl:min-w-[300px] max-w-lg lg:max-w-xl xl:max-w-2xl">
-          <EcommerceSearchBar inputId="site-search-desktop" />
-        </div>
-
-        <nav className="hidden items-center gap-2.5 xl:gap-3.5 2xl:gap-4 lg:flex" aria-label="Primary">
+        <nav className="hidden items-center gap-4 whitespace-nowrap lg:flex xl:gap-6" aria-label="Primary">
           {NAV.map((item) => {
             const active = item.to === '/shop' ? location.pathname.startsWith('/shop') : location.pathname === item.to;
+
+            if (item.label === 'Shop') {
+              return (
+                <div key={item.to} className="relative" ref={shopRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShopOpen((value) => !value)}
+                    className={`flex items-center gap-1.5 py-2 text-[13px] font-medium transition-colors ${
+                      active || shopOpen ? 'text-terra' : 'text-ink/80 hover:text-forest'
+                    }`}
+                    aria-expanded={shopOpen}
+                    aria-haspopup="true"
+                  >
+                    {item.label}
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className={`h-3 w-3 transition-transform duration-200 ${shopOpen ? 'rotate-180' : ''}`} aria-hidden>
+                      <path d="m5 7.5 5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+
+                  {shopOpen ? (
+                    <div className="absolute left-1/2 top-full z-50 w-[30rem] -translate-x-1/2 pt-3">
+                      <div className="border border-line bg-paper p-6 shadow-lift fade-in">
+                        <p className="t-eyebrow mb-4 text-terra">Shop by shelf</p>
+                        <div className="grid grid-cols-2 gap-x-7">
+                          {CATEGORY_NAV.map((category) => (
+                            <Link
+                              key={category.slug || 'all'}
+                              to={category.slug ? `/shop?category=${category.slug}` : '/shop'}
+                              onClick={() => setShopOpen(false)}
+                              className="group/link flex min-h-9 items-center justify-between gap-2 text-[13px] text-ink/85 transition-colors hover:text-terra"
+                            >
+                              <span>{category.label}</span>
+                              <span
+                                className="text-[11px] text-muted/50 transition-all duration-200 group-hover/link:translate-x-0.5 group-hover/link:text-terra"
+                                aria-hidden
+                              >
+                                →
+                              </span>
+                            </Link>
+                          ))}
+                        </div>
+                        <div className="mt-5 flex items-center justify-between">
+                          <Link to="/shop" onClick={() => setShopOpen(false)} className="link-arrow">
+                            Browse everything
+                          </Link>
+                          <Link
+                            to="/offers/pahadi-festive-glow"
+                            onClick={() => setShopOpen(false)}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-terra/30 bg-terra/[0.08] px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-terra"
+                          >
+                            <Diya className="h-3 w-3" />
+                            Diwali offers
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                className={`border-b-2 py-1.5 text-[12.5px] lg:text-[13px] xl:text-[13.5px] font-medium transition-colors ${
-                  active
-                    ? 'border-terra text-forest font-semibold'
-                    : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
+                className={`py-2 text-[13px] font-medium transition-colors ${
+                  active ? 'text-terra' : 'text-ink/80 hover:text-forest'
                 }`}
               >
                 {item.label}
               </Link>
             );
           })}
-
-          <Link
-            to="/offers/pahadi-festive-glow"
-            className="hidden 2xl:inline-flex items-center gap-1 rounded-full border border-terra/30 bg-terra/10 px-2.5 py-0.5 text-[11px] lg:text-xs font-bold text-terra transition-all hover:bg-terra/20 shadow-xs"
-          >
-            <span>🪔</span>
-            <span>Diwali Offers</span>
-          </Link>
         </nav>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5">
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <button
+            type="button"
+            onClick={() => setSearchOpen((value) => !value)}
+            className="inline-flex h-10 w-10 items-center justify-center text-ink transition-colors hover:text-terra md:hidden"
+            aria-label={searchOpen ? 'Close search' : 'Open search'}
+            aria-expanded={searchOpen}
+          >
+            <Icon name="search" className="h-5 w-5" />
+          </button>
+
+          <div className="hidden w-[190px] md:block lg:w-[200px] xl:w-[250px] 2xl:w-[290px]">
+            <EcommerceSearchBar inputId="site-search-desktop" />
+          </div>
+
           <Link
             to="/account/wishlist"
-            className="hidden h-9.5 w-9.5 lg:h-10 lg:w-10 items-center justify-center text-ink transition-colors hover:text-terra sm:inline-flex"
+            className="hidden h-10 w-10 items-center justify-center text-ink transition-colors hover:text-terra xl:inline-flex"
             aria-label="Saved items"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-[18px] w-[18px] lg:h-5 lg:w-5" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-[18px] w-[18px]" aria-hidden>
               <path
                 d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
                 strokeWidth="1.6"
@@ -476,16 +566,16 @@ function Header() {
           {user?.roles.includes('admin') ? (
             <Link
               to="/admin"
-              className="hidden items-center gap-1.5 rounded border border-forest/25 bg-surface px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:bg-forest/5 xl:inline-flex"
+              className="hidden items-center rounded-full border border-forest/25 bg-surface px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-forest transition-colors hover:bg-forest/5 xl:inline-flex"
             >
               Admin
             </Link>
           ) : user?.roles.includes('seller') ? (
             <Link
               to="/seller"
-              className="hidden items-center gap-1.5 rounded border border-terra/30 bg-terra/20 px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-terra transition-colors hover:bg-terra/30 xl:inline-flex"
+              className="hidden items-center rounded-full border border-terra/30 bg-terra/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-terra transition-colors hover:bg-terra/20 xl:inline-flex"
             >
-              Seller Studio
+              Studio
             </Link>
           ) : null}
 
@@ -509,95 +599,17 @@ function Header() {
         </div>
       </div>
 
-      <div className="px-3 pb-2.5 md:hidden">
-        <EcommerceSearchBar inputId="site-search-mobile" />
-      </div>
-
-      <div className="hidden border-t md:block border-line bg-[#EFE9DD]/90 text-ink">
-        <div className="mx-auto flex max-w-[88rem] items-center px-4 sm:px-6 lg:px-8 xl:px-10 py-1.5 sm:py-2 text-[11.5px] sm:text-xs lg:text-[13px] font-medium">
-          <div className="no-scrollbar flex w-full items-center gap-1 lg:gap-1.5 overflow-x-auto whitespace-nowrap">
-            <Link
-              to="/shop"
-              className="flex shrink-0 items-center gap-1.5 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-semibold text-forest hover:bg-forest/10 transition-colors"
-            >
-              <Icon name="grid" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              All products
-            </Link>
-            <span className="text-forest/25 mx-1" aria-hidden>
-              |
-            </span>
-            {[
-              { label: 'Shawls & handlooms', slug: 'shawls-and-weaves' },
-              { label: 'Kangra tea', slug: 'tea-and-infusions' },
-              { label: 'Dry fruit & nuts', slug: 'dry-fruit-and-nuts' },
-              { label: 'Honey & preserves', slug: 'pantry-and-preserves' },
-              { label: 'Cold-pressed oils', slug: 'cold-pressed-oils' },
-              { label: 'Knitwear', slug: 'knitwear' },
-              { label: 'Himachali caps', slug: 'caps-and-headwear' },
-            ].map((item) => (
-              <Link
-                key={item.slug}
-                to={`/shop?category=${item.slug}`}
-                className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 text-ink/80 hover:bg-forest/10 hover:text-forest transition-colors"
-              >
-                {item.label}
-              </Link>
-            ))}
-            <Link
-              to="/offers/pahadi-festive-glow"
-              className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-bold text-[#C06041] hover:bg-terra/10 transition-colors flex items-center gap-1.5"
-            >
-              <span>🪔</span>
-              <span>Diwali Offers</span>
-              <span className="rounded-full bg-terra/20 border border-terra/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-terra">
-                30% off
-              </span>
-            </Link>
-            <Link
-              to="/shop?category=gifting"
-              className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-semibold text-terra hover:bg-forest/10 transition-colors"
-            >
-              Curated gifting
-            </Link>
-
-            <div className="relative inline-block shrink-0" ref={moreRef}>
-              <button
-                type="button"
-                onClick={() => setMoreOpen((value) => !value)}
-                className="flex items-center gap-1 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-medium text-ink/85 hover:bg-forest/10 hover:text-forest transition-colors"
-                aria-expanded={moreOpen}
-                aria-haspopup="menu"
-                aria-label="More categories and stories"
-              >
-                More
-                <svg viewBox="0 0 20 20" fill="currentColor" className={`h-3.5 w-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`} aria-hidden>
-                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                </svg>
-              </button>
-              {moreOpen ? (
-                <div role="menu" className="absolute left-0 top-full z-50 mt-1.5 w-60 border border-line bg-surface py-1.5 text-ink shadow-xl">
-                  {[
-                    { label: 'Mountain pulses & staples', to: '/shop?category=pulses-and-staples' },
-                    { label: 'Meet the makers', to: '/makers' },
-                    { label: 'The sourcing standard', to: '/sourcing' },
-                    { label: 'Our story & heritage', to: '/about' },
-                    { label: 'Authenticity & proof', to: '/policies/authenticity' },
-                  ].map((item) => (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      role="menuitem"
-                      onClick={() => setMoreOpen(false)}
-                      className="flex min-h-11 items-center px-4 py-2 text-[12px] text-ink transition-colors hover:bg-paper hover:text-forest"
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </div>
+      {searchOpen ? (
+        <div className="shell pb-4 md:hidden">
+          <EcommerceSearchBar inputId="site-search-mobile" />
         </div>
+      ) : null}
+
+      <div className="absolute inset-x-0 bottom-0 h-px bg-line/70" aria-hidden>
+        <div
+          className="h-full origin-left bg-terra transition-transform duration-150 ease-out"
+          style={{ transform: `scaleX(${progress})` }}
+        />
       </div>
 
       {mobileOpen ? (
@@ -650,6 +662,22 @@ function Header() {
                 </span>
               </Link>
             </nav>
+
+            <div className="mt-6 border-t border-line pt-5">
+              <p className="t-eyebrow mb-2 text-terra">Shop by shelf</p>
+              <div className="grid grid-cols-2 gap-x-5">
+                {CATEGORY_NAV.filter((category) => category.slug).map((category) => (
+                  <Link
+                    key={category.slug}
+                    to={`/shop?category=${category.slug}`}
+                    onClick={() => setMobileOpen(false)}
+                    className="flex min-h-10 items-center border-b border-line/50 text-[12.5px] text-ink/80 transition-colors hover:text-terra"
+                  >
+                    {category.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
 
             <div className="mt-6 space-y-1">
               <Link to="/account" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between py-2 text-sm font-medium text-ink">
@@ -827,16 +855,16 @@ function Newsletter() {
 
   return (
     <div>
-      <h3 className="font-serif text-xl text-paper">Letters from the hills</h3>
-      <p className="mt-2 text-sm leading-relaxed text-paper/70">
+      <h3 className="font-serif text-[1.35rem] text-paper">Letters from the hills</h3>
+      <p className="mt-2.5 text-[13px] leading-relaxed text-paper/65">
         Occasional dispatches on new makers, seasonal harvests and life across the Himalayan valleys. No daily promotions.
       </p>
       {status === 'done' ? (
-        <p className="mt-4 border border-paper/20 bg-white/5 px-3 py-2.5 text-sm text-paper/90">
+        <p className="mt-5 rounded-full border border-paper/20 bg-white/5 px-4 py-2.5 text-[13px] text-paper/90">
           You are on the list. You can unsubscribe anytime with one click.
         </p>
       ) : (
-        <form onSubmit={submit} className="mt-4 space-y-3">
+        <form onSubmit={submit} className="mt-5 space-y-3">
           <div className="flex gap-2">
             <input
               type="email"
@@ -845,17 +873,17 @@ function Newsletter() {
               onChange={(event) => setEmail(event.target.value)}
               placeholder="Your email address"
               aria-label="Email address for newsletter"
-              className="h-10 w-full border border-paper/30 bg-white/5 px-3.5 text-sm text-paper placeholder:text-paper/40 focus:border-sand focus:outline-none focus:ring-1 focus:ring-sand transition-all"
+              className="h-11 w-full rounded-full border border-paper/25 bg-white/5 px-4 text-[13px] text-paper placeholder:text-paper/40 focus:border-sand focus:outline-none focus:ring-1 focus:ring-sand transition-all"
             />
             <button
               type="submit"
               disabled={status === 'saving'}
-              className="h-10 shrink-0 border border-sand bg-sand/15 px-4 text-[12px] font-semibold uppercase tracking-wider text-paper hover:bg-sand/30 transition-colors disabled:opacity-50"
+              className="h-11 shrink-0 rounded-full border border-sand bg-sand px-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-forest-deep transition-colors hover:bg-paper disabled:opacity-50"
             >
               {status === 'saving' ? 'Joining…' : 'Join'}
             </button>
           </div>
-          <label className="flex items-start gap-2 text-[11px] leading-relaxed text-paper/60 cursor-pointer">
+          <label className="flex cursor-pointer items-start gap-2 text-[11px] leading-relaxed text-paper/55">
             <input
               type="checkbox"
               checked={consent}
@@ -873,67 +901,87 @@ function Newsletter() {
 function Footer() {
   const { config } = useAuth();
   return (
-    <footer className="mt-20 border-t border-forest-deep bg-forest text-paper">
-      <div className="mx-auto max-w-[88rem] px-4 py-14 sm:px-6 lg:px-8 xl:px-10">
-        <div className="grid gap-10 border-b border-paper/15 pb-14 md:grid-cols-2 lg:grid-cols-4">
+    <footer className="border-t border-paper/10 bg-forest text-paper">
+      <div className="shell py-16 lg:py-20">
+        <div className="grid gap-12 border-b border-paper/15 pb-14 md:grid-cols-2 lg:grid-cols-[1.15fr_0.85fr_0.85fr_1.15fr] lg:gap-10">
           <div>
             <Wordmark compact light />
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-paper/70">
+            <p className="mt-5 max-w-xs text-sm leading-relaxed text-paper/70">
               A curated marketplace for products made and grown in Himachal Pradesh. Every listing names the store behind
               it, and every maker and product is reviewed before publication.
             </p>
-            <div className="mt-6 flex flex-wrap gap-2 text-[10.5px] uppercase tracking-[0.16em] text-paper/50">
-              <span>Mandi</span> · <span>Kullu</span> · <span>Kangra</span> · <span>Kinnaur</span> · <span>Lahaul</span> · <span>Chamba</span>
+            <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 text-[10px] uppercase tracking-[0.18em] text-paper/45">
+              <span>Mandi</span>
+              <span>Kullu</span>
+              <span>Kangra</span>
+              <span>Kinnaur</span>
+              <span>Lahaul</span>
+              <span>Chamba</span>
             </div>
           </div>
 
           <div>
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">Explore the shelves</h3>
-            <ul className="mt-4 space-y-2.5 text-sm text-paper/75">
-              <li><Link to="/shop" className="hover:text-sand transition-colors">All products</Link></li>
-              <li><Link to="/shop?category=shawls-and-weaves" className="hover:text-sand transition-colors">Shawls & Handlooms</Link></li>
-              <li><Link to="/shop?category=pantry-and-preserves" className="hover:text-sand transition-colors">Mountain Pantry & Honey</Link></li>
-              <li><Link to="/shop?category=gifting" className="hover:text-sand transition-colors">Curated Himalayan Gifting</Link></li>
-              <li><Link to="/makers" className="hover:text-sand transition-colors">Meet the makers</Link></li>
-              <li><Link to="/sourcing" className="hover:text-sand transition-colors">The Sourcing Standard</Link></li>
+            <h3 className="text-[9.5px] font-semibold uppercase tracking-[0.24em] text-sand/70">Explore the shelves</h3>
+            <ul className="mt-5 space-y-3 text-[13px] text-paper/75">
+              <li><Link to="/shop" className="transition-colors hover:text-sand">All products</Link></li>
+              <li><Link to="/shop?category=shawls-and-weaves" className="transition-colors hover:text-sand">Shawls &amp; handlooms</Link></li>
+              <li><Link to="/shop?category=pantry-and-preserves" className="transition-colors hover:text-sand">Pantry &amp; honey</Link></li>
+              <li><Link to="/shop?category=gifting" className="transition-colors hover:text-sand">Curated gifting</Link></li>
+              <li><Link to="/makers" className="transition-colors hover:text-sand">Meet the makers</Link></li>
+              <li><Link to="/sourcing" className="transition-colors hover:text-sand">The sourcing standard</Link></li>
             </ul>
           </div>
 
           <div>
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">Information & Trust</h3>
-            <ul className="mt-4 space-y-2.5 text-sm text-paper/75">
-              <li><Link to="/about" className="hover:text-sand transition-colors">Our story & philosophy</Link></li>
-              <li><Link to="/policies/shipping" className="hover:text-sand transition-colors">Shipping & delivery</Link></li>
-              <li><Link to="/policies/returns" className="hover:text-sand transition-colors">Returns & refunds</Link></li>
-              <li><Link to="/policies/authenticity" className="hover:text-sand transition-colors">Authenticity & product claims</Link></li>
-              <li><Link to="/policies/seller-terms" className="hover:text-sand transition-colors">Seller terms & KYC</Link></li>
-              <li><Link to="/credits" className="hover:text-sand transition-colors">Photography credits</Link></li>
-              <li><Link to="/contact" className="hover:text-sand transition-colors">Contact & support</Link></li>
+            <h3 className="text-[9.5px] font-semibold uppercase tracking-[0.24em] text-sand/70">Care &amp; information</h3>
+            <ul className="mt-5 space-y-3 text-[13px] text-paper/75">
+              <li><Link to="/about" className="transition-colors hover:text-sand">Our story</Link></li>
+              <li><Link to="/policies/shipping" className="transition-colors hover:text-sand">Shipping &amp; delivery</Link></li>
+              <li><Link to="/policies/returns" className="transition-colors hover:text-sand">Returns &amp; refunds</Link></li>
+              <li><Link to="/policies/authenticity" className="transition-colors hover:text-sand">Authenticity</Link></li>
+              <li><Link to="/policies/seller-terms" className="transition-colors hover:text-sand">Seller terms &amp; KYC</Link></li>
+              <li><Link to="/contact" className="transition-colors hover:text-sand">Contact &amp; support</Link></li>
             </ul>
           </div>
 
           <Newsletter />
         </div>
 
-        <div className="flex flex-col gap-4 pt-8 text-[11px] leading-relaxed text-paper/50 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl space-y-1.5">
+        <div className="flex flex-col gap-8 border-b border-paper/10 py-8 sm:flex-row sm:items-center sm:justify-between">
+          <ul className="grid grid-cols-2 gap-x-8 gap-y-3 text-[10.5px] uppercase tracking-[0.14em] text-paper/55 sm:flex sm:flex-wrap sm:gap-x-10">
+            <li>Reviewed makers</li>
+            <li>Origin documented</li>
+            <li>Ships across India</li>
+            <li>Secure payments</li>
+          </ul>
+          <div className="flex flex-wrap items-center gap-2">
+            {['UPI', 'VISA', 'Mastercard', 'RuPay', 'Razorpay'].map((mark) => (
+              <span
+                key={mark}
+                className="rounded-full border border-paper/20 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-paper/60"
+              >
+                {mark}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-5 pt-7 text-[11px] leading-relaxed text-paper/45 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl space-y-2">
+            <p>© {new Date().getFullYear()} DEAR HILLS · Handmade and grown in Himachal Pradesh.</p>
             <p>
-              © {new Date().getFullYear()} DEAR HILLS. Demonstration build — policy documents are drafts pending legal
-              review. Product and seller records in this environment are labelled demo data.
-            </p>
-            <p>
-              Photography is authentic and illustrative of Himachal Pradesh, sourced under creative licences listed on the{' '}
+              Photography is illustrative of Himachal Pradesh and licensed on the{' '}
               <Link to="/credits" className="underline underline-offset-2 hover:text-paper">credits page</Link>.
             </p>
             {config?.supportEmailIsPlaceholder ? (
-              <p className="text-terra/90">Support email is configured for development. Replace with live contact before public launch.</p>
+              <p className="text-terra/80">Support email is configured for development. Replace with live contact before public launch.</p>
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-4 text-paper/60">
-            <Link to="/faq" className="hover:text-paper transition-colors">FAQ</Link>
-            <Link to="/policies/privacy" className="hover:text-paper transition-colors">Privacy Policy</Link>
-            <Link to="/policies/terms" className="hover:text-paper transition-colors">Terms of Service</Link>
-            <Link to="/sell" className="hover:text-paper transition-colors">Seller Registration</Link>
+          <div className="flex flex-wrap gap-5 text-paper/55">
+            <Link to="/faq" className="transition-colors hover:text-paper">FAQ</Link>
+            <Link to="/policies/privacy" className="transition-colors hover:text-paper">Privacy</Link>
+            <Link to="/policies/terms" className="transition-colors hover:text-paper">Terms</Link>
+            <Link to="/sell" className="transition-colors hover:text-paper">Sell with us</Link>
           </div>
         </div>
       </div>
@@ -965,6 +1013,24 @@ function CheckoutFooter() {
   );
 }
 
+function HelpFloat() {
+  const { pathname } = useLocation();
+  if (pathname.startsWith('/checkout') || pathname.startsWith('/admin') || pathname.startsWith('/seller')) return null;
+
+  return (
+    <Link
+      to="/contact"
+      aria-label="Questions? Talk to us"
+      className="fixed bottom-24 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-forest text-paper shadow-lift transition-transform duration-200 hover:-translate-y-0.5 md:bottom-6 md:right-6"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-5 w-5" aria-hidden>
+        <path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.6L3 21l1.9-5.6A8.5 8.5 0 1 1 21 11.5Z" strokeLinejoin="round" />
+        <path d="M8.5 10.5h7M8.5 14h4.5" strokeLinecap="round" />
+      </svg>
+    </Link>
+  );
+}
+
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -986,6 +1052,7 @@ export function PublicLayout() {
       </main>
       {isCheckout ? <CheckoutFooter /> : <Footer />}
       <MobileTabBar />
+      <HelpFloat />
     </div>
   );
 }

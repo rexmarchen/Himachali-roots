@@ -460,7 +460,7 @@ export function SellerLayout() {
                           <div className="flex items-center gap-2.5">
                             <StudioNavIcon type={item.icon} className="h-4 w-4 text-[#D98263]" />
                             <span>{item.label}</span>
-                          </div>
+            </div>
                           <span className="text-[10px] text-white/40">↗</span>
                         </Link>
                       </li>
@@ -484,7 +484,7 @@ export function SellerLayout() {
                         <div className="flex items-center gap-2.5">
                           <StudioNavIcon type={item.icon} className="h-4 w-4" />
                           <span>{item.label}</span>
-                        </div>
+            </div>
                         {item.to === '/seller/notifications' && unread > 0 ? (
                           <span className="rounded-full bg-[#D98263] px-1.5 py-0.2 text-[10px] font-semibold text-white">
                             {unread}
@@ -506,7 +506,7 @@ export function SellerLayout() {
           to="/"
           className="flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/80 hover:bg-white/10 hover:text-white transition-colors"
         >
-          <span>←</span>
+          <span>â†</span>
           <span>Customer Marketplace</span>
         </Link>
         <button
@@ -726,7 +726,7 @@ export function SellerApplicationPage() {
                 <div>
                   <p className="text-[13px] text-ink">{item.label}</p>
                   <p className="mt-0.5 text-[11px] text-muted">{item.detail}</p>
-                </div>
+            </div>
                 <div className="flex items-center gap-3">
                   <span
                     className={`text-[10.5px] uppercase tracking-[0.1em] ${
@@ -738,7 +738,7 @@ export function SellerApplicationPage() {
                   {item.href && canEdit ? (
                     <Link to={item.href} className="text-[11px] text-forest underline underline-offset-2">Open</Link>
                   ) : null}
-                </div>
+            </div>
               </li>
             ))}
           </ul>
@@ -760,7 +760,7 @@ export function SellerApplicationPage() {
                     {document.originalName} · uploaded {formatDate(document.uploadedAt)}
                   </p>
                   {document.reviewNote ? <p className="mt-1 text-[11px] text-[#8e4630]">Reviewer: {document.reviewNote}</p> : null}
-                </div>
+            </div>
                 <Badge tone={document.status === 'accepted' ? 'forest' : document.status === 'rejected' ? 'terra' : 'sand'}>
                   {document.status === 'accepted' ? 'Accepted' : document.status === 'rejected' ? 'Rejected' : 'Awaiting review'}
                 </Badge>
@@ -804,13 +804,13 @@ export function SellerApplicationPage() {
                 <dd className={data.verification?.emailVerified ? 'text-forest' : 'text-[#8e4630]'}>
                   {data.verification?.emailVerified ? 'Confirmed' : 'Not confirmed'}
                 </dd>
-              </div>
+            </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted">Mobile</dt>
                 <dd className="text-bark">
                   {data.verification?.phoneVerified ? 'Verified' : 'Verified manually during review (SMS not configured)'}
                 </dd>
-              </div>
+            </div>
             </dl>
           </div>
           <div className="border border-line bg-paper p-5 text-[11.5px] leading-relaxed text-muted">
@@ -1027,16 +1027,16 @@ export function SellerNotificationsPage() {
                     {!row.readAt ? <span className="h-1.5 w-1.5 rounded-full bg-orchard" aria-label="Unread" /> : null}
                     <p className="text-[13px] font-medium text-ink">{row.title}</p>
                     <span className="text-[10.5px] text-muted">{formatDateTime(row.createdAt)}</span>
-                  </div>
+            </div>
                   <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{row.body}</p>
                   {row.actionUrl ? (
                     <Link to={row.actionUrl} className="mt-2 inline-block text-[11px] text-forest underline underline-offset-2">Open</Link>
                   ) : null}
-                </div>
+            </div>
                 {!row.readAt ? (
                   <Button size="sm" variant="ghost" loading={busy === row.id} onClick={() => void markRead(row.id)}>Mark read</Button>
                 ) : null}
-              </div>
+            </div>
             </li>
           ))}
         </ul>
@@ -1207,7 +1207,7 @@ export function SellerDashboardPage() {
                 <span className="rounded-full bg-[#D98263] text-white px-2 py-0.5 text-xs font-bold">
                   {data.orders.pending} pending
                 </span>
-              </div>
+            </div>
               <p className="mt-2 text-sm font-semibold text-[#172321]">
                 Orders Awaiting Confirmation
               </p>
@@ -1221,7 +1221,7 @@ export function SellerDashboardPage() {
                 className="inline-flex items-center gap-1 text-xs font-semibold text-[#D98263] hover:underline"
               >
                 <span>Process Orders</span>
-                <span>→</span>
+                <span>â†’</span>
               </Link>
             </div>
           </div>
@@ -1234,7 +1234,7 @@ export function SellerDashboardPage() {
             </div>
             <div className="mt-4 pt-3 border-t border-[#E4DACE]">
               <Link to="/seller/orders" className="text-xs font-medium text-[#66745A] hover:underline">
-                View order archive →
+                View order archive â†’
               </Link>
             </div>
           </div>
@@ -1248,7 +1248,7 @@ export function SellerDashboardPage() {
                 <span className="rounded-full bg-amber-600 text-white px-2 py-0.5 text-xs font-bold">
                   {data.products.low_stock} low
                 </span>
-              </div>
+            </div>
               <p className="mt-2 text-sm font-semibold text-[#172321]">
                 Low Stock Threshold Warning
               </p>
@@ -1259,7 +1259,7 @@ export function SellerDashboardPage() {
             <div className="mt-4 pt-3 border-t border-amber-200">
               <Link to="/seller/inventory" className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 hover:underline">
                 <span>Restock Inventory</span>
-                <span>→</span>
+                <span>â†’</span>
               </Link>
             </div>
           </div>
@@ -1272,7 +1272,7 @@ export function SellerDashboardPage() {
             </div>
             <div className="mt-4 pt-3 border-t border-[#E4DACE]">
               <Link to="/seller/inventory" className="text-xs font-medium text-[#66745A] hover:underline">
-                Audit quantities →
+                Audit quantities â†’
               </Link>
             </div>
           </div>
@@ -1311,7 +1311,7 @@ export function SellerDashboardPage() {
           </div>
           <div className="mt-4 pt-3 border-t border-[#E4DACE]">
             <Link to="/seller/application" className="text-xs font-medium text-[#172321] hover:underline">
-              Review verification records →
+              Review verification records â†’
             </Link>
           </div>
         </div>
@@ -1327,7 +1327,7 @@ export function SellerDashboardPage() {
 
         <div className="rounded-xl border border-[#E4DACE] bg-white p-5 shadow-xs">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#172321]/50">Marketplace Platform Fee (12%)</p>
-          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]/80">−{formatINR(data.finances?.commissionPaise ?? data.sales.commission)}</p>
+          <p className="mt-2 font-serif text-2xl sm:text-3xl text-[#172321]/80">âˆ’{formatINR(data.finances?.commissionPaise ?? data.sales.commission)}</p>
           <p className="mt-1.5 text-xs text-[#172321]/60">On product value after discounts</p>
         </div>
 
@@ -1351,7 +1351,7 @@ export function SellerDashboardPage() {
         <div className="rounded-xl border border-[#E4DACE] bg-[#FAF7F2] p-4 shadow-xs">
           <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[#172321]/50">Product Costs (COGS)</p>
           <p className="mt-1.5 font-serif text-xl sm:text-2xl text-[#172321]">
-            {data.finances?.hasCostData ? `−${formatINR(data.finances.cogsPaise)}` : '—'}
+            {data.finances?.hasCostData ? `âˆ’${formatINR(data.finances.cogsPaise)}` : '—'}
           </p>
           <p className="mt-1 text-[11px] text-[#172321]/60">
             {data.finances?.hasCostData ? 'Private maker production costs' : 'Set unit cost in product editor'}
@@ -1361,7 +1361,7 @@ export function SellerDashboardPage() {
         <div className="rounded-xl border border-[#E4DACE] bg-[#FAF7F2] p-4 shadow-xs">
           <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[#172321]/50">Packaging Expenses</p>
           <p className="mt-1.5 font-serif text-xl sm:text-2xl text-[#172321]">
-            {data.finances?.hasCostData ? `−${formatINR(data.finances.packagingPaise)}` : '—'}
+            {data.finances?.hasCostData ? `âˆ’${formatINR(data.finances.packagingPaise)}` : '—'}
           </p>
           <p className="mt-1 text-[11px] text-[#172321]/60">Boxes, wrapping & transit seals</p>
         </div>
@@ -1540,9 +1540,9 @@ export function SellerDashboardPage() {
               <div>
                 <h2 className="text-sm font-serif font-bold text-[#172321]">Top Performing Creations</h2>
                 <p className="text-[11px] text-[#172321]/60">Ranked by revenue generated during this {days}-day period</p>
-              </div>
+            </div>
               <Link to="/seller/products" className="text-xs text-[#D98263] font-medium hover:underline">
-                All Listings →
+                All Listings â†’
               </Link>
             </div>
             {topProducts.length ? (
@@ -1556,8 +1556,8 @@ export function SellerDashboardPage() {
                       <div>
                         <p className="text-xs font-medium text-[#172321]">{p.name}</p>
                         <p className="text-[10.5px] text-[#172321]/55">{p.unitsSold} units sold</p>
-                      </div>
-                    </div>
+            </div>
+            </div>
                     <div className="text-right">
                       <p className="text-xs font-semibold text-[#172321]">{formatINR(p.revenuePaise)}</p>
                       {p.profitPaise !== undefined && p.profitPaise > 0 ? (
@@ -1565,10 +1565,10 @@ export function SellerDashboardPage() {
                       ) : (
                         <p className="text-[10px] text-emerald-700 font-medium">In Catalogue</p>
                       )}
-                    </div>
-                  </div>
+            </div>
+            </div>
                 ))}
-              </div>
+            </div>
             ) : (
               <p className="px-5 py-8 text-center text-xs text-[#172321]/50">No sales recorded yet for this period.</p>
             )}
@@ -1580,9 +1580,9 @@ export function SellerDashboardPage() {
               <div>
                 <h2 className="text-sm font-serif font-bold text-[#172321]">Recent Fulfilment Orders</h2>
                 <p className="text-[11px] text-[#172321]/60">Direct customer orders assigned to your workshop</p>
-              </div>
+            </div>
               <Link to="/seller/orders" className="text-xs text-[#D98263] font-medium hover:underline">
-                View All Orders →
+                View All Orders â†’
               </Link>
             </div>
             {data.recentOrders.length ? (
@@ -1598,14 +1598,14 @@ export function SellerDashboardPage() {
                         <p className="text-[11px] text-[#172321]/60">
                           {order.orderNumber} · Dispatch by {order.dispatchBy ? formatDate(order.dispatchBy) : 'not scheduled'}
                         </p>
-                      </div>
+            </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <p className="text-xs font-bold text-[#172321]">{formatINR(order.totalPaise)}</p>
                           <p className="text-[10px] text-[#D98263]">Earning: {formatINR(order.earningPaise)}</p>
-                        </div>
+            </div>
                         <StatusBadge status={order.status} label={sellerOrderStatusLabel(order.status)} />
-                      </div>
+            </div>
                     </Link>
                   </li>
                 ))}
@@ -1623,26 +1623,26 @@ export function SellerDashboardPage() {
             <div className="flex items-center justify-between border-b border-[#E4DACE] pb-3">
               <h2 className="text-sm font-serif font-bold text-[#172321]">Payout & Ledger Status</h2>
               <Link to="/seller/earnings" className="text-xs text-[#D98263] hover:underline">
-                Ledger Details →
+                Ledger Details â†’
               </Link>
             </div>
             <dl className="mt-4 space-y-3 text-xs">
               <div className="flex items-center justify-between border-b border-[#E4DACE]/60 pb-2.5">
                 <dt className="text-[#172321]/60">Ledger Pending (in return window)</dt>
                 <dd className="font-semibold text-[#172321]">{formatINR(data.ledger.pending)}</dd>
-              </div>
+            </div>
               <div className="flex items-center justify-between border-b border-[#E4DACE]/60 pb-2.5">
                 <dt className="text-[#172321]/60">Eligible For Settlement</dt>
                 <dd className="font-semibold text-emerald-700">{formatINR(data.ledger.eligible)}</dd>
-              </div>
+            </div>
               <div className="flex items-center justify-between border-b border-[#E4DACE]/60 pb-2.5">
                 <dt className="text-[#172321]/60">Settled to Date</dt>
                 <dd className="font-semibold text-[#172321]">{formatINR(data.ledger.settled)}</dd>
-              </div>
+            </div>
               <div className="flex items-center justify-between">
                 <dt className="text-[#172321]/60">Pending Settlement Batches</dt>
                 <dd className="font-semibold text-[#D98263]">{data.settlement.pending_batches} batch</dd>
-              </div>
+            </div>
             </dl>
           </section>
 
@@ -1658,9 +1658,9 @@ export function SellerDashboardPage() {
                   <div>
                     <p className="font-medium text-[#172321]">{item.label}</p>
                     <p className="text-[10.5px] text-[#172321]/60">{item.detail}</p>
-                  </div>
+            </div>
                   <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide shrink-0">
-                    {item.status === 'complete' ? '✓ Verified' : 'Pending'}
+                    {item.status === 'complete' ? 'âœ“ Verified' : 'Pending'}
                   </span>
                 </li>
               ))}
@@ -1757,16 +1757,16 @@ export function SellerProductsPage() {
                       <div className="flex items-start gap-3">
                         <div className="h-12 w-12 shrink-0 overflow-hidden bg-sand/40">
                           {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-cover" /> : null}
-                        </div>
+            </div>
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <Link to={`/seller/products/${product.id}/edit`} className="font-medium text-forest hover:text-terra">{product.name}</Link>
                             {product.isDemo ? <DemoBadge /> : null}
-                          </div>
+            </div>
                           <p className="text-[10.5px] text-muted">{product.sku} · {product.categoryName}</p>
                           {product.moderationNote ? <p className="mt-1 max-w-xs text-[10.5px] text-[#8e4630]">Reviewer: {product.moderationNote}</p> : product.rejectionReason ? <p className="mt-1 max-w-xs text-[10.5px] text-terra">{product.rejectionReason}</p> : null}
-                        </div>
-                      </div>
+            </div>
+            </div>
                     </td>
                     <td className="px-4 py-4"><StatusBadge status={product.workflowStatus ?? product.status} label={PRODUCT_WORKFLOW_LABELS[product.workflowStatus ?? product.status]} /></td>
                     <td className="px-4 py-4">{formatINR(product.pricePaise)}</td>
@@ -1790,7 +1790,7 @@ export function SellerProductsPage() {
                         {product.status !== 'archived' ? (
                           <Button size="sm" variant="ghost" onClick={() => void act(product, 'archive')}>Archive</Button>
                         ) : null}
-                      </div>
+            </div>
                     </td>
                   </tr>
                 ))}
@@ -2125,7 +2125,7 @@ export function SellerProductEditorPage() {
     }
 
     if (!form.priceRupees || Number(form.priceRupees) < 1) {
-      setFields({ pricePaise: 'Set a valid selling price (at least ₹1).' });
+      setFields({ pricePaise: 'Set a valid selling price (at least â‚¹1).' });
       toast.push('Please set a customer selling price.', 'error');
       setActiveStep(5);
       return;
@@ -2259,12 +2259,12 @@ export function SellerProductEditorPage() {
       if (shouldSubmit && targetProductId) {
         try {
           await api(`/seller/products/${targetProductId}/submit`, { method: 'POST' });
-          toast.push('🎉 Product created, photos uploaded, and submitted for review!');
+          toast.push('ðŸŽ‰ Product created, photos uploaded, and submitted for review!');
         } catch (subErr) {
           toast.push(`Product saved, but review submission note: ${errorMessage(subErr)}`, 'error');
         }
       } else {
-        toast.push(isNew ? '✓ Product draft created with photos and stock saved!' : '✓ Product updated successfully!');
+        toast.push(isNew ? 'âœ“ Product draft created with photos and stock saved!' : 'âœ“ Product updated successfully!');
       }
 
       await queryClient.invalidateQueries({ queryKey: ['seller-products'] });
@@ -2322,18 +2322,18 @@ export function SellerProductEditorPage() {
   const unitMarginPercent = priceNum > 0 ? ((unitProfitNum / priceNum) * 100).toFixed(1) : '0.0';
 
   const steps = [
-    { num: 1, label: 'Basics & Category', icon: '🏷️' },
-    { num: 2, label: 'Photos & Gallery', icon: '📷', count: existingImages.length + pendingPhotos.length },
-    { num: 3, label: 'Himachal Provenance', icon: '🏔️' },
-    { num: 4, label: 'Story & Description', icon: '✍️' },
-    { num: 5, label: 'Pricing & Profit', icon: '💰' },
-    { num: 6, label: 'Stock & Fulfilment', icon: '📦' },
+    { num: 1, label: 'Basics & Category', icon: 'ðŸ·ï¸' },
+    { num: 2, label: 'Photos & Gallery', icon: 'ðŸ“·', count: existingImages.length + pendingPhotos.length },
+    { num: 3, label: 'Himachal Provenance', icon: 'ðŸ”ï¸' },
+    { num: 4, label: 'Story & Description', icon: 'âœï¸' },
+    { num: 5, label: 'Pricing & Profit', icon: 'ðŸ’°' },
+    { num: 6, label: 'Stock & Fulfilment', icon: 'ðŸ“¦' },
     ...(complianceGroup !== 'general'
       ? [
           {
             num: 7,
             label: complianceGroup === 'food' ? 'Food compliance' : 'Category requirements',
-            icon: '📋',
+            icon: 'ðŸ“‹',
           },
         ]
       : []),
@@ -2368,7 +2368,7 @@ export function SellerProductEditorPage() {
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <LinkButton to="/seller/products" variant="secondary" size="sm">
-              ← Back to Catalogue
+              â† Back to Catalogue
             </LinkButton>
             {!isNew && current?.status === 'approved' ? (
               <LinkButton to={`/shop/${current.slug}`} size="sm" variant="secondary">
@@ -2396,7 +2396,7 @@ export function SellerProductEditorPage() {
               onClick={() => void saveProduct(true)}
               className="bg-[#D98263] text-white hover:bg-[#c26e50] border-transparent font-medium shadow-xs"
             >
-              ✓ {isNew ? 'Create & Submit' : 'Save & Submit'}
+              âœ“ {isNew ? 'Create & Submit' : 'Save & Submit'}
             </Button>
           </div>
         </div>
@@ -2435,7 +2435,7 @@ export function SellerProductEditorPage() {
                   <div className="min-w-0">
                     <p className="text-[10px] uppercase tracking-wider opacity-60">Step {s.num}</p>
                     <p className="truncate font-medium">{s.label}</p>
-                  </div>
+            </div>
                   {s.count !== undefined && s.count > 0 ? (
                     <span className="ml-auto inline-flex items-center justify-center rounded-full bg-[#172321]/10 px-1.5 text-[10px] font-bold text-[#172321]">
                       {s.count}
@@ -2478,8 +2478,8 @@ export function SellerProductEditorPage() {
                 <div>
                   <h2 className="text-lg font-serif font-bold text-[#172321]">Core Essentials & Category</h2>
                   <p className="text-xs text-[#172321]/60">Product title, unique SKU identifier, unit of sale, and category</p>
-                </div>
-              </div>
+            </div>
+            </div>
               <span className="rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium">
                 Mandatory
               </span>
@@ -2511,7 +2511,7 @@ export function SellerProductEditorPage() {
                     ))}
                     {categories.data?.subcategories.map((c) => (
                       <option key={c.id} value={c.id}>
-                        ↳ {c.name}
+                        â†³ {c.name}
                       </option>
                     ))}
                   </Select>
@@ -2527,19 +2527,19 @@ export function SellerProductEditorPage() {
                       onClick={generateAutoSku}
                       className="text-[11px] font-semibold text-[#D98263] hover:underline flex items-center gap-1"
                     >
-                      ✨ Auto-generate SKU
+                      âœ¨ Auto-generate SKU
                     </button>
-                  </div>
+            </div>
                   <div className="mt-1">
                     <Input
                       value={form.sku}
                       onChange={(event) => setForm({ ...form, sku: event.target.value.toUpperCase() })}
                       placeholder="e.g. HR-APPL-4921"
                     />
-                  </div>
+            </div>
                   <p className="mt-1 text-[11px] text-[#172321]/55">Leave blank to auto-generate from product name.</p>
-                </div>
-              </div>
+            </div>
+            </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Unit of Sale" required hint="e.g. 1 kg box, piece, 500 g jar, pair, set of 4">
@@ -2558,7 +2558,7 @@ export function SellerProductEditorPage() {
                     placeholder="e.g. 1500 (for 1.5 kg)"
                   />
                 </Field>
-              </div>
+            </div>
             </div>
           </section>
         )}
@@ -2578,8 +2578,8 @@ export function SellerProductEditorPage() {
                   <p className="text-xs text-[#172321]/60">
                     Add clear, high-resolution photographs. First image acts as the primary catalogue cover. Up to 6 photos.
                   </p>
-                </div>
-              </div>
+            </div>
+            </div>
               <span className="rounded-full bg-[#172321]/10 px-2.5 py-0.5 text-xs font-semibold text-[#172321]">
                 {existingImages.length + pendingPhotos.length} / 6 Photos
               </span>
@@ -2610,13 +2610,13 @@ export function SellerProductEditorPage() {
                           onClick={() => void deleteExistingImage(img.id)}
                           className="mt-1 text-[10.5px] font-medium text-[#D98263] hover:underline"
                         >
-                          ✕ Delete
+                          âœ• Delete
                         </button>
-                      </div>
-                    </div>
+            </div>
+            </div>
                   ))}
-                </div>
-              </div>
+            </div>
+            </div>
             )}
 
             {/* Pending Queued Photographs (Selected for upload) */}
@@ -2636,7 +2636,7 @@ export function SellerProductEditorPage() {
                       Upload Now
                     </Button>
                   )}
-                </div>
+            </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                   {pendingPhotos.map((photo, pIdx) => (
                     <div
@@ -2658,20 +2658,20 @@ export function SellerProductEditorPage() {
                             onClick={() => removePendingPhoto(photo.id)}
                             className="text-[10px] text-red-600 font-semibold hover:underline"
                           >
-                            ✕ Remove
+                            âœ• Remove
                           </button>
-                        </div>
-                      </div>
-                    </div>
+            </div>
+            </div>
+            </div>
                   ))}
-                </div>
+            </div>
                 {isNew && (
                   <p className="mt-2 text-[11px] text-[#66745A]">
-                    ✓ These {pendingPhotos.length} photograph{pendingPhotos.length === 1 ? '' : 's'} will be uploaded
+                    âœ“ These {pendingPhotos.length} photograph{pendingPhotos.length === 1 ? '' : 's'} will be uploaded
                     automatically when you save the product below!
                   </p>
                 )}
-              </div>
+            </div>
             )}
 
             {/* Interactive Drag & Drop Zone */}
@@ -2713,8 +2713,8 @@ export function SellerProductEditorPage() {
                   }}
                 />
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#D98263]/15 text-[#D98263] text-2xl shadow-inner">
-                  📸
-                </div>
+                  ðŸ“¸
+            </div>
                 <h3 className="mt-3 text-sm font-semibold text-[#172321]">
                   Click to browse or drag and drop photographs here
                 </h3>
@@ -2722,12 +2722,12 @@ export function SellerProductEditorPage() {
                   Select 1 to {6 - existingImages.length - pendingPhotos.length} high-quality images · JPG, PNG, or WebP up to 8MB
                 </p>
                 <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-medium text-[#172321] border border-[#E4DACE] shadow-xs">
-                  <span>📁 Choose Photos</span>
-                </div>
-              </div>
+                  <span>ðŸ“ Choose Photos</span>
+            </div>
+            </div>
             ) : (
               <p className="mt-4 text-xs text-center text-[#66745A] font-medium bg-[#FAF7F2] p-3 rounded-xl border border-[#E4DACE]">
-                ✓ Maximum 6 photographs reached. Delete an existing image to upload an alternate.
+                âœ“ Maximum 6 photographs reached. Delete an existing image to upload an alternate.
               </p>
             )}
           </section>
@@ -2748,8 +2748,8 @@ export function SellerProductEditorPage() {
                   <p className="text-xs text-[#172321]/60">
                     Geographic origin, artisan collective, harvest plucking season, and materials
                   </p>
-                </div>
-              </div>
+            </div>
+            </div>
               <span className="rounded-full bg-[#66745A]/15 text-[#66745A] px-2.5 py-0.5 text-xs font-semibold">
                 Authenticity Seal
               </span>
@@ -2859,7 +2859,7 @@ export function SellerProductEditorPage() {
                   value={form.dimensions}
                   onChange={(event) => setForm({ ...form, dimensions: event.target.value })}
                   invalid={Boolean(fields.dimensions)}
-                  placeholder="e.g. 200 × 100 cm (Shawl) or 30 × 20 cm box"
+                  placeholder="e.g. 200 Ã— 100 cm (Shawl) or 30 Ã— 20 cm box"
                 />
               </Field>
 
@@ -2895,8 +2895,8 @@ export function SellerProductEditorPage() {
                   <p className="text-xs text-[#172321]/60">
                     Tell the heritage behind your creation, why buyers love it, and what makes it special
                   </p>
-                </div>
-              </div>
+            </div>
+            </div>
               <span className="text-xs text-[#172321]/50 font-mono">
                 {form.description.length} characters
               </span>
@@ -2933,7 +2933,7 @@ export function SellerProductEditorPage() {
                 <div className="flex items-center justify-between mt-1 text-[10.5px] text-[#172321]/50">
                   <span>Recommended: at least 80 characters for public moderation approval.</span>
                   <span>{form.description.length} / 6000</span>
-                </div>
+            </div>
               </Field>
             </div>
           </section>
@@ -2954,8 +2954,8 @@ export function SellerProductEditorPage() {
                   <p className="text-xs text-[#172321]/60">
                     Set your buyer pricing and enter confidential direct costs to see your live profit per unit
                   </p>
-                </div>
-              </div>
+            </div>
+            </div>
               <span className="rounded-full bg-[#172321] text-white px-2.5 py-0.5 text-xs font-semibold">
                 Private Ledger
               </span>
@@ -2963,7 +2963,7 @@ export function SellerProductEditorPage() {
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Field
-                label="Customer Selling Price (₹)"
+                label="Customer Selling Price (â‚¹)"
                 required
                 error={fields.pricePaise}
                 hint="Price the buyer pays (all taxes inclusive)"
@@ -2978,7 +2978,7 @@ export function SellerProductEditorPage() {
                 />
               </Field>
 
-              <Field label="Original Compare-At Price (₹ MRP)" hint="Optional strike-through retail price">
+              <Field label="Original Compare-At Price (â‚¹ MRP)" hint="Optional strike-through retail price">
                 <Input
                   inputMode="decimal"
                   value={form.compareAtRupees}
@@ -2988,7 +2988,7 @@ export function SellerProductEditorPage() {
               </Field>
 
               <Field
-                label="Your Direct Production Cost (COGS, ₹)"
+                label="Your Direct Production Cost (COGS, â‚¹)"
                 hint="Private to you: raw materials, plucking, weaving, or crafting cost"
               >
                 <Input
@@ -3000,7 +3000,7 @@ export function SellerProductEditorPage() {
               </Field>
 
               <Field
-                label="Packaging & Box Cost (₹)"
+                label="Packaging & Box Cost (â‚¹)"
                 hint="Private to you: cartons, cushioning liners, seal tape"
               >
                 <Input
@@ -3019,52 +3019,43 @@ export function SellerProductEditorPage() {
                   Live Unit Margin & Profit Calculator
                 </span>
                 <span className="text-[11px] font-medium text-[#66745A]">
-                  🔒 Completely confidential — Never shown to customers
+                  ðŸ”’ Completely confidential — Never shown to customers
                 </span>
-              </div>
+            </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 text-center">
                 <div className="rounded-xl border border-[#E4DACE] bg-white p-3 shadow-xs">
                   <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Selling Price</p>
                   <p className="mt-1 font-serif text-lg font-bold text-[#172321]">
-                    ₹{form.priceRupees || '0'}
+                    â‚¹{form.priceRupees || '0'}
                   </p>
-                </div>
+            </div>
 
                 <div className="rounded-xl border border-[#E4DACE] bg-white p-3 shadow-xs">
                   <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Platform Fee ({percentFromBp(commissionBp)})</p>
                   <p className="mt-1 font-serif text-lg font-bold text-[#172321]/70">
-                    −₹{commissionNum.toFixed(2)}
+                    âˆ’â‚¹{commissionNum.toFixed(2)}
                   </p>
-                </div>
+            </div>
 
                 <div className="rounded-xl border border-[#E4DACE] bg-white p-3 shadow-xs">
                   <p className="text-[10px] uppercase font-semibold text-[#172321]/50">Your Direct Costs</p>
                   <p className="mt-1 font-serif text-lg font-bold text-[#172321]/70">
-                    −₹{(cogsNum + pkgNum).toFixed(2)}
+                    âˆ’â‚¹{(cogsNum + pkgNum).toFixed(2)}
                   </p>
-                </div>
+            </div>
 
                 <div className="rounded-xl border border-[#D98263]/50 bg-white p-3 shadow-xs">
                   <p className="text-[10px] uppercase font-bold text-[#D98263]">Est. Profit / Unit</p>
                   <p className="mt-1 font-serif text-xl font-bold text-[#D98263]">
-                    ₹{unitProfitNum.toFixed(2)}
+                    â‚¹{unitProfitNum.toFixed(2)}
                   </p>
                   <p className="text-[10px] font-bold text-[#66745A] mt-0.5">
                     {unitMarginPercent}% margin
                   </p>
-                </div>
-              </div>
 
-              {/* Heavy Produce & Harvest Crate Guidance */}
-              <div className="mt-4 rounded-xl border border-[#66745A]/25 bg-white/70 p-3.5 text-[11px] leading-relaxed text-[#172321]/75">
-                <p className="font-semibold text-[#172321] flex items-center gap-1.5">
-                  <span>🍎</span> Fresh Harvest &amp; Heavy Goods Strategy (Apples, Walnuts, Pulses)
-                </p>
-                <p className="mt-1">
-                  For fresh orchard produce and heavy goods, list in standard farm-fresh packs (e.g. 2.5 kg trial box at ₹699 or 5 kg harvest crate at ₹1,299) with built-in protective packaging. Customers enjoy complimentary delivery over ₹699 while preserving strong farm margins.
-                </p>
-              </div>
+            </div>
+            </div>
             </div>
           </section>
         )}
@@ -3084,8 +3075,8 @@ export function SellerProductEditorPage() {
                   <p className="text-xs text-[#172321]/60">
                     Keep stock honest. Only list units you have ready to dispatch.
                   </p>
-                </div>
-              </div>
+            </div>
+            </div>
               <span className="rounded-full bg-[#172321]/10 px-2.5 py-0.5 text-xs font-semibold text-[#172321]">
                 Stock Control
               </span>
@@ -3141,8 +3132,8 @@ export function SellerProductEditorPage() {
                     {complianceGuide.label}
                   </h2>
                   <p className="text-xs text-[#172321]/60">{complianceGuide.summary}</p>
-                </div>
-              </div>
+            </div>
+            </div>
               <span className="rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-semibold">
                 Reviewed before publication
               </span>
@@ -3270,7 +3261,7 @@ export function SellerProductEditorPage() {
                   <Button type="button" variant="secondary" size="sm" className="mt-3" onClick={() => setActiveStep(3)}>
                     Edit provenance details
                   </Button>
-                </div>
+            </div>
               ) : null}
             </div>
 
@@ -3316,7 +3307,7 @@ export function SellerProductEditorPage() {
               onClick={() => void saveProduct(true)}
               className="bg-[#D98263] text-white hover:bg-[#c26e50] border-transparent font-semibold shadow-xs"
             >
-              ✓ {isNew ? 'Create & Submit for Review' : 'Save & Submit for Review'}
+              âœ“ {isNew ? 'Create & Submit for Review' : 'Save & Submit for Review'}
             </Button>
           </div>
         </div>
@@ -3455,9 +3446,10 @@ export function SellerOrderDetailPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('Out of stock / harvest damaged');
   const [rejectDetails, setRejectDetails] = useState('');
-  const [carrier, setCarrier] = useState('');
-  const [trackingNumber, setTrackingNumber] = useState('');
-  const [trackingUrl, setTrackingUrl] = useState('');
+  const [pkgLength, setPkgLength] = useState('20');
+  const [pkgBreadth, setPkgBreadth] = useState('15');
+  const [pkgHeight, setPkgHeight] = useState('10');
+  const [pkgWeight, setPkgWeight] = useState('500');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const order = useQuery({
@@ -3472,16 +3464,35 @@ export function SellerOrderDetailPage() {
     await queryClient.invalidateQueries({ queryKey: ['seller-dashboard'] });
   };
 
+  const arrangeShipping = async () => {
+    setBusy(true);
+    try {
+      await api(`/seller/orders/${id}/shipping/arrange`, {
+        method: 'POST',
+        body: {
+          length: Number(pkgLength) || 20,
+          breadth: Number(pkgBreadth) || 15,
+          height: Number(pkgHeight) || 10,
+          weight: Number(pkgWeight) || 500,
+        },
+      });
+      setShipOpen(false);
+      toast.push('ðŸšš Shipment booked via Shiprocket! AWB & pickup scheduled.');
+      await refresh();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const act = async (action: string, customNote?: string) => {
     setBusy(true);
     try {
       const finalNote = customNote !== undefined ? customNote : note;
       await api(`/seller/orders/${id}/action`, {
         method: 'POST',
-        body:
-          action === 'ship'
-            ? { action, carrier, trackingNumber, trackingUrl: trackingUrl || undefined, note: finalNote || undefined }
-            : { action, note: finalNote || undefined },
+        body: { action, note: finalNote || undefined },
       });
       setShipOpen(false);
       setRejectOpen(false);
@@ -3512,10 +3523,10 @@ export function SellerOrderDetailPage() {
         {data.status === 'pending' ? (
           <>
             <Button onClick={() => void act('accept')} loading={busy} className="bg-[#66745A] hover:bg-[#525E48] text-white">
-              ✓ Accept Order
+              âœ“ Accept Order
             </Button>
             <Button variant="danger" onClick={() => setRejectOpen(true)}>
-              ✕ Reject Order
+              âœ• Reject Order
             </Button>
           </>
         ) : null}
@@ -3569,7 +3580,7 @@ export function SellerOrderDetailPage() {
                   <div className="flex-1">
                     <p className="text-sm text-ink">{item.name}</p>
                     <p className="text-[11px] text-muted">SKU {item.sku} · Qty {item.quantity} · {formatINR(item.unitPricePaise)} each</p>
-                  </div>
+            </div>
                   <p className="text-sm">{formatINR(item.lineSubtotalPaise)}</p>
                 </li>
               ))}
@@ -3579,11 +3590,11 @@ export function SellerOrderDetailPage() {
             <h2 className="text-lg">Payment & platform fee</h2>
             <dl className="mt-4 space-y-2 text-[12.5px]">
               <div className="flex justify-between"><dt className="text-muted">Product value</dt><dd>{formatINR(data.subtotalPaise)}</dd></div>
-              {data.discountPaise ? <div className="flex justify-between"><dt className="text-muted">Discount</dt><dd>−{formatINR(data.discountPaise)}</dd></div> : null}
+              {data.discountPaise ? <div className="flex justify-between"><dt className="text-muted">Discount</dt><dd>âˆ’{formatINR(data.discountPaise)}</dd></div> : null}
               <div className="flex justify-between"><dt className="text-muted">Shipping (marketplace)</dt><dd>{formatINR(data.shippingPaise)}</dd></div>
               {data.taxPaise ? <div className="flex justify-between"><dt className="text-muted">Tax included</dt><dd>{formatINR(data.taxPaise)}</dd></div> : null}
               <div className="flex justify-between border-t border-line pt-2"><dt className="text-muted">Buyer paid</dt><dd>{formatINR(data.totalPaise)}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Platform Fee ({percentFromBp(data.commissionRateBp)})</dt><dd>−{formatINR(data.commissionPaise)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Platform Fee ({percentFromBp(data.commissionRateBp)})</dt><dd>âˆ’{formatINR(data.commissionPaise)}</dd></div>
               <div className="flex justify-between border-t border-line pt-2 font-medium"><dt>Your earning</dt><dd>{formatINR(data.earningPaise)}</dd></div>
             </dl>
             <p className="mt-3 text-[11px] leading-relaxed text-muted">{data.commissionNote}</p>
@@ -3629,19 +3640,23 @@ export function SellerOrderDetailPage() {
         </aside>
       </div>
 
-      {/* Carrier Tracking Modal */}
+      {/* Shiprocket Auto-Booking Modal */}
       <Modal
         open={shipOpen}
         onClose={() => setShipOpen(false)}
-        title="Dispatch this shipment"
-        footer={<><Button variant="ghost" onClick={() => setShipOpen(false)}>Cancel</Button><Button loading={busy} onClick={() => void act('ship')}>Record dispatch</Button></>}
+        title="Book Shipment via Shiprocket"
+        footer={<><Button variant="ghost" onClick={() => setShipOpen(false)}>Cancel</Button><Button loading={busy} onClick={() => void arrangeShipping()} className="bg-[#66745A] hover:bg-[#525E48] text-white">🚚 Book Courier Now</Button></>}
       >
         <div className="space-y-4">
-          <Alert tone="info">This build does not create a carrier label. Enter the carrier and tracking reference from your own dispatch process.</Alert>
-          <Field label="Carrier" required><Input value={carrier} onChange={(event) => setCarrier(event.target.value)} placeholder="e.g. India Post, Delhivery" /></Field>
-          <Field label="Tracking number" required><Input value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} /></Field>
-          <Field label="Tracking URL" hint="Optional"><Input type="url" value={trackingUrl} onChange={(event) => setTrackingUrl(event.target.value)} placeholder="https://" /></Field>
-          <Field label="Internal note" hint="Optional"><Textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} /></Field>
+          <Alert tone="info">Shiprocket will automatically assign a courier, generate an AWB number, and schedule a pickup from your registered address.</Alert>
+          <p className="text-[12px] font-semibold text-[#172321]">Package dimensions &amp; weight</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Length (cm)" required><Input type="number" value={pkgLength} onChange={(event) => setPkgLength(event.target.value)} placeholder="20" /></Field>
+            <Field label="Breadth (cm)" required><Input type="number" value={pkgBreadth} onChange={(event) => setPkgBreadth(event.target.value)} placeholder="15" /></Field>
+            <Field label="Height (cm)" required><Input type="number" value={pkgHeight} onChange={(event) => setPkgHeight(event.target.value)} placeholder="10" /></Field>
+            <Field label="Weight (grams)" required><Input type="number" value={pkgWeight} onChange={(event) => setPkgWeight(event.target.value)} placeholder="500" /></Field>
+          </div>
+          <p className="text-[11px] text-muted">After booking, order status updates to Shipped and the AWB tracking number appears below.</p>
         </div>
       </Modal>
 
@@ -3725,17 +3740,17 @@ export function SellerOrderDetailPage() {
             <p className="font-semibold text-[#172321] uppercase tracking-wide text-[10.5px]">Before dispatch</p>
             <div className="grid sm:grid-cols-3 gap-2 text-[11px] text-[#172321]/80">
               <div className="flex items-center gap-2">
-                <span className="font-bold">☐</span>
+                <span className="font-bold">â˜</span>
                 <span>Match every SKU and quantity</span>
-              </div>
+            </div>
               <div className="flex items-center gap-2">
-                <span className="font-bold">☐</span>
+                <span className="font-bold">â˜</span>
                 <span>Pack to protect the item in transit</span>
-              </div>
+            </div>
               <div className="flex items-center gap-2">
-                <span className="font-bold">☐</span>
+                <span className="font-bold">â˜</span>
                 <span>Record the real carrier and tracking number</span>
-              </div>
+            </div>
             </div>
           </div>
 
@@ -3800,7 +3815,7 @@ export function SellerOrderDetailPage() {
 interface EarningsResponse {
   entries: { id: string; type: string; amountPaise: number; status: string; reference: string; note: string | null; availableAt: string | null; createdAt: string; orderNumber: string | null }[];
   totals: { pending: number; eligible: number; settled: number; reversed: number };
-  commissions: { sellerOrderId: string; basisPaise: number; rateBp: number; amountPaise: number; createdAt: string }[];
+  commissions?: { sellerOrderId: string; basisPaise: number; rateBp: number; amountPaise: number; createdAt: string }[];
   settlements: { id: string; reference: string; periodStart: string; periodEnd: string; netPaise: number; status: string; paidAt: string | null; providerReference: string | null }[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
   commissionNote: string;
@@ -3846,7 +3861,7 @@ export function SellerEarningsPage() {
                 {data.settlements.map((settlement) => (
                   <tr key={settlement.id}>
                     <td className="px-4 py-3 text-forest">{settlement.reference}</td>
-                    <td className="px-4 py-3">{formatDate(settlement.periodStart)} – {formatDate(settlement.periodEnd)}</td>
+                    <td className="px-4 py-3">{formatDate(settlement.periodStart)} â€“ {formatDate(settlement.periodEnd)}</td>
                     <td className="px-4 py-3">{formatINR(settlement.netPaise)}</td>
                     <td className="px-4 py-3"><StatusBadge status={settlement.status} /></td>
                     <td className="px-4 py-3 text-muted">{settlement.providerReference ?? (settlement.status === 'paid' ? 'Recorded' : '—')}</td>
@@ -3887,9 +3902,9 @@ export function SellerEarningsPage() {
       <section className="border border-line bg-surface p-5">
         <h2 className="text-xl">Platform fee entries</h2>
         <p className="mt-1 text-[11px] text-muted">{data.commissionNote}</p>
-        {data.commissions.length ? (
+        {data.commissions?.length ? (
           <ul className="mt-4 divide-y divide-line text-[12.5px]">
-            {data.commissions.map((commission) => (
+            {data.commissions?.map((commission) => (
               <li key={`${commission.sellerOrderId}-${commission.createdAt}`} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
                 <span className="text-muted">{formatDate(commission.createdAt)} · basis {formatINR(commission.basisPaise)} · {percentFromBp(commission.rateBp)}</span>
                 <span>{formatINR(commission.amountPaise)}</span>
@@ -3929,7 +3944,7 @@ export function SellerRequestsPage() {
                   <p className="mt-1 text-[12px] text-ink/70">{request.reason}</p>
                   {request.description ? <p className="mt-1 text-[11.5px] text-muted">{request.description}</p> : null}
                   <p className="text-[11px] text-muted">{formatDate(request.created_at)}</p>
-                </div>
+            </div>
                 <StatusBadge status={request.status} />
               </li>
             ))}
@@ -3946,7 +3961,7 @@ export function SellerRequestsPage() {
                   <p className="text-[13px] font-medium text-forest">{request.order_number}</p>
                   <p className="mt-1 text-[12px] text-ink/70">{request.reason}</p>
                   <p className="text-[11px] text-muted">{formatDate(request.created_at)}</p>
-                </div>
+            </div>
                 <StatusBadge status={request.status} />
               </li>
             ))}
@@ -4112,7 +4127,7 @@ export function SellerProfilePage() {
               ) : (
                 <div className="flex h-full w-full items-center justify-center font-serif text-2xl">
                   {savedSeller.businessName.slice(0, 2).toUpperCase()}
-                </div>
+            </div>
               )}
             </div>
             <div>
@@ -4200,11 +4215,11 @@ export function SellerProfilePage() {
                 <div>
                   <p className="font-medium text-ink">{document.originalName}</p>
                   <p className="text-[11px] text-muted">{document.docType.replaceAll('_', ' ')} · {formatDate(document.uploadedAt)}</p>
-                </div>
+            </div>
                 <div className="flex items-center gap-3">
                   <StatusBadge status={document.status} />
                   <a href={`/api/seller/documents/${document.id}/file`} target="_blank" rel="noreferrer" className="text-[11px] text-forest underline underline-offset-2">Open</a>
-                </div>
+            </div>
               </li>
             ))}
           </ul>

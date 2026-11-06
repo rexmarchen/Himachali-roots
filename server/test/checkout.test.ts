@@ -3,6 +3,7 @@ import type { Express } from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { closeDb, execute, queryAll, queryOne, type Db } from '../db.js';
+import { env } from '../env.js';
 import {
   ADDRESS,
   IDS,
@@ -293,5 +294,139 @@ describe('checkout', () => {
 
     const afterPaid = await mutate(customer.post(`/api/orders/${orderNumber}/payment`)).send({});
     expect(afterPaid.status).toBe(409);
+  });
+});
+
+describe('payment verification and obsolete route deprecation', () => {
+  const originalKeyId = env.razorpay.keyId;
+  const originalKeySecret = env.razorpay.keySecret;
+  const TEST_KEY_SECRET = 'test_secret_key_for_hmac_sha256_32char';
+
+  beforeEach(() => {
+    (env.razorpay as any).keyId = 'rzp_test_mock_key';
+    (env.razorpay as any).keySecret = TEST_KEY_SECRET;
+  });
+
+  afterAll(() => {
+    (env.razorpay as any).keyId = originalKeyId;
+    (env.razorpay as any).keySecret = originalKeySecret;
+  });
+
+  it('verifies valid HMAC signature, transitions order to paid, and is idempotent on duplicate replay', async () => {
+    const customer = await login(app, 'customer@test.local');
+    await addToCart(app, customer, IDS.product, 1);
+    const created = await checkout(app, customer);
+    const orderId = created.body.order.id as string;
+    const razorpayOrderId = 'order_rzp_mock_12345';
+    const razorpayPaymentId = 'pay_rzp_mock_67890';
+
+    execute(
+      db,
+      'UPDATE payments SET provider_order_id = ?, provider = ? WHERE order_id = ?',
+      razorpayOrderId,
+      'razorpay',
+      orderId,
+    );
+
+    const validSignature = crypto
+      .createHmac('sha256', TEST_KEY_SECRET)
+      .update(razorpayOrderId + '|' + razorpayPaymentId)
+      .digest('hex');
+
+    const firstVerify = await mutate(customer.post('/api/payments/verify')).send({
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature: validSignature,
+    });
+
+    expect(firstVerify.status).toBe(200);
+    expect(firstVerify.body.alreadyProcessed).toBe(false);
+    expect(firstVerify.body.order.status).toBe('paid');
+
+    const replayVerify = await mutate(customer.post('/api/payments/verify')).send({
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature: validSignature,
+    });
+
+    expect(replayVerify.status).toBe(200);
+    expect(replayVerify.body.alreadyProcessed).toBe(true);
+    expect(replayVerify.body.order.status).toBe('paid');
+  });
+
+  it('rejects tampered or invalid Razorpay payment signature', async () => {
+    const customer = await login(app, 'customer@test.local');
+    await addToCart(app, customer, IDS.product, 1);
+    const created = await checkout(app, customer);
+    const orderId = created.body.order.id as string;
+    const razorpayOrderId = 'order_rzp_mock_invalid_sig';
+    const razorpayPaymentId = 'pay_rzp_mock_invalid_sig';
+
+    execute(
+      db,
+      'UPDATE payments SET provider_order_id = ?, provider = ? WHERE order_id = ?',
+      razorpayOrderId,
+      'razorpay',
+      orderId,
+    );
+
+    const tamperedSignature = crypto
+      .createHmac('sha256', 'wrong_secret')
+      .update(razorpayOrderId + '|' + razorpayPaymentId)
+      .digest('hex');
+
+    const response = await mutate(customer.post('/api/payments/verify')).send({
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature: tamperedSignature,
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toContain('Payment signature verification failed');
+  });
+
+  it('prevents cross-user payment verification by rejecting unauthorized customers', async () => {
+    const customer = await login(app, 'customer@test.local');
+    const otherCustomer = await login(app, 'other@test.local');
+    await addToCart(app, customer, IDS.product, 1);
+    const created = await checkout(app, customer);
+    const orderId = created.body.order.id as string;
+    const razorpayOrderId = 'order_rzp_cross_user';
+    const razorpayPaymentId = 'pay_rzp_cross_user';
+
+    execute(
+      db,
+      'UPDATE payments SET provider_order_id = ?, provider = ? WHERE order_id = ?',
+      razorpayOrderId,
+      'razorpay',
+      orderId,
+    );
+
+    const signature = crypto
+      .createHmac('sha256', TEST_KEY_SECRET)
+      .update(razorpayOrderId + '|' + razorpayPaymentId)
+      .digest('hex');
+
+    const response = await mutate(otherCustomer.post('/api/payments/verify')).send({
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature: signature,
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.message).toContain('does not belong to your account');
+  });
+
+  it('confirms deprecated unauthenticated payment endpoints return 404', async () => {
+    const customer = await login(app, 'customer@test.local');
+    const resCreate = await mutate(customer.post('/api/create-order')).send({ amount: 100 });
+    expect(resCreate.status).toBe(404);
+
+    const resVerify = await mutate(customer.post('/api/verify-payment')).send({
+      razorpay_order_id: 'rzp_1',
+      razorpay_payment_id: 'rzp_2',
+      razorpay_signature: 'sig',
+    });
+    expect(resVerify.status).toBe(404);
   });
 });

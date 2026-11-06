@@ -96,11 +96,11 @@ export function ShopPage() {
   });
 
   return (
-    <div className="mx-auto max-w-[88rem] px-4 py-8 sm:px-6 lg:px-8 xl:px-10 lg:py-12">
+    <div className="shell py-8 lg:py-12">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Shop' }]} />
       <PageHeader
-        eyebrow={q ? `Search results for “${q}”` : activeCategory ? 'Category Collection' : 'The Catalogue'}
-        title={q ? 'Search the shelves' : activeCategory ? activeCategory.name : 'All Products'}
+        eyebrow={q ? `Search results for “${q}”` : activeCategory ? 'Category collection' : 'The catalogue'}
+        title={q ? 'Search the shelves' : activeCategory ? activeCategory.name : 'All products'}
         lede={
           activeCategory?.description
             ? activeCategory.description
@@ -108,16 +108,16 @@ export function ShopPage() {
         }
       />
 
-      {/* Category quick filters: only shelves with live listings are shown. */}
+      {/* Category quick filters — mobile only; desktop uses the sidebar. */}
       {liveCategories.length ? (
-        <div className="no-scrollbar -mx-4 mt-6 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+        <div className="no-scrollbar -mx-4 mt-6 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 lg:hidden">
           <div className="flex min-w-max items-center gap-2 py-1">
             <button
               type="button"
               onClick={() => update('category', null)}
-              className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
+              className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-colors ${
                 !category
-                  ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
+                  ? 'border-forest bg-forest font-semibold text-paper'
                   : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
               }`}
             >
@@ -134,9 +134,9 @@ export function ShopPage() {
                   key={item.id}
                   type="button"
                   onClick={() => update('category', isSelected ? null : item.slug)}
-                  className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
+                  className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-colors ${
                     isSelected
-                      ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
+                      ? 'border-forest bg-forest font-semibold text-paper'
                       : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
                   }`}
                 >
@@ -151,24 +151,25 @@ export function ShopPage() {
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[230px_1fr]">
+      <div className="mt-8 grid gap-10 lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="hidden lg:block">
           <div className="sticky top-32 space-y-7">
             <div>
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Categories</p>
-              <ul className="space-y-1">
+              <p className="t-eyebrow mb-3">Categories</p>
+              <ul className="border-t border-line">
                 <li>
                   <button
                     type="button"
                     onClick={() => update('category', null)}
-                    className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-[12.5px] transition-colors ${
-                      !category
-                        ? 'font-semibold text-forest bg-forest/[0.08] border border-forest/20'
-                        : 'text-ink/70 hover:bg-paper hover:text-forest'
+                    className={`flex w-full items-center justify-between gap-2 border-b border-line/70 py-2.5 text-left text-[12.5px] transition-colors ${
+                      !category ? 'font-semibold text-forest' : 'text-ink/70 hover:text-forest'
                     }`}
                   >
-                    <span>All shelves</span>
-                    <span className="text-[10px] font-mono text-muted">
+                    <span className="flex items-center gap-2">
+                      {!category ? <span className="h-1 w-1 rounded-full bg-terra" aria-hidden /> : null}
+                      All shelves
+                    </span>
+                    <span className="font-mono text-[10px] text-muted">
                       {liveCategories.reduce((total, item) => total + (item.productCount ?? 0), 0)}
                     </span>
                   </button>
@@ -180,16 +181,15 @@ export function ShopPage() {
                       <button
                         type="button"
                         onClick={() => update('category', item.slug)}
-                        className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] transition-colors ${
-                          isSelected
-                            ? 'font-semibold text-forest bg-forest/[0.08] border border-forest/20'
-                            : 'text-ink/70 hover:bg-paper hover:text-forest'
+                        className={`flex w-full items-center justify-between gap-2 border-b border-line/70 py-2.5 text-left text-[12.5px] transition-colors ${
+                          isSelected ? 'font-semibold text-forest' : 'text-ink/70 hover:text-forest'
                         }`}
                       >
-                        <span className="truncate">{item.name}</span>
-                        <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${isSelected ? 'bg-forest/15 text-forest font-semibold' : 'text-muted'}`}>
-                          {item.productCount ?? 0}
+                        <span className="flex min-w-0 items-center gap-2">
+                          {isSelected ? <span className="h-1 w-1 shrink-0 rounded-full bg-terra" aria-hidden /> : null}
+                          <span className="truncate">{item.name}</span>
                         </span>
+                        <span className="font-mono text-[10px] text-muted">{item.productCount ?? 0}</span>
                       </button>
                     </li>
                   );
@@ -199,15 +199,17 @@ export function ShopPage() {
 
             {filters?.regions.length ? (
               <div className="border-t border-line pt-5">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Region</p>
+                <p className="t-eyebrow mb-3">Region</p>
                 <div className="flex flex-wrap gap-1.5">
                   {filters.regions.map((item) => (
                     <button
                       key={item.region}
                       type="button"
                       onClick={() => update('region', region === item.region ? null : item.region)}
-                      className={`border px-2 py-1 text-[11px] ${
-                        region === item.region ? 'border-forest bg-forest text-paper' : 'border-line bg-surface text-ink hover:border-forest/40'
+                      className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                        region === item.region
+                          ? 'border-forest bg-forest text-paper'
+                          : 'border-line bg-surface text-ink hover:border-forest/40'
                       }`}
                     >
                       {item.region}
@@ -219,7 +221,7 @@ export function ShopPage() {
 
             {filters?.sellers.length ? (
               <div className="border-t border-line pt-5">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Maker</p>
+                <p className="t-eyebrow mb-3">Maker</p>
                 <Select value={seller ?? ''} onChange={(event) => update('seller', event.target.value || null)} aria-label="Filter by maker">
                   <option value="">All makers</option>
                   {filters.sellers.map((item) => (
@@ -232,7 +234,7 @@ export function ShopPage() {
             ) : null}
 
             <div className="border-t border-line pt-5">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Price (₹)</p>
+              <p className="t-eyebrow mb-3">Price (₹)</p>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
@@ -279,40 +281,38 @@ export function ShopPage() {
         </aside>
 
         <div>
-          {/* Editorial Category Showcase Banner */}
+          {/* Editorial category banner */}
           {activeCategory && !q ? (
-            <div className="mb-6 overflow-hidden rounded-xl border border-line bg-gradient-to-br from-[#FAF6F0] via-surface to-[#F3EDE2] p-5 sm:p-6 shadow-xs">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+            <div className="mb-7 overflow-hidden border border-line bg-paper-2">
+              <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                 <div className="max-w-xl">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="inline-flex items-center gap-1 rounded bg-forest/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-forest">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-forest/20 bg-paper px-2.5 py-1 text-[9.5px] font-semibold uppercase tracking-[0.13em] text-forest">
                       <TagIcon className="h-3 w-3" />
-                      Featured Department
+                      Featured shelf
                     </span>
                     <span className="text-[11px] text-muted">
                       {products.data?.total ?? activeCategory.productCount ?? 0} approved listings
                     </span>
                   </div>
-                  <h2 className="font-serif text-2xl sm:text-3xl font-medium text-forest tracking-tight">
-                    {activeCategory.name}
-                  </h2>
+                  <h2 className="t-h3 mt-1">{activeCategory.name}</h2>
                   {activeCategory.description ? (
-                    <p className="mt-1.5 text-[13px] leading-relaxed text-ink/75 font-sans">
+                    <p className="mt-2 text-[13px] leading-[1.7] text-ink/70">
                       {activeCategory.description}
                     </p>
                   ) : null}
 
-                  <div className="mt-3.5 flex flex-wrap items-center gap-2 text-[11px] text-ink/75">
-                    <span className="inline-flex items-center gap-1 rounded-sm border border-line/70 bg-paper px-2 py-0.5 shadow-2xs">
+                  <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10.5px] uppercase tracking-[0.1em] text-muted">
+                    <span className="inline-flex items-center gap-1.5">
                       <MountainIcon className="h-3 w-3 text-forest" />
-                      Approved listings only
+                      Approved only
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-sm border border-line/70 bg-paper px-2 py-0.5 shadow-2xs">
+                    <span className="inline-flex items-center gap-1.5">
                       <CheckCircleIcon className="h-3 w-3 text-terra" />
                       Seller reviewed
                     </span>
                     {freeShippingThreshold > 0 ? (
-                      <span className="inline-flex items-center gap-1 rounded-sm border border-line/70 bg-paper px-2 py-0.5 shadow-2xs">
+                      <span className="inline-flex items-center gap-1.5">
                         <TruckIcon className="h-3 w-3 text-forest" />
                         Free shipping over {formatINR(freeShippingThreshold)}
                       </span>
@@ -321,12 +321,8 @@ export function ShopPage() {
                 </div>
 
                 {activeCategory.imageUrl ? (
-                  <div className="hidden sm:block shrink-0">
-                    <img
-                      src={activeCategory.imageUrl}
-                      alt={activeCategory.name}
-                      className="h-24 w-24 sm:h-28 sm:w-28 rounded-lg object-cover border border-line shadow-sm"
-                    />
+                  <div className="frame hidden h-28 w-28 shrink-0 sm:block">
+                    <img src={activeCategory.imageUrl} alt={activeCategory.name} className="img-brand h-full w-full object-cover" />
                   </div>
                 ) : null}
               </div>
@@ -591,7 +587,7 @@ function FilterChip({ label, onClear }: { label: string; onClear: () => void }) 
     <button
       type="button"
       onClick={onClear}
-      className="inline-flex items-center gap-1.5 border border-forest/25 bg-forest/[0.04] px-2 py-1 text-[11px] text-forest hover:bg-forest/[0.08]"
+      className="inline-flex items-center gap-1.5 rounded-full border border-forest/25 bg-forest/[0.04] px-2.5 py-1 text-[11px] text-forest transition-colors hover:bg-forest/[0.08]"
     >
       {label}
       <span aria-hidden>✕</span>

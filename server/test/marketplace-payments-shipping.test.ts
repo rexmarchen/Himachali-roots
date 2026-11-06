@@ -1,13 +1,11 @@
-import crypto from 'node:crypto';
 import type { Express } from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { closeDb, execute, queryAll, queryOne, type Db } from '../db.js';
+import { closeDb, execute, queryOne, type Db } from '../db.js';
 import { commissionOn, resolveCommissionBp } from '../lib/pricing.js';
 import { checkCourierServiceability } from '../lib/shipping.js';
 import { markOrderPaid } from '../lib/orders.js';
 import {
-  ADDRESS,
   IDS,
   addToCart,
   checkout,

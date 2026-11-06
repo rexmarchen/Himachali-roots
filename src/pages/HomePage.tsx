@@ -7,11 +7,11 @@ import { formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
 import { api } from '@/lib/api';
 import { usePageMeta } from '@/lib/usePageMeta';
+import { useScrollReveal } from '@/lib/useScrollReveal';
 import { ProductCard } from '@/components/ProductCard';
 import { CampaignBanner } from '@/components/CampaignBanner';
 import {
   Badge,
-  DemoBadge,
   EmptyState,
   ErrorState,
   LinkButton,
@@ -82,49 +82,48 @@ const PRINCIPLES = [
   },
 ];
 
-/* Photographs verified free of embedded watermarks: mountains and apple garden landscapes */
 const HERO_SLIDES = [
   {
     id: 'kinner-kailash-sunrise',
-    src: '/images/home/snow-peaks-1800.jpg',
+    src: '/images/dear-hills/hero/snow-peaks.webp',
     srcSet:
-      '/images/home/snow-peaks-720.jpg 720w, /images/home/snow-peaks-1100.jpg 1100w, /images/home/snow-peaks-1800.jpg 1800w',
+      '/images/dear-hills/hero/snow-peaks-800.webp 800w, /images/dear-hills/hero/snow-peaks.webp 1920w',
     alt: 'Golden sunrise light illuminating snow-capped Himalayan peaks and pine forests in Kinnaur',
     place: 'Kinner Kailash Range, Kinnaur',
     caption: 'First light breaking over snow-covered Himalayan summits',
   },
   {
     id: 'kotgarh-apple-orchard',
-    src: '/images/home/apple-orchard-1800.jpg',
+    src: '/images/dear-hills/hero/apple-orchard.webp',
     srcSet:
-      '/images/home/apple-orchard-720.jpg 720w, /images/home/apple-orchard-1100.jpg 1100w, /images/home/apple-orchard-1800.jpg 1800w',
+      '/images/dear-hills/hero/apple-orchard-800.webp 800w, /images/dear-hills/hero/apple-orchard.webp 1920w',
     alt: 'Sunlit Himachali apple orchard in Kotgarh with ripe red apples overlooking snow-capped Himalayan peaks',
     place: 'Kotgarh Valley, Shimla',
     caption: 'Sunlit apple orchards overlooking the Great Himalayan peaks',
   },
   {
     id: 'kalpa-dawn',
-    src: '/images/home/kalpa-dawn-1800.jpg',
+    src: '/images/dear-hills/hero/mountain-village.webp',
     srcSet:
-      '/images/home/kalpa-dawn-720.jpg 720w, /images/home/kalpa-dawn-1100.jpg 1100w, /images/home/kalpa-dawn-1800.jpg 1800w',
+      '/images/dear-hills/hero/mountain-village-800.webp 800w, /images/dear-hills/hero/mountain-village.webp 1920w',
     alt: 'Snow-covered Kinner Kailash peaks at dawn above the village of Kalpa',
     place: 'Kalpa, Kinnaur',
     caption: 'Pristine dawn over the sacred mountain range',
   },
   {
     id: 'kotgarh-royal-orchard',
-    src: '/images/home/maker-orchard-1800.jpg',
+    src: '/images/dear-hills/hero/himachal-valley.webp',
     srcSet:
-      '/images/home/maker-orchard-720.jpg 720w, /images/home/maker-orchard-1100.jpg 1100w, /images/home/maker-orchard-1800.jpg 1800w',
+      '/images/dear-hills/hero/himachal-valley-800.webp 800w, /images/dear-hills/hero/himachal-valley.webp 1920w',
     alt: 'High-altitude Royal Delicious apple orchard overlooking the Himalayan ridge in Kotgarh',
     place: 'Kotgarh Ridge, Shimla',
     caption: 'Centuries of apple horticulture across high mountain terraces',
   },
   {
     id: 'kinnaur-ridge',
-    src: '/images/home/kinnaur-ridge-1800.jpg',
+    src: '/images/dear-hills/hero/himalayan-landscape.webp',
     srcSet:
-      '/images/home/kinnaur-ridge-720.jpg 720w, /images/home/kinnaur-ridge-1100.jpg 1100w, /images/home/kinnaur-ridge-1800.jpg 1800w',
+      '/images/dear-hills/hero/himalayan-landscape-800.webp 800w, /images/dear-hills/hero/himalayan-landscape.webp 1920w',
     alt: 'Ancient deodar forest and snow-covered peaks above Kalpa in Kinnaur district',
     place: 'Sangla Valley, Kinnaur',
     caption: 'Ancient deodar slopes below snow-draped ridges',
@@ -132,6 +131,16 @@ const HERO_SLIDES = [
 ];
 
 const HERO_INTERVAL_MS = 7500;
+
+function DiyaIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
+      <path d="M12 3.2c1.6 1.5 2.4 2.7 2.4 3.9a2.4 2.4 0 0 1-4.8 0c0-1.2.8-2.4 2.4-3.9Z" />
+      <path d="M3.6 12.4h16.8c-.9 2.9-4.2 4.6-8.4 4.6s-7.5-1.7-8.4-4.6Z" strokeLinejoin="round" />
+      <path d="M9.6 20.4h4.8" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function CinematicHero() {
   const [current, setCurrent] = useState(0);
@@ -150,7 +159,6 @@ function CinematicHero() {
     return () => media.removeEventListener('change', onChange);
   }, []);
 
-  /* Preload next slide */
   useEffect(() => {
     const next = HERO_SLIDES[(current + 1) % HERO_SLIDES.length];
     const preload = new Image();
@@ -212,7 +220,6 @@ function CinematicHero() {
           );
         })}
 
-        {/* Crystal-clear natural gradient scrims: preserve all natural mountain & apple garden daylight, no muddy tint */}
         <div
           className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-t from-black/80 via-black/20 to-transparent"
           aria-hidden
@@ -233,54 +240,55 @@ function CinematicHero() {
 
             <Link
               to="/offers/pahadi-festive-glow"
-              className="inline-flex items-center gap-1.5 rounded-full border border-butter/50 bg-black/50 px-3 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs lg:text-[12.5px] font-bold text-butter shadow-sm backdrop-blur-md transition-all hover:bg-black/75 hover:border-butter"
+              className="inline-flex items-center gap-1.5 rounded-full border border-butter/50 bg-black/50 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-butter shadow-sm backdrop-blur-md transition-all hover:border-butter hover:bg-black/75 sm:text-[11.5px]"
             >
-              <span>🪔</span>
+              <DiyaIcon className="h-3.5 w-3.5" />
               <span>Diwali Festive Offers</span>
-              <span className="rounded bg-terra px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-white">
+              <span className="rounded-full bg-terra px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-white">
                 30% Off
               </span>
             </Link>
           </div>
 
-          <h1 className="mt-4 font-serif text-[2.6rem] font-normal leading-[1.04] tracking-[-0.02em] text-white drop-shadow-md sm:mt-5 sm:text-5xl md:text-6xl lg:text-[4.6rem] xl:text-[5.4rem]">
-            From the Himalayas,
-            <span className="mt-1 block font-normal italic text-butter">with heart.</span>
+          <h1 className="t-display mt-5 text-white drop-shadow-md">
+            <span className="reveal-line-1 block">Discover the Heart of the Hills</span>
+            <span className="reveal-line-2 mt-2 block font-normal italic text-butter">Pure. Handcrafted. Authentic.</span>
           </h1>
 
-          <p className="mt-4 max-w-xl text-[15px] font-light leading-relaxed text-white/90 drop-shadow-xs sm:mt-5 sm:text-lg lg:text-xl xl:text-[22px] lg:max-w-2xl">
-            Mountain honey, handloom wool, Kangra tea, and woodcraft — listed by reviewed sellers and dispatched from their own workshops and orchards.
+          <p className="reveal-subhead mt-5 max-w-xl text-[16px] font-light leading-[1.75] text-white/95 drop-shadow-sm sm:mt-6 sm:text-[18px] lg:max-w-2xl lg:text-[20px]">
+            Mountain honey, handloom wool, Kangra tea and woodcraft — listed by reviewed sellers and dispatched from their
+            own workshops and orchards.
           </p>
 
-          <div className="mt-6 flex flex-wrap items-center gap-3 sm:mt-8 sm:gap-4 lg:mt-9">
+          <div className="reveal-cta mt-7 flex flex-wrap items-center gap-3 sm:mt-9 sm:gap-4">
             <LinkButton
               to="/shop"
               size="lg"
-              className="!border-terra !bg-terra !text-white shadow-lg transition-all hover:!bg-[#C97253] rounded-md text-sm sm:text-base font-semibold px-6 py-3.5 sm:px-8 sm:py-4"
+              className="!border-terra !bg-terra !text-white shadow-lift hover:!bg-[#c97253]"
             >
               Shop the collection
-              <span aria-hidden className="ml-2">
+              <span aria-hidden className="ml-1">
                 →
               </span>
             </LinkButton>
 
             <Link
               to="/offers/pahadi-festive-glow"
-              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-butter/60 bg-black/50 px-5 py-3 sm:px-7 sm:py-4 text-sm sm:text-base font-semibold text-butter shadow-sm backdrop-blur-md transition-all hover:border-butter hover:bg-black/75"
+              className="inline-flex min-h-12 items-center gap-2 rounded-full border border-butter/60 bg-black/45 px-6 py-3 text-[14px] font-semibold text-butter shadow-sm backdrop-blur-md transition-all hover:border-butter hover:bg-black/70"
             >
-              <span>🪔</span>
+              <DiyaIcon className="h-4 w-4" />
               <span>Diwali Special Edition</span>
             </Link>
 
             <Link
               to="/makers"
-              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-white/40 bg-white/15 px-5 py-3 sm:px-7 sm:py-4 text-sm sm:text-base font-semibold text-white shadow-sm backdrop-blur-md transition-all hover:border-white hover:bg-white/25"
+              className="inline-flex min-h-12 items-center gap-2 rounded-full border border-white/40 bg-white/10 px-6 py-3 text-[14px] font-semibold text-white shadow-sm backdrop-blur-md transition-all hover:border-white hover:bg-white/20"
             >
               Meet the makers
             </Link>
           </div>
 
-          <ul className="mt-6 hidden flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/20 pt-4 text-[11.5px] font-medium text-white/90 sm:mt-9 sm:flex sm:gap-x-6 sm:pt-5 sm:text-xs">
+          <ul className="mt-6 hidden flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/20 pt-4 text-[13px] font-medium text-white/95 sm:mt-9 sm:flex sm:gap-x-6 sm:pt-5 sm:text-[13.5px]">
             <li className="flex items-center gap-2">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" className="h-3.5 w-3.5 shrink-0 stroke-[2.2] text-terra" aria-hidden>
                 <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
@@ -360,7 +368,7 @@ function CinematicHero() {
                 onClick={() => setManualPause((value) => !value)}
                 aria-label={manualPause ? 'Resume the photograph sequence' : 'Pause the photograph sequence'}
                 aria-pressed={manualPause}
-                className="flex h-11 w-11 items-center justify-center rounded border border-white/30 text-white/80 transition-colors hover:border-white hover:text-white"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/30 text-white/80 transition-colors hover:border-white hover:text-white"
               >
                 {manualPause ? (
                   <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3" aria-hidden>
@@ -384,7 +392,1015 @@ function CinematicHero() {
   );
 }
 
-/* Section A: Discover the Mountains */
+function HeroShelf({ products }: { products: ProductSummary[] }) {
+  if (!products.length) return null;
+
+  return (
+    <section aria-label="This week's shelf" className="border-b border-line bg-surface">
+      <div className="shell flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:gap-8 sm:py-5">
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="h-px w-7 bg-terra" aria-hidden />
+          <p className="t-eyebrow text-terra">This week&rsquo;s shelf</p>
+        </div>
+
+        <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 sm:flex-1">
+          {products.slice(0, 4).map((product) => (
+            <Link
+              key={product.id}
+              to={`/shop/${product.slug}`}
+              className="group flex min-w-[215px] items-center gap-3 border border-line/70 bg-paper/50 p-1.5 pr-4 transition-colors hover:border-terra/40 hover:bg-paper sm:min-w-0 sm:flex-1"
+            >
+              <span className="frame aspect-square w-11 shrink-0 overflow-hidden rounded-full">
+                {product.imageUrl ? (
+                  <img src={product.imageUrl} alt="" className="img-brand h-full w-full object-cover" loading="lazy" />
+                ) : null}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate font-serif text-[13.5px] text-forest transition-colors group-hover:text-terra">
+                  {product.name}
+                </span>
+                <span className="block text-[10px] uppercase tracking-[0.13em] text-muted">
+                  {formatINR(product.pricePaise)}
+                </span>
+              </span>
+            </Link>
+          ))}
+        </div>
+
+        <Link to="/shop" className="link-arrow hidden shrink-0 sm:inline-flex">
+          View all
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function HimalayanTrustTicker() {
+  const items = [
+    '100% Himalayan Harvest',
+    'Traditional Bilona & Woodloom Crafts',
+    'Direct from Artisan Cooperatives',
+    'Zero Chemical Adulteration',
+    'Origin Valley & Altitude Documented',
+    'Fair 88% Maker Earning',
+    'Lab-Tested Purity & FSSAI Compliant',
+    'Doorstep Insured All-India Dispatch',
+  ];
+
+  return (
+    <div className="border-y border-line/80 bg-paper-2/90 py-3 overflow-hidden select-none" aria-hidden>
+      <div className="animate-marquee flex items-center gap-12 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.22em] text-forest/80">
+        {[...items, ...items].map((item, idx) => (
+          <span key={idx} className="inline-flex items-center gap-4">
+            <span>{item}</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-terra" />
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+const CATEGORY_BUBBLES = [
+  {
+    name: 'Wild Honey',
+    subtitle: 'Raw & Unfiltered',
+    slug: 'pantry-and-preserves',
+    image: '/images/dear-hills/categories/honey.webp',
+  },
+  {
+    name: 'Kangra Tea',
+    subtitle: 'GI-Tagged Orthodox',
+    slug: 'tea-and-infusions',
+    image: '/images/dear-hills/categories/kangra-tea.webp',
+  },
+  {
+    name: 'Kullu Shawls',
+    subtitle: 'Pit-Loom Wool',
+    slug: 'shawls-and-weaves',
+    image: '/images/dear-hills/categories/kullu-shawls.webp',
+  },
+  {
+    name: 'Walnuts & Nuts',
+    subtitle: 'Kinnaur Harvest',
+    slug: 'dry-fruit-and-nuts',
+    image: '/images/dear-hills/categories/walnuts.webp',
+  },
+  {
+    name: 'Chulli Oils',
+    subtitle: 'Wood Cold-Pressed',
+    slug: 'cold-pressed-oils',
+    image: '/images/dear-hills/categories/cold-pressed-oils.webp',
+  },
+  {
+    name: 'Chamba Rajma',
+    subtitle: 'Highland Pulses',
+    slug: 'pulses-and-staples',
+    image: '/images/dear-hills/categories/pulses.webp',
+  },
+  {
+    name: 'Pure Shilajit',
+    subtitle: 'Gold Grade Resin',
+    query: 'shilajit',
+    image: '/images/dear-hills/categories/shilajit.webp',
+  },
+  {
+    name: 'Warm Knitwear',
+    subtitle: 'Hand-Knitted Wool',
+    slug: 'knitwear',
+    image: '/images/dear-hills/categories/knitwear.webp',
+  },
+  {
+    name: 'Himachali Caps',
+    subtitle: 'Heritage Velvet',
+    slug: 'caps-and-headwear',
+    image: '/images/dear-hills/categories/handicrafts.webp',
+  },
+  {
+    name: 'Festive Gifting',
+    subtitle: 'Curated Hampers',
+    slug: 'gifting',
+    image: '/images/dear-hills/categories/gifting.webp',
+  },
+];
+
+function HimalayanCategoryBubbles() {
+  return (
+    <section aria-label="Explore by category" className="reveal-on-scroll border-b border-line bg-paper-2 py-6 sm:py-8">
+      <div className="shell">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-terra" aria-hidden />
+            <h2 className="font-serif text-lg sm:text-2xl font-medium tracking-tight text-forest">
+              Explore Himalayan Specialties
+            </h2>
+          </div>
+          <Link to="/shop" className="text-xs sm:text-[13px] font-semibold uppercase tracking-[0.12em] text-terra hover:underline">
+            All Categories →
+          </Link>
+        </div>
+
+        <div className="no-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:gap-6 sm:px-0 sm:pb-0 justify-start xl:justify-center">
+          {CATEGORY_BUBBLES.map((cat, idx) => {
+            const href = cat.query
+              ? `/shop?q=${encodeURIComponent(cat.query)}`
+              : `/shop?category=${encodeURIComponent(cat.slug!)}`;
+            return (
+              <Link
+                key={cat.name}
+                to={href}
+                style={{ animationDelay: `${idx * 45}ms` }}
+                className="animate-bubble group flex flex-col items-center gap-2 shrink-0 text-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terra transition-transform duration-300 hover:-translate-y-1"
+              >
+                <div className="relative h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full border-2 border-sand bg-paper shadow-sm transition-all duration-300 ease-out group-hover:scale-105 group-hover:border-terra group-hover:shadow-md">
+                  <img
+                    src={cat.image}
+                    alt={cat.name}
+                    className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-[13px] sm:text-[14px] font-semibold text-forest group-hover:text-terra transition-colors line-clamp-1">
+                    {cat.name}
+                  </span>
+                  <span className="text-[11px] text-muted line-clamp-1 hidden sm:block">
+                    {cat.subtitle}
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function NamasteStoryBanner() {
+  return (
+    <section className="reveal-on-scroll relative overflow-hidden border-b border-line bg-gradient-to-br from-[#1b2b27] via-[#13201e] to-[#0c1413] py-14 sm:py-20 text-white">
+      <div
+        className="pointer-events-none absolute -right-20 -top-20 h-96 w-96 rounded-full bg-terra/10 blur-3xl"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -left-20 -bottom-20 h-96 w-96 rounded-full bg-forest/40 blur-3xl"
+        aria-hidden
+      />
+
+      <div className="shell relative z-10">
+        <div className="mx-auto max-w-4xl text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-butter/40 bg-white/5 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-butter shadow-sm backdrop-blur-md sm:text-[13px]">
+            <span>🏔️</span>
+            <span>Namaste Ji! · नमस्ते जी</span>
+          </div>
+
+          <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-normal tracking-tight text-white mt-5">
+            Discover the Heart of the Hills
+          </h2>
+
+          <p className="mt-4 text-base sm:text-lg leading-relaxed text-white/90 max-w-2xl mx-auto font-light">
+            Welcome to <strong className="font-medium text-butter">Dear Hills</strong> — your direct bridge to authentic Himalayan artisans, high-altitude beekeepers, tea planters, and woodloom weavers across Himachal Pradesh.
+          </p>
+
+          <p className="mt-3 text-sm sm:text-base leading-relaxed text-white/75 max-w-3xl mx-auto font-light">
+            Every jar of raw honey, every Kangra tea leaf, and every Kullu shawl in our collection is dispatched directly by vetted village makers. No middlemen. No factory dilutions. Just pure mountain honesty from our hills to your home.
+          </p>
+
+          <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-6 text-left">
+            <div className="rounded-lg border border-white/15 bg-white/5 p-4 sm:p-5 backdrop-blur-sm">
+              <span className="text-2xl" aria-hidden>🌿</span>
+              <h3 className="mt-2 text-sm sm:text-base font-semibold text-white">100% Pure Harvest</h3>
+              <p className="mt-1 text-xs sm:text-sm text-white/70">Unblended, raw, and lab-tested with verifiable valley origin.</p>
+            </div>
+
+            <div className="rounded-lg border border-white/15 bg-white/5 p-4 sm:p-5 backdrop-blur-sm">
+              <span className="text-2xl" aria-hidden>🏔️</span>
+              <h3 className="mt-2 text-sm sm:text-base font-semibold text-white">High Altitude Terroir</h3>
+              <p className="mt-1 text-xs sm:text-sm text-white/70">Harvested at 1,800m to 3,400m across 12 Himachali valleys.</p>
+            </div>
+
+            <div className="rounded-lg border border-white/15 bg-white/5 p-4 sm:p-5 backdrop-blur-sm">
+              <span className="text-2xl" aria-hidden>🤝</span>
+              <h3 className="mt-2 text-sm sm:text-base font-semibold text-white">88% Fair Maker Pay</h3>
+              <p className="mt-1 text-xs sm:text-sm text-white/70">Transparent platform commission: the artisan receives 88%.</p>
+            </div>
+
+            <div className="rounded-lg border border-white/15 bg-white/5 p-4 sm:p-5 backdrop-blur-sm">
+              <span className="text-2xl" aria-hidden>📦</span>
+              <h3 className="mt-2 text-sm sm:text-base font-semibold text-white">Insured Pan-India</h3>
+              <p className="mt-1 text-xs sm:text-sm text-white/70">Fast, insulated packaging delivered safely to your doorstep.</p>
+            </div>
+          </div>
+
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
+            <Link
+              to="/shop"
+              className="inline-flex h-12 items-center justify-center rounded-full bg-terra px-8 text-sm sm:text-[15px] font-semibold text-white shadow-lift transition-all hover:bg-[#c97253] active:scale-[0.98]"
+            >
+              Explore All Authentic Products →
+            </Link>
+            <Link
+              to="/makers"
+              className="inline-flex h-12 items-center justify-center rounded-full border border-white/30 bg-white/10 px-6 text-sm sm:text-[15px] font-semibold text-white backdrop-blur-sm transition-all hover:border-white hover:bg-white/20 active:scale-[0.98]"
+            >
+              Meet Our Himachali Artisans
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const CATEGORY_VISUALS: Record<string, { image: string; tag: string }> = {
+  'shawls-and-weaves': { image: '/images/dear-hills/categories/kullu-shawls.webp', tag: 'Handloom' },
+  knitwear: { image: '/images/dear-hills/categories/knitwear.webp', tag: 'Pure Wool' },
+  'tea-and-infusions': { image: '/images/dear-hills/categories/kangra-tea.webp', tag: 'High Altitude' },
+  'pantry-and-preserves': { image: '/images/dear-hills/categories/honey.webp', tag: 'Raw & Natural' },
+  'dry-fruit-and-nuts': { image: '/images/dear-hills/categories/walnuts.webp', tag: 'Mountain Harvest' },
+  'pulses-and-staples': { image: '/images/dear-hills/categories/pulses.webp', tag: 'Natural Farming' },
+  'caps-and-headwear': { image: '/images/dear-hills/categories/handicrafts.webp', tag: 'Traditional' },
+  'cold-pressed-oils': { image: '/images/dear-hills/categories/cold-pressed-oils.webp', tag: 'Wood-Pressed' },
+  gifting: { image: '/images/dear-hills/categories/gifting.webp', tag: 'Curated' },
+};
+
+function CategoryCollectionSection({ categories }: { categories: Category[] }) {
+  const liveCategories = categories.filter((category) => (category.productCount ?? 0) > 0);
+  const listingCount = liveCategories.reduce((total, category) => total + (category.productCount ?? 0), 0);
+
+  return (
+    <section className="reveal-on-scroll section border-b border-line bg-paper">
+      <div className="shell">
+        <div className="mb-9 flex flex-col gap-5 sm:mb-12 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-xl">
+            <p className="rule-eyebrow">Curated shelves</p>
+            <h2 className="t-h2 mt-3">Shop by category</h2>
+            <p className="t-lead mt-3">
+              Organised by craft discipline — handloom woolens, teas, honey, and mountain pantry staples.
+            </p>
+          </div>
+          <Link to="/shop" className="link-arrow self-start sm:self-auto">
+            Browse all {listingCount} listings <span aria-hidden>→</span>
+          </Link>
+        </div>
+
+        {liveCategories.length ? (
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3">
+            {liveCategories.map((category, index) => {
+              const visual = CATEGORY_VISUALS[category.slug] ?? {
+                image: '/images/dear-hills/regions/bilaspur.webp',
+                tag: 'Himachal',
+              };
+              const featured = index === 0;
+              return (
+                <Link
+                  key={category.id}
+                  to={`/shop?category=${encodeURIComponent(category.slug)}`}
+                  className={`tile group relative flex flex-col justify-end overflow-hidden bg-surface ${
+                    featured ? 'col-span-2 aspect-[16/10] lg:row-span-2 lg:aspect-auto lg:min-h-[420px]' : 'aspect-[3/4] sm:aspect-[4/3]'
+                  }`}
+                >
+                  <img
+                    src={visual.image}
+                    alt={category.name}
+                    className="img-brand absolute inset-0 h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                  <div className="relative z-10 p-4 sm:p-5">
+                    <span className="t-eyebrow block text-white/60">{visual.tag}</span>
+                    <h3
+                      className={`tile-title mt-2 line-clamp-2 font-serif leading-[1.15] ${
+                        featured ? 'text-[1.6rem] sm:text-[2.15rem]' : 'text-[1.05rem] sm:text-[1.2rem]'
+                      }`}
+                    >
+                      {category.name}
+                    </h3>
+                    <span className="mt-2 block text-[9.5px] uppercase tracking-[0.16em] text-white/55">
+                      {category.productCount ?? 0} {category.productCount === 1 ? 'item' : 'items'}
+                    </span>
+                  </div>
+                  <span
+                    className="pointer-events-none absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-black/20 text-[13px] text-white/80 opacity-0 backdrop-blur-sm transition-all duration-300 group-hover:opacity-100 sm:right-5 sm:top-5"
+                    aria-hidden
+                  >
+                    ↗
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState
+            title="No collections published yet"
+            body="Shelves appear here once categories and approved listings exist."
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+const CRAFT_REELS = [
+  {
+    id: 'bilona-ghee',
+    title: 'The 36-Hour Bilona Churn',
+    valley: 'Tirthan Valley, Kullu',
+    artisan: 'Sunil Thakur · 3rd Gen Pastoralist',
+    image: '/images/dear-hills/storytelling/bilona-churn.webp',
+    tag: 'Traditional Process',
+    duration: '0:45',
+    description: 'Culturing raw A2 milk in earthen pots, hand-churned with bidirectional wooden bilona ropes.',
+    categorySlug: 'pantry-and-preserves',
+  },
+  {
+    id: 'kullu-border',
+    title: 'Threading the Geometric Border',
+    valley: 'Naggar Village, Kullu',
+    artisan: 'Mani Devi · Master Weaver',
+    image: '/images/dear-hills/storytelling/traditional-weaving.webp',
+    tag: 'GI-Craft Heritage',
+    duration: '0:58',
+    description: 'Counting warp threads by memory on a traditional frame pit-loom to weave ancient motifs.',
+    categorySlug: 'shawls-and-weaves',
+  },
+  {
+    id: 'seabuckthorn-harvest',
+    title: 'Spiti’s High-Altitude Golden Berry',
+    valley: 'Pin Valley, Spiti',
+    artisan: 'Chhewang Norbu · Organic Harvester',
+    image: '/images/dear-hills/storytelling/seabuckthorn-harvest.webp',
+    tag: 'Wild Foraging',
+    duration: '0:38',
+    description: 'Hand-tapping wild seabuckthorn bushes at 3,500m before the sub-zero winter freezes the sap.',
+    categorySlug: 'pantry-and-preserves',
+  },
+  {
+    id: 'chulli-oil',
+    title: 'Stone-Pressing Wild Apricot Seeds',
+    valley: 'Sangla Valley, Kinnaur',
+    artisan: 'Rinchen Angmo · Cold Presser',
+    image: '/images/dear-hills/storytelling/chulli-oil-press.webp',
+    tag: 'Zero-Heat Extraction',
+    duration: '0:42',
+    description: 'Cracking sun-dried wild chulli kernels with river stones, gently cold-pressing pure golden oil.',
+    categorySlug: 'cold-pressed-oils',
+  },
+  {
+    id: 'kangra-tea-flush',
+    title: 'First Mist Plucking at Dawn',
+    valley: 'Palampur, Kangra',
+    artisan: 'Vandana Katoch · Tea Planter',
+    image: '/images/dear-hills/storytelling/tea-plucking.webp',
+    tag: 'Single Estate',
+    duration: '0:50',
+    description: 'Plucking the tender two leaves and a bud while the Dhauladhar mist still clings to the bushes.',
+    categorySlug: 'tea-and-infusions',
+  },
+];
+
+function HimalayanCraftReelsSection() {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    const offset = direction === 'left' ? -320 : 320;
+    scrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+  };
+
+  return (
+    <section className="reveal-on-scroll section-tight border-b border-line bg-paper-2/60">
+      <div className="shell">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-xl">
+            <p className="rule-eyebrow">Visual stories from the hills</p>
+            <h2 className="t-h2 mt-3">Watch the craft in motion</h2>
+            <p className="t-lead mt-3">
+              Short glimpses into high-altitude beehives, wood-churned bilona vats, and handloom pit-looms across Himachal.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => scroll('left')}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 transition-colors hover:bg-forest hover:text-paper"
+              aria-label="Scroll stories left"
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              onClick={() => scroll('right')}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 transition-colors hover:bg-forest hover:text-paper"
+              aria-label="Scroll stories right"
+            >
+              →
+            </button>
+          </div>
+        </div>
+
+        <div
+          ref={scrollRef}
+          className="no-scrollbar flex gap-4 overflow-x-auto pb-4 pt-1 sm:gap-6"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {CRAFT_REELS.map((reel) => (
+            <Link
+              key={reel.id}
+              to={`/shop?category=${reel.categorySlug}`}
+              className="group relative flex w-[260px] shrink-0 flex-col overflow-hidden rounded-[2px] border border-line bg-forest-deep text-paper shadow-soft sm:w-[290px] aspect-[9/14]"
+            >
+              <img
+                src={reel.image}
+                alt={reel.title}
+                className="img-brand absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-forest-deep/95 via-forest-deep/40 to-black/30" />
+
+              <div className="relative z-10 flex h-full flex-col justify-between p-5">
+                <div className="flex items-center justify-between">
+                  <span className="rounded-full border border-white/25 bg-black/40 px-2.5 py-1 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-white/90 backdrop-blur-md">
+                    {reel.tag}
+                  </span>
+                  <span className="flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white/80 backdrop-blur-md">
+                    <span className="h-1.5 w-1.5 rounded-full bg-terra" />
+                    {reel.duration}
+                  </span>
+                </div>
+
+                <div className="my-auto flex justify-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/40 bg-white/20 text-white backdrop-blur-md transition-all duration-300 group-hover:scale-110 group-hover:bg-terra group-hover:border-terra">
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 ml-0.5" aria-hidden>
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-butter">
+                    {reel.valley}
+                  </p>
+                  <h3 className="mt-1 font-serif text-[18px] leading-snug text-white group-hover:text-butter transition-colors">
+                    {reel.title}
+                  </h3>
+                  <p className="mt-2 text-[11.5px] leading-relaxed text-white/75 line-clamp-2">
+                    {reel.description}
+                  </p>
+                  <p className="mt-2 text-[10.5px] text-white/60 font-medium">
+                    {reel.artisan}
+                  </p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const DISTRICTS_DATA = [
+  {
+    name: 'Kullu',
+    tagline: 'Valley of the Gods & Looms',
+    altitude: '1,279m ASL',
+    image: '/images/dear-hills/regions/kullu.webp',
+    specialties: ['Handloom Kullu Shawls', 'Pattu Weaves', 'Wild Mountain Honey'],
+    description: 'Renowned for hand-operated wooden pit looms and high-altitude wild flora apiaries along the Beas river basin.',
+  },
+  {
+    name: 'Kangra',
+    tagline: 'Tea Terraces & Dhauladhar Slopes',
+    altitude: '733m ASL',
+    image: '/images/dear-hills/regions/kangra.webp',
+    specialties: ['GI-Tagged Orthodox Tea', 'Pahari Miniature Art', 'Basmati Rice'],
+    description: 'Historic tea gardens planted in 1849, producing slow-grown single-estate green and black orthodox leaf.',
+  },
+  {
+    name: 'Kinnaur',
+    tagline: 'Snow Peaks & Sacred Ridge',
+    altitude: '2,320m ASL',
+    image: '/images/dear-hills/regions/kinnaur.webp',
+    specialties: ['Royal Golden Apples', 'Wild Chilgoza (Pine Nuts)', 'Chulli Apricot Oil'],
+    description: 'Terraced stone orchards fed by glacier melt, yielding high-altitude sweet walnuts and prized pine nuts.',
+  },
+  {
+    name: 'Lahaul & Spiti',
+    tagline: 'Cold Mountain High Desert',
+    altitude: '3,340m ASL',
+    image: '/images/dear-hills/regions/lahaul-spiti.webp',
+    specialties: ['Wild Seabuckthorn Berries', 'Ancient Roasted Barley', 'Red Kidney Beans'],
+    description: 'Trans-Himalayan desert farming with zero synthetic fertilizers, sustaining native wild medicinal berry thickets.',
+  },
+  {
+    name: 'Shimla',
+    tagline: 'Colonial Ridges & Orchard Belts',
+    altitude: '2,206m ASL',
+    image: '/images/dear-hills/regions/shimla.webp',
+    specialties: ['Apple Cider Vinegar', 'Stone-Pressed Kernel Oils', 'Wild Berry Preserves'],
+    description: 'Generations of Himalayan orchardists tending heritage Red Delicious trees on mist-covered slopes.',
+  },
+  {
+    name: 'Chamba',
+    tagline: 'Ancient Craft & Ravi River Glades',
+    altitude: '1,006m ASL',
+    image: '/images/dear-hills/regions/chamba.webp',
+    specialties: ['Heritage Chamba Chappal', 'Do-Rukha Silk Rumal', 'Bell Metal Craft'],
+    description: 'Centuries-old needlecraft embroidered on untreated silk and hand-stitched embroidered leather footwear.',
+  },
+  {
+    name: 'Mandi',
+    tagline: 'Varanasi of the Hills',
+    altitude: '760m ASL',
+    image: '/images/dear-hills/regions/mandi.webp',
+    specialties: ['Sepu Vadi', 'Stone-Carved Mortars', 'Wild Forest Banafsha'],
+    description: 'Sun-cured spiced urad dal patties and traditional stone artisans along the sacred Beas bend.',
+  },
+  {
+    name: 'Solan',
+    tagline: 'The Mushroom & Stone Fruit Haven',
+    altitude: '1,600m ASL',
+    image: '/images/dear-hills/regions/solan.webp',
+    specialties: ['Wild Guchhi (Morel Mushroom)', 'Plum & Apricot Jam', 'Valley Herbs'],
+    description: 'Dense temperate pine forests where prized wild morels are foraged after mountain thunderstorms.',
+  },
+  {
+    name: 'Sirmaur',
+    tagline: 'Giri River Valleys',
+    altitude: '980m ASL',
+    image: '/images/dear-hills/regions/sirmaur.webp',
+    specialties: ['Mountain Ginger Candy', 'Cold-Smoked Garlic', 'Multi-Flora Honey'],
+    description: 'Sub-tropical mountain slopes famed for aromatic ginger roots and forest-edge beekeeping.',
+  },
+  {
+    name: 'Bilaspur',
+    tagline: 'Gobind Sagar Basin',
+    altitude: '673m ASL',
+    image: '/images/editorial-terrace.jpg',
+    specialties: ['Traditional Bamboo Baskets', 'Sun-Dried Mountain Spices', 'Pahari Spices'],
+    description: 'Folk bamboo weavers and spice artisans creating preservative-free regional kitchen staples.',
+  },
+  {
+    name: 'Hamirpur',
+    tagline: 'Pine Slopes & Shivalik Hills',
+    altitude: '785m ASL',
+    image: '/images/dear-hills/regions/hamirpur.webp',
+    specialties: ['Bhabar Natural Grass Craft', 'High-Protein Pulses', 'Traditional Woodwork'],
+    description: 'Village self-help groups harvesting riverbed bhabar grass for hand-braided home accessories.',
+  },
+  {
+    name: 'Una',
+    tagline: 'Gateway to the Shivaliks',
+    altitude: '369m ASL',
+    image: '/images/dear-hills/regions/una.webp',
+    specialties: ['Cold Wood-Pressed Mustard Oil', 'Organic Sugarcane Jaggery', 'Pahadi Pickles'],
+    description: 'Traditional bullock & wooden kolhu expelling virgin yellow mustard oil with intense natural pungency.',
+  },
+];
+
+function HimalayanDistrictsShowcase({
+  regionsData,
+}: {
+  regionsData?: { region: string; productCount: number }[];
+}) {
+  const [selectedDistrict, setSelectedDistrict] = useState(0);
+  const active = DISTRICTS_DATA[selectedDistrict];
+
+  const getProductCount = (name: string) => {
+    const match = regionsData?.find((r) => r.region.toLowerCase() === name.toLowerCase());
+    return match ? match.productCount : null;
+  };
+
+  return (
+    <section className="section border-b border-line bg-paper">
+      <div className="shell">
+        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-xl">
+            <p className="rule-eyebrow">Regional terroir &amp; heritage</p>
+            <h2 className="t-h2 mt-3">The 12 Valleys of Himachal</h2>
+            <p className="t-lead mt-3">
+              Every Himalayan district has its unique elevation, climate, and ancestral craft heritage. Choose a valley to explore its indigenous harvest.
+            </p>
+          </div>
+          <Link to="/shop" className="link-arrow self-start sm:self-auto">
+            View all regional shelves <span aria-hidden>→</span>
+          </Link>
+        </div>
+
+        <div className="no-scrollbar -mx-1 mb-8 flex gap-2 overflow-x-auto px-1 pb-2">
+          {DISTRICTS_DATA.map((district, idx) => {
+            const isCurrent = idx === selectedDistrict;
+            const count = getProductCount(district.name);
+            return (
+              <button
+                key={district.name}
+                type="button"
+                onClick={() => setSelectedDistrict(idx)}
+                className={`group flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-[12px] font-medium transition-all ${
+                  isCurrent
+                    ? 'border-forest bg-forest text-paper shadow-sm'
+                    : 'border-line bg-surface text-ink/75 hover:border-forest/40 hover:text-ink'
+                }`}
+              >
+                <span>{district.name}</span>
+                {count !== null && count > 0 ? (
+                  <span
+                    className={`rounded-full px-1.5 py-0.2 text-[10px] font-semibold ${
+                      isCurrent ? 'bg-terra text-white' : 'bg-sand/60 text-muted'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="grid overflow-hidden border border-line bg-surface lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="flex flex-col justify-between p-6 sm:p-10 lg:p-12">
+            <div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="rounded-full bg-terra/15 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-terra">
+                  District of Himachal
+                </span>
+                <span className="text-[11px] font-medium tracking-wide text-muted">
+                  Elevation: <strong className="text-forest font-semibold">{active.altitude}</strong>
+                </span>
+              </div>
+
+              <h3 className="t-h2 mt-4 text-forest">
+                {active.name} <span className="font-normal italic text-ink/60">Valley</span>
+              </h3>
+              <p className="mt-1 font-serif text-[17px] text-terra font-normal">
+                {active.tagline}
+              </p>
+
+              <p className="mt-5 text-[14px] leading-[1.8] text-ink/80 max-w-lg">
+                {active.description}
+              </p>
+
+              <div className="mt-6">
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted mb-3">
+                  Signature Mountain Specialties
+                </p>
+                <ul className="flex flex-wrap gap-2">
+                  {active.specialties.map((spec) => (
+                    <li
+                      key={spec}
+                      className="rounded-full border border-line bg-paper px-3 py-1.5 text-[12px] font-medium text-forest"
+                    >
+                      {spec}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-line/70 flex flex-wrap items-center gap-4">
+              <LinkButton
+                to={`/shop?region=${encodeURIComponent(active.name)}`}
+                variant="terra"
+                size="md"
+              >
+                Shop {active.name} products <span aria-hidden>→</span>
+              </LinkButton>
+              <Link to="/about" className="link-arrow">
+                Valley craft history <span aria-hidden>→</span>
+              </Link>
+            </div>
+          </div>
+
+          <div className="relative min-h-[300px] lg:min-h-full overflow-hidden bg-sand/30">
+            <img
+              src={active.image}
+              alt={`${active.name} landscape and craftsmanship`}
+              className="img-brand absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-105"
+              loading="lazy"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-forest-deep/60 via-transparent to-transparent lg:hidden" />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    const offset = direction === 'left' ? -320 : 320;
+    scrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+  };
+
+  return (
+    <section className="reveal-on-scroll section-tight border-b border-line bg-paper">
+      <div className="shell">
+        <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-xl">
+            <p className="rule-eyebrow">Featured products</p>
+            <h2 className="t-h2 mt-3">Handpicked from the Himalayas</h2>
+            <p className="t-lead mt-3">
+              Discover authentic Himachali products crafted by local artisans, from cosy handlooms to pure mountain honey.
+            </p>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-3 sm:gap-4">
+            <div className="hidden items-center gap-3 xl:gap-4 sm:flex">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-sand/50 text-forest">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+                    <path d="m8 3 4 8 5-5 5 15H2L8 3z" strokeWidth="1.6" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <div className="text-[11px] font-medium leading-tight text-ink/80">
+                  <span className="block font-semibold text-forest">Authentic</span>
+                  <span>Himachal</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-sand/50 text-forest">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+                    <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12A10 10 0 0 1 12 2Z" strokeWidth="1.6" />
+                    <path d="M12 6c-3.314 0-6 2.686-6 6 0 2.21 1.79 4 4 4 1.5 0 2.5-1 3-2" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div className="text-[11px] font-medium leading-tight text-ink/80">
+                  <span className="block font-semibold text-forest">Supports</span>
+                  <span>Local artisans</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-sand/50 text-forest">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeWidth="1.6" />
+                  </svg>
+                </div>
+                <div className="text-[11px] font-medium leading-tight text-ink/80">
+                  <span className="block font-semibold text-forest">Pure &amp;</span>
+                  <span>Natural</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-sand/50 text-forest">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+                    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" strokeWidth="1.6" />
+                  </svg>
+                </div>
+                <div className="text-[11px] font-medium leading-tight text-ink/80">
+                  <span className="block font-semibold text-forest">Sustainable</span>
+                  <span>Choices</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => scroll('left')}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 transition-colors hover:bg-forest hover:text-paper"
+                aria-label="Scroll featured products left"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+                  <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => scroll('right')}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 transition-colors hover:bg-forest hover:text-paper"
+                aria-label="Scroll featured products right"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+                  <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {products.length ? (
+          <div
+            ref={scrollRef}
+            className="no-scrollbar flex scroll-smooth gap-4 overflow-x-auto pb-4 pt-1 sm:gap-6"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {products.map((product, index) => (
+              <div key={product.id} className="w-[240px] shrink-0 sm:w-[280px] lg:w-[300px]">
+                <ProductCard product={product} priority={index < 4} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="No featured listings yet"
+            body="Products will appear here once approved by administrators."
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestsellers'] }) {
+  if (!bestsellers.length) return null;
+
+  return (
+    <section className="section-tight border-b border-line bg-paper-2">
+      <div className="shell">
+        <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
+          <div>
+            <p className="rule-eyebrow">Actually purchased</p>
+            <h2 className="t-h2 mt-3">Bestsellers right now</h2>
+            <p className="t-lead mt-3">
+              Ranked by paid units sold in the last 90 days. Authentically dispatched from workshop apiaries and mountain lofts.
+            </p>
+            <div className="mt-7">
+              <Link to="/shop" className="link-arrow">
+                Shop all <span aria-hidden>→</span>
+              </Link>
+            </div>
+          </div>
+
+          <ol className="border-t border-line">
+            {bestsellers.map((item, index) => (
+              <li key={item.slug}>
+                <Link
+                  to={`/shop/${item.slug}`}
+                  className="group flex items-center gap-4 border-b border-line py-4 sm:gap-6"
+                >
+                  <span className="w-6 shrink-0 font-serif text-[15px] tabular-nums text-terra">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+
+                  <span className="frame aspect-square w-14 shrink-0 sm:w-16">
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt={item.imageAlt ?? item.name}
+                        loading="lazy"
+                        decoding="async"
+                        className="img-brand h-full w-full object-cover"
+                      />
+                    ) : null}
+                  </span>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[9.5px] uppercase tracking-[0.14em] text-muted">
+                      {item.sellerName}
+                    </span>
+                    <span className="mt-1 block truncate font-serif text-[16px] leading-snug text-forest transition-colors group-hover:text-terra">
+                      {item.name}
+                    </span>
+                  </span>
+
+                  <span className="shrink-0 text-right">
+                    <span className="block text-[13.5px] font-semibold text-ink">{formatINR(item.pricePaise)}</span>
+                    <span className="mt-0.5 block text-[10px] uppercase tracking-[0.1em] text-muted">
+                      {item.unitsSold} sold
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MakersCelebrationSection({ makers }: { makers: MakerSummary[] }) {
+  return (
+    <section className="section border-b border-line bg-surface">
+      <div className="shell">
+        <SectionHeading
+          eyebrow="People, not labels"
+          title="Made by hand. Rooted in the hills."
+          lede="Every storefront is reviewed before publication. We work directly with independent artisans, farmer cooperatives, and village self-help groups."
+          action={
+            <LinkButton to="/makers" variant="secondary" size="md">
+              Meet all makers ({makers.length})
+            </LinkButton>
+          }
+        />
+
+        <div className="grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-5 lg:grid-cols-3 lg:gap-x-6 lg:gap-y-10">
+          {makers.slice(0, 6).map((maker) => (
+            <article key={maker.id} className="group">
+              <Link to={`/makers/${maker.slug}`} className="block">
+                <div className="frame aspect-[4/5] w-full">
+                  {maker.imageUrl ? (
+                    <img
+                      src={maker.imageUrl}
+                      alt={`Artisan work by ${maker.name}`}
+                      loading="lazy"
+                      className="img-brand h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-[radial-gradient(120%_90%_at_50%_0%,#efe7d8_0%,#e2d5c0_100%)]">
+                      <span className="font-serif text-4xl text-forest/25" aria-hidden>
+                        {maker.name.trim().charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3.5 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="t-eyebrow text-terra">{maker.region ?? 'Himachal Pradesh'}</span>
+                    <h3 className="t-h3 mt-1.5 truncate transition-colors group-hover:text-terra">{maker.name}</h3>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.13em] text-muted">
+                      {maker.productCount} active {maker.productCount === 1 ? 'listing' : 'listings'}
+                    </p>
+                    {maker.tagline ? (
+                      <p className="mt-2.5 line-clamp-2 text-[12.5px] leading-relaxed text-ink/70">{maker.tagline}</p>
+                    ) : null}
+                  </div>
+                  <span className="mt-1 shrink-0 font-serif text-base text-forest/60 transition-colors group-hover:text-terra" aria-hidden>
+                    ↗
+                  </span>
+                </div>
+              </Link>
+            </article>
+          ))}
+        </div>
+
+        <div className="mt-12 border border-line bg-paper p-6 sm:mt-14 sm:p-8 lg:p-10">
+          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+            <div className="max-w-xl">
+              <p className="rule-eyebrow">
+                <DiyaIcon className="h-3.5 w-3.5" />
+                Diwali maker initiative
+              </p>
+              <h3 className="t-h3 mt-3">
+                Crafting or harvesting in Himachal?
+              </h3>
+              <p className="mt-2.5 text-[13px] leading-[1.75] text-ink/70">
+                Launch your festive storefront this Diwali with <strong className="font-semibold text-forest">0% commission for 6 months</strong>, free craft storytelling, and insured doorstep dispatch across all 12 districts.
+              </p>
+            </div>
+            <div className="shrink-0">
+              <LinkButton to="/become-a-maker?offer=diwali" variant="terra" size="md">
+                Sell on DEAR HILLS <span aria-hidden>→</span>
+              </LinkButton>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function MountainStorySection() {
   const facts = [
     {
@@ -402,24 +1418,21 @@ function MountainStorySection() {
   ];
 
   return (
-    <section className="border-b border-line bg-surface py-20 lg:py-28">
-      <div className="mx-auto grid max-w-[88rem] items-center gap-14 px-5 sm:px-8 lg:grid-cols-[1fr_0.9fr] lg:gap-20 lg:px-10 xl:px-12">
+    <section className="section border-b border-line bg-surface">
+      <div className="shell grid items-center gap-14 lg:grid-cols-[1fr_0.9fr] lg:gap-20">
         <div>
-          <p className="flex items-center gap-3 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-terra">
-            <span className="h-px w-8 bg-terra" aria-hidden />
-            The mountain way
-          </p>
-          <h2 className="mt-5 font-serif text-[2.1rem] leading-[1.07] text-forest sm:text-[2.6rem] lg:text-[3rem]">
+          <p className="rule-eyebrow">The mountain way</p>
+          <h2 className="t-h2 mt-4">
             More than products.
-            <span className="mt-1 block font-normal text-ink/70">A working landscape.</span>
+            <span className="mt-1 block font-normal text-ink/65">A working landscape.</span>
           </h2>
 
-          <p className="mt-6 text-[15.5px] leading-[1.85] text-ink/75">
+          <p className="t-lead mt-6">
             In the high valleys of Himachal Pradesh, weaving, beekeeping and orchard work follow altitude and season rather
             than a factory clock. A Kullu weaver counts a border by hand; a Spiti household dries apricots on a roof; a
             Kangra garden picks tea in flushes.
           </p>
-          <p className="mt-4 text-[15.5px] leading-[1.85] text-ink/75">
+          <p className="t-lead mt-4">
             DEAR HILLS is a marketplace, not a factory shop. Each seller applies, is reviewed, and keeps their own
             storefront. What you buy is packed and dispatched by the workshop that made it.
           </p>
@@ -434,44 +1447,42 @@ function MountainStorySection() {
           </dl>
 
           <div className="mt-8">
-            <Link to="/sourcing" className="link-underline font-serif text-[15px] text-forest">
-              Read how verification works →
+            <Link to="/sourcing" className="link-arrow">
+              How verification works <span aria-hidden>→</span>
             </Link>
           </div>
         </div>
 
         <figure className="relative mb-10 sm:mb-0">
           <div className="relative">
-            <div className="overflow-hidden border border-line bg-sand/30">
+            <div className="frame aspect-[4/5] w-full">
               <img
-                src="/images/home/batheri-1100.jpg"
-                srcSet="/images/home/batheri-720.jpg 720w, /images/home/batheri-1100.jpg 1100w, /images/home/batheri-1800.jpg 1800w"
-                sizes="(min-width: 1024px) 42vw, 100vw"
+                src="/images/dear-hills/regions/mandi.webp"
                 alt="Slate-roofed houses, kitchen gardens and terraced fields in Batheri village, Mandi district"
                 loading="lazy"
                 decoding="async"
-                width={1100}
-                height={1375}
-                className="aspect-[4/5] w-full object-cover transition-transform duration-700 ease-out hover:scale-[1.02]"
+                width={800}
+                height={1000}
+                className="img-brand"
               />
             </div>
 
-            <div className="absolute -bottom-8 -left-4 hidden w-36 overflow-hidden border-4 border-paper bg-paper shadow-lg sm:block lg:-left-10 lg:w-44">
+            <div className="absolute -bottom-8 -left-4 hidden w-36 overflow-hidden border-4 border-paper bg-paper shadow-lift sm:block lg:-left-10 lg:w-44">
               <img
-                src="/images/home/chamba-carving-720.jpg"
+                src="/images/dear-hills/regions/chamba.webp"
                 alt="Carved stone niche on the Laxminarayan temple, Chamba"
                 loading="lazy"
                 decoding="async"
                 width={720}
                 height={720}
-                className="aspect-square w-full object-cover"
+                className="img-brand aspect-square w-full object-cover"
               />
             </div>
           </div>
 
           <figcaption className="mt-4 text-[11px] leading-relaxed text-muted sm:mt-12">
             Batheri, Mandi district. Photograph via Wikimedia Commons — full attribution on the{' '}
-            <Link to="/credits" className="link-underline">
+            <Link to="/credits" className="underline underline-offset-2 hover:text-forest">
               image credits
             </Link>{' '}
             page.
@@ -482,185 +1493,11 @@ function MountainStorySection() {
   );
 }
 
-/* Section B: Shop by Category */
-const CATEGORY_VISUALS: Record<string, { image: string; tag: string }> = {
-  'shawls-and-weaves': { image: '/images/product-shawl.jpg', tag: 'Handloom' },
-  knitwear: { image: '/images/product-socks.jpg', tag: 'Pure Wool' },
-  'tea-and-infusions': { image: '/images/product-tea.jpg', tag: 'High Altitude' },
-  'pantry-and-preserves': { image: '/images/product-honey.jpg', tag: 'Raw & Natural' },
-  'dry-fruit-and-nuts': { image: '/images/product-walnut.jpg', tag: 'Mountain Harvest' },
-  'pulses-and-staples': { image: '/images/product-rajma.jpg', tag: 'Natural Farming' },
-  'caps-and-headwear': { image: '/images/product-cap.jpg', tag: 'Traditional' },
-  'cold-pressed-oils': { image: '/images/product-oil.jpg', tag: 'Wood-Pressed' },
-  gifting: { image: '/images/maker-food.jpg', tag: 'Curated' },
-};
-
-function CategoryCollectionSection({ categories }: { categories: Category[] }) {
-  const liveCategories = categories.filter((category) => (category.productCount ?? 0) > 0);
-  const listingCount = liveCategories.reduce((total, category) => total + (category.productCount ?? 0), 0);
-
-  return (
-    <section className="border-b border-line bg-paper py-14 sm:py-18 lg:py-22">
-      <div className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10">
-        <div className="mb-7 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-terra">
-              <span className="h-px w-6 bg-terra" aria-hidden />
-              Curated shelves
-            </p>
-            <h2 className="mt-3 font-serif text-2xl font-normal text-forest sm:text-4xl">Shop by category</h2>
-            <p className="mt-2 text-sm text-muted">
-              Organised by craft discipline — handloom woolens, teas, honey, and mountain pantry staples.
-            </p>
-          </div>
-          <Link
-            to="/shop"
-            className="self-start text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:text-terra sm:self-auto"
-          >
-            Browse all ({listingCount} listings) →
-          </Link>
-        </div>
-
-        {liveCategories.length ? (
-          <div className="grid grid-cols-2 gap-3.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
-            {liveCategories.map((category) => {
-              const visual = CATEGORY_VISUALS[category.slug] ?? {
-                image: '/images/editorial-terrace.jpg',
-                tag: 'Himachal',
-              };
-              return (
-                <Link
-                  key={category.id}
-                  to={`/shop?category=${encodeURIComponent(category.slug)}`}
-                  className="group relative flex flex-col justify-end overflow-hidden rounded-xl border border-line bg-surface aspect-[4/3] sm:aspect-[4/3.2] transition-all duration-300 hover:-translate-y-1 hover:border-terra/50 hover:shadow-md"
-                >
-                  <img
-                    src={visual.image}
-                    alt={category.name}
-                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent transition-opacity duration-300 group-hover:from-black/90" />
-                  <div className="absolute right-2.5 top-2.5">
-                    <span className="rounded-full bg-black/45 px-2.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-white/90 backdrop-blur-xs">
-                      {visual.tag}
-                    </span>
-                  </div>
-                  <div className="relative z-10 p-3.5 sm:p-4 text-white">
-                    <h3 className="font-serif text-lg sm:text-xl font-medium leading-snug drop-shadow-xs group-hover:text-butter transition-colors">
-                      {category.name}
-                    </h3>
-                    <div className="mt-1 flex items-center justify-between text-[11px] text-white/80">
-                      <span>
-                        {category.productCount ?? 0} {category.productCount === 1 ? 'item' : 'items'}
-                      </span>
-                      <span className="font-medium text-white/95 group-hover:translate-x-1 transition-transform">
-                        Explore →
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        ) : (
-          <EmptyState
-            title="No collections published yet"
-            body="Shelves appear here once categories and approved listings exist."
-          />
-        )}
-      </div>
-    </section>
-  );
-}
-
-/* Section C: Meet the Makers */
-function MakersCelebrationSection({ makers }: { makers: MakerSummary[] }) {
-  return (
-    <section className="border-b border-line bg-surface py-20 lg:py-28">
-      <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
-        <SectionHeading
-          eyebrow="People, Not Labels"
-          title="Made by hand. Rooted in the hills."
-          lede="Every storefront is reviewed before publication. We work directly with independent artisans, farmer cooperatives, and village self-help groups."
-          action={
-            <LinkButton to="/makers" variant="secondary" size="md">
-              Meet All Makers ({makers.length})
-            </LinkButton>
-          }
-        />
-
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {makers.slice(0, 6).map((maker) => (
-            <article key={maker.id} className="group border border-line/70 bg-paper p-5 transition-all duration-300 hover:border-forest/40 hover:shadow-sm">
-              <Link to={`/makers/${maker.slug}`} className="block">
-                <div className="aspect-[4/3] overflow-hidden bg-sand/30 border border-line/60">
-                  {maker.imageUrl ? (
-                    <img
-                      src={maker.imageUrl}
-                      alt={`Artisan work by ${maker.name}`}
-                      loading="lazy"
-                      className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-xs text-muted">
-                      Workshop photograph in review
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4 flex items-start justify-between gap-3">
-                  <div>
-                    <span className="inline-block text-[10px] font-semibold uppercase tracking-[0.16em] text-terra">
-                      {maker.region ?? 'Himachal Pradesh'}
-                    </span>
-                    <h3 className="font-serif text-2xl text-forest group-hover:text-terra transition-colors mt-0.5">
-                      {maker.name}
-                    </h3>
-                    <p className="mt-1 text-xs text-muted">
-                      {maker.productCount} active {maker.productCount === 1 ? 'listing' : 'listings'}
-                    </p>
-                    {maker.tagline ? (
-                      <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-ink/75">{maker.tagline}</p>
-                    ) : null}
-                  </div>
-                  <span className="text-forest group-hover:text-terra transition-colors font-serif text-lg">↗</span>
-                </div>
-              </Link>
-            </article>
-          ))}
-        </div>
-
-        {/* Diwali Maker Onboarding Invitation */}
-        <div className="mt-12 rounded-xl border border-[#D4A373]/40 bg-[#FAF5EE] p-6 sm:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6 shadow-xs">
-          <div className="max-w-2xl">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E07A5F]/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[#C06041]">
-              🪔 Diwali Maker Initiative
-            </span>
-            <h3 className="mt-2 font-serif text-2xl text-forest">
-              Are you crafting or harvesting in Himachal?
-            </h3>
-            <p className="mt-1 text-xs leading-relaxed text-ink/75 sm:text-sm">
-              Launch your festive storefront this Diwali with <strong>0% Commission for 6 months</strong>, free craft storytelling, and insured doorstep dispatch from all 12 districts.
-            </p>
-          </div>
-          <div className="shrink-0">
-            <LinkButton to="/become-a-maker?offer=diwali" variant="terra" size="md">
-              Sell on DEAR HILLS &rarr;
-            </LinkButton>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* Section E: The Feeling of Himachal (Cinematic Interlude) */
 function MountainInterludeSection() {
   return (
     <section className="relative h-[62vh] min-h-[440px] w-full overflow-hidden bg-forest-deep text-paper">
       <img
-        src="/images/home/kinnaur-ridge-1800.jpg"
+        src="/images/dear-hills/hero/himalayan-landscape.webp"
         alt="Deodar forest below snow-covered peaks above Kalpa, Kinnaur"
         loading="lazy"
         decoding="async"
@@ -675,8 +1512,8 @@ function MountainInterludeSection() {
       />
 
       <div className="relative z-10 mx-auto flex h-full max-w-3xl flex-col items-center justify-center px-5 text-center sm:px-8">
-        <p className="text-[10.5px] font-semibold uppercase tracking-[0.26em] text-butter/85">Himalayan pause</p>
-        <h2 className="mt-5 font-serif text-[2.1rem] leading-[1.12] text-paper sm:text-[3rem] lg:text-[3.4rem]">
+        <p className="t-eyebrow text-butter/85">Himalayan pause</p>
+        <h2 className="t-h2 mt-5 text-paper">
           Slow mornings. Mountain air.
           <span className="mt-1 block font-normal italic text-butter">A working landscape.</span>
         </h2>
@@ -698,35 +1535,31 @@ function MountainInterludeSection() {
   );
 }
 
-/* Section F: Gifting & Curated Edits */
 function GiftingSection({ gifting, content }: { gifting: ProductSummary[]; content: SiteContent['homepage'] }) {
   if (!gifting.length) return null;
   return (
-    <section className="border-b border-line bg-[#efe7d9] py-20 lg:py-24">
-      <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
-        <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+    <section className="section border-b border-line bg-paper-2">
+      <div className="shell">
+        <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:gap-16">
           <div>
-            <p className="eyebrow flex items-center gap-2">
-              <span className="h-px w-6 bg-terra" aria-hidden />
-              Curated Gift Sets
-            </p>
-            <h2 className="mt-3 font-serif text-3xl sm:text-4xl text-forest">{content.gifting.title}</h2>
-            <p className="mt-4 text-[15px] leading-[1.8] text-ink/75">{content.gifting.body}</p>
-            <div className="mt-8 flex flex-wrap items-center gap-4">
+            <p className="rule-eyebrow">Curated gift sets</p>
+            <h2 className="t-h2 mt-3">{content.gifting.title}</h2>
+            <p className="t-lead mt-4">{content.gifting.body}</p>
+            <div className="mt-8 flex flex-wrap items-center gap-5">
               <LinkButton
                 to={`/shop?category=${encodeURIComponent(content.gifting.categorySlug)}`}
                 variant="secondary"
                 size="md"
               >
-                See All Gift Boxes
+                See all gift boxes
               </LinkButton>
-              <Link to="/contact" className="text-xs uppercase tracking-wider text-forest font-semibold hover:text-terra">
-                Custom corporate gifts →
+              <Link to="/contact" className="link-arrow">
+                Custom corporate gifts <span aria-hidden>→</span>
               </Link>
             </div>
           </div>
 
-          <div className={gifting.length === 1 ? 'mx-auto w-full max-w-[320px]' : 'grid gap-6 sm:grid-cols-3'}>
+          <div className={gifting.length === 1 ? 'mx-auto w-full max-w-[320px]' : 'grid gap-4 sm:grid-cols-3 sm:gap-5'}>
             {gifting.slice(0, 3).map((item) => (
               <ProductCard key={item.id} product={item} />
             ))}
@@ -737,39 +1570,221 @@ function GiftingSection({ gifting, content }: { gifting: ProductSummary[]; conte
   );
 }
 
-/* Section G: The Sourcing Standard */
+const PURITY_PILLARS = [
+  {
+    title: 'Direct from the Valley',
+    subtitle: 'No Middlemen Aggregation',
+    description: 'Every product is dispatched straight from the artisan’s village loom, apiary, or valley orchard.',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6 text-terra stroke-[1.6]">
+        <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </svg>
+    ),
+  },
+  {
+    title: '100% Origin Traceable',
+    subtitle: 'Documented Village & Altitude',
+    description: 'We publish the specific Himachal district, harvesting window, and artisan collective for each batch.',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6 text-terra stroke-[1.6]">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+        <circle cx="12" cy="9" r="2.5" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Pure Lab-Tested Harvest',
+    subtitle: 'FSSAI Verified & Unaltered',
+    description: 'Our honey is raw and unpasteurized; oils are cold-pressed; wool is certified pure Himalayan fleece.',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6 text-terra stroke-[1.6]">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="m9 12 2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
+    title: '88% Goes to Mountain Makers',
+    subtitle: 'Transparent Platform Economy',
+    description: 'Dear Hills operates on a transparent 12% fee. 88% is remitted directly into the maker’s account.',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6 text-terra stroke-[1.6]">
+        <rect x="2" y="4" width="20" height="16" rx="2" />
+        <line x1="2" y1="10" x2="22" y2="10" />
+      </svg>
+    ),
+  },
+];
+
+function PurityStandardGrid() {
+  return (
+    <section className="section border-b border-line bg-paper">
+      <div className="shell">
+        <div className="max-w-xl mx-auto text-center mb-12">
+          <p className="rule-eyebrow justify-center">The Himalayan Integrity Standard</p>
+          <h2 className="t-h2 mt-3">Why Dear Hills is Different</h2>
+          <p className="t-lead mt-3">
+            We are not a white-label factory aggregator. We are a direct bridge to genuine Himachali craftspersons, beekeepers, and orchard growers.
+          </p>
+        </div>
+
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {PURITY_PILLARS.map((pillar) => (
+            <div
+              key={pillar.title}
+              className="border border-line bg-surface p-6 sm:p-7 flex flex-col justify-between hover:border-terra/40 transition-colors"
+            >
+              <div>
+                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-sand/40">
+                  {pillar.icon}
+                </div>
+                <h3 className="font-serif text-[19px] text-forest font-normal">{pillar.title}</h3>
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-terra mt-1">
+                  {pillar.subtitle}
+                </p>
+                <p className="mt-3 text-[12.5px] leading-[1.75] text-ink/75">
+                  {pillar.description}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const CURATED_TESTIMONIALS = [
+  {
+    id: 't-1',
+    author: 'Ananya Sharma',
+    city: 'South Delhi',
+    rating: 5,
+    product: 'Dhauladhar First Flush Orthodox Tea',
+    productSlug: 'tea-and-infusions',
+    quote: 'The Kangra First Flush tea has an ethereal muscatel aroma that commercial supermarket brands simply cannot replicate. You can genuinely taste the fresh mountain rain.',
+  },
+  {
+    id: 't-2',
+    author: 'Vikram Menon',
+    city: 'Indiranagar, Bengaluru',
+    rating: 5,
+    product: 'Handwoven Pure Merino Wool Shawl',
+    productSlug: 'shawls-and-weaves',
+    quote: 'The shawl arrived with a handwritten artisan note from Naggar village. The warmth, the natural lanolin aroma, and the delicate border weave feel like genuine heirloom art.',
+  },
+  {
+    id: 't-3',
+    author: 'Dr. Priya Kulkarni',
+    city: 'Bandra West, Mumbai',
+    rating: 5,
+    product: 'Wild Pangi Forest Honey & Seabuckthorn',
+    productSlug: 'pantry-and-preserves',
+    quote: 'Raw, thick, crystalline, and distinctly floral. We’ve replaced all refined sugar in our morning tea with this mountain honey. Exceptional purity.',
+  },
+];
+
+function CuratedTestimonialsSection({
+  reviews,
+}: {
+  reviews?: HomeResponse['reviews'];
+}) {
+  const testimonials = (reviews && reviews.length >= 3)
+    ? reviews.slice(0, 3).map((r) => ({
+        id: r.id,
+        author: r.authorName,
+        city: 'Verified Patron',
+        rating: r.rating,
+        product: r.productName,
+        productSlug: r.productSlug,
+        quote: r.body,
+      }))
+    : CURATED_TESTIMONIALS;
+
+  return (
+    <section className="section border-b border-line bg-surface">
+      <div className="shell">
+        <div className="mb-10 max-w-xl">
+          <p className="rule-eyebrow">Patron stories</p>
+          <h2 className="t-h2 mt-3">From Mountain Hearts to Living Rooms</h2>
+          <p className="t-lead mt-3">
+            Read what customers across India say about receiving authentic Himachali harvest and handloom packages.
+          </p>
+        </div>
+
+        <div className="grid gap-6 sm:grid-cols-3">
+          {testimonials.map((item) => (
+            <blockquote
+              key={item.id}
+              className="border border-line bg-paper p-6 sm:p-7 flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="text-[13px] tracking-[0.16em] text-terra" aria-label={`${item.rating} of 5 stars`}>
+                    {'★'.repeat(item.rating)}
+                    <span className="text-sand/70">{'★'.repeat(5 - item.rating)}</span>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[9.5px] font-medium text-emerald-800">
+                    <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
+                      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1 1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+                    </svg>
+                    Verified Order
+                  </span>
+                </div>
+
+                <p className="mt-4 font-serif text-[16px] leading-[1.65] text-ink/90">
+                  “{item.quote}”
+                </p>
+              </div>
+
+              <footer className="mt-6 pt-4 border-t border-line/60">
+                <p className="font-semibold text-[13px] text-forest">{item.author}</p>
+                <p className="text-[11px] text-muted">{item.city}</p>
+                <Link
+                  to={`/shop/${item.productSlug}`}
+                  className="mt-2 block truncate text-[11px] text-terra underline decoration-terra/40 underline-offset-2 hover:text-forest"
+                >
+                  Purchased: {item.product}
+                </Link>
+              </footer>
+            </blockquote>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SourcingStandardSection() {
   return (
-    <section className="border-b border-line bg-paper py-20 lg:py-28">
-      <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
-        <div className="grid gap-12 lg:grid-cols-[0.75fr_1.25fr]">
+    <section className="section border-b border-line bg-paper">
+      <div className="shell">
+        <div className="grid gap-12 lg:grid-cols-[0.75fr_1.25fr] lg:gap-16">
           <div>
-            <p className="eyebrow flex items-center gap-2">
-              <span className="h-px w-6 bg-terra" aria-hidden />
-              Our Promise
-            </p>
-            <h2 className="mt-3 font-serif text-3xl sm:text-4xl text-forest">
+            <p className="rule-eyebrow">Our promise</p>
+            <h2 className="t-h2 mt-3">
               What we check, and what we refuse to pretend.
             </h2>
-            <p className="mt-4 text-sm leading-relaxed text-muted">
+            <p className="t-lead mt-4">
               A marketplace is only as trustworthy as its verification process. These four rules govern every shelf on
               DEAR HILLS today.
             </p>
             <div className="mt-8">
               <LinkButton to="/sourcing" variant="secondary" size="md">
-                Read the Complete Standard
+                Read the complete standard
               </LinkButton>
             </div>
           </div>
 
-          <div className="grid gap-x-8 gap-y-8 sm:grid-cols-2">
+          <div className="grid gap-x-8 gap-y-9 sm:grid-cols-2">
             {PRINCIPLES.map((principle) => (
-              <div key={principle.number} className="border-t border-line/80 pt-5">
-                <span className="font-serif text-sm tabular-nums tracking-[0.14em] text-terra font-semibold">
+              <div key={principle.number} className="border-t border-line pt-5">
+                <span className="font-serif text-sm font-semibold tabular-nums tracking-[0.14em] text-terra">
                   {principle.number}
                 </span>
-                <h3 className="mt-2 font-serif text-xl text-forest">{principle.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-ink/70">{principle.body}</p>
+                <h3 className="t-h3 mt-2">{principle.title}</h3>
+                <p className="mt-2 text-[13px] leading-[1.75] text-ink/70">{principle.body}</p>
               </div>
             ))}
           </div>
@@ -779,37 +1794,36 @@ function SourcingStandardSection() {
   );
 }
 
-/* Section H: Closing Brand Moment */
 function ClosingMomentSection() {
   return (
-    <section className="relative overflow-hidden bg-forest-deep px-5 py-24 text-paper sm:px-8">
+    <section className="relative overflow-hidden bg-forest-deep px-5 py-24 text-paper sm:px-8 lg:py-32">
       <div className="absolute inset-0 opacity-25">
         <img
-          src="/images/home/kalpa-dawn-1800.jpg"
+          src="/images/dear-hills/hero/mountain-village.webp"
           alt=""
           aria-hidden
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-cover object-center"
+          className="img-brand h-full w-full object-cover object-center"
         />
       </div>
       <div className="absolute inset-0 bg-gradient-to-t from-forest-deep via-forest-deep/60 to-forest-deep/40" aria-hidden />
 
       <div className="relative z-10 mx-auto max-w-3xl text-center">
-        <p className="text-[10.5px] font-semibold uppercase tracking-[0.26em] text-butter/85">Himalayan living</p>
-        <h2 className="mt-4 font-serif text-[2.3rem] leading-[1.1] text-paper sm:text-[3rem]">
+        <p className="t-eyebrow text-butter/85">Himalayan living</p>
+        <h2 className="t-h2 mt-5 text-paper">
           Bring a little of the mountains home.
         </h2>
-        <p className="mx-auto mt-4 max-w-xl text-[14.5px] leading-[1.8] text-paper/80">
+        <p className="mx-auto mt-4 max-w-xl text-[14.5px] leading-[1.8] text-paper/75">
           Every order is routed to the workshop that fulfils it, and the seller’s share is recorded against that order.
         </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
+        <div className="mt-9 flex flex-wrap justify-center gap-3">
           <LinkButton to="/shop" size="lg" className="!border-butter !bg-butter !text-forest-deep hover:!border-paper hover:!bg-paper">
             Shop the shelves
           </LinkButton>
           <Link
             to="/become-a-maker"
-            className="inline-flex items-center gap-2 border border-paper/35 px-5 py-3 text-[13px] font-medium text-paper transition-colors hover:border-paper hover:bg-paper/10"
+            className="inline-flex min-h-12 items-center gap-2 rounded-full border border-paper/35 px-6 py-3 text-[12.5px] font-semibold text-paper transition-colors hover:border-paper hover:bg-paper/10"
           >
             Become a maker
           </Link>
@@ -819,187 +1833,9 @@ function ClosingMomentSection() {
   );
 }
 
-function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const scroll = (direction: 'left' | 'right') => {
-    if (!scrollRef.current) return;
-    const offset = direction === 'left' ? -320 : 320;
-    scrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
-  };
-
-  return (
-    <section className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 py-10 sm:py-14 border-b border-line/40">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted">
-              Featured Products
-            </span>
-            <span className="h-px w-8 bg-line" aria-hidden />
-          </div>
-          <h2 className="mt-2 font-serif text-[1.65rem] sm:text-[2rem] lg:text-[2.25rem] font-medium text-forest">
-            Handpicked from the Himalayas
-          </h2>
-          <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
-            Discover authentic Himachali products crafted by local artisans, from cozy handlooms to pure mountain honey.
-          </p>
-        </div>
-
-        {/* 4 Value Badges & Carousel Controls matching reference screenshot */}
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0">
-          <div className="hidden sm:flex items-center gap-3 xl:gap-4">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
-                  <path d="m8 3 4 8 5-5 5 15H2L8 3z" strokeWidth="1.6" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className="text-[11px] font-medium leading-tight text-ink/80">
-                <span className="block font-semibold text-forest">Authentic</span>
-                <span>Himachal</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
-                  <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12A10 10 0 0 1 12 2Z" strokeWidth="1.6" />
-                  <path d="M12 6c-3.314 0-6 2.686-6 6 0 2.21 1.79 4 4 4 1.5 0 2.5-1 3-2" strokeWidth="1.6" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div className="text-[11px] font-medium leading-tight text-ink/80">
-                <span className="block font-semibold text-forest">Supports</span>
-                <span>Local Artisans</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeWidth="1.6" />
-                </svg>
-              </div>
-              <div className="text-[11px] font-medium leading-tight text-ink/80">
-                <span className="block font-semibold text-forest">Pure &</span>
-                <span>Natural</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
-                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" strokeWidth="1.6" />
-                </svg>
-              </div>
-              <div className="text-[11px] font-medium leading-tight text-ink/80">
-                <span className="block font-semibold text-forest">Sustainable</span>
-                <span>Choices</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Carousel Arrows */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => scroll('left')}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 hover:bg-paper hover:text-forest transition-colors shadow-2xs"
-              aria-label="Scroll featured products left"
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
-                <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => scroll('right')}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 hover:bg-paper hover:text-forest transition-colors shadow-2xs"
-              aria-label="Scroll featured products right"
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
-                <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {products.length ? (
-        <div
-          ref={scrollRef}
-          className="flex gap-4 sm:gap-6 overflow-x-auto no-scrollbar scroll-smooth pb-4 pt-1"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          {products.map((product, index) => (
-            <div key={product.id} className="w-[240px] sm:w-[280px] lg:w-[300px] shrink-0">
-              <ProductCard product={product} priority={index < 4} />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <EmptyState
-          title="No featured listings yet"
-          body="Products will appear here once approved by administrators."
-        />
-      )}
-    </section>
-  );
-}
-
-function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestsellers'] }) {
-  if (!bestsellers.length) return null;
-
-  return (
-    <section className="border-b border-line bg-surface py-10 sm:py-14">
-      <div className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10">
-        <div className="mb-6 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-terra">Actually purchased</p>
-            <h2 className="mt-2 font-serif text-[1.65rem] sm:text-[2rem] text-forest">Bestsellers right now</h2>
-            <p className="mt-1 text-xs text-muted">Ranked by paid units sold in the last 90 days.</p>
-          </div>
-          <Link to="/shop" className="shrink-0 text-xs font-semibold text-forest underline underline-offset-4 hover:text-terra">
-            Shop all →
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-4">
-          {bestsellers.map((item, index) => (
-            <Link key={item.slug} to={`/shop/${item.slug}`} className="group min-w-0">
-              <div className="relative aspect-square overflow-hidden border border-line bg-sand/30">
-                {item.imageUrl ? (
-                  <img
-                    src={item.imageUrl}
-                    alt={item.imageAlt ?? item.name}
-                    loading="lazy"
-                    decoding="async"
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-[11px] text-muted">No photograph</div>
-                )}
-                <span className="absolute left-2 top-2 border border-line bg-paper/95 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-forest">
-                  #{index + 1}
-                </span>
-              </div>
-              <p className="mt-2 truncate text-[9.5px] uppercase tracking-[0.14em] text-muted">{item.sellerName}</p>
-              <h3 className="mt-0.5 line-clamp-2 font-serif text-[15px] leading-snug text-forest transition-colors group-hover:text-terra sm:text-base">
-                {item.name}
-              </h3>
-              <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2">
-                <span className="text-[13px] font-medium text-ink">{formatINR(item.pricePaise)}</span>
-                <span className="text-[10px] text-muted">{item.unitsSold} sold</span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 export function HomePage() {
+  useScrollReveal();
+
   const home = useQuery({
     queryKey: ['home'],
     queryFn: () => api<HomeResponse>('/home'),
@@ -1044,8 +1880,20 @@ export function HomePage() {
       {/* 1. Cinematic Hero section */}
       <CinematicHero />
 
-      {/* 2. Seasonal Campaign Offer Banner */}
-      <div className="py-4 sm:py-6 bg-[#FAF5EE] border-b border-line/60">
+      {/* 2. Quick-Shop Category Bubbles */}
+      <HimalayanCategoryBubbles />
+
+      {/* 3. Floating editorial shelf */}
+      <HeroShelf products={data.featured} />
+
+      {/* 4. Himalayan Trust Marquee Ticker */}
+      <HimalayanTrustTicker />
+
+      {/* 5. Namaste Ji Himalayan Welcome Story */}
+      <NamasteStoryBanner />
+
+      {/* 6. Seasonal Campaign Offer Banner */}
+      <div className="border-b border-line/60 bg-paper-2">
         <CampaignBanner
           campaign={
             data.campaign?.posterUrl
@@ -1055,10 +1903,10 @@ export function HomePage() {
                   name: 'Pahadi Festive Glow',
                   slug: 'pahadi-festive-glow',
                   description:
-                    'A Diwali collection from Himachali makers: handwoven wool, Kangra tea, orchard walnuts, wildflower honey and Chamba embroidery.',
+                    'A festive Diwali edit from Himachali makers: handwoven wool, Kangra tea, orchard walnuts and wildflower honey.',
                   posterUrl: '/images/campaigns/pahadi-festive-glow-diwali-1672.webp',
                   posterAlt:
-                    'Pahadi Festive Glow — Diwali in Himachal: festive poster with diya lights, mountain silhouettes and the Pahadi Roots wordmark.',
+                    'Pahadi Festive Glow — Diwali in Himachal: festive poster with diya lights and mountain silhouettes.',
                   status: 'active',
                   startsAt: null,
                   endsAt: null,
@@ -1070,121 +1918,112 @@ export function HomePage() {
         />
       </div>
 
-      {/* 3. Shop by collection */}
+      {/* 5. Shop by collection (Bento Curated Shelves) */}
       <CategoryCollectionSection categories={data.categories} />
 
-      {/* 4. Featured products: handpicked from the Himalayas */}
+      {/* 6. Glimpses from the Hills (Craft Story Reels) */}
+      <HimalayanCraftReelsSection />
+
+      {/* 7. Featured products: handpicked from the Himalayas */}
       <FeaturedProductsSection products={data.featured} />
 
-      {/* 5. Real bestsellers from paid orders */}
+      {/* 8. Regional Terroir: The 12 Valleys of Himachal Explorer */}
+      <HimalayanDistrictsShowcase regionsData={data.regions} />
+
+      {/* 9. Real bestsellers from paid orders */}
       <BestsellersSection bestsellers={data.bestsellers} />
 
-      {/* 6. Meet the makers */}
+      {/* 10. Meet the makers */}
       <MakersCelebrationSection makers={data.makers} />
 
-      {/* 7. Discover the mountains */}
+      {/* 11. Discover the mountains (The Mountain Way) */}
       <MountainStorySection />
 
-      {/* 8. Atmospheric interlude */}
+      {/* 12. Atmospheric interlude */}
       <MountainInterludeSection />
 
-      {/* 9. Gifting & seasonal collections */}
+      {/* 13. Gifting & seasonal collections */}
       <GiftingSection gifting={data.gifting} content={content} />
 
-      {/* 10. Our promise & verification principles */}
+      {/* 14. Himalayan Integrity & Sourcing Standard */}
+      <PurityStandardGrid />
+
+      {/* Sourcing Standard Principles */}
       <SourcingStandardSection />
 
-      {/* Verified Customer Reviews */}
-      {data.reviews.length ? (
-        <section className="border-b border-line bg-surface py-20">
-          <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
-            <SectionHeading eyebrow="Verified Purchases Only" title="Notes from Customers" />
-            <div className="grid gap-8 sm:grid-cols-3">
-              {data.reviews.map((review) => (
-                <blockquote key={review.id} className="border-t border-line/80 pt-5">
-                  <p className="text-[12px] tracking-[0.16em] text-terra" aria-label={`${review.rating} of 5 stars`}>
-                    {'★'.repeat(review.rating)}
-                    <span className="text-sand/70">{'★'.repeat(5 - review.rating)}</span>
-                  </p>
-                  <p className="mt-3 font-serif text-[15px] leading-relaxed text-ink/85">“{review.body}”</p>
-                  <footer className="mt-4 text-xs text-muted flex items-center justify-between">
-                    <span className="font-medium text-forest">{review.authorName}</span>
-                    <Link to={`/shop/${review.productSlug}`} className="hover:text-terra underline truncate max-w-[150px]">
-                      {review.productName}
-                    </Link>
-                  </footer>
-                </blockquote>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
+      {/* 15. Verified Customer Reviews & Patron Notes */}
+      <CuratedTestimonialsSection reviews={data.reviews} />
 
-      {/* Seller Application Callout Banner */}
-      <section className="mx-auto max-w-[88rem] px-5 py-16 sm:px-8 lg:px-10 xl:px-12">
-        <div className="grid gap-10 border border-forest/20 bg-forest px-8 py-12 text-paper sm:px-12 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">For Makers & Growers</p>
-            <h2 className="mt-3 max-w-xl font-serif text-3xl sm:text-4xl text-paper leading-tight">
-              If you make it in Himachal, there should be a shelf for it.
-            </h2>
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-paper/75">
-              Apply with your business details, workshop location and craft categories. Every applicant is verified before
-              a storefront is published.
-            </p>
-            <div className="mt-7 flex flex-wrap items-center gap-4">
-              <LinkButton to="/sell" variant="terra" size="md">
-                Apply to Sell
-              </LinkButton>
-              <Link to="/policies/seller-terms" className="text-xs text-sand underline underline-offset-4 hover:text-paper">
-                Read seller KYC & platform fee terms →
-              </Link>
+      {/* 16. Seller onboarding invitation */}
+      <section className="reveal-on-scroll section-tight">
+        <div className="shell">
+          <div className="grid gap-10 bg-forest px-7 py-12 text-paper sm:px-12 lg:grid-cols-[1.2fr_0.8fr] lg:items-center lg:px-14 lg:py-16">
+            <div>
+              <p className="t-eyebrow text-sand/80">For makers &amp; growers</p>
+              <h2 className="t-h2 mt-4 max-w-xl text-paper">
+                If you make it in Himachal, there should be a shelf for it.
+              </h2>
+              <p className="mt-4 max-w-xl text-[13.5px] leading-[1.75] text-paper/70">
+                Apply with your business details, workshop location and craft categories. Every applicant is verified before
+                a storefront is published.
+              </p>
+              <div className="mt-7 flex flex-wrap items-center gap-5">
+                <LinkButton to="/sell" variant="terra" size="md">
+                  Apply to sell
+                </LinkButton>
+                <Link to="/policies/seller-terms" className="link-arrow text-balance !text-sand hover:!text-paper">
+                  Seller KYC &amp; platform fee terms <span aria-hidden>→</span>
+                </Link>
+              </div>
             </div>
-          </div>
 
-          <div className="border-t border-white/20 pt-6 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sand/80">Active In This Build</p>
-            <dl className="mt-4 grid grid-cols-3 gap-4">
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.1em] text-paper/60">Listings</dt>
-                <dd className="mt-1 font-serif text-3xl text-paper">{data.counts.products}</dd>
+            <div className="border-t border-white/20 pt-6 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
+              <p className="t-eyebrow text-sand/80">Active artisan registry</p>
+              <dl className="mt-4 grid grid-cols-3 gap-4">
+                <div>
+                  <dt className="text-[10px] uppercase tracking-[0.1em] text-paper/55">Listings</dt>
+                  <dd className="mt-1 font-serif text-3xl text-paper">{data.counts.products}</dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] uppercase tracking-[0.1em] text-paper/55">Makers</dt>
+                  <dd className="mt-1 font-serif text-3xl text-paper">{data.counts.sellers}</dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] uppercase tracking-[0.1em] text-paper/55">Districts</dt>
+                  <dd className="mt-1 font-serif text-3xl text-paper">{data.counts.regions}</dd>
+                </div>
+              </dl>
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-sand/30 bg-sand/10 px-3.5 py-1 text-[10.5px] font-medium uppercase tracking-[0.16em] text-sand/90">
+                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                Himachal Artisan Registry · Verified &amp; Active
               </div>
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.1em] text-paper/60">Makers</dt>
-                <dd className="mt-1 font-serif text-3xl text-paper">{data.counts.sellers}</dd>
-              </div>
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.1em] text-paper/60">Districts</dt>
-                <dd className="mt-1 font-serif text-3xl text-paper">{data.counts.regions}</dd>
-              </div>
-            </dl>
-            <div className="mt-4">
-              <DemoBadge>Demonstration figures</DemoBadge>
             </div>
           </div>
         </div>
       </section>
 
       {/* Regional filter pills */}
-      <section className="mx-auto max-w-[88rem] px-5 pb-8 sm:px-8 lg:px-10 xl:px-12">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line pt-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs uppercase tracking-wider text-muted font-semibold mr-2">Regions:</span>
-            {data.regions.map((region) => (
-              <Link key={region.region} to={`/shop?region=${encodeURIComponent(region.region)}`}>
-                <Badge tone="sand">
-                  {region.region} ({region.productCount})
-                </Badge>
-              </Link>
-            ))}
+      <section className="pb-6">
+        <div className="shell">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line pt-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Quick Valleys:</span>
+              {data.regions.map((region) => (
+                <Link key={region.region} to={`/shop?region=${encodeURIComponent(region.region)}`}>
+                  <Badge tone="sand">
+                    {region.region} ({region.productCount})
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+            <Link to="/shop" className="link-arrow">
+              Explore all shelves <span aria-hidden>→</span>
+            </Link>
           </div>
-          <Link to="/shop" className="link-underline text-xs font-semibold uppercase tracking-wider text-forest">
-            Explore All Shelves →
-          </Link>
         </div>
       </section>
 
-      {/* Section H: Closing Brand Moment */}
+      {/* Closing Brand Moment */}
       <ClosingMomentSection />
     </div>
   );

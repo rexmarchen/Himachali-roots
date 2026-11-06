@@ -14,41 +14,61 @@ export function CampaignBanner({
   if (!campaign?.posterUrl) return null;
 
   const href = `/offers/${campaign.slug}`;
+  const discount = campaign.maxDiscountPercent ? `${campaign.maxDiscountPercent}% off` : 'Limited offer';
 
   return (
-    <section aria-labelledby="festive-campaign-heading" className="w-full pt-3 pb-2 sm:pt-4 sm:pb-3">
-      <h2 id="festive-campaign-heading" className="sr-only">
-        {campaign.name} — Diwali in Himachal Offers
-      </h2>
-      <div className="mx-auto w-full max-w-3xl sm:max-w-4xl lg:max-w-[860px] xl:max-w-[900px] px-4 sm:px-6">
-        <Link
-          to={href}
-          aria-label={`${campaign.name}: view the festive Himachali collection`}
-          className="group relative block w-full overflow-hidden rounded-xl sm:rounded-2xl border border-[#2D241C]/25 bg-[#14120E] shadow-xl transition-all duration-300 hover:border-terra/40 hover:shadow-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terra"
-        >
+    <section aria-labelledby="festive-campaign-heading" className="shell section-tight">
+      <div className="grid overflow-hidden border border-line bg-forest-deep text-paper lg:grid-cols-[0.85fr_1.15fr]">
+        <div className="order-2 flex flex-col justify-center px-6 py-11 sm:px-10 sm:py-14 lg:order-1 lg:px-12 lg:py-16">
+          <p className="t-eyebrow text-butter/80">Diwali collection · {discount}</p>
+
+          <h2 id="festive-campaign-heading" className="t-h2 mt-4 text-paper">
+            {campaign.name}
+          </h2>
+
+          <p className="mt-4 max-w-md text-[13.5px] leading-[1.75] text-paper/70">
+            {campaign.description ??
+              'A festive collection from Himachali makers: handwoven wool, Kangra tea, orchard walnuts and wildflower honey.'}
+          </p>
+
+          <div className="mt-7 flex flex-wrap items-center gap-4">
+            <Link
+              to={href}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-butter bg-butter px-6 text-[12px] font-semibold uppercase tracking-[0.12em] text-forest-deep transition-colors hover:bg-paper"
+            >
+              Shop the offer
+              <span aria-hidden>→</span>
+            </Link>
+            <Link
+              to="/shop"
+              className="text-[11px] font-semibold uppercase tracking-[0.14em] text-paper/60 underline decoration-paper/25 underline-offset-4 transition-colors hover:text-paper"
+            >
+              {campaign.productCount ?? 0} pieces in the edit
+            </Link>
+          </div>
+        </div>
+
+        <div className="relative order-1 min-h-[220px] overflow-hidden sm:min-h-[300px] lg:order-2 lg:block lg:min-h-[420px]">
           <img
             src={campaign.posterUrl}
             srcSet={posterSrcSet(campaign.posterUrl)}
-            sizes="(min-width: 1280px) 900px, (min-width: 1024px) 860px, (min-width: 640px) 720px, 100vw"
+            sizes="(min-width: 1024px) 58vw, 100vw"
             alt={campaign.posterAlt ?? `${campaign.name} — authentic Himachali goods from local makers`}
             width={1672}
             height={941}
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
             decoding="async"
-            className="block h-auto w-full aspect-[1672/941] object-contain transition-transform duration-500 ease-out group-hover:scale-[1.008]"
+            className="img-brand absolute inset-0 h-full w-full object-cover object-[78%_center] transition-transform duration-[1200ms] ease-out hover:scale-[1.02]"
           />
-        </Link>
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
-          <p className="text-bark/80">
-            <span className="font-semibold text-terra">✨ Diwali Maker Special:</span> Selling mountain craft or harvest?
-          </p>
-          <Link
-            to="/become-a-maker?offer=diwali"
-            className="font-medium text-forest hover:text-terra underline underline-offset-4 transition-colors"
-          >
-            Apply to sell this festive season &rarr;
-          </Link>
+          <div
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,#101918_0%,rgba(16,25,24,0.97)_30%,rgba(16,25,24,0.9)_44%,rgba(16,25,24,0.6)_56%,rgba(16,25,24,0.16)_69%,rgba(16,25,24,0)_80%)]"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-forest-deep/70 to-transparent lg:hidden"
+            aria-hidden
+          />
         </div>
       </div>
     </section>

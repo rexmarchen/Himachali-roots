@@ -11,6 +11,7 @@
   --color-terra: #d98263;
   --color-sand: #e4dace;
   --color-sage: #66745a;
+  --color-paper-2: #f2ebdf;
   --color-line: #e4dace;
   --color-muted: #5c6663;
   --color-orchard: #172321;
@@ -30,6 +31,20 @@
   --font-serif: 'Cormorant Garamond Variable', 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
   --font-sans: 'Manrope Variable', 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Cormorant Garamond Variable', 'Cormorant Garamond', Georgia, serif;
+
+  /* Shape language: sharp editorial surfaces, pill actions */
+  --radius-card: 2px;
+  --radius-input: 2px;
+
+  /* Depth */
+  --shadow-soft: 0 1px 2px rgb(23 35 33 / 0.05), 0 12px 32px -14px rgb(23 35 33 / 0.16);
+  --shadow-lift: 0 2px 6px rgb(23 35 33 / 0.06), 0 26px 52px -18px rgb(23 35 33 / 0.22);
+
+  /* Motion */
+  --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 180ms;
+  --dur-base: 380ms;
+  --dur-slow: 900ms;
 }
 
 @layer base {
@@ -80,6 +95,13 @@
     letter-spacing: -0.02em;
     color: var(--color-forest);
     font-variation-settings: 'SOFT' 40, 'WONK' 1;
+    text-wrap: balance;
+  }
+
+  p,
+  li,
+  dd {
+    text-wrap: pretty;
   }
 
   ::selection {
@@ -148,18 +170,18 @@
 
 @layer components {
   .eyebrow {
-    font-size: 0.71875rem; /* 11.5px — raised from 11px for WCAG legibility */
-    letter-spacing: 0.22em;
+    font-size: 0.75rem; /* 12px legibility */
+    letter-spacing: 0.18em;
     text-transform: uppercase;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--color-muted);
   }
 
   .eyebrow-terra {
-    font-size: 0.71875rem;
-    letter-spacing: 0.22em;
+    font-size: 0.75rem;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--color-terra);
   }
 
@@ -256,6 +278,204 @@
     background: linear-gradient(90deg, #ece5d8 25%, #f4efe5 37%, #ece5d8 63%);
     background-size: 400% 100%;
     animation: shimmer 1.6s ease infinite;
+  }
+}
+
+/* ============================================================
+   Editorial design system — one scale, one frame, one rhythm
+   ============================================================ */
+
+@layer components {
+  /* Layout rhythm --------------------------------------------------------- */
+  .shell {
+    width: 100%;
+    max-width: 1320px;
+    margin-inline: auto;
+    padding-inline: clamp(1.25rem, 4vw, 3rem);
+  }
+
+  .section {
+    padding-block: clamp(4rem, 7vw, 7.5rem);
+  }
+
+  .section-tight {
+    padding-block: clamp(2.75rem, 4.5vw, 4.75rem);
+  }
+
+  /* Type scale ------------------------------------------------------------ */
+  .t-display {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-size: clamp(2.7rem, 6vw, 5.25rem);
+    line-height: 0.98;
+    letter-spacing: -0.03em;
+    color: inherit;
+  }
+
+  .t-h2 {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-size: clamp(1.9rem, 3.4vw, 3.05rem);
+    line-height: 1.04;
+    letter-spacing: -0.022em;
+    color: inherit;
+  }
+
+  .t-h3 {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-size: clamp(1.2rem, 1.6vw, 1.45rem);
+    line-height: 1.25;
+    letter-spacing: -0.012em;
+    color: inherit;
+  }
+
+  .t-eyebrow {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .t-lead {
+    font-family: var(--font-sans);
+    font-size: clamp(1rem, 1.15vw, 1.15rem);
+    line-height: 1.78;
+    color: var(--color-ink-soft, #3c403a);
+  }
+
+  .hairline {
+    height: 1px;
+    width: 100%;
+    background: var(--color-line);
+  }
+
+  .rule-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--color-terra);
+  }
+
+  .rule-eyebrow::before {
+    content: '';
+    display: block;
+    width: 1.75rem;
+    height: 1px;
+    background: currentColor;
+  }
+
+  /* Photographic art direction ------------------------------------------- */
+  .img-brand {
+    filter: saturate(0.92) contrast(1.03) sepia(0.06) brightness(1.01);
+  }
+
+  .frame {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 50% 0%, #efe7d8 0%, #e2d5c0 100%);
+    box-shadow: inset 0 0 0 1px rgb(23 35 33 / 0.08);
+  }
+
+  .frame img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--dur-slow) var(--ease-editorial);
+  }
+
+  .group:hover .frame img {
+    transform: scale(1.045);
+  }
+
+  /* Category tile scrim --------------------------------------------------- */
+  .tile::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgb(16 25 24 / 0.9) 0%,
+      rgb(16 25 24 / 0.42) 40%,
+      rgb(16 25 24 / 0) 72%
+    );
+    pointer-events: none;
+  }
+
+  .tile-title {
+    color: #ffffff;
+    text-shadow: 0 1px 14px rgb(0 0 0 / 0.35);
+  }
+
+  /* Links ----------------------------------------------------------------- */
+  .link-arrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-forest);
+    transition: color var(--dur-fast) ease, gap var(--dur-fast) ease;
+  }
+
+  .link-arrow:hover {
+    color: var(--color-terra);
+    gap: 0.75rem;
+  }
+
+  /* Buttons: fill sweep on hover ------------------------------------------ */
+  .btn-sweep {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .btn-sweep::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: currentColor;
+    opacity: 0.08;
+    transform: translateX(-101%);
+    transition: transform var(--dur-base) var(--ease-editorial);
+  }
+
+  .btn-sweep:hover::before {
+    transform: translateX(0);
+  }
+}
+
+/* Scroll reveal — progressive enhancement, no JS required */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: reveal-up linear both;
+      animation-timeline: view();
+      animation-range: entry 8% cover 26%;
+    }
+  }
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -380,4 +600,75 @@
 
 .animate-pop {
   animation: popInBounce 0.75s cubic-bezier(0.28, 0.84, 0.42, 1) forwards;
+}
+
+/* Editorial scroll-triggered section reveals */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Hero line-by-line reveal animations */
+@keyframes heroLineReveal {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal-line-1 {
+  animation: heroLineReveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+}
+
+.reveal-line-2 {
+  animation: heroLineReveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+}
+
+.reveal-subhead {
+  animation: heroLineReveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
+}
+
+.reveal-cta {
+  animation: heroLineReveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.7s both;
+}
+
+/* Staggered entrances for category bubbles */
+@keyframes bubbleEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-bubble {
+  animation: bubbleEntrance 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-on-scroll,
+  .reveal-line-1,
+  .reveal-line-2,
+  .reveal-subhead,
+  .reveal-cta,
+  .animate-bubble {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
 }

@@ -1,3 +1,4 @@
+/* global console, process */
 // scripts/financial-unit-economics-simulator.cjs
 // Rigorous Monte Carlo & Deterministic Financial Simulator for Dear Hills Marketplace
 
@@ -117,6 +118,9 @@ function runModelSimulation(name, shippingPolicyFn) {
     name,
     avgOrderValue: Math.round(totalGrossSales / SIMULATION_COUNT),
     totalGrossGMV: Math.round(totalGrossSales),
+    totalPlatformRevenue: Math.round(totalPlatformRevenue),
+    totalLogisticsCosts: Math.round(totalLogisticsCosts),
+    totalGatewayFees: Math.round(totalGatewayFees),
     totalNetProfit: Math.round(totalNetProfit),
     avgProfitPerOrder: (totalNetProfit / SIMULATION_COUNT).toFixed(2),
     profitMarginOnGMV: ((totalNetProfit / totalGrossSales) * 100).toFixed(2) + '%',
