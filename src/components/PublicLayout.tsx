@@ -205,25 +205,34 @@ function MenuLink({ to, children, onClick }: { to: string; children: ReactNode; 
 }
 
 function HeritageAnnouncementBar({ customText, light = false }: { customText?: string; light?: boolean }) {
+  const items = [
+    '🏔️ 100% Harvested & Hand-Woven in Himachal',
+    '✦ Flat ₹29 Delivery Across India',
+    '✦ Free Shipping On Orders Over ₹699',
+    '✦ Pure Raw Honey · A2 Desi Ghee · Kullu Shawls · Spiti Seabuckthorn',
+    '✦ 88% Direct Payouts to Mountain Artisans',
+    '✦ Pure · Honest · Local',
+  ];
+
+  if (customText) {
+    items.unshift(`✦ ${customText}`);
+  }
+
   return (
     <div
-      className={`border-b transition-colors duration-300 ${
-        light ? 'border-white/10 bg-black/50 text-white/90' : 'border-[#0F1614] bg-forest-deep text-paper'
+      className={`relative overflow-hidden border-b transition-colors duration-300 ${
+        light ? 'border-white/10 bg-black/60 text-white/90' : 'border-[#1b2b28] bg-[#142320] text-[#f4ede2]'
       }`}
       aria-label="Dear Hills announcements"
     >
-      <div className="shell flex h-9 items-center justify-center gap-2.5 overflow-hidden text-[10px] font-medium uppercase tracking-[0.16em] sm:h-10 sm:text-[10.5px]">
-        <Diya className="h-3.5 w-3.5 shrink-0 text-butter" />
-        <Link to="/offers/pahadi-festive-glow" className="min-w-0 truncate transition-colors hover:text-butter">
-          {customText || 'Festive harvest · up to 30% off · 0% platform fee'}
-        </Link>
-        <Link
-          to="/offers/pahadi-festive-glow"
-          className="hidden shrink-0 items-center gap-1.5 font-semibold text-butter underline decoration-butter/50 underline-offset-4 transition-colors hover:text-white md:inline-flex"
-        >
-          Diwali offers
-          <span aria-hidden>→</span>
-        </Link>
+      <div className="flex h-9 sm:h-9.5 items-center overflow-hidden whitespace-nowrap text-[11px] sm:text-[11.5px] font-medium tracking-[0.14em]">
+        <div className="animate-marquee-track flex items-center gap-8 px-4">
+          {[...items, ...items].map((text, i) => (
+            <span key={i} className="inline-flex items-center gap-2 transition-colors hover:text-[#d98263]">
+              {text}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

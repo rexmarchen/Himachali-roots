@@ -643,6 +643,26 @@
   animation: heroLineReveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.7s both;
 }
 
+/* Continuous Marquee Ticker */
+@keyframes marqueeSlide {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marqueeSlide 36s linear infinite;
+}
+
+.animate-marquee-track:hover {
+  animation-play-state: paused;
+}
+
 /* Staggered entrances for category bubbles */
 @keyframes bubbleEntrance {
   from {
@@ -665,7 +685,8 @@
   .reveal-line-2,
   .reveal-subhead,
   .reveal-cta,
-  .animate-bubble {
+  .animate-bubble,
+  .animate-marquee-track {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
