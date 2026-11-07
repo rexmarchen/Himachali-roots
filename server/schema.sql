@@ -217,11 +217,15 @@ CREATE TABLE IF NOT EXISTS seller_documents (
   doc_type TEXT NOT NULL,
   doc_label TEXT,
   file_path TEXT NOT NULL,
+  storage_key TEXT,
+  sha256 TEXT,
   original_name TEXT NOT NULL,
   mime_type TEXT NOT NULL,
   size_bytes INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted','accepted','rejected')),
   review_note TEXT,
+  reviewed_by TEXT REFERENCES users(id),
+  reviewed_at TEXT,
   expires_at TEXT,
   uploaded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );

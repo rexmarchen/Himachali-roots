@@ -216,8 +216,17 @@ function migrateSellerOnboarding(db: Db): void {
 
   addColumn(db, 'seller_documents', 'application_id', 'TEXT');
   addColumn(db, 'seller_documents', 'doc_label', 'TEXT');
+  addColumn(db, 'seller_documents', 'storage_key', 'TEXT');
+  addColumn(db, 'seller_documents', 'sha256', 'TEXT');
   addColumn(db, 'seller_documents', 'review_note', 'TEXT');
+  addColumn(db, 'seller_documents', 'reviewed_by', 'TEXT');
+  addColumn(db, 'seller_documents', 'reviewed_at', 'TEXT');
   addColumn(db, 'seller_documents', 'expires_at', 'TEXT');
+  db.exec(`
+    UPDATE seller_documents
+       SET storage_key = COALESCE(storage_key, file_path)
+     WHERE storage_key IS NULL;
+  `);
 
   addColumn(db, 'products', 'compliance_json', 'TEXT');
   addColumn(db, 'products', 'moderation_note', 'TEXT');

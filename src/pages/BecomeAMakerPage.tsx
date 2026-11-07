@@ -7,7 +7,7 @@ import { api, errorFields, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { formatDate, formatDateTime, percentFromBp } from '@/lib/format';
-import { Alert, Button, Field, Input, Select, StatusBadge, Textarea, buttonClass } from '@/components/ui';
+import { Alert, Button, Field, Input, Modal, Select, StatusBadge, Textarea, buttonClass } from '@/components/ui';
 
 /* -------------------------------------------------------------------------- */
 /*                              Constants & types                             */
@@ -293,6 +293,9 @@ interface ApplicationDocument {
   status: string;
   reviewNote: string | null;
   uploadedAt: string;
+  sizeBytes?: number;
+  mimeType?: string;
+  fileUrl?: string;
 }
 
 interface ApplicationEvent {
@@ -734,6 +737,8 @@ export function BecomeAMakerPage() {
   const [regTerms, setRegTerms] = useState(false);
 
   const [uploadingType, setUploadingType] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<ApplicationDocument | null>(null);
+  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawReason, setWithdrawReason] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
@@ -969,20 +974,46 @@ export function BecomeAMakerPage() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+
+    const docType = pendingDocTypeRef.current;
+    setUploadErrors((prev) => {
+      const next = { ...prev };
+      delete next[docType];
+      return next;
+    });
+
     if (file.size > 5 * 1024 * 1024) {
-      toast.push('Documents must be 5 MB or smaller.', 'error');
+      const msg = 'Documents must be 5 MB or smaller.';
+      toast.push(msg, 'error');
+      setUploadErrors((prev) => ({ ...prev, [docType]: msg }));
       return;
     }
-    setUploadingType(pendingDocTypeRef.current);
+
+    const allowedExts = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
+    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    if (!allowedExts.includes(ext) && !['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      const msg = 'Upload a PDF, JPEG, PNG, or WebP document.';
+      toast.push(msg, 'error');
+      setUploadErrors((prev) => ({ ...prev, [docType]: msg }));
+      return;
+    }
+
+    setUploadingType(docType);
     try {
+      if (user && (!application.data?.exists || dirty)) {
+        await persistDraft(step, form, true);
+      }
+
       const body = new FormData();
       body.append('document', file);
-      body.append('docType', pendingDocTypeRef.current);
+      body.append('docType', docType);
       await api('/seller/documents', { method: 'POST', body });
       toast.push('Document uploaded privately. Only authorised reviewers can open it.');
       await queryClient.invalidateQueries({ queryKey: ['seller-application'] });
     } catch (error) {
-      toast.push(errorMessage(error), 'error');
+      const msg = errorMessage(error);
+      toast.push(msg, 'error');
+      setUploadErrors((prev) => ({ ...prev, [docType]: msg }));
     } finally {
       setUploadingType(null);
     }
@@ -1648,52 +1679,86 @@ export function BecomeAMakerPage() {
   const renderDocRow = (type: string, required: boolean) => {
     const current = documents.find((document) => document.docType === type && document.status !== 'rejected');
     const rejected = documents.find((document) => document.docType === type && document.status === 'rejected');
+    const rowError = uploadErrors[type];
     return (
-      <li key={type} className="flex flex-wrap items-start justify-between gap-3 border-b border-line py-3 last:border-b-0">
-        <div className="min-w-0">
-          <p className="text-sm text-ink">
-            {docLabels[type] ?? type}
-            {required ? <span className="ml-1 text-terra">*</span> : null}
-          </p>
-          {current ? (
-            <p className="mt-1 truncate text-xs text-muted">
-              {current.originalName} · {formatDate(current.uploadedAt)} ·{' '}
-              {current.status === 'accepted' ? 'Accepted' : 'Awaiting review'}
+      <li key={type} className="border-b border-line py-3.5 last:border-b-0">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-ink">
+              {docLabels[type] ?? type}
+              {required ? <span className="ml-1 text-terra">*</span> : null}
             </p>
-          ) : (
-            <p className="mt-1 text-xs text-muted">
-              {required ? 'Required before submission' : 'Optional supporting evidence'}
-            </p>
-          )}
-          {rejected ? (
-            <p className="mt-1 text-xs text-[#8e4630]">
-              Previous file rejected{rejected.reviewNote ? `: ${rejected.reviewNote}` : '.'}
-            </p>
-          ) : null}
+            {current ? (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className="truncate text-xs text-muted">
+                  {current.originalName}
+                  {current.sizeBytes ? ` (${Math.round(current.sizeBytes / 1024)} KB)` : ''} · {formatDate(current.uploadedAt)}
+                </span>
+                <StatusBadge
+                  status={current.status}
+                  label={current.status === 'accepted' ? 'Accepted' : current.status === 'rejected' ? 'Rejected' : 'Awaiting review'}
+                />
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-muted">
+                {required ? 'Required before submission' : 'Optional supporting evidence'}
+              </p>
+            )}
+            {rejected ? (
+              <p className="mt-1 text-xs text-[#8e4630]">
+                Previous file rejected{rejected.reviewNote ? `: ${rejected.reviewNote}` : '.'}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {current ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setPreviewDoc(current)}
+              >
+                Preview
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              loading={uploadingType === type}
+              onClick={() => {
+                pendingDocTypeRef.current = type;
+                fileInputRef.current?.click();
+              }}
+            >
+              {current ? 'Replace' : 'Upload'}
+            </Button>
+            {current ? (
+              <button
+                type="button"
+                className="text-xs text-muted underline underline-offset-2 hover:text-terra"
+                onClick={() => void removeDocument(current)}
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            loading={uploadingType === type}
-            onClick={() => {
-              pendingDocTypeRef.current = type;
-              fileInputRef.current?.click();
-            }}
-          >
-            {current ? 'Replace' : 'Upload'}
-          </Button>
-          {current ? (
+        {rowError ? (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded border border-[#f5d0c5] bg-[#fdf2ee] p-2 text-xs text-terra">
+            <span>{rowError}</span>
             <button
               type="button"
-              className="text-xs text-muted underline underline-offset-2 hover:text-terra"
-              onClick={() => void removeDocument(current)}
+              className="font-semibold underline hover:text-ink"
+              onClick={() => {
+                pendingDocTypeRef.current = type;
+                fileInputRef.current?.click();
+              }}
             >
-              Remove
+              Try again
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </li>
     );
   };
@@ -1763,7 +1828,7 @@ export function BecomeAMakerPage() {
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-display text-xl text-orchard">Private verification documents</h3>
-          <span className="text-[11px] uppercase tracking-[0.12em] text-muted">PDF, JPEG or PNG · max 5 MB</span>
+          <span className="text-[11px] uppercase tracking-[0.12em] text-muted">PDF, JPEG, PNG or WebP · max 5 MB</span>
         </div>
         <p className="mt-1 text-xs leading-relaxed text-muted">
           Files are stored outside the public web root and served only through authorised review endpoints. They are not
@@ -1772,7 +1837,7 @@ export function BecomeAMakerPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.jpg,.jpeg,.png"
+          accept=".pdf,.jpg,.jpeg,.png,.webp"
           className="sr-only"
           onChange={handleFile}
           aria-label="Upload verification document"
@@ -1786,19 +1851,35 @@ export function BecomeAMakerPage() {
               className="flex flex-wrap items-start justify-between gap-3 border-b border-line py-3 last:border-b-0"
             >
               <div className="min-w-0">
-                <p className="text-sm text-ink">{document.docLabel ?? docLabels[document.docType] ?? document.docType}</p>
-                <p className="mt-1 truncate text-xs text-muted">
-                  {document.originalName} · {formatDate(document.uploadedAt)} ·{' '}
-                  {document.status === 'accepted' ? 'Accepted' : document.status === 'rejected' ? 'Rejected' : 'Awaiting review'}
-                </p>
+                <p className="text-sm font-medium text-ink">{document.docLabel ?? docLabels[document.docType] ?? document.docType}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className="truncate text-xs text-muted">
+                    {document.originalName}
+                    {document.sizeBytes ? ` (${Math.round(document.sizeBytes / 1024)} KB)` : ''} · {formatDate(document.uploadedAt)}
+                  </span>
+                  <StatusBadge
+                    status={document.status}
+                    label={document.status === 'accepted' ? 'Accepted' : document.status === 'rejected' ? 'Rejected' : 'Awaiting review'}
+                  />
+                </div>
               </div>
-              <button
-                type="button"
-                className="text-xs text-muted underline underline-offset-2 hover:text-terra"
-                onClick={() => void removeDocument(document)}
-              >
-                Remove
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setPreviewDoc(document)}
+                >
+                  Preview
+                </Button>
+                <button
+                  type="button"
+                  className="text-xs text-muted underline underline-offset-2 hover:text-terra"
+                  onClick={() => void removeDocument(document)}
+                >
+                  Remove
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -2934,6 +3015,54 @@ export function BecomeAMakerPage() {
           </div>
         </div>
       </section>
+
+      <Modal
+        open={Boolean(previewDoc)}
+        onClose={() => setPreviewDoc(null)}
+        title={previewDoc ? (previewDoc.docLabel ?? docLabels[previewDoc.docType] ?? previewDoc.docType) : 'Document preview'}
+        wide
+        footer={
+          <div className="flex w-full items-center justify-between gap-3">
+            <span className="truncate text-xs text-muted">
+              {previewDoc?.originalName}
+              {previewDoc?.sizeBytes ? ` · ${Math.round(previewDoc.sizeBytes / 1024)} KB` : ''}
+            </span>
+            <div className="flex items-center gap-2">
+              {previewDoc ? (
+                <a
+                  href={previewDoc.fileUrl || `/api/seller/documents/${previewDoc.id}/file`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={buttonClass('secondary', 'sm')}
+                >
+                  Open in new tab
+                </a>
+              ) : null}
+              <Button variant="ghost" size="sm" onClick={() => setPreviewDoc(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        {previewDoc ? (
+          <div className="flex min-h-[300px] items-center justify-center rounded bg-warm-paper/40 p-2">
+            {previewDoc.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(previewDoc.originalName) ? (
+              <img
+                src={previewDoc.fileUrl || `/api/seller/documents/${previewDoc.id}/file`}
+                alt={previewDoc.originalName}
+                className="max-h-[65vh] max-w-full rounded border border-line object-contain shadow-sm"
+              />
+            ) : (
+              <iframe
+                src={previewDoc.fileUrl || `/api/seller/documents/${previewDoc.id}/file`}
+                title={previewDoc.originalName}
+                className="h-[65vh] w-full rounded border border-line bg-white shadow-sm"
+              />
+            )}
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

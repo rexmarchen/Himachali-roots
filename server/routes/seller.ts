@@ -9,7 +9,14 @@ import { requireApprovedSeller, requireAuth } from '../lib/auth.js';
 import { audit } from '../lib/audit.js';
 import { badRequest, conflict, notFound, parse } from '../lib/http.js';
 import { newId, uniqueSlug } from '../lib/ids.js';
-import { documentUpload, hasValidFileSignature, imageUpload, isInsidePrivateDocs } from '../lib/uploads.js';
+import {
+  calculateFileSha256,
+  deletePrivateDoc,
+  documentUpload,
+  hasValidFileSignature,
+  imageUpload,
+  resolvePrivateDocPath,
+} from '../lib/uploads.js';
 import { notify, escapeHtml } from '../lib/email.js';
 import { COMMISSION_BASIS_NOTE, resolveCommissionBp } from '../lib/pricing.js';
 import { firstComplianceError, validateProductCompliance, COMPLIANCE_GUIDES } from '../lib/productCompliance.js';
@@ -292,9 +299,12 @@ export function sellerRouter(db: Db): Router {
         docType: doc.doc_type,
         docLabel: doc.doc_label ?? DOCUMENT_LABELS[doc.doc_type as DocumentType],
         originalName: doc.original_name,
+        sizeBytes: doc.size_bytes,
+        mimeType: doc.mime_type,
         status: doc.status,
         reviewNote: doc.review_note,
         uploadedAt: doc.uploaded_at,
+        fileUrl: `/api/seller/documents/${doc.id}/file`,
       })),
       events: events.map((event) => ({
         id: event.id,
@@ -721,49 +731,114 @@ export function sellerRouter(db: Db): Router {
 
   router.post('/documents', documentUpload().single('document'), (req, res) => {
     const file = req.file;
-    if (!file) throw badRequest('Choose a document to upload.');
+    if (!file) throw badRequest('Please choose a PDF, JPEG, PNG, or WebP document to upload.');
+
+    // Signature verification with safe cleanup
     if (!hasValidFileSignature(file.path, 'document')) {
-      fs.unlinkSync(file.path);
-      throw badRequest('That file does not look like a valid PDF, JPEG, or PNG document.');
+      deletePrivateDoc(file.path);
+      throw badRequest('That file does not look like a valid PDF, JPEG, PNG, or WebP document.');
     }
-    const seller = sellerForUser(db, req.user!.id);
-    if (!seller) throw badRequest('Start your application before uploading documents.');
-    const current = latestApplication(db, seller.id);
+
+    const storageKey = path.basename(file.path);
+    const fileSha256 = calculateFileSha256(file.path);
+
+    // Auto-ensure seller profile and application draft so applicant is never blocked
+    const seller = sellerForUser(db, req.user!.id) ?? ensureSellerProfile(db, req.user!.id, {});
+    let current = latestApplication(db, seller.id);
+    if (!current || current.status === 'withdrawn') {
+      const now = new Date().toISOString();
+      const appId = newId('app_');
+      execute(
+        db,
+        `INSERT INTO seller_applications
+           (id, seller_id, status, revision, current_step, seller_category, business_name, seller_type,
+            categories, address, data_json, last_saved_at, created_at, updated_at)
+         VALUES (?, ?, 'draft', 1, 6, ?, ?, ?, '[]', '{}', '{}', ?, ?, ?)`,
+        appId,
+        seller.id,
+        seller.seller_category ?? null,
+        seller.business_name ?? 'New maker',
+        seller.seller_type ?? 'individual',
+        now,
+        now,
+        now,
+      );
+      current = latestApplication(db, seller.id);
+    }
+
     if (current && ['submitted', 'under_review', 'approved', 'suspended'].includes(current.status)) {
-      throw conflict('Documents cannot be replaced while the application is in review. Ask the review team to reopen it.');
+      deletePrivateDoc(file.path);
+      throw conflict('Documents cannot be replaced while the application is in review or approved. Contact our team to reopen.');
     }
-    const docType = String(req.body.docType ?? 'other') as DocumentType;
-    if (!DOCUMENT_TYPES.includes(docType)) throw badRequest('Choose a valid document type.');
-    const id = newId('doc_');
-    execute(
+
+    const docType = String(req.body.docType ?? 'id_proof') as DocumentType;
+    if (!DOCUMENT_TYPES.includes(docType)) {
+      deletePrivateDoc(file.path);
+      throw badRequest('Choose a valid document type.');
+    }
+
+    // Clean up previous file for the same docType so disk does not accumulate orphaned files
+    const existingDocs = queryAll<{ id: string; file_path: string; storage_key: string | null }>(
       db,
-      `INSERT INTO seller_documents
-         (id, seller_id, application_id, doc_type, doc_label, file_path, original_name, mime_type, size_bytes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      id,
+      'SELECT id, file_path, storage_key FROM seller_documents WHERE seller_id = ? AND doc_type = ?',
       seller.id,
-      current?.id ?? null,
       docType,
-      DOCUMENT_LABELS[docType],
-      file.path,
-      path.basename(file.originalname).slice(0, 160),
-      file.mimetype,
-      file.size,
     );
+    for (const oldDoc of existingDocs) {
+      deletePrivateDoc(oldDoc.storage_key || oldDoc.file_path);
+      execute(db, 'DELETE FROM seller_documents WHERE id = ?', oldDoc.id);
+    }
+
+    const id = newId('doc_');
+    const safeOriginalName = path.basename(file.originalname).slice(0, 160);
+    const now = new Date().toISOString();
+
+    try {
+      execute(
+        db,
+        `INSERT INTO seller_documents
+           (id, seller_id, application_id, doc_type, doc_label, file_path, storage_key, sha256, original_name, mime_type, size_bytes, status, uploaded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?)`,
+        id,
+        seller.id,
+        current?.id ?? null,
+        docType,
+        DOCUMENT_LABELS[docType],
+        storageKey,
+        storageKey,
+        fileSha256,
+        safeOriginalName,
+        file.mimetype,
+        file.size,
+        now,
+      );
+    } catch (insertError) {
+      deletePrivateDoc(file.path);
+      throw insertError;
+    }
+
     if (current) {
       recordApplicationEvent(db, {
         applicationId: current.id,
         sellerId: seller.id,
         actor: req.user!,
         event: 'document_uploaded',
-        metadata: { docType, documentId: id },
+        metadata: { docType, documentId: id, originalName: safeOriginalName, sizeBytes: file.size },
       });
     }
     audit(db, req.user!, 'seller.document_uploaded', 'seller', seller.id, null, { docType, id });
+
     res.status(201).json({
       id,
       docType,
       label: DOCUMENT_LABELS[docType],
+      docLabel: DOCUMENT_LABELS[docType],
+      originalName: safeOriginalName,
+      sizeBytes: file.size,
+      mimeType: file.mimetype,
+      status: 'submitted',
+      uploadedAt: now,
+      fileUrl: `/api/seller/documents/${id}/file`,
       message: 'Document uploaded privately. Only authorized reviewers can open it.',
     });
   });
@@ -771,9 +846,9 @@ export function sellerRouter(db: Db): Router {
   router.delete('/documents/:id', (req, res) => {
     const seller = sellerForUser(db, req.user!.id);
     if (!seller) throw notFound('Document not found.');
-    const doc = queryOne<{ id: string; seller_id: string; file_path: string }>(
+    const doc = queryOne<{ id: string; seller_id: string; file_path: string; storage_key: string | null }>(
       db,
-      'SELECT id, seller_id, file_path FROM seller_documents WHERE id = ? AND seller_id = ?',
+      'SELECT id, seller_id, file_path, storage_key FROM seller_documents WHERE id = ? AND seller_id = ?',
       req.params.id,
       seller.id,
     );
@@ -783,7 +858,7 @@ export function sellerRouter(db: Db): Router {
       throw conflict('Documents cannot be removed while the application is in review.');
     }
     execute(db, 'DELETE FROM seller_documents WHERE id = ?', doc.id);
-    if (isInsidePrivateDocs(doc.file_path) && fs.existsSync(doc.file_path)) fs.unlinkSync(doc.file_path);
+    deletePrivateDoc(doc.storage_key || doc.file_path);
     audit(db, req.user!, 'seller.document_deleted', 'seller', seller.id, { documentId: doc.id }, null);
     res.json({ ok: true });
   });
@@ -852,9 +927,16 @@ export function sellerRouter(db: Db): Router {
   });
 
   router.get('/documents/:id/file', (req, res) => {
-    const doc = queryOne<{ id: string; seller_id: string; file_path: string; mime_type: string; original_name: string }>(
+    const doc = queryOne<{
+      id: string;
+      seller_id: string;
+      file_path: string;
+      storage_key: string | null;
+      mime_type: string;
+      original_name: string;
+    }>(
       db,
-      'SELECT * FROM seller_documents WHERE id = ?',
+      'SELECT id, seller_id, file_path, storage_key, mime_type, original_name FROM seller_documents WHERE id = ?',
       req.params.id,
     );
     if (!doc) throw notFound('Document not found.');
@@ -862,11 +944,17 @@ export function sellerRouter(db: Db): Router {
       queryOne(db, 'SELECT 1 FROM seller_profiles WHERE id = ? AND user_id = ?', doc.seller_id, req.user!.id),
     );
     if (!isOwner && !req.user!.roles.includes('admin')) throw notFound('Document not found.');
-    if (!isInsidePrivateDocs(doc.file_path) || !fs.existsSync(doc.file_path)) throw notFound('Document file not found.');
-    res.setHeader('Content-Type', doc.mime_type);
+
+    const resolved = resolvePrivateDocPath(doc.storage_key || doc.file_path);
+    if (!resolved || !fs.existsSync(resolved)) {
+      throw notFound('Document file not found on storage.');
+    }
+
+    res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.original_name)}"`);
-    res.setHeader('Cache-Control', 'private, no-store');
-    fs.createReadStream(doc.file_path).pipe(res);
+    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    fs.createReadStream(resolved).pipe(res);
   });
 
   /* -------------------------- Approved seller -------------------------- */

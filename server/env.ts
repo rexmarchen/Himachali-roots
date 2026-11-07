@@ -33,15 +33,44 @@ const sameSiteRaw = (process.env.SESSION_COOKIE_SAMESITE ?? 'lax').toLowerCase()
 const sessionSameSite: 'lax' | 'strict' | 'none' =
   sameSiteRaw === 'strict' || sameSiteRaw === 'none' ? sameSiteRaw : 'lax';
 
+const databasePath = process.env.DATABASE_PATH ?? path.resolve(process.cwd(), 'data', 'pahadi-roots.db');
+
+function resolveStorageDirectory(configured: string | undefined, subdir: string): string {
+  if (configured && configured.trim()) {
+    return path.resolve(configured.trim());
+  }
+  // When running with persistent /data volume (e.g. Railway, Render, Fly), place uploads and docs inside /data
+  const dbDir = path.dirname(databasePath);
+  if (dbDir === '/data' || (process.platform !== 'win32' && fs.existsSync('/data'))) {
+    return path.join('/data', subdir);
+  }
+  return path.resolve(process.cwd(), 'storage', subdir);
+}
+
+const uploadDir = resolveStorageDirectory(process.env.UPLOAD_DIR, 'uploads');
+const privateDocsDir = resolveStorageDirectory(process.env.PRIVATE_DOCS_DIR, path.join('private', 'seller-docs'));
+
+try {
+  fs.mkdirSync(uploadDir, { recursive: true });
+} catch {
+  // Ignored if cannot create immediately
+}
+
+try {
+  fs.mkdirSync(privateDocsDir, { recursive: true });
+} catch {
+  // Ignored if cannot create immediately
+}
+
 export const env = {
   nodeEnv,
   isProduction,
   isTest: nodeEnv === 'test',
   port: int(process.env.PORT, 8787),
   appUrl: (process.env.APP_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
-  databasePath: process.env.DATABASE_PATH ?? path.resolve(process.cwd(), 'data', 'pahadi-roots.db'),
-  uploadDir: process.env.UPLOAD_DIR ?? path.resolve(process.cwd(), 'storage', 'uploads'),
-  privateDocsDir: process.env.PRIVATE_DOCS_DIR ?? path.resolve(process.cwd(), 'storage', 'private', 'seller-docs'),
+  databasePath,
+  uploadDir,
+  privateDocsDir,
   trustProxy: bool(process.env.TRUST_PROXY, false),
   sessionDays: int(process.env.SESSION_DAYS, 30),
   sessionIdleDays: int(process.env.SESSION_IDLE_DAYS, 7),

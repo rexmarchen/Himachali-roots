@@ -10,7 +10,7 @@ import { badRequest, conflict, notFound, parse } from '../lib/http.js';
 import { newId, uniqueSlug } from '../lib/ids.js';
 import { escapeHtml, notify, notificationQueueSummary } from '../lib/email.js';
 import { getOrderView, decideRefund, createRefundForReturn, generateSettlement, markSettlementPaid, markManualRefundCompleted, sellerOrderAction, refreshOrderStatus } from '../lib/orders.js';
-import { isInsidePrivateDocs, imageUpload, hasValidFileSignature } from '../lib/uploads.js';
+import { imageUpload, hasValidFileSignature, resolvePrivateDocPath } from '../lib/uploads.js';
 import { getSiteContent, setSiteContent } from '../lib/site.js';
 import {
   assertProductNotInAnotherCampaign,
@@ -229,6 +229,7 @@ export function adminRouter(db: Db): Router {
       product_count: number;
       paid_orders: number;
       gmv: number;
+      document_count: number;
       application_id: string | null;
       application_status: string | null;
       application_revision: number | null;
@@ -240,6 +241,7 @@ export function adminRouter(db: Db): Router {
               sp.seller_category, sp.seller_type, sp.region, sp.created_at, sp.approved_at,
               u.email, la.id AS application_id, la.status AS application_status, la.revision AS application_revision,
               la.current_step AS application_current_step, la.submitted_at,
+              (SELECT COUNT(*) FROM seller_documents sd WHERE sd.seller_id = sp.id) AS document_count,
               (SELECT COUNT(*) FROM products p WHERE p.seller_id = sp.id AND p.status = 'approved') AS product_count,
               (SELECT COUNT(*) FROM seller_orders so JOIN orders o ON o.id = so.order_id
                 WHERE so.seller_id = sp.id AND o.paid_at IS NOT NULL) AS paid_orders,
@@ -291,15 +293,21 @@ export function adminRouter(db: Db): Router {
       id: string;
       doc_type: string;
       doc_label: string | null;
+      file_path: string;
+      storage_key: string | null;
+      sha256: string | null;
       original_name: string;
       mime_type: string;
       size_bytes: number;
       status: string;
       review_note: string | null;
+      reviewed_by: string | null;
+      reviewed_at: string | null;
       uploaded_at: string;
     }>(
       db,
-      `SELECT id, doc_type, doc_label, original_name, mime_type, size_bytes, status, review_note, uploaded_at
+      `SELECT id, doc_type, doc_label, file_path, storage_key, sha256, original_name, mime_type, size_bytes,
+              status, review_note, reviewed_by, reviewed_at, uploaded_at
          FROM seller_documents WHERE seller_id = ? ORDER BY uploaded_at DESC`,
       seller.id,
     );
@@ -398,10 +406,24 @@ export function adminRouter(db: Db): Router {
             agreement: parseJson<Record<string, unknown> | null>(application.agreement_json, null),
           }
         : null,
-      documents: documents.map((doc) => ({
-        ...doc,
-        docLabel: doc.doc_label ?? DOCUMENT_LABELS[doc.doc_type as DocumentType],
-      })),
+      documents: documents.map((doc) => {
+        const resolved = resolvePrivateDocPath(doc.storage_key || doc.file_path);
+        return {
+          id: doc.id,
+          docType: doc.doc_type,
+          docLabel: doc.doc_label ?? DOCUMENT_LABELS[doc.doc_type as DocumentType],
+          originalName: doc.original_name,
+          mimeType: doc.mime_type,
+          sizeBytes: doc.size_bytes,
+          status: doc.status,
+          reviewNote: doc.review_note,
+          reviewedBy: doc.reviewed_by,
+          reviewedAt: doc.reviewed_at,
+          uploadedAt: doc.uploaded_at,
+          fileExists: Boolean(resolved && fs.existsSync(resolved)),
+          fileUrl: `/api/admin/seller-documents/${doc.id}/file`,
+        };
+      }),
       events,
       auditTrail,
       requirements,
@@ -418,22 +440,34 @@ export function adminRouter(db: Db): Router {
   });
 
   router.get('/seller-documents/:id/file', (req, res) => {
-    const doc = queryOne<{ seller_id: string; file_path: string; mime_type: string; original_name: string; doc_type: string }>(
+    const doc = queryOne<{
+      id: string;
+      seller_id: string;
+      file_path: string;
+      storage_key: string | null;
+      mime_type: string;
+      original_name: string;
+      doc_type: string;
+    }>(
       db,
-      'SELECT seller_id, file_path, mime_type, original_name, doc_type FROM seller_documents WHERE id = ?',
+      'SELECT id, seller_id, file_path, storage_key, mime_type, original_name, doc_type FROM seller_documents WHERE id = ?',
       req.params.id,
     );
-    if (!doc || !isInsidePrivateDocs(doc.file_path) || !fs.existsSync(doc.file_path)) throw notFound('Document not found.');
-    // Opening identity evidence is itself a sensitive action. Record who opened
-    // which document without copying the file contents into the log.
+    if (!doc) throw notFound('Document not found.');
+    const resolvedPath = resolvePrivateDocPath(doc.storage_key || doc.file_path);
+    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+      throw notFound('Document file not found on storage.');
+    }
+
     audit(db, req.user!, 'seller.document_opened', 'seller_document', req.params.id, null, {
       sellerId: doc.seller_id,
       docType: doc.doc_type,
     });
-    res.setHeader('Content-Type', doc.mime_type);
+    res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.original_name)}"`);
-    res.setHeader('Cache-Control', 'private, no-store');
-    fs.createReadStream(doc.file_path).pipe(res);
+    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    fs.createReadStream(resolvedPath).pipe(res);
   });
 
   router.post('/sellers/:id/decision', async (req, res) => {
@@ -509,9 +543,11 @@ export function adminRouter(db: Db): Router {
     if (!doc) throw notFound('Document not found.');
     execute(
       db,
-      'UPDATE seller_documents SET status = ?, review_note = ? WHERE id = ?',
+      'UPDATE seller_documents SET status = ?, review_note = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?',
       input.status,
       input.note ?? null,
+      req.user!.id,
+      new Date().toISOString(),
       doc.id,
     );
     const seller = queryOne<{ user_id: string }>(db, 'SELECT user_id FROM seller_profiles WHERE id = ?', doc.seller_id);

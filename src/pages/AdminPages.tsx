@@ -14,6 +14,7 @@ import {
   Alert,
   Badge,
   Button,
+  buttonClass,
   EmptyState,
   ErrorState,
   Field,
@@ -1421,6 +1422,7 @@ interface SellerRow {
   application_id: string | null;
   application_status: string | null; application_revision: number | null; application_current_step: number | null;
   submitted_at: string | null;
+  document_count?: number;
 }
 
 interface SellerListResponse {
@@ -1586,6 +1588,7 @@ export function AdminSellersPage() {
                   <th scope="col" className="px-4 py-3 font-semibold">Application</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Store</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Category</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">Documents</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Listings</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Paid orders</th>
                   <th scope="col" className="px-4 py-3 font-semibold">GMV</th>
@@ -1622,6 +1625,13 @@ export function AdminSellersPage() {
                       <td className="px-4 py-4 text-muted">
                         {seller.seller_category ? humanise(seller.seller_category) : '—'}
                         <p className="text-[10.5px]">{humanise(seller.seller_type)}</p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium ${
+                          (seller.document_count ?? 0) > 0 ? 'bg-forest/10 text-forest' : 'bg-warm-paper text-muted'
+                        }`}>
+                          {seller.document_count ?? 0} uploaded
+                        </span>
                       </td>
                       <td className="px-4 py-4 tabular-nums">{seller.product_count}</td>
                       <td className="px-4 py-4 tabular-nums">{seller.paid_orders}</td>
@@ -1739,6 +1749,9 @@ interface AdminSellerDetail {
     status: string;
     review_note?: string | null;
     uploaded_at: string;
+    fileExists?: boolean;
+    storage_key?: string;
+    file_path?: string;
   }[];
   events?: AdminApplicationEventRow[];
   auditTrail?: AdminAuditRow[];
@@ -1771,6 +1784,7 @@ export function AdminSellerDetailPage() {
   const [documentTarget, setDocumentTarget] = useState<{ id: string; label: string } | null>(null);
   const [documentNote, setDocumentNote] = useState('');
   const [documentBusy, setDocumentBusy] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<AdminSellerDetail['documents'][0] | null>(null);
   const [adjustAmount, setAdjustAmount] = useState('');
   const [adjustNote, setAdjustNote] = useState('');
   const detail = useQuery({
@@ -1987,26 +2001,49 @@ export function AdminSellerDetailPage() {
                 {data.documents.map((document) => (
                   <li key={document.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                     <div className="min-w-0">
-                      <p className="font-medium text-ink">{document.docLabel ?? humanise(document.doc_type)}</p>
-                      <p className="text-[10.5px] text-muted">{document.original_name} · {Math.round(document.size_bytes / 1024)} KB · {formatDate(document.uploaded_at)}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-ink">{document.docLabel ?? humanise(document.doc_type)}</p>
+                        {document.fileExists === false ? (
+                          <span className="rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                            File missing on disk
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-[10.5px] text-muted">
+                        {document.original_name} · {Math.round(document.size_bytes / 1024)} KB · {formatDate(document.uploaded_at)}
+                      </p>
                       {document.review_note ? <p className="mt-1 text-[10.5px] text-terra">Note: {document.review_note}</p> : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={document.status} />
-                      <a href={`/api/admin/seller-documents/${document.id}/file`} target="_blank" rel="noreferrer" className="text-[11px] text-forest underline underline-offset-2">
-                        Open {document.docLabel ?? humanise(document.doc_type)}
-                      </a>
-                      <Button size="sm" variant="ghost" onClick={() => void decideDocument(document.id, 'accepted')}>Accept</Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setDocumentTarget({ id: document.id, label: document.docLabel ?? humanise(document.doc_type) });
-                          setDocumentNote('');
-                        }}
-                      >
-                        Reject
+                      <Button size="sm" variant="secondary" onClick={() => setPreviewDoc(document)}>
+                        Preview
                       </Button>
+                      <a
+                        href={`/api/admin/seller-documents/${document.id}/file`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-forest underline underline-offset-2"
+                      >
+                        Open in tab
+                      </a>
+                      {document.status !== 'accepted' ? (
+                        <Button size="sm" variant="ghost" onClick={() => void decideDocument(document.id, 'accepted')}>
+                          Accept
+                        </Button>
+                      ) : null}
+                      {document.status !== 'rejected' ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setDocumentTarget({ id: document.id, label: document.docLabel ?? humanise(document.doc_type) });
+                            setDocumentNote('');
+                          }}
+                        >
+                          Reject
+                        </Button>
+                      ) : null}
                     </div>
                   </li>
                 ))}
@@ -2161,6 +2198,89 @@ export function AdminSellerDetailPage() {
             <Textarea rows={3} value={documentNote} onChange={(event) => setDocumentNote(event.target.value)} />
           </Field>
         </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(previewDoc)}
+        onClose={() => setPreviewDoc(null)}
+        title={previewDoc ? (previewDoc.docLabel ?? humanise(previewDoc.doc_type)) : 'Document preview'}
+        wide
+        footer={
+          <div className="flex w-full items-center justify-between gap-3">
+            <span className="truncate text-xs text-muted">
+              {previewDoc?.original_name}
+              {previewDoc?.size_bytes ? ` · ${Math.round(previewDoc.size_bytes / 1024)} KB` : ''}
+              {previewDoc ? ` · ${formatDate(previewDoc.uploaded_at)}` : ''}
+            </span>
+            <div className="flex items-center gap-2">
+              {previewDoc ? (
+                <a
+                  href={`/api/admin/seller-documents/${previewDoc.id}/file`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={buttonClass('secondary', 'sm')}
+                >
+                  Open in new tab
+                </a>
+              ) : null}
+              {previewDoc && previewDoc.status !== 'accepted' ? (
+                <Button
+                  size="sm"
+                  loading={documentBusy}
+                  onClick={() => {
+                    const docId = previewDoc.id;
+                    setPreviewDoc(null);
+                    void decideDocument(docId, 'accepted');
+                  }}
+                >
+                  Accept
+                </Button>
+              ) : null}
+              {previewDoc && previewDoc.status !== 'rejected' ? (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => {
+                    const target = { id: previewDoc.id, label: previewDoc.docLabel ?? humanise(previewDoc.doc_type) };
+                    setPreviewDoc(null);
+                    setDocumentTarget(target);
+                    setDocumentNote('');
+                  }}
+                >
+                  Reject
+                </Button>
+              ) : null}
+              <Button variant="ghost" size="sm" onClick={() => setPreviewDoc(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        {previewDoc ? (
+          <div className="flex min-h-[350px] items-center justify-center rounded bg-warm-paper/40 p-2">
+            {previewDoc.fileExists === false ? (
+              <div className="rounded border border-amber-200 bg-amber-50 p-6 text-center text-sm text-amber-800">
+                <p className="font-medium">File missing on server volume</p>
+                <p className="mt-1 text-xs text-amber-700">
+                  This document record exists in the database ({previewDoc.storage_key || previewDoc.file_path}), but the physical file is not found at the configured storage location.
+                </p>
+              </div>
+            ) : previewDoc.mime_type?.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(previewDoc.original_name) ? (
+              <img
+                src={`/api/admin/seller-documents/${previewDoc.id}/file`}
+                alt={previewDoc.original_name}
+                className="max-h-[70vh] max-w-full rounded border border-line object-contain shadow-sm"
+              />
+            ) : (
+              <iframe
+                src={`/api/admin/seller-documents/${previewDoc.id}/file`}
+                title={previewDoc.original_name}
+                className="h-[70vh] w-full rounded border border-line bg-white shadow-sm"
+              />
+            )}
+          </div>
+        ) : null}
       </Modal>
     </div>
   );

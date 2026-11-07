@@ -457,14 +457,17 @@ export function listDocuments(db: Db, sellerId: string): Array<{
   doc_type: DocumentType;
   doc_label: string | null;
   original_name: string;
+  mime_type: string;
+  size_bytes: number;
   status: string;
   review_note: string | null;
   uploaded_at: string;
   application_id: string | null;
+  storage_key: string | null;
 }> {
   return queryAll(
     db,
-    `SELECT id, doc_type, doc_label, original_name, status, review_note, uploaded_at, application_id
+    `SELECT id, doc_type, doc_label, original_name, mime_type, size_bytes, status, review_note, uploaded_at, application_id, storage_key
        FROM seller_documents WHERE seller_id = ? ORDER BY uploaded_at DESC`,
     sellerId,
   );

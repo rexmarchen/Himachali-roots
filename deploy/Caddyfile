@@ -4,7 +4,7 @@
 www.dearhills.in {
 	encode zstd gzip
 	request_body {
-		max_size 6MB
+		max_size 10MB
 	}
 	reverse_proxy 127.0.0.1:8787 {
 		header_up X-Forwarded-Proto {scheme}
