@@ -2019,9 +2019,9 @@ export function AdminSellerDetailPage() {
           <section className="border border-line bg-surface p-5">
             <h2 className="text-lg">Verification documents</h2>
             <p className="mt-1 text-[11px] text-muted">Identity evidence is private. Opening a file is recorded in the audit log.</p>
-            {data.documents.length ? (
+            {(data.documents ?? []).length ? (
               <ul className="mt-4 divide-y divide-line text-[12.5px]">
-                {data.documents.map((document) => {
+                {(data.documents ?? []).map((document) => {
                   const docType = document.doc_type ?? document.docType ?? '';
                   const docLabel = document.docLabel ?? humanise(docType);
                   const originalName = document.original_name ?? document.originalName ?? 'Document';
@@ -2139,7 +2139,7 @@ export function AdminSellerDetailPage() {
               <div className="flex justify-between"><dt className="text-muted">Platform Fee</dt><dd>{formatINR(metrics?.commission ?? 0)}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">Eligible</dt><dd>{formatINR(metrics?.eligible ?? 0)}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">Settled</dt><dd>{formatINR(metrics?.settled ?? 0)}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Platform fee rule</dt><dd>{data.commissionRules ? percentFromBp(data.commissionRules.rate_bp) : 'Default 12%'}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Platform fee rule</dt><dd>{data.commissionRules?.rate_bp != null ? percentFromBp(data.commissionRules.rate_bp) : 'Default 12%'}</dd></div>
             </dl>
           </section>
           <section className="border border-line bg-surface p-5">

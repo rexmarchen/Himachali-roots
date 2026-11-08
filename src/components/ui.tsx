@@ -174,12 +174,13 @@ export function Badge({
   );
 }
 
-export function StatusBadge({ status, label }: { status: string; label?: string }) {
+export function StatusBadge({ status, label }: { status?: string | null; label?: string }) {
+  const safeStatus = status ?? '';
   return (
     <span
-      className={`inline-flex items-center border px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.1em] ${statusTone(status)}`}
+      className={`inline-flex items-center border px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.1em] ${statusTone(safeStatus)}`}
     >
-      {label ?? status.replaceAll('_', ' ')}
+      {label ?? (safeStatus ? safeStatus.replaceAll('_', ' ') : '—')}
     </span>
   );
 }

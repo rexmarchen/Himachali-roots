@@ -386,13 +386,14 @@ export function adminRouter(db: Db): Router {
     res.json({
       seller: {
         ...seller,
-        operatingAddress: seller.operating_address ? JSON.parse(String(seller.operating_address)) : null,
+        operatingAddress: seller.operating_address ? parseJson<Record<string, unknown> | null>(String(seller.operating_address), null) : null,
         payoutDetails: seller.payout_details_json
           ? parseJson<Record<string, unknown> | null>(String(seller.payout_details_json), null)
           : (application?.payout_json ? parseJson<Record<string, unknown> | null>(String(application.payout_json), null) : null),
         email: user?.email,
         emailVerified: user?.email_verified === 1,
         accountCreatedAt: user?.created_at,
+        created_at: user?.created_at,
       },
       application: application
         ? {
