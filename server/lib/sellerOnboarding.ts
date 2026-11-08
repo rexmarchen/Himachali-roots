@@ -273,6 +273,39 @@ export const agreementsSchema = z.object({
   version: z.string().trim().min(1).max(40),
 });
 
+export const draftAddressSchema = z.object({
+  line1: z.string().trim().max(200).default(''),
+  line2: z.string().trim().max(200).default(''),
+  city: z.string().trim().max(80).default(''),
+  state: z.string().trim().max(80).default('Himachal Pradesh'),
+  pincode: z.string().trim().max(10).default(''),
+});
+
+export const draftShippingSchema = z.object({
+  dispatchDays: z.coerce.number().int().min(0).max(30).optional().default(0),
+  packaging: z.string().trim().max(500).optional().default(''),
+  shipsAcrossIndia: z.boolean().optional().default(true),
+  coldChain: z.boolean().optional().default(false),
+  notes: z.string().trim().max(800).optional().default(''),
+});
+
+export const draftPayoutSchema = z.object({
+  method: z.enum(['bank_transfer', 'upi']).optional().default('bank_transfer'),
+  accountHolderName: z.string().trim().max(120).optional().default(''),
+  accountLast4: z.string().trim().max(10).optional().default(''),
+  ifsc: z.string().trim().max(20).optional().default(''),
+  upiIdMasked: z.string().trim().max(80).optional().default(''),
+  consent: z.boolean().optional().default(false),
+});
+
+export const draftAgreementsSchema = z.object({
+  sellerAgreement: z.boolean().optional().default(false),
+  commissionDisclosure: z.boolean().optional().default(false),
+  authenticityPolicy: z.boolean().optional().default(false),
+  privacyPolicy: z.boolean().optional().default(false),
+  version: z.string().trim().max(40).optional().default(''),
+});
+
 export const wizardDataSchema = z.object({
   fullName: z.string().trim().max(120).optional().default(''),
   phone: z.string().trim().max(10).optional().default(''),
@@ -283,8 +316,8 @@ export const wizardDataSchema = z.object({
   story: z.string().trim().max(3000).optional().default(''),
   region: z.string().trim().max(80).optional().default(''),
   village: z.string().trim().max(120).optional().default(''),
-  address: addressSchema.partial().optional(),
-  dispatchAddress: addressSchema.partial().optional(),
+  address: draftAddressSchema.optional(),
+  dispatchAddress: draftAddressSchema.optional(),
   dispatchSameAsOperating: z.boolean().optional().default(true),
   categorySlugs: z.array(z.string().trim().min(1).max(80)).max(8).optional().default([]),
   productGroups: z.array(z.string().trim().min(1).max(60)).max(10).optional().default([]),
@@ -297,9 +330,9 @@ export const wizardDataSchema = z.object({
   udyamNumber: z.string().trim().max(30).optional().default(''),
   businessRegistrationNumber: z.string().trim().max(60).optional().default(''),
   yearsOperating: z.coerce.number().int().min(0).max(100).optional(),
-  shipping: shippingSchema.partial().optional(),
-  payout: payoutSchema.partial().optional(),
-  agreements: agreementsSchema.partial().optional(),
+  shipping: draftShippingSchema.optional(),
+  payout: draftPayoutSchema.optional(),
+  agreements: draftAgreementsSchema.optional(),
 });
 
 export type WizardData = z.infer<typeof wizardDataSchema>;
@@ -357,39 +390,6 @@ export function parseJson<T>(value: string | null, fallback: T): T {
 export function normaliseWizardData(input: unknown): WizardData {
   return wizardDataSchema.parse(input ?? {});
 }
-
-export const draftAddressSchema = z.object({
-  line1: z.string().trim().max(200).optional().default(''),
-  line2: z.string().trim().max(200).optional().default(''),
-  city: z.string().trim().max(80).optional().default(''),
-  state: z.string().trim().max(80).optional().default('Himachal Pradesh'),
-  pincode: z.string().trim().max(10).optional().default(''),
-});
-
-export const draftShippingSchema = z.object({
-  dispatchDays: z.coerce.number().int().min(0).max(30).optional().default(0),
-  packaging: z.string().trim().max(500).optional().default(''),
-  shipsAcrossIndia: z.boolean().optional().default(true),
-  coldChain: z.boolean().optional().default(false),
-  notes: z.string().trim().max(800).optional().default(''),
-});
-
-export const draftPayoutSchema = z.object({
-  method: z.enum(['bank_transfer', 'upi']).optional().default('bank_transfer'),
-  accountHolderName: z.string().trim().max(120).optional().default(''),
-  accountLast4: z.string().trim().max(10).optional().default(''),
-  ifsc: z.string().trim().max(20).optional().default(''),
-  upiIdMasked: z.string().trim().max(80).optional().default(''),
-  consent: z.boolean().optional().default(false),
-});
-
-export const draftAgreementsSchema = z.object({
-  sellerAgreement: z.boolean().optional().default(false),
-  commissionDisclosure: z.boolean().optional().default(false),
-  authenticityPolicy: z.boolean().optional().default(false),
-  privacyPolicy: z.boolean().optional().default(false),
-  version: z.string().trim().max(40).optional().default(''),
-});
 
 export const draftDataSchema = z.object({
   fullName: z.string().trim().max(120).optional().default(''),

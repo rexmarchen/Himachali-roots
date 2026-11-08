@@ -598,6 +598,7 @@ function isLockedStatus(status: string | undefined): boolean {
 function toPayload(form: WizardForm) {
   return {
     ...form,
+    dispatchAddress: form.dispatchSameAsOperating ? form.address : form.dispatchAddress,
     sellerCategory: form.sellerCategory || undefined,
     yearsOperating: form.yearsOperating === '' ? undefined : Number(form.yearsOperating),
     shipping: {
@@ -885,6 +886,7 @@ export function BecomeAMakerPage() {
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
       toast.push('A few fields still need attention.', 'error');
+      focusHeading();
       return;
     }
     setErrors({});
