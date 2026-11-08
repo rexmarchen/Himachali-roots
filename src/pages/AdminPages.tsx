@@ -1593,6 +1593,7 @@ export function AdminSellersPage() {
                   <th scope="col" className="px-4 py-3 font-semibold">Paid orders</th>
                   <th scope="col" className="px-4 py-3 font-semibold">GMV</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Created</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -1627,16 +1628,27 @@ export function AdminSellersPage() {
                         <p className="text-[10.5px]">{humanise(seller.seller_type)}</p>
                       </td>
                       <td className="px-4 py-4">
-                        <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium ${
-                          (seller.document_count ?? 0) > 0 ? 'bg-forest/10 text-forest' : 'bg-warm-paper text-muted'
-                        }`}>
+                        <Link
+                          to={`/admin/sellers/${seller.id}`}
+                          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors hover:opacity-80 ${
+                            (seller.document_count ?? 0) > 0 ? 'bg-forest/10 text-forest' : 'bg-warm-paper text-muted'
+                          }`}
+                        >
                           {seller.document_count ?? 0} uploaded
-                        </span>
+                        </Link>
                       </td>
                       <td className="px-4 py-4 tabular-nums">{seller.product_count}</td>
                       <td className="px-4 py-4 tabular-nums">{seller.paid_orders}</td>
                       <td className="px-4 py-4 tabular-nums">{formatINR(seller.gmv)}</td>
                       <td className="px-4 py-4 text-muted">{formatDate(seller.created_at)}</td>
+                      <td className="px-4 py-4 text-right">
+                        <Link
+                          to={`/admin/sellers/${seller.id}`}
+                          className="inline-flex items-center gap-1 rounded-sm border border-forest/30 bg-forest/10 px-2.5 py-1 text-xs font-semibold text-forest hover:bg-forest hover:text-paper transition-colors"
+                        >
+                          Review file →
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}
