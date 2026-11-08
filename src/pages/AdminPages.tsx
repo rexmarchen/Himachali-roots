@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { usePageMeta } from '@/lib/usePageMeta';
 import { dateInputToIso, daysAgoInput, formatDate, formatDateTime, humanise, orderStatusLabel, percentFromBp, sellerOrderStatusLabel, todayInput } from '@/lib/format';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AdminMetric, AdminPage, AdminQueueRow, AdminSection, ConfirmDialog } from '@/components/admin';
 import {
   Alert,
@@ -943,7 +944,9 @@ export function AdminLayout() {
 
         <main id="admin-main" tabIndex={-1} className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-[1440px]">
-            <Outlet />
+            <ErrorBoundary>
+              <Outlet />
+            </ErrorBoundary>
           </div>
         </main>
 
@@ -1753,21 +1756,28 @@ interface AdminSellerDetail {
   application: AdminApplicationRecord | null;
   documents: {
     id: string;
-    doc_type: string;
+    doc_type?: string;
+    docType?: string;
     docLabel?: string | null;
-    original_name: string;
-    mime_type: string;
-    size_bytes: number;
+    original_name?: string;
+    originalName?: string;
+    mime_type?: string;
+    mimeType?: string;
+    size_bytes?: number;
+    sizeBytes?: number;
     status: string;
     review_note?: string | null;
-    uploaded_at: string;
+    reviewNote?: string | null;
+    uploaded_at?: string;
+    uploadedAt?: string;
     fileExists?: boolean;
     storage_key?: string;
     file_path?: string;
   }[];
   events?: AdminApplicationEventRow[];
   auditTrail?: AdminAuditRow[];
-  requirements?: { required: string[]; optional: string[]; missing: string[]; labels: Record<string, string> };
+  requirements?: { required: string[]; optional: string[]; missing: string[]; labels?: Record<string, string> };
+  documentLabels?: Record<string, string>;
   checklist?: { id: string; label: string; status: string; detail: string; href?: string }[];
   metrics: { active_products?: number; pending_products?: number; paid_orders?: number; delivered_orders?: number; gross?: number; commission?: number; eligible?: number; settled?: number };
   recentOrders: { reference: string; status: string; total_paise: number; created_at: string; order_number: string }[];
@@ -1912,10 +1922,10 @@ export function AdminSellerDetailPage() {
       ) : null}
       {seller.rejection_reason ? <Alert tone="warning" title="Current reviewer note">{String(seller.rejection_reason)}</Alert> : null}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Live products" value={metrics.active_products ?? 0} />
-        <Stat label="Paid orders" value={metrics.paid_orders ?? 0} />
-        <Stat label="Product value" value={formatINR(metrics.gross ?? 0)} />
-        <Stat label="Eligible to settle" value={formatINR(metrics.eligible ?? 0)} />
+        <Stat label="Live products" value={metrics?.active_products ?? 0} />
+        <Stat label="Paid orders" value={metrics?.paid_orders ?? 0} />
+        <Stat label="Product value" value={formatINR(metrics?.gross ?? 0)} />
+        <Stat label="Eligible to settle" value={formatINR(metrics?.eligible ?? 0)} />
       </div>
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">
@@ -1987,16 +1997,17 @@ export function AdminSellerDetailPage() {
             </section>
           ) : null}
 
-          {data.requirements?.required.length ? (
+          {data.requirements?.required?.length ? (
             <section className="border border-line bg-surface p-5">
               <h2 className="text-lg">Evidence requirements</h2>
               <p className="mt-1 text-[11px] text-muted">Required for this category and structure. Requirement sets are not a legal determination.</p>
               <ul className="mt-3 space-y-1.5 text-[12.5px]">
                 {data.requirements.required.map((type) => {
-                  const missing = data.requirements!.missing.includes(type);
+                  const missing = Boolean(data.requirements?.missing?.includes(type));
+                  const label = data.requirements?.labels?.[type] ?? data.documentLabels?.[type] ?? humanise(type);
                   return (
                     <li key={type} className="flex items-center justify-between gap-3">
-                      <span>{data.requirements!.labels[type] ?? humanise(type)}</span>
+                      <span>{label}</span>
                       <span className={missing ? 'text-terra' : 'text-forest'}>{missing ? 'Missing' : 'Uploaded'}</span>
                     </li>
                   );
@@ -2010,55 +2021,63 @@ export function AdminSellerDetailPage() {
             <p className="mt-1 text-[11px] text-muted">Identity evidence is private. Opening a file is recorded in the audit log.</p>
             {data.documents.length ? (
               <ul className="mt-4 divide-y divide-line text-[12.5px]">
-                {data.documents.map((document) => (
-                  <li key={document.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-ink">{document.docLabel ?? humanise(document.doc_type)}</p>
-                        {document.fileExists === false ? (
-                          <span className="rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
-                            File missing on disk
-                          </span>
+                {data.documents.map((document) => {
+                  const docType = document.doc_type ?? document.docType ?? '';
+                  const docLabel = document.docLabel ?? humanise(docType);
+                  const originalName = document.original_name ?? document.originalName ?? 'Document';
+                  const sizeBytes = document.size_bytes ?? document.sizeBytes ?? 0;
+                  const uploadedAt = document.uploaded_at ?? document.uploadedAt;
+                  const reviewNote = document.review_note ?? document.reviewNote;
+                  return (
+                    <li key={document.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-ink">{docLabel}</p>
+                          {document.fileExists === false ? (
+                            <span className="rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                              File missing on disk
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-[10.5px] text-muted">
+                          {originalName} · {sizeBytes > 0 ? `${Math.round(sizeBytes / 1024)} KB` : '—'} · {formatDate(uploadedAt)}
+                        </p>
+                        {reviewNote ? <p className="mt-1 text-[10.5px] text-terra">Note: {reviewNote}</p> : null}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge status={document.status} />
+                        <Button size="sm" variant="secondary" onClick={() => setPreviewDoc(document)}>
+                          Preview
+                        </Button>
+                        <a
+                          href={`/api/admin/seller-documents/${document.id}/file`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-forest underline underline-offset-2"
+                        >
+                          Open in tab
+                        </a>
+                        {document.status !== 'accepted' ? (
+                          <Button size="sm" variant="ghost" onClick={() => void decideDocument(document.id, 'accepted')}>
+                            Accept
+                          </Button>
+                        ) : null}
+                        {document.status !== 'rejected' ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setDocumentTarget({ id: document.id, label: docLabel });
+                              setDocumentNote('');
+                            }}
+                          >
+                            Reject
+                          </Button>
                         ) : null}
                       </div>
-                      <p className="text-[10.5px] text-muted">
-                        {document.original_name} · {Math.round(document.size_bytes / 1024)} KB · {formatDate(document.uploaded_at)}
-                      </p>
-                      {document.review_note ? <p className="mt-1 text-[10.5px] text-terra">Note: {document.review_note}</p> : null}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge status={document.status} />
-                      <Button size="sm" variant="secondary" onClick={() => setPreviewDoc(document)}>
-                        Preview
-                      </Button>
-                      <a
-                        href={`/api/admin/seller-documents/${document.id}/file`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[11px] text-forest underline underline-offset-2"
-                      >
-                        Open in tab
-                      </a>
-                      {document.status !== 'accepted' ? (
-                        <Button size="sm" variant="ghost" onClick={() => void decideDocument(document.id, 'accepted')}>
-                          Accept
-                        </Button>
-                      ) : null}
-                      {document.status !== 'rejected' ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setDocumentTarget({ id: document.id, label: document.docLabel ?? humanise(document.doc_type) });
-                            setDocumentNote('');
-                          }}
-                        >
-                          Reject
-                        </Button>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             ) : <p className="mt-3 text-sm text-muted">No documents uploaded.</p>}
           </section>
@@ -2101,7 +2120,7 @@ export function AdminSellerDetailPage() {
 
           <section className="border border-line bg-surface p-5">
             <h2 className="text-lg">Recent orders</h2>
-            {data.recentOrders.length ? (
+            {data.recentOrders?.length ? (
               <ul className="mt-3 divide-y divide-line text-[12.5px]">
                 {data.recentOrders.map((order) => (
                   <li key={order.reference} className="flex justify-between gap-3 py-2.5">
@@ -2117,9 +2136,9 @@ export function AdminSellerDetailPage() {
           <section className="border border-line bg-surface p-5">
             <h2 className="text-lg">Ledger</h2>
             <dl className="mt-3 space-y-2 text-[12.5px]">
-              <div className="flex justify-between"><dt className="text-muted">Platform Fee</dt><dd>{formatINR(metrics.commission ?? 0)}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Eligible</dt><dd>{formatINR(metrics.eligible ?? 0)}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Settled</dt><dd>{formatINR(metrics.settled ?? 0)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Platform Fee</dt><dd>{formatINR(metrics?.commission ?? 0)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Eligible</dt><dd>{formatINR(metrics?.eligible ?? 0)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Settled</dt><dd>{formatINR(metrics?.settled ?? 0)}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">Platform fee rule</dt><dd>{data.commissionRules ? percentFromBp(data.commissionRules.rate_bp) : 'Default 12%'}</dd></div>
             </dl>
           </section>
@@ -2215,14 +2234,14 @@ export function AdminSellerDetailPage() {
       <Modal
         open={Boolean(previewDoc)}
         onClose={() => setPreviewDoc(null)}
-        title={previewDoc ? (previewDoc.docLabel ?? humanise(previewDoc.doc_type)) : 'Document preview'}
+        title={previewDoc ? (previewDoc.docLabel ?? humanise(previewDoc.doc_type ?? previewDoc.docType)) : 'Document preview'}
         wide
         footer={
           <div className="flex w-full items-center justify-between gap-3">
             <span className="truncate text-xs text-muted">
-              {previewDoc?.original_name}
-              {previewDoc?.size_bytes ? ` · ${Math.round(previewDoc.size_bytes / 1024)} KB` : ''}
-              {previewDoc ? ` · ${formatDate(previewDoc.uploaded_at)}` : ''}
+              {previewDoc?.original_name ?? previewDoc?.originalName}
+              {(previewDoc?.size_bytes ?? previewDoc?.sizeBytes) ? ` · ${Math.round(((previewDoc?.size_bytes ?? previewDoc?.sizeBytes) ?? 0) / 1024)} KB` : ''}
+              {previewDoc ? ` · ${formatDate(previewDoc.uploaded_at ?? previewDoc.uploadedAt)}` : ''}
             </span>
             <div className="flex items-center gap-2">
               {previewDoc ? (
@@ -2253,7 +2272,10 @@ export function AdminSellerDetailPage() {
                   size="sm"
                   variant="danger"
                   onClick={() => {
-                    const target = { id: previewDoc.id, label: previewDoc.docLabel ?? humanise(previewDoc.doc_type) };
+                    const target = {
+                      id: previewDoc.id,
+                      label: previewDoc.docLabel ?? humanise(previewDoc.doc_type ?? previewDoc.docType),
+                    };
                     setPreviewDoc(null);
                     setDocumentTarget(target);
                     setDocumentNote('');
@@ -2278,16 +2300,16 @@ export function AdminSellerDetailPage() {
                   This document record exists in the database ({previewDoc.storage_key || previewDoc.file_path}), but the physical file is not found at the configured storage location.
                 </p>
               </div>
-            ) : previewDoc.mime_type?.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(previewDoc.original_name) ? (
+            ) : (previewDoc.mime_type ?? previewDoc.mimeType)?.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(previewDoc.original_name ?? previewDoc.originalName ?? '') ? (
               <img
                 src={`/api/admin/seller-documents/${previewDoc.id}/file`}
-                alt={previewDoc.original_name}
+                alt={previewDoc.original_name ?? previewDoc.originalName ?? 'Document'}
                 className="max-h-[70vh] max-w-full rounded border border-line object-contain shadow-sm"
               />
             ) : (
               <iframe
                 src={`/api/admin/seller-documents/${previewDoc.id}/file`}
-                title={previewDoc.original_name}
+                title={previewDoc.original_name ?? previewDoc.originalName ?? 'Document'}
                 className="h-[70vh] w-full rounded border border-line bg-white shadow-sm"
               />
             )}
