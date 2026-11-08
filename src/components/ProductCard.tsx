@@ -10,7 +10,7 @@ import { useToast } from '@/lib/toast';
 export function ProductCard({
   product,
   priority = false,
-  showAddToCart = true,
+  showAddToCart = false,
 }: {
   product: ProductSummary;
   priority?: boolean;
@@ -73,9 +73,9 @@ export function ProductCard({
   });
 
   return (
-    <article className="group relative flex flex-col justify-between">
+    <article className="group relative flex flex-col justify-between transition-all duration-300">
       <div>
-        <div className="frame aspect-[4/5] w-full">
+        <div className="relative aspect-[4/5] w-full overflow-hidden bg-sand/30 border border-line/60">
           <Link to={`/shop/${product.slug}`} className="block h-full w-full" aria-label={`View ${product.name}`}>
             {product.imageUrl && !imageError ? (
               <img
@@ -83,29 +83,29 @@ export function ProductCard({
                 alt={product.imageAlt ?? product.name}
                 loading={priority ? 'eager' : 'lazy'}
                 onError={() => setImageError(true)}
-                className="img-brand h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.045]"
+                className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.035]"
               />
             ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-3 bg-[radial-gradient(120%_90%_at_50%_0%,#efe7d8_0%,#e2d5c0_100%)] p-5 text-center">
-                <span className="font-serif text-5xl leading-none text-forest/25" aria-hidden>
-                  {product.name.trim().charAt(0).toUpperCase()}
-                </span>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted/80">
-                  {product.categoryName ?? 'Himachal Pradesh'}
-                </span>
+              <div className="flex h-full flex-col items-center justify-center p-4 text-center text-xs text-muted bg-sand/20">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-8 w-8 text-sand mb-2" aria-hidden>
+                  <rect width="18" height="18" x="3" y="3" rx="2" strokeWidth="1.5" />
+                  <circle cx="8.5" cy="8.5" r="1.5" strokeWidth="1.5" />
+                  <path d="M21 15l-5-5L5 21" strokeWidth="1.5" />
+                </svg>
+                <span>No photograph</span>
               </div>
             )}
           </Link>
 
           {/* Badges */}
-          <div className="pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-2">
+          <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5 pointer-events-none">
             {soldOut ? (
-              <span className="rounded-full bg-paper/95 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-ink shadow-soft">
+              <span className="border border-ink/20 bg-paper/95 px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-ink shadow-xs">
                 Sold out
               </span>
             ) : null}
             {discountPercent ? (
-              <span className="rounded-full bg-terra px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white shadow-soft">
+              <span className="border border-terra/30 bg-terra px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-white shadow-xs">
                 {campaignOriginal ? `${discountPercent}% off` : `${discountPercent}% less`}
               </span>
             ) : null}
@@ -120,10 +120,10 @@ export function ProductCard({
               toggleWishlist.mutate(isSaved);
             }}
             aria-label={isSaved ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`}
-            className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-md transition-all duration-200 ${
+            className={`absolute right-2.5 top-2.5 flex h-10 w-10 items-center justify-center rounded-full border transition-all duration-200 sm:h-9 sm:w-9 ${
               isSaved
-                ? 'border-terra bg-terra text-white shadow-soft'
-                : 'border-white/50 bg-paper/85 text-ink/70 hover:bg-paper hover:text-terra'
+                ? 'border-terra bg-terra text-white shadow-sm'
+                : 'border-line/70 bg-paper/90 text-ink/70 hover:bg-paper hover:text-terra'
             }`}
           >
             <svg viewBox="0 0 20 20" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" className="h-4 w-4">
@@ -134,68 +134,42 @@ export function ProductCard({
               />
             </svg>
           </button>
-
-          {/* Quick add — slides up on hover (desktop) */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden translate-y-3 p-3 opacity-0 transition-all duration-300 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100 sm:block">
-            <button
-              type="button"
-              onClick={() => addToCart.mutate()}
-              disabled={soldOut || addToCart.isPending}
-              className="pointer-events-auto w-full rounded-full bg-paper/95 px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-forest shadow-lift backdrop-blur transition-colors hover:bg-paper disabled:cursor-not-allowed disabled:text-muted"
-            >
-              {soldOut ? 'Sold out' : addToCart.isPending ? 'Adding…' : 'Add to bag'}
-            </button>
-          </div>
-
-          {/* Quick add — compact on touch */}
-          {!soldOut ? (
-            <button
-              type="button"
-              onClick={() => addToCart.mutate()}
-              disabled={addToCart.isPending}
-              aria-label={`Add ${product.name} to bag`}
-              className="absolute bottom-2.5 right-2.5 flex h-9 w-9 items-center justify-center rounded-full bg-paper/95 text-forest shadow-soft transition-colors hover:bg-paper sm:hidden"
-            >
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
-                <path d="M10 4v12M4 10h12" strokeLinecap="round" />
-              </svg>
-            </button>
-          ) : null}
         </div>
 
         {/* Content */}
-        <div className="mt-4 flex flex-col">
-          <p className="truncate text-[11px] font-bold uppercase tracking-[0.14em] text-terra">
-            {product.sellerName}
-          </p>
+        <div className="mt-3.5 flex flex-col">
+          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-muted">
+            <span className="truncate max-w-[70%]">{product.sellerName}</span>
+            {product.region ? <span className="shrink-0">{product.region}</span> : null}
+          </div>
 
-          <h3 className="mt-1.5 line-clamp-2 font-serif text-[17px] font-medium leading-snug text-forest sm:text-[18.5px]">
-            <Link to={`/shop/${product.slug}`} className="transition-colors duration-150 hover:text-terra">
+          <h3 className="mt-1 line-clamp-2 font-serif text-[16px] leading-snug text-forest sm:text-[17px]">
+            <Link to={`/shop/${product.slug}`} className="hover:text-terra transition-colors duration-150">
               {product.name}
             </Link>
           </h3>
 
-          <p className="mt-1 truncate text-[12.5px] text-muted">
-            {product.region ? <span className="text-terra/80">{product.region} · </span> : null}
+          <p className="mt-0.5 text-xs text-muted/90 truncate">
             {product.categoryName}
+            {product.campaignName ? <span className="text-terra"> · {product.campaignName}</span> : null}
           </p>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 border-t border-line/60 pt-3">
+      <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 border-t border-line/50 pt-2.5">
         <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-          <span className="text-[17px] font-bold tracking-tight text-ink sm:text-[18px]">{formatINR(product.pricePaise)}</span>
-          {strikePrice ? <span className="text-[13px] text-muted/70 line-through">{formatINR(strikePrice)}</span> : null}
+          <span className="text-[14px] font-medium text-ink">{formatINR(product.pricePaise)}</span>
+          {strikePrice ? <span className="text-xs text-muted/80 line-through">{formatINR(strikePrice)}</span> : null}
         </div>
 
         {product.ratingCount > 0 && product.ratingAverage ? (
-          <div className="flex items-center gap-1 text-[12px] font-medium text-muted">
+          <div className="flex items-center gap-1 text-[11px] text-muted">
             <span className="text-terra">★</span>
             <span className="font-medium text-ink">{product.ratingAverage.toFixed(1)}</span>
             <span className="text-muted/60">({product.ratingCount})</span>
           </div>
         ) : !soldOut && product.stock <= 3 ? (
-          <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-warning">Only {product.stock} left</span>
+          <span className="text-[10.5px] font-medium text-warning">Only {product.stock} left</span>
         ) : null}
       </div>
 
@@ -204,22 +178,18 @@ export function ProductCard({
           type="button"
           onClick={() => addToCart.mutate()}
           disabled={soldOut || addToCart.isPending}
-          className="mt-3.5 flex h-11 w-full items-center justify-center gap-2 rounded-full border border-forest bg-forest px-4 text-[13px] font-semibold uppercase tracking-[0.1em] text-paper shadow-sm transition-all duration-200 hover:bg-forest-deep hover:shadow active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terra disabled:cursor-not-allowed disabled:border-line disabled:bg-sand/40 disabled:text-muted"
+          className="mt-3 w-full border border-forest bg-forest px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-paper transition-colors hover:bg-forest/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terra disabled:cursor-not-allowed disabled:border-line disabled:bg-sand/40 disabled:text-muted"
         >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
-            <path d="M4 6h12l1.2 11H2.8L4 6z" strokeWidth="1.6" strokeLinejoin="round" />
-            <path d="M7 6V4.5a3 3 0 0 1 6 0V6" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
-          <span>{soldOut ? 'Sold out' : addToCart.isPending ? 'Adding…' : 'Add to bag'}</span>
+          {soldOut ? 'Sold out' : addToCart.isPending ? 'Adding…' : 'Add to bag'}
         </button>
       ) : null}
     </article>
   );
 }
 
-export function ProductGrid({ products, showAddToCart = true }: { products: ProductSummary[]; showAddToCart?: boolean }) {
+export function ProductGrid({ products, showAddToCart = false }: { products: ProductSummary[]; showAddToCart?: boolean }) {
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 sm:gap-y-12 md:grid-cols-3 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-x-4 gap-y-9 sm:gap-x-6 sm:gap-y-11 md:grid-cols-3 xl:grid-cols-4">
       {products.map((product, index) => (
         <ProductCard key={product.id} product={product} priority={index < 4} showAddToCart={showAddToCart} />
       ))}

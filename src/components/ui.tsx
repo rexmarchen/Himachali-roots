@@ -18,21 +18,21 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'terra' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
 
 const buttonVariants: Record<Variant, string> = {
-  primary: 'bg-forest text-paper hover:bg-forest-deep border border-forest shadow-soft',
+  primary: 'bg-forest text-paper hover:bg-forest-deep border border-forest',
   secondary: 'bg-transparent text-forest border border-forest/30 hover:border-forest hover:bg-forest/[0.04]',
   ghost: 'bg-transparent text-ink border border-transparent hover:bg-ink/[0.05]',
-  terra: 'bg-terra text-white border border-terra hover:bg-[#c06f52] shadow-soft',
+  terra: 'bg-terra text-white border border-terra hover:bg-[#b9694c]',
   danger: 'bg-[#8e3b2b] text-white border border-[#8e3b2b] hover:bg-[#772f22]',
 };
 
 const buttonSizes: Record<Size, string> = {
-  sm: 'h-10 px-4 text-[13px] font-medium',
-  md: 'h-12 px-6 text-[14px] font-semibold',
-  lg: 'h-14 px-8 text-[15.5px] font-semibold',
+  sm: 'h-9 px-3.5 text-[13px]',
+  md: 'h-11 px-5 text-sm',
+  lg: 'h-12 px-6 text-sm',
 };
 
 export function buttonClass(variant: Variant = 'primary', size: Size = 'md', extra = ''): string {
-  return `btn-sweep inline-flex items-center justify-center gap-2 rounded-full font-semibold tracking-[0.04em] transition-all duration-200 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:active:translate-y-0 ${buttonVariants[variant]} ${buttonSizes[size]} ${extra}`;
+  return `inline-flex items-center justify-center gap-2 rounded-sm font-medium tracking-[0.01em] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${buttonVariants[variant]} ${buttonSizes[size]} ${extra}`;
 }
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -167,7 +167,7 @@ export function Badge({
   };
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${tones[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 border px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.12em] ${tones[tone]} ${className}`}
     >
       {children}
     </span>
@@ -177,7 +177,7 @@ export function Badge({
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.11em] ${statusTone(status)}`}
+      className={`inline-flex items-center border px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.1em] ${statusTone(status)}`}
     >
       {label ?? status.replaceAll('_', ' ')}
     </span>
@@ -186,8 +186,8 @@ export function StatusBadge({ status, label }: { status: string; label?: string 
 
 export function DemoBadge({ children = 'Demo data' }: { children?: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-terra/30 bg-terra/[0.07] px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[#8e4630]">
-      <span className="h-1.5 w-1.5 rounded-full bg-terra" aria-hidden />
+    <span className="inline-flex items-center gap-1 border border-terra/30 bg-terra/[0.07] px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[#8e4630]">
+      <span className="h-1 w-1 rounded-full bg-terra" aria-hidden />
       {children}
     </span>
   );
@@ -298,11 +298,11 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-col gap-6 border-b border-line pb-9 sm:flex-row sm:items-end sm:justify-between ${className}`}>
+    <div className={`flex flex-col gap-5 border-b border-line pb-8 sm:flex-row sm:items-end sm:justify-between ${className}`}>
       <div className="max-w-2xl">
-        {eyebrow ? <p className="rule-eyebrow mb-3">{eyebrow}</p> : null}
-        <h1 className="t-h2">{title}</h1>
-        {lede ? <p className="t-lead mt-3 max-w-xl">{lede}</p> : null}
+        {eyebrow ? <p className="eyebrow mb-2">{eyebrow}</p> : null}
+        <h1 className="text-3xl leading-[1.08] sm:text-4xl">{title}</h1>
+        {lede ? <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted sm:text-[15px]">{lede}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div> : null}
     </div>
@@ -323,11 +323,11 @@ export function SectionHeading({
   className?: string;
 }) {
   return (
-    <div className={`mb-10 flex flex-col items-start gap-5 sm:mb-12 sm:flex-row sm:items-end sm:justify-between sm:gap-8 ${className}`}>
-      <div className="max-w-2xl">
-        {eyebrow ? <p className="rule-eyebrow mb-3">{eyebrow}</p> : null}
-        <h2 className="t-h2">{title}</h2>
-        {lede ? <p className="t-lead mt-3 max-w-xl">{lede}</p> : null}
+    <div className={`mb-8 flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6 ${className}`}>
+      <div className="max-w-xl">
+        {eyebrow ? <p className="eyebrow mb-2">{eyebrow}</p> : null}
+        <h2 className="text-2xl leading-tight sm:text-[2rem]">{title}</h2>
+        {lede ? <p className="mt-2 text-sm leading-relaxed text-muted">{lede}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
