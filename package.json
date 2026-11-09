@@ -25,7 +25,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
-    "admin:create": "tsx server/scripts/create-admin.ts"
+    "admin:create": "tsx server/scripts/create-admin.ts",
+    "mobile:preview": "node scripts/mobile-preview-server.mjs"
   },
   "dependencies": {
     "@fontsource-variable/cormorant-garamond": "^5.3.0",
