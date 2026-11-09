@@ -68,12 +68,25 @@ const INJECTED_HELPER_SCRIPT = `
 <!-- DEAR HILLS MOBILE PREVIEW HELPER -->
 <script id="__dh_mobile_helper">
 (function() {
+  function cleanPath(urlStr) {
+    try {
+      const u = new URL(urlStr, window.location.origin);
+      u.searchParams.delete('__dh_inner');
+      u.searchParams.delete('app');
+      u.searchParams.delete('t');
+      const search = u.search;
+      return u.pathname + (search && search !== '?' ? search : '') + u.hash;
+    } catch (e) {
+      return urlStr.replace(/[?&]__dh_inner=1/g, '').replace(/[?&]app=(1|true)/g, '').replace(/[?&]t=\\d+/g, '').replace(/\\?$/, '');
+    }
+  }
+
   function sendRouteToParent() {
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({
           type: 'DH_SIMULATOR_ROUTE',
-          path: window.location.pathname + window.location.search + window.location.hash,
+          path: cleanPath(window.location.pathname + window.location.search + window.location.hash),
           title: document.title
         }, '*');
       }
@@ -101,9 +114,13 @@ const INJECTED_HELPER_SCRIPT = `
   window.addEventListener('message', function(event) {
     if (!event.data) return;
     if (event.data.type === 'DH_SIMULATOR_NAVIGATE') {
-      const target = event.data.path;
-      if (target && target !== window.location.pathname + window.location.search) {
-        window.location.href = target;
+      let target = event.data.path;
+      if (target) {
+        const hasQuery = target.includes('?');
+        const innerTarget = target + (hasQuery ? '&' : '?') + '__dh_inner=1';
+        if (cleanPath(target) !== cleanPath(window.location.pathname + window.location.search)) {
+          window.location.href = innerTarget;
+        }
       }
     } else if (event.data.type === 'DH_SIMULATOR_RELOAD') {
       window.location.reload();
@@ -116,7 +133,6 @@ const INJECTED_HELPER_SCRIPT = `
 
   // Touch emulation indicator (optional visual enhancement)
   document.addEventListener('DOMContentLoaded', function() {
-    // Add touch-action styles for crisp mobile simulation
     const style = document.createElement('style');
     style.textContent = 'body { -webkit-tap-highlight-color: rgba(217, 130, 99, 0.2); }';
     document.head.appendChild(style);
@@ -129,6 +145,7 @@ const INJECTED_HELPER_SCRIPT = `
  * Generates the Simulator Shell HTML
  */
 function renderSimulatorShell({ initialPath = '/', initialTarget = 'production' }) {
+  const cleanInitialPath = initialPath.replace(/[?&]__dh_inner=1/g, '').replace(/[?&]app=(1|true)/g, '').replace(/\?$/, '') || '/';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -894,7 +911,7 @@ function renderSimulatorShell({ initialPath = '/', initialTarget = 'production' 
       <button class="nav-arrow" onclick="historyForward()" title="Forward">›</button>
       <div class="address-input-wrapper">
         <span class="address-lock">🔒</span>
-        <input type="text" class="address-input" id="address-input" value="${initialPath}" onkeydown="handleAddressKey(event)" placeholder="e.g. /become-a-maker or /shop">
+        <input type="text" class="address-input" id="address-input" value="${cleanInitialPath}" onkeydown="handleAddressKey(event)" placeholder="e.g. /become-a-maker or /shop">
       </div>
       <button class="btn-go" onclick="navigateAddress()">Go</button>
     </div>
@@ -944,7 +961,7 @@ function renderSimulatorShell({ initialPath = '/', initialTarget = 'production' 
           <iframe 
             id="mobile-iframe" 
             class="phone-iframe" 
-            src="${initialPath}${initialPath.includes('?') ? '&' : '?'}app=1" 
+            src="${cleanInitialPath}${cleanInitialPath.includes('?') ? '&' : '?'}__dh_inner=1" 
             loading="eager"
             title="Dear Hills Mobile Viewport">
           </iframe>
@@ -1132,7 +1149,7 @@ function renderSimulatorShell({ initialPath = '/', initialTarget = 'production' 
     function switchTarget(target) {
       document.cookie = 'dh_target=' + target + '; path=/; max-age=86400';
       const curPath = addressInput.value || '/';
-      mobileIframe.src = curPath + (curPath.includes('?') ? '&' : '?') + 'app=1&t=' + Date.now();
+      mobileIframe.src = curPath + (curPath.includes('?') ? '&' : '?') + '__dh_inner=1&t=' + Date.now();
     }
 
     // Address Bar navigation
@@ -1188,7 +1205,7 @@ function renderSimulatorShell({ initialPath = '/', initialTarget = 'production' 
 
     function openDirectTab() {
       const path = addressInput.value || '/';
-      window.open(path + (path.includes('?') ? '&' : '?') + 'app=1', '_blank');
+      window.open(path + (path.includes('?') ? '&' : '?') + 'raw=1', '_blank');
     }
 
     // Listen for route messages from inside the iframe
@@ -1261,6 +1278,11 @@ function handleProxy(req, res, targetOrigin) {
     headers['user-agent'] = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
   }
 
+  // Ensure accept-encoding uses formats we can decompress cleanly
+  if (headers['accept-encoding']) {
+    headers['accept-encoding'] = 'gzip, deflate, br';
+  }
+
   // Remove hop-by-hop headers
   delete headers['connection'];
   delete headers['keep-alive'];
@@ -1314,22 +1336,50 @@ function handleProxy(req, res, targetOrigin) {
     // If HTML, intercept and inject communication helper
     if (isHtml) {
       const contentEncoding = (resHeaders['content-encoding'] || '').toLowerCase();
-      delete resHeaders['content-encoding'];
-      delete resHeaders['content-length'];
-
       let stream = proxyRes;
+      let decompressed = false;
+
       if (contentEncoding === 'gzip') {
         stream = proxyRes.pipe(zlib.createGunzip());
+        decompressed = true;
       } else if (contentEncoding === 'br') {
         stream = proxyRes.pipe(zlib.createBrotliDecompress());
+        decompressed = true;
       } else if (contentEncoding === 'deflate') {
         stream = proxyRes.pipe(zlib.createInflate());
+        decompressed = true;
+      } else if (contentEncoding === 'zstd' && typeof zlib.createZstdDecompress === 'function') {
+        stream = proxyRes.pipe(zlib.createZstdDecompress());
+        decompressed = true;
+      } else if (!contentEncoding || contentEncoding === 'identity') {
+        decompressed = true;
+      }
+
+      if (decompressed) {
+        delete resHeaders['content-encoding'];
+        delete resHeaders['content-length'];
       }
 
       const chunks = [];
       stream.on('data', chunk => chunks.push(chunk));
       stream.on('end', () => {
-        let html = Buffer.concat(chunks).toString('utf8');
+        let html;
+        if (decompressed) {
+          html = Buffer.concat(chunks).toString('utf8');
+        } else {
+          // If we couldn't decompress, try zstdDecompressSync as fallback
+          try {
+            if (typeof zlib.zstdDecompressSync === 'function') {
+              html = zlib.zstdDecompressSync(Buffer.concat(chunks)).toString('utf8');
+              delete resHeaders['content-encoding'];
+              delete resHeaders['content-length'];
+            } else {
+              html = Buffer.concat(chunks).toString('utf8');
+            }
+          } catch (e) {
+            html = Buffer.concat(chunks).toString('utf8');
+          }
+        }
 
         // Inject helper script before closing </body> or at the end
         if (html.includes('</body>')) {
@@ -1409,7 +1459,9 @@ const server = http.createServer((req, res) => {
   }
 
   // Check if this request is explicitly an APP request (inside simulator iframe, or direct mobile request)
-  const isExplicitApp = parsedUrl.searchParams.get('app') === '1' || parsedUrl.searchParams.get('app') === 'true';
+  const isExplicitApp = 
+    parsedUrl.searchParams.get('__dh_inner') === '1' ||
+    parsedUrl.searchParams.get('raw') === '1';
   const isIframe = req.headers['sec-fetch-dest'] === 'iframe';
   const isMobile = isMobileUserAgent(ua) && parsedUrl.searchParams.get('simulator') !== '1';
   
