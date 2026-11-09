@@ -309,7 +309,33 @@ export function openDatabase(filename: string): Db {
 
   migrateShippingAndLedger(db);
   markMigration(db, 10);
+
+  migrateTransactionalOutbox(db);
+  markMigration(db, 11);
   return db;
+}
+
+function migrateTransactionalOutbox(db: Db): void {
+  if (!tableExists(db, 'outbox_events')) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS outbox_events (
+        id TEXT PRIMARY KEY,
+        aggregate_type TEXT NOT NULL,
+        aggregate_id TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'published', 'failed', 'dead_letter')),
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        max_retries INTEGER NOT NULL DEFAULT 5,
+        last_error TEXT,
+        scheduled_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        processed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_outbox_events_status_scheduled ON outbox_events(status, scheduled_at);
+      CREATE INDEX IF NOT EXISTS idx_outbox_events_aggregate ON outbox_events(aggregate_type, aggregate_id);
+    `);
+  }
 }
 
 

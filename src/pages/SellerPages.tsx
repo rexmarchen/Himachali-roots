@@ -3303,9 +3303,9 @@ export function SellerProductEditorPage() {
   // the API, falling back to the configured marketplace default only while the
   // config request is loading.
   const commissionBp =
-    sellerConfig.data?.commission.categoryRates[form.categoryId] ??
-    sellerConfig.data?.commission.defaultBp ??
-    1500;
+    sellerConfig.data?.commission?.categoryRates?.[form.categoryId] ??
+    sellerConfig.data?.commission?.defaultBp ??
+    1200;
   const priceNum = Number(form.priceRupees || 0);
   const cogsNum = Number(form.estimatedCostRupees || 0);
   const pkgNum = Number(form.packagingCostRupees || 0);

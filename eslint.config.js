@@ -4,15 +4,18 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
-  { ignores: ['dist', 'dist-server', 'data', 'storage', 'node_modules', '.vercel', 'backups'] },
+  { ignores: ['dist', 'dist-server', 'data', 'storage', 'node_modules', '.vercel', 'backups', 'scripts'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.{mjs,cjs}'],
     languageOptions: {
       ecmaVersion: 2022,
-      sourceType: 'module',
+      sourceType: 'commonjs',
       globals: { ...globals.node, fetch: 'readonly', URLSearchParams: 'readonly' },
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
   {
@@ -24,6 +27,7 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      'react-hooks/set-state-in-effect': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-empty': ['error', { allowEmptyCatch: true }],

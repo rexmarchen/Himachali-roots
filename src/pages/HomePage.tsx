@@ -85,6 +85,15 @@ const PRINCIPLES = [
 /* Photographs verified free of embedded watermarks: mountains and apple garden landscapes */
 const HERO_SLIDES = [
   {
+    id: 'himalayan-morning-ridges',
+    src: '/images/home/himalayan-ridges-morning.jpg',
+    srcSet:
+      '/images/home/himalayan-ridges-morning-720.webp 720w, /images/home/himalayan-ridges-morning-1100.webp 1100w, /images/home/himalayan-ridges-morning.webp 1376w',
+    alt: 'Golden sunrise light illuminating layered mountain ridges and deodar pine forests in the Western Himalayas',
+    place: 'Western Himalayan Ranges',
+    caption: 'Soft dawn mist rising through ancient deodar forests',
+  },
+  {
     id: 'kinner-kailash-sunrise',
     src: '/images/home/snow-peaks-1800.jpg',
     srcSet:
@@ -442,39 +451,40 @@ function MountainStorySection() {
 
         <figure className="relative mb-10 sm:mb-0">
           <div className="relative">
-            <div className="overflow-hidden border border-line bg-sand/30">
+            <div className="overflow-hidden rounded-xl border border-line bg-sand/30 shadow-md group">
+              <picture>
+                <source
+                  type="image/webp"
+                  srcSet="/images/home/himalayan-kathkuni-village-720.webp 720w, /images/home/himalayan-kathkuni-village-1100.webp 1100w, /images/home/himalayan-kathkuni-village.webp 1376w"
+                  sizes="(min-width: 1024px) 42vw, 100vw"
+                />
+                <img
+                  src="/images/home/himalayan-kathkuni-village.jpg"
+                  alt="Traditional Kath-Kuni wood-and-stone architecture, slate roofs, and terraced mountain slopes in Himachal Pradesh"
+                  loading="lazy"
+                  decoding="async"
+                  width={1376}
+                  height={768}
+                  className="aspect-[4/3] w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+                />
+              </picture>
+            </div>
+
+            <div className="absolute -bottom-6 -left-3 hidden w-36 overflow-hidden rounded-lg border-4 border-paper bg-paper shadow-xl sm:block lg:-left-8 lg:w-44 group">
               <img
                 src="/images/home/batheri-1100.jpg"
-                srcSet="/images/home/batheri-720.jpg 720w, /images/home/batheri-1100.jpg 1100w, /images/home/batheri-1800.jpg 1800w"
-                sizes="(min-width: 1024px) 42vw, 100vw"
-                alt="Slate-roofed houses, kitchen gardens and terraced fields in Batheri village, Mandi district"
+                alt="Slate-roofed houses and terraces in Mandi district"
                 loading="lazy"
                 decoding="async"
                 width={1100}
                 height={1375}
-                className="aspect-[4/5] w-full object-cover transition-transform duration-700 ease-out hover:scale-[1.02]"
-              />
-            </div>
-
-            <div className="absolute -bottom-8 -left-4 hidden w-36 overflow-hidden border-4 border-paper bg-paper shadow-lg sm:block lg:-left-10 lg:w-44">
-              <img
-                src="/images/home/chamba-carving-720.jpg"
-                alt="Carved stone niche on the Laxminarayan temple, Chamba"
-                loading="lazy"
-                decoding="async"
-                width={720}
-                height={720}
-                className="aspect-square w-full object-cover"
+                className="aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
             </div>
           </div>
 
-          <figcaption className="mt-4 text-[11px] leading-relaxed text-muted sm:mt-12">
-            Batheri, Mandi district. Photograph via Wikimedia Commons — full attribution on the{' '}
-            <Link to="/credits" className="link-underline">
-              image credits
-            </Link>{' '}
-            page.
+          <figcaption className="mt-4 text-[11px] leading-relaxed text-muted sm:mt-8">
+            Traditional Kath-Kuni cedar architecture & stone masonry in the high mountain valleys of Himachal Pradesh.
           </figcaption>
         </figure>
       </div>
@@ -484,11 +494,11 @@ function MountainStorySection() {
 
 /* Section B: Shop by Category */
 const CATEGORY_VISUALS: Record<string, { image: string; tag: string }> = {
-  'shawls-and-weaves': { image: '/images/product-shawl.jpg', tag: 'Handloom' },
+  'shawls-and-weaves': { image: '/images/home/himalayan-textile-craftsmanship.webp', tag: 'Handloom' },
   knitwear: { image: '/images/product-socks.jpg', tag: 'Pure Wool' },
   'tea-and-infusions': { image: '/images/product-tea.jpg', tag: 'High Altitude' },
   'pantry-and-preserves': { image: '/images/product-honey.jpg', tag: 'Raw & Natural' },
-  'dry-fruit-and-nuts': { image: '/images/product-walnut.jpg', tag: 'Mountain Harvest' },
+  'dry-fruit-and-nuts': { image: '/images/home/himalayan-harvest-lifestyle.webp', tag: 'Mountain Harvest' },
   'pulses-and-staples': { image: '/images/product-rajma.jpg', tag: 'Natural Farming' },
   'caps-and-headwear': { image: '/images/product-cap.jpg', tag: 'Traditional' },
   'cold-pressed-oils': { image: '/images/product-oil.jpg', tag: 'Wood-Pressed' },
@@ -705,17 +715,17 @@ function MountainInterludeSection() {
 function GiftingSection({ gifting, content }: { gifting: ProductSummary[]; content: SiteContent['homepage'] }) {
   if (!gifting.length) return null;
   return (
-    <section className="border-b border-line bg-[#efe7d9] py-20 lg:py-24">
-      <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
-        <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+    <section className="border-b border-line bg-[#efe7d9] py-10 sm:py-20 lg:py-24">
+      <div className="mx-auto max-w-[88rem] px-4 sm:px-8 lg:px-10 xl:px-12">
+        <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
           <div>
             <p className="eyebrow flex items-center gap-2">
               <span className="h-px w-6 bg-terra" aria-hidden />
               Curated Gift Sets
             </p>
-            <h2 className="mt-3 font-serif text-3xl sm:text-4xl text-forest">{content.gifting.title}</h2>
-            <p className="mt-4 text-[15px] leading-[1.8] text-ink/75">{content.gifting.body}</p>
-            <div className="mt-8 flex flex-wrap items-center gap-4">
+            <h2 className="mt-3 font-serif text-2xl sm:text-4xl text-forest">{content.gifting.title}</h2>
+            <p className="mt-3 text-[14px] sm:text-[15px] leading-relaxed text-ink/75">{content.gifting.body}</p>
+            <div className="mt-6 flex flex-wrap items-center gap-4">
               <LinkButton
                 to={`/shop?category=${encodeURIComponent(content.gifting.categorySlug)}`}
                 variant="secondary"
@@ -729,7 +739,7 @@ function GiftingSection({ gifting, content }: { gifting: ProductSummary[]; conte
             </div>
           </div>
 
-          <div className={gifting.length === 1 ? 'mx-auto w-full max-w-[260px]' : 'grid grid-cols-2 gap-2 sm:gap-6 sm:grid-cols-3'}>
+          <div className="grid grid-cols-2 gap-2 sm:gap-6 sm:grid-cols-3">
             {gifting.slice(0, 4).map((item) => (
               <ProductCard key={item.id} product={item} />
             ))}
@@ -745,7 +755,7 @@ function SourcingStandardSection() {
   return (
     <section className="border-b border-line bg-paper py-20 lg:py-28">
       <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
-        <div className="grid gap-12 lg:grid-cols-[0.75fr_1.25fr]">
+        <div className="grid gap-12 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
           <div>
             <p className="eyebrow flex items-center gap-2">
               <span className="h-px w-6 bg-terra" aria-hidden />
@@ -758,23 +768,79 @@ function SourcingStandardSection() {
               A marketplace is only as trustworthy as its verification process. These four rules govern every shelf on
               DEAR HILLS today.
             </p>
-            <div className="mt-8">
+
+            {/* Visual artisan workshop card - Photo 3 */}
+            <div className="mt-7 overflow-hidden rounded-xl border border-line bg-surface shadow-xs group">
+              <div className="relative aspect-[16/10] overflow-hidden">
+                <picture>
+                  <source
+                    type="image/webp"
+                    srcSet="/images/home/himalayan-artisan-workshop-720.webp 720w, /images/home/himalayan-artisan-workshop-1100.webp 1100w, /images/home/himalayan-artisan-workshop.webp 1264w"
+                  />
+                  <img
+                    src="/images/home/himalayan-artisan-workshop.jpg"
+                    alt="Elderly Himalayan craftsperson hand-carving fragrant deodar cedar wood in a natural timber workshop"
+                    loading="lazy"
+                    decoding="async"
+                    width={1264}
+                    height={848}
+                    className="h-full w-full object-cover editorial-card-zoom"
+                  />
+                </picture>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                <div className="absolute bottom-3 left-3.5 right-3.5 text-white">
+                  <span className="text-[9.5px] font-bold uppercase tracking-wider text-butter">Direct from Workshop</span>
+                  <p className="font-serif text-[14.5px] text-paper/95 leading-tight mt-0.5">
+                    Crafted in small batches with traditional hand tools
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6">
               <LinkButton to="/sourcing" variant="secondary" size="md">
                 Read the Complete Standard
               </LinkButton>
             </div>
           </div>
 
-          <div className="grid gap-x-8 gap-y-8 sm:grid-cols-2">
-            {PRINCIPLES.map((principle) => (
-              <div key={principle.number} className="border-t border-line/80 pt-5">
-                <span className="font-serif text-sm tabular-nums tracking-[0.14em] text-terra font-semibold">
-                  {principle.number}
-                </span>
-                <h3 className="mt-2 font-serif text-xl text-forest">{principle.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-ink/70">{principle.body}</p>
+          <div className="space-y-6">
+            <div className="grid gap-x-8 gap-y-8 sm:grid-cols-2">
+              {PRINCIPLES.map((principle) => (
+                <div key={principle.number} className="border-t border-line/80 pt-5">
+                  <span className="font-serif text-sm tabular-nums tracking-[0.14em] text-terra font-semibold">
+                    {principle.number}
+                  </span>
+                  <h3 className="mt-2 font-serif text-xl text-forest">{principle.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-ink/70">{principle.body}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Photo 4: Himalayan Craftsmanship Close-up banner */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 rounded-xl border border-line/80 bg-surface/90 p-4 shadow-2xs group">
+              <div className="relative h-20 w-28 sm:h-24 sm:w-36 shrink-0 overflow-hidden rounded-lg border border-line">
+                <picture>
+                  <source
+                    type="image/webp"
+                    srcSet="/images/home/himalayan-textile-craftsmanship-720.webp 720w, /images/home/himalayan-textile-craftsmanship.webp 1264w"
+                  />
+                  <img
+                    src="/images/home/himalayan-textile-craftsmanship.jpg"
+                    alt="Close-up macro of traditional handwoven Himalayan wool textile patterns and natural yarns"
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover editorial-card-zoom"
+                  />
+                </picture>
               </div>
-            ))}
+              <div className="min-w-0">
+                <p className="text-[10.5px] font-bold uppercase tracking-wider text-terra">Material Authenticity</p>
+                <p className="text-xs text-ink/80 mt-1 leading-relaxed">
+                  Pure Himalayan sheep wool, natural botanical dyes, and handloom weaves — certified with documented workshop origins.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -782,41 +848,154 @@ function SourcingStandardSection() {
   );
 }
 
-/* Section H: Closing Brand Moment */
+/* Section H: Closing Brand Moment (Full-width Cinematic Himalayan Hillside Cottage Landscape) */
 function ClosingMomentSection() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [isRevealed, setIsRevealed] = useState(false);
+
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setIsRevealed(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsRevealed(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.18 },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <section className="relative overflow-hidden bg-forest-deep px-5 py-24 text-paper sm:px-8">
-      <div className="absolute inset-0 opacity-25">
+    <section
+      ref={sectionRef}
+      className="relative isolate w-full overflow-hidden bg-forest-deep text-paper py-32 sm:py-40 lg:py-48 flex items-center justify-center min-h-[620px] sm:min-h-[700px] lg:min-h-[780px]"
+    >
+      {/* Background Image: High-res Himachali hillside cottage with golden sunrise & snow peaks */}
+      <picture className="absolute inset-0 z-0 overflow-hidden">
+        <source
+          type="image/webp"
+          srcSet="/images/home/himalayan-cottage-sunrise-closing-640.webp 640w, /images/home/himalayan-cottage-sunrise-closing-1024.webp 1024w, /images/home/himalayan-cottage-sunrise-closing-1600.webp 1600w, /images/home/himalayan-cottage-sunrise-closing.webp 2048w"
+          sizes="100vw"
+        />
         <img
-          src="/images/home/kalpa-dawn-1800.jpg"
-          alt=""
-          aria-hidden
+          src="/images/home/himalayan-cottage-sunrise-closing.jpg"
+          alt="Traditional Himachali stone cottage, terraced village gardens, and snow-capped Himalayan peaks at golden dawn"
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-cover object-center"
+          width={2048}
+          height={1152}
+          className="h-full w-full object-cover object-[center_42%] kenburns-slow scale-[1.03]"
         />
-      </div>
-      <div className="absolute inset-0 bg-gradient-to-t from-forest-deep via-forest-deep/60 to-forest-deep/40" aria-hidden />
+      </picture>
 
-      <div className="relative z-10 mx-auto max-w-3xl text-center">
-        <p className="text-[10.5px] font-semibold uppercase tracking-[0.26em] text-butter/85">Himalayan living</p>
-        <h2 className="mt-4 font-serif text-[2.3rem] leading-[1.1] text-paper sm:text-[3rem]">
-          Bring a little of the mountains home.
-        </h2>
-        <p className="mx-auto mt-4 max-w-xl text-[14.5px] leading-[1.8] text-paper/80">
-          Every order is routed to the workshop that fulfils it, and the seller’s share is recorded against that order.
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <LinkButton to="/shop" size="lg" className="!border-butter !bg-butter !text-forest-deep hover:!border-paper hover:!bg-paper">
-            Shop the shelves
+      {/* Editorial Scrims: Pine forest gradient and atmospheric golden sunrise warmth */}
+      <div
+        className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-forest-deep/95 via-forest-deep/55 to-forest-deep/30"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(ellipse_at_center,_rgba(244,232,206,0.18)_0%,_rgba(16,25,24,0.42)_55%,_rgba(16,25,24,0.9)_100%)]"
+        aria-hidden
+      />
+
+      {/* Content Container with Opening Reveal Animation */}
+      <div className="relative z-20 mx-auto max-w-4xl px-5 sm:px-8 text-center">
+        {/* Aperture Horizon Line Draw & Expanding Eyebrow */}
+        <div className="mx-auto mb-6 flex items-center justify-center gap-3">
+          <span
+            className={`h-px w-10 sm:w-16 bg-gradient-to-r from-transparent to-butter/75 aperture-line ${
+              isRevealed ? 'is-revealed' : ''
+            }`}
+            aria-hidden
+          />
+          <p
+            className={`inline-flex items-center gap-2 rounded-full border border-butter/40 bg-forest-deep/75 px-4 py-1.5 text-[10.5px] sm:text-[11px] font-semibold uppercase text-butter shadow-sm backdrop-blur-md transition-all duration-1000 ${
+              isRevealed ? 'tracking-[0.28em] opacity-100' : 'tracking-[0.1em] opacity-0'
+            }`}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-terra animate-pulse" aria-hidden />
+            <span>Beyond The Cloud Line</span>
+          </p>
+          <span
+            className={`h-px w-10 sm:w-16 bg-gradient-to-l from-transparent to-butter/75 aperture-line ${
+              isRevealed ? 'is-revealed' : ''
+            }`}
+            aria-hidden
+          />
+        </div>
+
+        {/* Cinematic Headline with Blur-to-Focus Opening Animation */}
+        <div className="overflow-hidden py-1">
+          <h2
+            className={`font-serif text-[2.5rem] sm:text-[3.6rem] lg:text-[4.5rem] font-normal leading-[1.06] tracking-[-0.02em] text-paper drop-shadow-[0_2px_24px_rgba(16,25,24,0.95)] reveal-opening ${
+              isRevealed ? 'is-revealed' : ''
+            }`}
+          >
+            Where the mist settles,
+            <span className="block font-normal italic text-butter mt-1.5 sm:mt-2.5">
+              stories begin.
+            </span>
+          </h2>
+        </div>
+
+        {/* Aesthetic Subline with Staggered Glide Reveal */}
+        <div className="overflow-hidden py-1">
+          <p
+            className={`mx-auto mt-5 max-w-2xl text-[15.5px] sm:text-[17.5px] lg:text-[19px] font-light leading-relaxed text-paper/90 drop-shadow-[0_1px_10px_rgba(16,25,24,0.85)] reveal-opening ${
+              isRevealed ? 'is-revealed' : ''
+            }`}
+            style={{ transitionDelay: isRevealed ? '220ms' : '0ms' }}
+          >
+            Hand-carded sheep wool, wild forest honey, sun-dried apricots, and carved deodar timber — crafted with quiet patience in Himalayan hamlets, delivered straight to your home.
+          </p>
+        </div>
+
+        {/* Action Buttons with Interactive Elevation */}
+        <div
+          className={`mt-9 sm:mt-12 flex flex-wrap items-center justify-center gap-4 sm:gap-5 reveal-opening ${
+            isRevealed ? 'is-revealed' : ''
+          }`}
+          style={{ transitionDelay: isRevealed ? '420ms' : '0ms' }}
+        >
+          <LinkButton
+            to="/shop"
+            size="lg"
+            className="btn-editorial-primary !border-terra !bg-terra !text-white shadow-xl hover:!bg-[#C97253] rounded-md text-sm sm:text-base font-semibold px-8 py-4"
+          >
+            Explore The Shelves
+            <span aria-hidden className="ml-2 font-serif text-lg">
+              →
+            </span>
           </LinkButton>
+
           <Link
             to="/become-a-maker"
-            className="inline-flex items-center gap-2 border border-paper/35 px-5 py-3 text-[13px] font-medium text-paper transition-colors hover:border-paper hover:bg-paper/10"
+            className="btn-editorial-secondary inline-flex min-h-[48px] items-center gap-2 rounded-md border border-paper/45 bg-forest-deep/70 px-7 py-3.5 text-sm sm:text-base font-semibold text-paper shadow-md backdrop-blur-md hover:border-paper hover:bg-forest-deep/90 hover:text-white"
           >
-            Become a maker
+            Become a Maker
           </Link>
         </div>
+
+        {/* Editorial Subtext */}
+        <p
+          className={`mt-8 text-[11px] sm:text-[11.5px] uppercase tracking-[0.2em] text-paper/65 drop-shadow-xs reveal-opening ${
+            isRevealed ? 'is-revealed' : ''
+          }`}
+          style={{ transitionDelay: isRevealed ? '600ms' : '0ms' }}
+        >
+          Dispatched directly from artisan workshops and high-altitude orchards across all 12 districts
+        </p>
       </div>
     </section>
   );
@@ -972,10 +1151,10 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
             <Link
               key={item.slug}
               to={`/shop/${item.slug}`}
-              className="group min-w-0 flex flex-col justify-between bg-white rounded-xl border border-[#E4DACE]/75 shadow-xs p-2 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none transition-all"
+              className="group min-w-0 flex flex-col justify-between bg-white rounded-lg border border-[#E4DACE]/75 shadow-[0_1px_4px_rgba(23,35,33,0.03)] p-1.5 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none transition-all"
             >
               <div>
-                <div className="relative aspect-square overflow-hidden rounded-lg sm:rounded-none border border-[#E4DACE]/50 sm:border-line/60 bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE]">
+                <div className="relative aspect-square overflow-hidden rounded-md sm:rounded-none border border-[#E4DACE]/40 sm:border-line/60 bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE]">
                   {item.imageUrl ? (
                     <img
                       src={item.imageUrl}
@@ -985,20 +1164,20 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-[10px] text-muted">No photo</div>
+                    <div className="flex h-full items-center justify-center text-[9px] text-muted">No photo</div>
                   )}
-                  <span className="absolute left-1.5 top-1.5 rounded sm:rounded-none bg-[#172321] text-white px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wider shadow-2xs">
+                  <span className="absolute left-1 top-1 rounded sm:rounded-none bg-[#172321] text-white px-1 py-0.2 text-[8px] font-bold uppercase tracking-wider shadow-2xs">
                     #{index + 1} Best
                   </span>
                 </div>
-                <p className="mt-1.5 truncate text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.14em] text-[#D98263]">{item.sellerName}</p>
-                <h3 className="mt-0.5 line-clamp-2 text-[12px] sm:text-[16px] font-bold sm:font-normal leading-snug text-forest transition-colors group-hover:text-terra min-h-[28px] sm:min-h-0">
+                <p className="mt-1 truncate text-[8.5px] sm:text-[10px] font-bold uppercase tracking-[0.14em] text-[#D98263]">{item.sellerName}</p>
+                <h3 className="mt-0.5 line-clamp-2 text-[11px] sm:text-[16px] font-bold sm:font-normal leading-tight text-forest transition-colors group-hover:text-terra min-h-[24px] sm:min-h-0">
                   {item.name}
                 </h3>
               </div>
-              <div className="mt-1.5 flex items-baseline justify-between gap-x-1.5 border-t border-line/40 pt-1.5 sm:border-0 sm:pt-0">
-                <span className="text-[13.5px] font-extrabold text-[#172321] sm:font-medium sm:text-[13px]">{formatINR(item.pricePaise)}</span>
-                <span className="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded-xs">{item.unitsSold} sold</span>
+              <div className="mt-1 flex items-baseline justify-between gap-x-1 border-t border-line/30 pt-1 sm:border-0 sm:pt-0">
+                <span className="text-[12.5px] font-extrabold text-[#172321] sm:font-medium sm:text-[13px]">{formatINR(item.pricePaise)}</span>
+                <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded-xs">{item.unitsSold} sold</span>
               </div>
             </Link>
           ))}
@@ -1131,7 +1310,26 @@ export function HomePage() {
 
       {/* Seller Application Callout Banner */}
       <section className="mx-auto max-w-[88rem] px-5 py-16 sm:px-8 lg:px-10 xl:px-12">
-        <div className="grid gap-10 border border-forest/20 bg-forest px-8 py-12 text-paper sm:px-12 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+        <div className="relative isolate overflow-hidden rounded-2xl border border-forest/20 bg-forest text-paper shadow-xl">
+          {/* Authentic harvest lifestyle background image - Photo 5 */}
+          <div className="absolute inset-0 -z-10 opacity-25 mix-blend-luminosity">
+            <picture>
+              <source
+                type="image/webp"
+                srcSet="/images/home/himalayan-harvest-lifestyle-720.webp 720w, /images/home/himalayan-harvest-lifestyle-1100.webp 1100w, /images/home/himalayan-harvest-lifestyle.webp 1376w"
+              />
+              <img
+                src="/images/home/himalayan-harvest-lifestyle.jpg"
+                alt="Local mountain farmers harvesting wild sea buckthorn and herbs along high mountain terraces"
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover object-[center_35%] scale-[1.03]"
+              />
+            </picture>
+          </div>
+          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-forest via-forest/90 to-forest/80" />
+
+          <div className="relative z-10 grid gap-10 px-8 py-12 sm:px-12 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">For Makers & Growers</p>
             <h2 className="mt-3 max-w-xl font-serif text-3xl sm:text-4xl text-paper leading-tight">
@@ -1172,7 +1370,8 @@ export function HomePage() {
             </div>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
 
       {/* Regional filter pills */}
       <section className="mx-auto max-w-[88rem] px-5 pb-8 sm:px-8 lg:px-10 xl:px-12">

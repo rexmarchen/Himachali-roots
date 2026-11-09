@@ -2,6 +2,8 @@ import { env, assertProductionConfig, criticalProductionIssues } from './env.js'
 import { initDb, getDb, queryOne } from './db.js';
 import { createApp } from './app.js';
 import { releaseExpiredOrders } from './lib/orders.js';
+import { OutboxWorker } from './core/outbox/index.js';
+
 
 async function main(): Promise<void> {
   const db = initDb(env.databasePath);
@@ -56,8 +58,12 @@ async function main(): Promise<void> {
     );
   });
 
+  const outboxWorker = new OutboxWorker(db, 3000, 25);
+  outboxWorker.start();
+
   const shutdown = (signal: string) => {
     console.log(JSON.stringify({ level: 'info', msg: 'shutting_down', signal }));
+    outboxWorker.stop();
     server.close(() => {
       try {
         getDb().close();

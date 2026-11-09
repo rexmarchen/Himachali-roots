@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { queryAll, queryOne, type Db } from '../db.js';
+import { execute, queryAll, queryOne, type Db } from '../db.js';
 import { ADDRESS, IDS, addToCart, checkout, login, mutate, resetDb, seedFixtures, setupTestApp } from './helpers.js';
 
 describe('Demo Checkout, Inventory & Admin Order Management', () => {
@@ -170,6 +170,36 @@ describe('Demo Checkout, Inventory & Admin Order Management', () => {
       const order2 = await checkout(app, otherCustomerAgent, { address: ADDRESS });
       expect(order2.status).toBe(409);
       expect(order2.body.error.code).toBe('insufficient_stock');
+    });
+
+    it('prevents overselling during simultaneous checkout of the last available product unit', async () => {
+      // Set product stock to exactly 1
+      execute(db, 'UPDATE inventory SET quantity = 1, reserved_quantity = 0 WHERE product_id = ?', IDS.product);
+
+      // Both customers add 1 unit to cart
+      await addToCart(app, customerAgent, IDS.product, 1);
+      await addToCart(app, otherCustomerAgent, IDS.product, 1);
+
+      // Execute simultaneous checkout requests via Promise.all
+      const [res1, res2] = await Promise.all([
+        checkout(app, customerAgent, { address: ADDRESS }),
+        checkout(app, otherCustomerAgent, { address: ADDRESS }),
+      ]);
+
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([201, 409]);
+
+      const failedRes = res1.status === 409 ? res1 : res2;
+      expect(failedRes.body.error.code).toBe('insufficient_stock');
+
+      // Final stock verification: reserved is exactly 1, quantity is 1
+      const stock = queryOne<{ quantity: number; reserved_quantity: number }>(
+        db,
+        'SELECT quantity, reserved_quantity FROM inventory WHERE product_id = ?',
+        IDS.product,
+      );
+      expect(stock?.quantity).toBe(1);
+      expect(stock?.reserved_quantity).toBe(1);
     });
 
     it('recalculates totals on the server and rejects client-manipulated prices', async () => {

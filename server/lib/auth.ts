@@ -6,6 +6,8 @@ import type { Role, SellerStatus, SessionUser } from '../../shared/types.js';
 import { forbidden, unauthorized } from './http.js';
 import { randomToken } from './ids.js';
 
+import { PasswordService } from '../core/security/PasswordService.js';
+
 export const SESSION_COOKIE = 'pr_session';
 export const NO_PASSWORD_MARKER = '!google-only!';
 const SESSION_TOUCH_MS = 5 * 60_000;
@@ -15,26 +17,11 @@ export function hasUsablePassword(hash: string | null | undefined): boolean {
 }
 
 export function hashPassword(password: string): string {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
-  return `scrypt$16384$8$1$${salt}$${hash.toString('hex')}`;
+  return PasswordService.hash(password);
 }
 
 export function verifyPassword(password: string, stored: string): boolean {
-  try {
-    const [scheme, n, r, p, salt, hash] = stored.split('$');
-    if (scheme !== 'scrypt' || !salt || !hash) return false;
-    const expected = Buffer.from(hash, 'hex');
-    const actual = crypto.scryptSync(password, salt, expected.length, {
-      N: Number(n),
-      r: Number(r),
-      p: Number(p),
-      maxmem: 64 * 1024 * 1024,
-    });
-    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
-  } catch {
-    return false;
-  }
+  return PasswordService.verify(password, stored);
 }
 
 export function sha256(value: string): string {

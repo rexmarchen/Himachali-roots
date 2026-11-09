@@ -16,6 +16,8 @@ import { accountRouter } from './routes/account.js';
 import { sellerRouter } from './routes/seller.js';
 import { adminRouter } from './routes/admin.js';
 
+import { MetricsRegistry } from './core/telemetry/metrics.js';
+
 export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.Express {
   const app = express();
   app.disable('x-powered-by');
@@ -27,6 +29,18 @@ export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.E
       supplied && /^[A-Za-z0-9._-]{8,64}$/.test(supplied) ? supplied : crypto.randomUUID();
     res.locals.requestId = requestId;
     res.setHeader('X-Request-Id', requestId);
+
+    const start = Date.now();
+    res.on('finish', () => {
+      MetricsRegistry.getInstance().recordRequest({
+        path: req.path,
+        method: req.method,
+        statusCode: res.statusCode,
+        durationMs: Date.now() - start,
+        timestamp: start,
+      });
+    });
+
     next();
   });
 

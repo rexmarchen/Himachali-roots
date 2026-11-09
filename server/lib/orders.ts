@@ -12,6 +12,7 @@ import { audit } from './audit.js';
 import { allocate, commissionOn, evaluateCoupon, resolveCommissionBp, shippingFor, taxComponentInclusive } from './pricing.js';
 import { newId, orderNumber, sellerOrderReference } from './ids.js';
 import type { SessionUser } from '../../shared/types.js';
+import { OutboxService } from '../core/outbox/OutboxService.js';
 
 interface CheckoutInput {
   userId: string;
@@ -360,6 +361,20 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
     });
 
     execute(db, "UPDATE carts SET status = 'converted', updated_at = ? WHERE id = ?", now.toISOString(), input.cartId);
+
+    OutboxService.enqueue(db, {
+      aggregateType: 'order',
+      aggregateId: id,
+      eventType: 'order.placed',
+      payload: {
+        orderId: id,
+        orderNumber: number,
+        userId: input.userId,
+        email: input.email,
+        totalPaise: total,
+        isDemo: isDemoOrder === 1,
+      },
+    });
   });
 
   return { orderId: id, orderNumber: number, totalPaise: total };
@@ -648,6 +663,17 @@ export function markOrderPaid(db: Db, params: PaidParams): { alreadyProcessed: b
       );
       execute(db, 'UPDATE seller_orders SET dispatch_by = ?, updated_at = ? WHERE id = ?', dispatchBy, new Date().toISOString(), so.id);
     }
+
+    OutboxService.enqueue(db, {
+      aggregateType: 'order',
+      aggregateId: order.id,
+      eventType: 'order.paid',
+      payload: {
+        orderId: order.id,
+        amountPaise: params.amountPaise,
+        provider: params.provider,
+      },
+    });
 
     audit(db, null, 'payment.captured', 'order', order.id, null, {
       provider: params.provider,

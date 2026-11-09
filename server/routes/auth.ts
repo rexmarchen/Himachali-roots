@@ -20,6 +20,7 @@ import {
   sha256,
   verifyPassword,
 } from '../lib/auth.js';
+import { PasswordService } from '../core/security/PasswordService.js';
 import { verifyGoogleIdToken as verifyGoogleIdTokenWithGoogle, type GoogleProfile } from '../lib/google.js';
 import { audit } from '../lib/audit.js';
 import { parse, unauthorized, badRequest, conflict, forbidden, AppError } from '../lib/http.js';
@@ -277,6 +278,10 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
       throw unauthorized('That email and password combination is not recognised.');
     }
     if (user.is_disabled) throw disabledError();
+    if (PasswordService.needsRehash(user.password_hash)) {
+      const upgradedHash = PasswordService.hash(input.password);
+      execute(db, 'UPDATE users SET password_hash = ? WHERE id = ?', upgradedHash, user.id);
+    }
     const body = signInResponse(db, req, res, user.id);
     res.json(body);
   });
