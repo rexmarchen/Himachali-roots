@@ -20,7 +20,7 @@ import os from 'node:os';
 const PORT = parseInt(process.env.PORT || '4100', 10);
 const LOCAL_TARGET = process.env.LOCAL_TARGET || 'http://localhost:5173';
 const PROD_TARGET = process.env.PROD_TARGET || 'https://www.dearhills.in';
-const DEFAULT_TARGET = process.env.TARGET || LOCAL_TARGET;
+const DEFAULT_TARGET = LOCAL_TARGET;
 
 // Detect primary non-internal IPv4 address
 function getLocalIp() {
@@ -145,7 +145,7 @@ const INJECTED_HELPER_SCRIPT = `
 /**
  * Generates the Simulator Shell HTML
  */
-function renderSimulatorShell({ initialPath = '/', initialTarget = 'production' }) {
+function renderSimulatorShell({ initialPath = '/', initialTarget = 'local' }) {
   const cleanInitialPath = initialPath.replace(/[?&]__dh_inner=1/g, '').replace(/[?&]app=(1|true)/g, '').replace(/\?$/, '') || '/';
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1146,11 +1146,15 @@ function renderSimulatorShell({ initialPath = '/', initialTarget = 'production' 
       calculateAndApplyScale();
     }
 
-    // Target Switcher (Production vs Local)
+    // Target Switcher (Local vs Production)
     function switchTarget(target) {
-      document.cookie = 'dh_target=' + target + '; path=/; max-age=86400';
-      const curPath = addressInput.value || '/';
-      mobileIframe.src = curPath + (curPath.includes('?') ? '&' : '?') + '__dh_inner=1&t=' + Date.now();
+      const url = new URL(window.location.href);
+      if (target === 'production') {
+        url.searchParams.set('target', 'production');
+      } else {
+        url.searchParams.delete('target');
+      }
+      window.location.href = url.toString();
     }
 
     // Address Bar navigation
@@ -1279,10 +1283,8 @@ function handleProxy(req, res, targetOrigin) {
     headers['user-agent'] = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
   }
 
-  // Ensure accept-encoding uses formats we can decompress cleanly
-  if (headers['accept-encoding']) {
-    headers['accept-encoding'] = 'gzip, deflate, br';
-  }
+  // Force uncompressed responses from upstream so HTML injection and raw streaming never result in garbled binary characters
+  headers['accept-encoding'] = 'identity';
 
   // Remove hop-by-hop headers
   delete headers['connection'];
@@ -1440,9 +1442,9 @@ const server = http.createServer((req, res) => {
   const cookies = parseCookies(req.headers['cookie']);
   const ua = req.headers['user-agent'] || '';
 
-  // Determine Upstream Target (default to Local Vite Dev)
+  // Determine Upstream Target (strictly default to Local Vite Dev http://localhost:5173)
   let targetOrigin = LOCAL_TARGET;
-  if (parsedUrl.searchParams.get('target') === 'production' || cookies['dh_target'] === 'production') {
+  if (parsedUrl.searchParams.get('target') === 'production') {
     targetOrigin = PROD_TARGET;
   }
 
@@ -1466,16 +1468,25 @@ const server = http.createServer((req, res) => {
   const isIframe = req.headers['sec-fetch-dest'] === 'iframe';
   const isMobile = isMobileUserAgent(ua) && parsedUrl.searchParams.get('simulator') !== '1';
   
-  // Static assets or API calls should ALWAYS be proxied directly
+  const secFetchDest = (req.headers['sec-fetch-dest'] || '').toLowerCase();
+  const isSubresource = ['script', 'style', 'image', 'font', 'empty', 'audio', 'video'].includes(secFetchDest);
+  const acceptHeader = (req.headers['accept'] || '').toLowerCase();
+  const wantsHtml = acceptHeader.includes('text/html');
+
+  // Static assets, Vite modules, and API calls should ALWAYS be proxied directly
   const isStaticOrApi = 
+    isSubresource ||
+    pathname.startsWith('/@') ||
+    pathname.startsWith('/src/') ||
+    pathname.startsWith('/node_modules/') ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/assets/') ||
     pathname.startsWith('/images/') ||
     pathname.startsWith('/uploads/') ||
     pathname.startsWith('/mock/') ||
-    /\.(js|css|json|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|map)$/i.test(pathname);
+    /\.(js|jsx|ts|tsx|mjs|cjs|css|json|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|map)(\?.*)?$/i.test(req.url);
 
-  if (isExplicitApp || isIframe || isMobile || isStaticOrApi) {
+  if (isExplicitApp || isIframe || isMobile || isStaticOrApi || !wantsHtml) {
     // Forward to Target Web Application
     handleProxy(req, res, targetOrigin);
     return;

@@ -96,9 +96,12 @@ export function ShopPage() {
   });
 
   return (
-    <div className="mx-auto max-w-[88rem] px-4 py-8 sm:px-6 lg:px-8 xl:px-10 lg:py-12">
-      <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Shop' }]} />
+    <div className="mx-auto max-w-[88rem] px-3.5 py-4 sm:px-6 lg:px-8 xl:px-10 sm:py-8 lg:py-12">
+      <div className="hidden sm:block">
+        <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Shop' }]} />
+      </div>
       <PageHeader
+        className="pb-4 sm:pb-8 pt-1 sm:pt-0"
         eyebrow={q ? `Search results for “${q}”` : activeCategory ? 'Category Collection' : 'The Catalogue'}
         title={q ? 'Search the shelves' : activeCategory ? activeCategory.name : 'All Products'}
         lede={
@@ -333,7 +336,8 @@ export function ShopPage() {
             </div>
           ) : null}
 
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+          {/* Desktop sort & count bar */}
+          <div className="mb-6 hidden lg:flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
             <p className="text-xs text-muted">
               {products.data ? `${products.data.total} listing${products.data.total === 1 ? '' : 's'}` : 'Loading…'}
               {region ? ` in ${region}` : ''}
@@ -352,50 +356,42 @@ export function ShopPage() {
             </div>
           </div>
 
-          <div className="mb-5 flex flex-wrap gap-2 lg:hidden">
-            <Button
-              variant="secondary"
-              size="md"
+          {/* Mobile high-converting Flipkart/Instamart action & filter bar */}
+          <div className="mb-4 flex items-center justify-between gap-2 border-y border-line/60 bg-paper py-2.5 lg:hidden">
+            <button
+              type="button"
               onClick={() => setFiltersOpen(true)}
-              className="gap-2"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-forest/30 bg-white px-3.5 text-xs font-semibold text-forest shadow-2xs active:scale-95"
               aria-haspopup="dialog"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5" aria-hidden>
                 <path d="M4 6h16M7 12h10M10 18h4" strokeLinecap="round" />
               </svg>
-              Filters
+              <span>Filters</span>
               {activeCount > 0 ? (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-terra px-1 text-[10px] font-bold text-white">
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-terra px-1 text-[9px] font-bold text-white">
                   {activeCount}
                 </span>
               ) : null}
-            </Button>
-            <Select
-              value={category ?? ''}
-              onChange={(event) => update('category', event.target.value || null)}
-              aria-label="Category"
-              className="h-11 w-auto max-w-[190px] text-xs"
-            >
-              <option value="">All categories</option>
-              {liveCategories.map((item) => (
-                <option key={item.id} value={item.slug}>
-                  {item.name}
-                </option>
-              ))}
-            </Select>
-            <Select
-              value={region ?? ''}
-              onChange={(event) => update('region', event.target.value || null)}
-              aria-label="Region"
-              className="h-11 w-auto max-w-[160px] text-xs"
-            >
-              <option value="">All regions</option>
-              {filters?.regions.map((item) => (
-                <option key={item.region} value={item.region}>
-                  {item.region}
-                </option>
-              ))}
-            </Select>
+            </button>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[11px] font-medium text-muted">
+                {products.data ? `${products.data.total} items` : '…'}
+              </span>
+              <Select
+                id="sort-mobile"
+                value={sort}
+                onChange={(event) => update('sort', event.target.value)}
+                className="h-9 w-auto max-w-[140px] py-1 px-2.5 text-xs rounded-full border-line bg-white font-medium shadow-2xs"
+              >
+                {SORTS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
 
           {activeCount > 0 ? (

@@ -935,7 +935,7 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {products.map((product, index) => (
-            <div key={product.id} className="w-[240px] sm:w-[280px] lg:w-[300px] shrink-0">
+            <div key={product.id} className="w-[210px] sm:w-[280px] lg:w-[300px] shrink-0 flex">
               <ProductCard product={product} priority={index < 4} />
             </div>
           ))}
@@ -967,32 +967,38 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-3.5 sm:gap-6 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-6 md:grid-cols-4">
           {bestsellers.map((item, index) => (
-            <Link key={item.slug} to={`/shop/${item.slug}`} className="group min-w-0">
-              <div className="relative aspect-square overflow-hidden rounded-2xl sm:rounded-none border border-[#E4DACE]/80 bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] shadow-[0_2px_8px_rgba(23,35,33,0.04)] sm:shadow-none">
-                {item.imageUrl ? (
-                  <img
-                    src={item.imageUrl}
-                    alt={item.imageAlt ?? item.name}
-                    loading="lazy"
-                    decoding="async"
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-[11px] text-muted">No photograph</div>
-                )}
-                <span className="absolute left-2.5 top-2.5 rounded-full sm:rounded-none border border-line bg-paper/95 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-forest shadow-xs">
-                  #{index + 1}
-                </span>
+            <Link
+              key={item.slug}
+              to={`/shop/${item.slug}`}
+              className="group min-w-0 flex flex-col justify-between bg-white rounded-2xl border border-[#E4DACE]/80 shadow-[0_2px_10px_rgba(23,35,33,0.05)] p-2.5 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none transition-all"
+            >
+              <div>
+                <div className="relative aspect-square overflow-hidden rounded-xl sm:rounded-none border border-[#E4DACE]/60 sm:border-line/60 bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE]">
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt={item.imageAlt ?? item.name}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-[11px] text-muted">No photograph</div>
+                  )}
+                  <span className="absolute left-2 top-2 rounded-md sm:rounded-none bg-[#172321] text-white px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider shadow-xs">
+                    #{index + 1} Best
+                  </span>
+                </div>
+                <p className="mt-2 truncate text-[10px] font-bold uppercase tracking-[0.14em] text-[#D98263]">{item.sellerName}</p>
+                <h3 className="mt-0.5 line-clamp-2 font-serif text-[13px] sm:text-[16px] font-bold sm:font-normal leading-snug text-forest transition-colors group-hover:text-terra">
+                  {item.name}
+                </h3>
               </div>
-              <p className="mt-2 truncate text-[10px] font-bold uppercase tracking-[0.14em] text-[#D98263]">{item.sellerName}</p>
-              <h3 className="mt-0.5 line-clamp-2 font-serif text-[15px] font-semibold sm:font-normal leading-snug text-forest transition-colors group-hover:text-terra sm:text-base">
-                {item.name}
-              </h3>
-              <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2">
-                <span className="text-[14px] font-bold text-ink sm:font-medium sm:text-[13px]">{formatINR(item.pricePaise)}</span>
-                <span className="text-[10px] text-muted">{item.unitsSold} sold</span>
+              <div className="mt-2 flex items-baseline justify-between gap-x-2 border-t border-line/40 pt-1.5 sm:border-0 sm:pt-0">
+                <span className="text-[15px] font-extrabold text-[#172321] sm:font-medium sm:text-[13px]">{formatINR(item.pricePaise)}</span>
+                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-sm">{item.unitsSold} sold</span>
               </div>
             </Link>
           ))}
