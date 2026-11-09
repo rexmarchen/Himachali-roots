@@ -172,7 +172,7 @@ function CinematicHero() {
 
   return (
     <section
-      className="relative isolate flex min-h-[62svh] w-full flex-col justify-end overflow-hidden bg-[#101918] text-white lg:min-h-[82vh] xl:min-h-[86vh]"
+      className="relative isolate flex min-h-[48svh] sm:min-h-[62svh] w-full flex-col justify-end overflow-hidden bg-[#101918] text-white lg:min-h-[82vh] xl:min-h-[86vh]"
       aria-roledescription="carousel"
       aria-label="Photographs from Himachal Pradesh"
       onKeyDown={onKeyDown}
@@ -223,7 +223,7 @@ function CinematicHero() {
         />
       </div>
 
-      <div className="relative z-30 mx-auto flex w-full max-w-[88rem] flex-1 flex-col justify-end px-5 pb-8 pt-12 sm:px-8 sm:pb-14 sm:pt-24 lg:px-12 lg:pb-16 lg:pt-36">
+      <div className="relative z-30 mx-auto flex w-full max-w-[88rem] flex-1 flex-col justify-end px-4 pb-6 pt-6 sm:px-8 sm:pb-14 sm:pt-24 lg:px-12 lg:pb-16 lg:pt-36">
         <div className="max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-black/40 px-3.5 py-1.5 sm:px-4 sm:py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/95 shadow-sm backdrop-blur-md sm:text-xs lg:text-[12.5px]">
@@ -243,7 +243,7 @@ function CinematicHero() {
             </Link>
           </div>
 
-          <h1 className="mt-4 font-serif text-[2.6rem] font-normal leading-[1.04] tracking-[-0.02em] text-white drop-shadow-md sm:mt-5 sm:text-5xl md:text-6xl lg:text-[4.6rem] xl:text-[5.4rem]">
+          <h1 className="mt-3 font-serif text-[2.2rem] font-normal leading-[1.05] tracking-[-0.02em] text-white drop-shadow-md sm:mt-5 sm:text-5xl md:text-6xl lg:text-[4.6rem] xl:text-[5.4rem]">
             From the Himalayas,
             <span className="mt-1 block font-normal italic text-butter">with heart.</span>
           </h1>
@@ -594,7 +594,7 @@ function MakersCelebrationSection({ makers }: { makers: MakerSummary[] }) {
           {makers.slice(0, 6).map((maker) => (
             <article
               key={maker.id}
-              className="w-[270px] shrink-0 sm:w-auto rounded-2xl sm:rounded-none overflow-hidden border border-[#E4DACE]/80 bg-paper p-3.5 sm:p-5 shadow-xs sm:shadow-none transition-all duration-300 hover:border-forest/40 hover:shadow-sm"
+              className="w-[210px] shrink-0 sm:w-auto rounded-xl sm:rounded-none overflow-hidden border border-[#E4DACE]/80 bg-paper p-2.5 sm:p-5 shadow-xs sm:shadow-none transition-all duration-300 hover:border-forest/40 hover:shadow-sm"
             >
               <Link to={`/makers/${maker.slug}`} className="block">
                 <div className="aspect-[16/10] sm:aspect-[4/3] rounded-xl sm:rounded-none overflow-hidden bg-sand/30 border border-line/60">
@@ -729,8 +729,8 @@ function GiftingSection({ gifting, content }: { gifting: ProductSummary[]; conte
             </div>
           </div>
 
-          <div className={gifting.length === 1 ? 'mx-auto w-full max-w-[320px]' : 'grid gap-6 sm:grid-cols-3'}>
-            {gifting.slice(0, 3).map((item) => (
+          <div className={gifting.length === 1 ? 'mx-auto w-full max-w-[260px]' : 'grid grid-cols-2 gap-2 sm:gap-6 sm:grid-cols-3'}>
+            {gifting.slice(0, 4).map((item) => (
               <ProductCard key={item.id} product={item} />
             ))}
           </div>
@@ -931,11 +931,11 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
       {products.length ? (
         <div
           ref={scrollRef}
-          className="flex gap-4 sm:gap-6 overflow-x-auto no-scrollbar scroll-smooth pb-4 pt-1"
+          className="grid grid-cols-2 gap-2 sm:flex sm:gap-6 sm:overflow-x-auto sm:no-scrollbar sm:scroll-smooth pb-4 pt-1"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {products.map((product, index) => (
-            <div key={product.id} className="w-[210px] sm:w-[280px] lg:w-[300px] shrink-0 flex">
+            <div key={product.id} className="min-w-0 sm:w-[280px] lg:w-[300px] sm:shrink-0 flex">
               <ProductCard product={product} priority={index < 4} />
             </div>
           ))}
@@ -967,15 +967,15 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-6 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-6 md:grid-cols-4">
           {bestsellers.map((item, index) => (
             <Link
               key={item.slug}
               to={`/shop/${item.slug}`}
-              className="group min-w-0 flex flex-col justify-between bg-white rounded-2xl border border-[#E4DACE]/80 shadow-[0_2px_10px_rgba(23,35,33,0.05)] p-2.5 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none transition-all"
+              className="group min-w-0 flex flex-col justify-between bg-white rounded-xl border border-[#E4DACE]/75 shadow-xs p-2 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none transition-all"
             >
               <div>
-                <div className="relative aspect-square overflow-hidden rounded-xl sm:rounded-none border border-[#E4DACE]/60 sm:border-line/60 bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE]">
+                <div className="relative aspect-square overflow-hidden rounded-lg sm:rounded-none border border-[#E4DACE]/50 sm:border-line/60 bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE]">
                   {item.imageUrl ? (
                     <img
                       src={item.imageUrl}
@@ -985,20 +985,20 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-[11px] text-muted">No photograph</div>
+                    <div className="flex h-full items-center justify-center text-[10px] text-muted">No photo</div>
                   )}
-                  <span className="absolute left-2 top-2 rounded-md sm:rounded-none bg-[#172321] text-white px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider shadow-xs">
+                  <span className="absolute left-1.5 top-1.5 rounded sm:rounded-none bg-[#172321] text-white px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wider shadow-2xs">
                     #{index + 1} Best
                   </span>
                 </div>
-                <p className="mt-2 truncate text-[10px] font-bold uppercase tracking-[0.14em] text-[#D98263]">{item.sellerName}</p>
-                <h3 className="mt-0.5 line-clamp-2 font-serif text-[13px] sm:text-[16px] font-bold sm:font-normal leading-snug text-forest transition-colors group-hover:text-terra">
+                <p className="mt-1.5 truncate text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.14em] text-[#D98263]">{item.sellerName}</p>
+                <h3 className="mt-0.5 line-clamp-2 text-[12px] sm:text-[16px] font-bold sm:font-normal leading-snug text-forest transition-colors group-hover:text-terra min-h-[28px] sm:min-h-0">
                   {item.name}
                 </h3>
               </div>
-              <div className="mt-2 flex items-baseline justify-between gap-x-2 border-t border-line/40 pt-1.5 sm:border-0 sm:pt-0">
-                <span className="text-[15px] font-extrabold text-[#172321] sm:font-medium sm:text-[13px]">{formatINR(item.pricePaise)}</span>
-                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-sm">{item.unitsSold} sold</span>
+              <div className="mt-1.5 flex items-baseline justify-between gap-x-1.5 border-t border-line/40 pt-1.5 sm:border-0 sm:pt-0">
+                <span className="text-[13.5px] font-extrabold text-[#172321] sm:font-medium sm:text-[13px]">{formatINR(item.pricePaise)}</span>
+                <span className="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded-xs">{item.unitsSold} sold</span>
               </div>
             </Link>
           ))}

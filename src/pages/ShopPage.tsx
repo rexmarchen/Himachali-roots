@@ -357,11 +357,11 @@ export function ShopPage() {
           </div>
 
           {/* Mobile high-converting Flipkart/Instamart action & filter bar */}
-          <div className="mb-4 flex items-center justify-between gap-2 border-y border-line/60 bg-paper py-2.5 lg:hidden">
+          <div className="mb-3.5 flex items-center justify-between gap-2 border-y border-line/60 bg-white/80 backdrop-blur-xs py-1.5 px-1 rounded-xl shadow-2xs lg:hidden">
             <button
               type="button"
               onClick={() => setFiltersOpen(true)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-forest/30 bg-white px-3.5 text-xs font-semibold text-forest shadow-2xs active:scale-95"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-forest/25 bg-paper px-3 text-[11.5px] font-semibold text-forest shadow-2xs active:scale-95 shrink-0"
               aria-haspopup="dialog"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5" aria-hidden>
@@ -375,15 +375,15 @@ export function ShopPage() {
               ) : null}
             </button>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[11px] font-medium text-muted">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-muted shrink-0">
                 {products.data ? `${products.data.total} items` : '…'}
               </span>
               <Select
                 id="sort-mobile"
                 value={sort}
                 onChange={(event) => update('sort', event.target.value)}
-                className="h-9 w-auto max-w-[140px] py-1 px-2.5 text-xs rounded-full border-line bg-white font-medium shadow-2xs"
+                className="h-8 w-auto min-w-[130px] py-0.5 px-2 text-[11.5px] rounded-lg border-line bg-paper font-medium shadow-2xs"
               >
                 {SORTS.map((option) => (
                   <option key={option.value} value={option.value}>

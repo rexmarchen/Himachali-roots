@@ -73,9 +73,9 @@ export function ProductCard({
   });
 
   return (
-    <article className="group relative flex flex-col justify-between transition-all duration-300 bg-white rounded-2xl border border-[#E4DACE]/80 shadow-[0_2px_10px_rgba(23,35,33,0.05)] p-2.5 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none">
+    <article className="group relative flex flex-col justify-between transition-all duration-200 bg-white rounded-xl border border-[#E4DACE]/80 shadow-[0_1px_6px_rgba(23,35,33,0.04)] p-2 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none h-full">
       <div>
-        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl sm:rounded-none bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] border border-[#E4DACE]/60 sm:border-line/60">
+        <div className="relative aspect-square sm:aspect-[4/5] w-full overflow-hidden rounded-lg sm:rounded-none bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] border border-[#E4DACE]/50 sm:border-line/60">
           <Link to={`/shop/${product.slug}`} className="block h-full w-full" aria-label={`View ${product.name}`}>
             {product.imageUrl && !imageError ? (
               <img
@@ -83,34 +83,34 @@ export function ProductCard({
                 alt={product.imageAlt ?? product.name}
                 loading={priority ? 'eager' : 'lazy'}
                 onError={() => setImageError(true)}
-                className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.035]"
+                className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.035]"
               />
             ) : (
-              <div className="flex h-full flex-col items-center justify-center p-4 text-center text-xs text-muted bg-sand/20">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-8 w-8 text-sand mb-2" aria-hidden>
+              <div className="flex h-full flex-col items-center justify-center p-3 text-center text-xs text-muted bg-sand/20">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6 text-sand mb-1" aria-hidden>
                   <rect width="18" height="18" x="3" y="3" rx="2" strokeWidth="1.5" />
                   <circle cx="8.5" cy="8.5" r="1.5" strokeWidth="1.5" />
                   <path d="M21 15l-5-5L5 21" strokeWidth="1.5" />
                 </svg>
-                <span>No photograph</span>
+                <span className="text-[10px]">No photo</span>
               </div>
             )}
           </Link>
 
           {/* Badges */}
-          <div className="absolute left-2 top-2 flex flex-col items-start gap-1 pointer-events-none">
+          <div className="absolute left-1.5 top-1.5 flex flex-col items-start gap-1 pointer-events-none">
             {discountPercent ? (
-              <span className="rounded-md sm:rounded-none bg-[#D98263] px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider text-white shadow-xs">
+              <span className="rounded sm:rounded-none bg-[#D98263] px-1.5 py-0.5 text-[8.5px] font-extrabold uppercase tracking-wider text-white shadow-2xs">
                 {discountPercent}% off
               </span>
             ) : null}
             {product.region ? (
-              <span className="sm:hidden rounded-full bg-[#172321]/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-semibold text-white tracking-wider shadow-xs">
+              <span className="sm:hidden rounded-full bg-[#172321]/80 backdrop-blur-xs px-1.5 py-0.5 text-[8px] font-semibold text-white tracking-wider shadow-2xs">
                 📍 {product.region}
               </span>
             ) : null}
             {soldOut ? (
-              <span className="rounded-md sm:rounded-none border border-ink/20 bg-paper/95 px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-ink shadow-xs">
+              <span className="rounded sm:rounded-none border border-ink/20 bg-paper/95 px-1.5 py-0.5 text-[8.5px] font-semibold uppercase tracking-wider text-ink shadow-2xs">
                 Sold out
               </span>
             ) : null}
@@ -125,13 +125,13 @@ export function ProductCard({
               toggleWishlist.mutate(isSaved);
             }}
             aria-label={isSaved ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`}
-            className={`absolute right-2 top-2 sm:right-2 sm:top-2 flex h-8 w-8 sm:h-11 sm:w-11 min-h-[32px] min-w-[32px] sm:min-h-[44px] sm:min-w-[44px] items-center justify-center rounded-full border transition-all duration-200 active:scale-90 ${
+            className={`absolute right-1.5 top-1.5 sm:right-2 sm:top-2 flex h-7 w-7 sm:h-11 sm:w-11 min-h-[28px] min-w-[28px] sm:min-h-[44px] sm:min-w-[44px] items-center justify-center rounded-full border transition-all duration-200 active:scale-90 ${
               isSaved
                 ? 'border-terra bg-terra text-white shadow-sm'
                 : 'border-[#E4DACE]/80 bg-white/95 backdrop-blur-sm sm:bg-paper/90 text-ink/70 hover:bg-paper hover:text-terra shadow-2xs'
             }`}
           >
-            <svg viewBox="0 0 20 20" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" className="h-3.5 w-3.5 sm:h-4 sm:w-4">
+            <svg viewBox="0 0 20 20" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" className="h-3 w-3 sm:h-4 sm:w-4">
               <path
                 d="M10 16.5l-6-6a4.2 4.2 0 0 1 0-6 4.2 4.2 0 0 1 6 0l0 0 0 0a4.2 4.2 0 0 1 6 0 4.2 4.2 0 0 1 0 6l-6 6Z"
                 strokeWidth="1.6"
@@ -142,25 +142,25 @@ export function ProductCard({
         </div>
 
         {/* Content */}
-        <div className="mt-2.5 sm:mt-3.5 flex flex-col">
-          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-muted">
+        <div className="mt-1.5 sm:mt-3.5 flex flex-col">
+          <div className="flex items-center justify-between text-[9px] sm:text-[10px] uppercase tracking-[0.14em] text-muted">
             <span className="truncate max-w-[70%] font-bold text-[#D98263]">{product.sellerName}</span>
             {product.region ? <span className="hidden sm:inline shrink-0">{product.region}</span> : null}
           </div>
 
-          <h3 className="mt-1 line-clamp-2 text-[13px] sm:text-[17px] font-bold sm:font-normal leading-snug text-[#172321] group-hover:text-terra transition-colors duration-150">
+          <h3 className="mt-0.5 line-clamp-2 text-[12px] sm:text-[17px] font-bold sm:font-normal leading-snug text-[#172321] group-hover:text-terra transition-colors min-h-[28px] sm:min-h-0">
             <Link to={`/shop/${product.slug}`} className="hover:text-terra transition-colors duration-150">
               {product.name}
             </Link>
           </h3>
 
-          <div className="mt-1 flex items-center justify-between gap-1 text-[11px] text-muted">
-            <span className="truncate text-muted/90">
+          <div className="mt-0.5 flex items-center justify-between gap-1 text-[10px] sm:text-[11px] text-muted">
+            <span className="truncate text-muted/80">
               {product.categoryName}
               {product.campaignName ? <span className="text-terra"> · {product.campaignName}</span> : null}
             </span>
             {product.ratingCount > 0 && product.ratingAverage ? (
-              <span className="sm:hidden inline-flex items-center gap-0.5 rounded bg-[#F4E8CE] border border-[#D4A373]/30 px-1.5 py-0.5 text-[9.5px] font-bold text-[#172321] shrink-0">
+              <span className="sm:hidden inline-flex items-center gap-0.5 rounded bg-[#F4E8CE] border border-[#D4A373]/30 px-1 py-0.2 text-[8.5px] font-bold text-[#172321] shrink-0">
                 ★ {product.ratingAverage.toFixed(1)}
               </span>
             ) : null}
@@ -169,11 +169,11 @@ export function ProductCard({
       </div>
 
       <div>
-        <div className="mt-2 flex items-center justify-between gap-1.5 border-t border-line/50 pt-2 sm:mt-2.5 sm:pt-2.5">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-1.5 sm:gap-2">
-            <span className="text-[15px] sm:text-[14px] font-extrabold sm:font-medium text-[#172321]">{formatINR(product.pricePaise)}</span>
-            {strikePrice ? <span className="text-[11px] sm:text-xs text-muted/70 line-through">{formatINR(strikePrice)}</span> : null}
-            {discountPercent ? <span className="sm:hidden text-[10.5px] font-bold text-emerald-700">{discountPercent}% off</span> : null}
+        <div className="mt-1.5 flex items-baseline justify-between gap-1 border-t border-line/40 pt-1.5 sm:mt-2.5 sm:border-line/50 sm:pt-2.5">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-1 sm:gap-2">
+            <span className="text-[13.5px] sm:text-[14px] font-extrabold sm:font-medium text-[#172321]">{formatINR(product.pricePaise)}</span>
+            {strikePrice ? <span className="text-[10px] sm:text-xs text-muted/70 line-through">{formatINR(strikePrice)}</span> : null}
+            {discountPercent ? <span className="sm:hidden text-[9.5px] font-bold text-emerald-700">{discountPercent}% off</span> : null}
           </div>
 
           {/* Desktop rating or low stock info */}
@@ -201,7 +201,7 @@ export function ProductCard({
             }
           }}
           disabled={soldOut || addToCart.isPending}
-          className={`mt-2.5 w-full h-8.5 sm:hidden flex items-center justify-center gap-1.5 rounded-xl font-bold text-[11px] uppercase tracking-wider transition-all duration-150 active:scale-95 shadow-2xs ${
+          className={`mt-2 w-full h-7.5 sm:hidden flex items-center justify-center gap-1 rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all duration-150 active:scale-95 shadow-2xs ${
             soldOut
               ? 'bg-sand/30 text-muted border border-line cursor-not-allowed'
               : 'border border-[#D98263] bg-[#FAF3EF] text-[#D98263] hover:bg-[#D98263] hover:text-white'
@@ -214,7 +214,7 @@ export function ProductCard({
             <span>Adding…</span>
           ) : (
             <>
-              <span className="text-sm font-black leading-none">+</span>
+              <span className="text-xs font-black leading-none">+</span>
               <span>ADD TO BAG</span>
             </>
           )}
