@@ -577,8 +577,8 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
 /* Section C: Meet the Makers */
 function MakersCelebrationSection({ makers }: { makers: MakerSummary[] }) {
   return (
-    <section className="border-b border-line bg-surface py-20 lg:py-28">
-      <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
+    <section className="border-b border-line bg-surface py-10 sm:py-20 lg:py-28">
+      <div className="mx-auto max-w-[88rem] px-4 sm:px-8 lg:px-10 xl:px-12">
         <SectionHeading
           eyebrow="People, Not Labels"
           title="Made by hand. Rooted in the hills."
@@ -590,11 +590,14 @@ function MakersCelebrationSection({ makers }: { makers: MakerSummary[] }) {
           }
         />
 
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="flex sm:grid gap-4 sm:gap-8 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid-cols-2 lg:grid-cols-3 pb-2">
           {makers.slice(0, 6).map((maker) => (
-            <article key={maker.id} className="group border border-line/70 bg-paper p-5 transition-all duration-300 hover:border-forest/40 hover:shadow-sm">
+            <article
+              key={maker.id}
+              className="w-[270px] shrink-0 sm:w-auto rounded-2xl sm:rounded-none overflow-hidden border border-[#E4DACE]/80 bg-paper p-3.5 sm:p-5 shadow-xs sm:shadow-none transition-all duration-300 hover:border-forest/40 hover:shadow-sm"
+            >
               <Link to={`/makers/${maker.slug}`} className="block">
-                <div className="aspect-[4/3] overflow-hidden bg-sand/30 border border-line/60">
+                <div className="aspect-[16/10] sm:aspect-[4/3] rounded-xl sm:rounded-none overflow-hidden bg-sand/30 border border-line/60">
                   {maker.imageUrl ? (
                     <img
                       src={maker.imageUrl}
@@ -609,22 +612,22 @@ function MakersCelebrationSection({ makers }: { makers: MakerSummary[] }) {
                   )}
                 </div>
 
-                <div className="mt-4 flex items-start justify-between gap-3">
-                  <div>
-                    <span className="inline-block text-[10px] font-semibold uppercase tracking-[0.16em] text-terra">
+                <div className="mt-3 sm:mt-4 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="inline-block text-[10px] font-bold uppercase tracking-[0.16em] text-terra">
                       {maker.region ?? 'Himachal Pradesh'}
                     </span>
-                    <h3 className="font-serif text-2xl text-forest group-hover:text-terra transition-colors mt-0.5">
+                    <h3 className="font-serif text-lg sm:text-2xl text-forest group-hover:text-terra transition-colors mt-0.5 truncate">
                       {maker.name}
                     </h3>
-                    <p className="mt-1 text-xs text-muted">
+                    <p className="mt-0.5 text-xs text-muted">
                       {maker.productCount} active {maker.productCount === 1 ? 'listing' : 'listings'}
                     </p>
                     {maker.tagline ? (
-                      <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-ink/75">{maker.tagline}</p>
+                      <p className="mt-2 line-clamp-2 text-xs sm:text-sm leading-relaxed text-ink/75">{maker.tagline}</p>
                     ) : null}
                   </div>
-                  <span className="text-forest group-hover:text-terra transition-colors font-serif text-lg">↗</span>
+                  <span className="text-forest group-hover:text-terra transition-colors font-serif text-base sm:text-lg shrink-0">↗</span>
                 </div>
               </Link>
             </article>

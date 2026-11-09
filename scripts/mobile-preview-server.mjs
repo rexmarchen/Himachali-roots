@@ -18,8 +18,9 @@ import zlib from 'node:zlib';
 import os from 'node:os';
 
 const PORT = parseInt(process.env.PORT || '4100', 10);
-const DEFAULT_TARGET = process.env.TARGET || 'https://www.dearhills.in';
-const LOCAL_TARGET = process.env.LOCAL_TARGET || 'http://localhost:8787';
+const LOCAL_TARGET = process.env.LOCAL_TARGET || 'http://localhost:5173';
+const PROD_TARGET = process.env.PROD_TARGET || 'https://www.dearhills.in';
+const DEFAULT_TARGET = process.env.TARGET || LOCAL_TARGET;
 
 // Detect primary non-internal IPv4 address
 function getLocalIp() {
@@ -847,8 +848,8 @@ function renderSimulatorShell({ initialPath = '/', initialTarget = 'production' 
       <div class="control-group">
         <span class="control-label">Target:</span>
         <select id="target-select" onchange="switchTarget(this.value)">
+          <option value="local" ${initialTarget === 'local' ? 'selected' : ''}>💻 Local Dev (localhost:5173)</option>
           <option value="production" ${initialTarget === 'production' ? 'selected' : ''}>🌐 Production (dearhills.in)</option>
-          <option value="local" ${initialTarget === 'local' ? 'selected' : ''}>💻 Local Dev (localhost:8787)</option>
         </select>
       </div>
 
@@ -1439,10 +1440,10 @@ const server = http.createServer((req, res) => {
   const cookies = parseCookies(req.headers['cookie']);
   const ua = req.headers['user-agent'] || '';
 
-  // Determine Upstream Target (default to Production dearhills.in)
-  let targetOrigin = DEFAULT_TARGET;
-  if (parsedUrl.searchParams.get('target') === 'local' || cookies['dh_target'] === 'local') {
-    targetOrigin = LOCAL_TARGET;
+  // Determine Upstream Target (default to Local Vite Dev)
+  let targetOrigin = LOCAL_TARGET;
+  if (parsedUrl.searchParams.get('target') === 'production' || cookies['dh_target'] === 'production') {
+    targetOrigin = PROD_TARGET;
   }
 
   // Health check endpoint
@@ -1483,7 +1484,7 @@ const server = http.createServer((req, res) => {
   // Otherwise, Desktop browser visiting a route: serve the Mobile Device Simulator Shell!
   const html = renderSimulatorShell({
     initialPath: pathname + (parsedUrl.search ? parsedUrl.search : ''),
-    initialTarget: targetOrigin === LOCAL_TARGET ? 'local' : 'production'
+    initialTarget: targetOrigin === PROD_TARGET ? 'production' : 'local'
   });
 
   res.writeHead(200, {
