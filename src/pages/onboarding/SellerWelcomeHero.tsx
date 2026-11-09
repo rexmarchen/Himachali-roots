@@ -199,3 +199,4 @@ export function SellerWelcomeHero({ selectedType, onSelectType, onStart, onLogin
     </section>
   );
 }
+

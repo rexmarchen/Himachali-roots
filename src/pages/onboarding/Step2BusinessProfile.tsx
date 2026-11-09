@@ -337,3 +337,4 @@ export function Step2BusinessProfile({ form, onChange, onNext, onBack }: Props) 
     </form>
   );
 }
+

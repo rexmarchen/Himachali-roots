@@ -1583,81 +1583,157 @@ export function AdminSellersPage() {
         {sellers.isLoading ? <LoadingBlock rows={4} /> : null}
         {sellers.isError ? <ErrorState onRetry={() => void sellers.refetch()} /> : null}
         {sellers.data && rows.length ? (
-          <div className="overflow-x-auto border border-line bg-surface">
-            <table className="min-w-full text-left text-[12.5px]" aria-label="Seller applications">
-              <thead className="border-b border-line bg-paper text-[9.5px] uppercase tracking-[0.14em] text-muted">
-                <tr>
-                  <th scope="col" className="px-4 py-3 font-semibold">Seller</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Application</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Store</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Category</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Documents</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Listings</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Paid orders</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">GMV</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Created</th>
-                  <th scope="col" className="px-4 py-3 text-right font-semibold">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {rows.map((seller) => {
-                  const applicationStatus = sellerApplicationStatus(seller);
-                  return (
-                    <tr key={seller.id} className="hover:bg-paper/60">
-                      <td className="px-4 py-4">
-                        <Link to={`/admin/sellers/${seller.id}`} className="font-medium text-forest hover:text-terra">
-                          {seller.business_name}
-                        </Link>
-                        <p className="mt-0.5 text-[10.5px] text-muted">{seller.email} · {seller.region ?? 'Region not recorded'}</p>
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge status={applicationStatus} label={applicationLabel(applicationStatus)} />
-                        <p className="mt-1 text-[10.5px] text-muted">
-                          {seller.submitted_at ? `Submitted ${formatDate(seller.submitted_at)}` : `Step ${seller.application_current_step ?? 1} of 10 · draft`}
-                          {seller.application_revision && seller.application_revision > 1 ? ` · revision ${seller.application_revision}` : ''}
-                        </p>
-                        {seller.application_id ? (
-                          <p className="mt-1 break-all font-mono text-[10px] text-muted" title={seller.application_id}>
-                            Ref {seller.application_id}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="text-ink">{STORE_STATUS_LABELS[seller.store_status] ?? humanise(seller.store_status)}</span>
-                        <p className="text-[10.5px] text-muted">Payouts: {humanise(seller.payout_status)}</p>
-                      </td>
-                      <td className="px-4 py-4 text-muted">
-                        {seller.seller_category ? humanise(seller.seller_category) : '—'}
-                        <p className="text-[10.5px]">{humanise(seller.seller_type)}</p>
-                      </td>
-                      <td className="px-4 py-4">
+          <>
+            {/* Mobile Cards View */}
+            <div className="space-y-3.5 md:hidden">
+              {rows.map((seller) => {
+                const applicationStatus = sellerApplicationStatus(seller);
+                return (
+                  <article
+                    key={seller.id}
+                    className="rounded-xl border border-line bg-surface p-4 shadow-2xs transition-shadow hover:shadow-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2 border-b border-line/60 pb-3">
+                      <div>
                         <Link
                           to={`/admin/sellers/${seller.id}`}
-                          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors hover:opacity-80 ${
-                            (seller.document_count ?? 0) > 0 ? 'bg-forest/10 text-forest' : 'bg-warm-paper text-muted'
+                          className="font-serif text-base font-semibold text-forest hover:text-terra"
+                        >
+                          {seller.business_name}
+                        </Link>
+                        <p className="mt-0.5 text-[11px] text-muted">
+                          {seller.email} · {seller.region ?? 'Region not set'}
+                        </p>
+                      </div>
+                      <StatusBadge status={applicationStatus} label={applicationLabel(applicationStatus)} />
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider text-muted">Store Status</span>
+                        <p className="font-medium text-ink">{STORE_STATUS_LABELS[seller.store_status] ?? humanise(seller.store_status)}</p>
+                        <p className="text-[10.5px] text-muted">Payouts: {humanise(seller.payout_status)}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider text-muted">Category</span>
+                        <p className="font-medium text-ink">{seller.seller_category ? humanise(seller.seller_category) : '—'}</p>
+                        <p className="text-[10.5px] text-muted">{humanise(seller.seller_type)}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2.5 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wider text-muted">Documents:</span>
+                        <Link
+                          to={`/admin/sellers/${seller.id}`}
+                          className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold ${
+                            (seller.document_count ?? 0) > 0 ? 'bg-forest/10 text-forest' : 'bg-sand/30 text-muted'
                           }`}
                         >
                           {seller.document_count ?? 0} uploaded
                         </Link>
-                      </td>
-                      <td className="px-4 py-4 tabular-nums">{seller.product_count}</td>
-                      <td className="px-4 py-4 tabular-nums">{seller.paid_orders}</td>
-                      <td className="px-4 py-4 tabular-nums">{formatINR(seller.gmv)}</td>
-                      <td className="px-4 py-4 text-muted">{formatDate(seller.created_at)}</td>
-                      <td className="px-4 py-4 text-right">
-                        <Link
-                          to={`/admin/sellers/${seller.id}`}
-                          className="inline-flex items-center gap-1 rounded-sm border border-forest/30 bg-forest/10 px-2.5 py-1 text-xs font-semibold text-forest hover:bg-forest hover:text-paper transition-colors"
-                        >
-                          Review file →
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                      <span className="text-[11px] text-muted">
+                        {seller.submitted_at ? `Submitted ${formatDate(seller.submitted_at)}` : 'Draft'}
+                      </span>
+                    </div>
+
+                    {seller.application_id ? (
+                      <p className="mt-2 break-all font-mono text-[10px] text-muted/75">
+                        Ref: {seller.application_id}
+                      </p>
+                    ) : null}
+
+                    <div className="mt-3.5 pt-2">
+                      <Link
+                        to={`/admin/sellers/${seller.id}`}
+                        className="flex h-11 w-full items-center justify-center rounded-lg border border-forest/30 bg-forest/10 text-xs font-semibold text-forest hover:bg-forest hover:text-white transition-colors"
+                      >
+                        Inspect &amp; Review File →
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto border border-line bg-surface">
+              <table className="min-w-full text-left text-[12.5px]" aria-label="Seller applications">
+                <thead className="border-b border-line bg-paper text-[9.5px] uppercase tracking-[0.14em] text-muted">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 font-semibold">Seller</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Application</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Store</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Category</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Documents</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Listings</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Paid orders</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">GMV</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Created</th>
+                    <th scope="col" className="px-4 py-3 text-right font-semibold">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {rows.map((seller) => {
+                    const applicationStatus = sellerApplicationStatus(seller);
+                    return (
+                      <tr key={seller.id} className="hover:bg-paper/60">
+                        <td className="px-4 py-4">
+                          <Link to={`/admin/sellers/${seller.id}`} className="font-medium text-forest hover:text-terra">
+                            {seller.business_name}
+                          </Link>
+                          <p className="mt-0.5 text-[10.5px] text-muted">{seller.email} · {seller.region ?? 'Region not recorded'}</p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <StatusBadge status={applicationStatus} label={applicationLabel(applicationStatus)} />
+                          <p className="mt-1 text-[10.5px] text-muted">
+                            {seller.submitted_at ? `Submitted ${formatDate(seller.submitted_at)}` : `Step ${seller.application_current_step ?? 1} of 10 · draft`}
+                            {seller.application_revision && seller.application_revision > 1 ? ` · revision ${seller.application_revision}` : ''}
+                          </p>
+                          {seller.application_id ? (
+                            <p className="mt-1 break-all font-mono text-[10px] text-muted" title={seller.application_id}>
+                              Ref {seller.application_id}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className="text-ink">{STORE_STATUS_LABELS[seller.store_status] ?? humanise(seller.store_status)}</span>
+                          <p className="text-[10.5px] text-muted">Payouts: {humanise(seller.payout_status)}</p>
+                        </td>
+                        <td className="px-4 py-4 text-muted">
+                          {seller.seller_category ? humanise(seller.seller_category) : '—'}
+                          <p className="text-[10.5px]">{humanise(seller.seller_type)}</p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <Link
+                            to={`/admin/sellers/${seller.id}`}
+                            className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors hover:opacity-80 ${
+                              (seller.document_count ?? 0) > 0 ? 'bg-forest/10 text-forest' : 'bg-warm-paper text-muted'
+                            }`}
+                          >
+                            {seller.document_count ?? 0} uploaded
+                          </Link>
+                        </td>
+                        <td className="px-4 py-4 tabular-nums">{seller.product_count}</td>
+                        <td className="px-4 py-4 tabular-nums">{seller.paid_orders}</td>
+                        <td className="px-4 py-4 tabular-nums">{formatINR(seller.gmv)}</td>
+                        <td className="px-4 py-4 text-muted">{formatDate(seller.created_at)}</td>
+                        <td className="px-4 py-4 text-right">
+                          <Link
+                            to={`/admin/sellers/${seller.id}`}
+                            className="inline-flex items-center gap-1 rounded-sm border border-forest/30 bg-forest/10 px-2.5 py-1 text-xs font-semibold text-forest hover:bg-forest hover:text-paper transition-colors"
+                          >
+                            Review file →
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : null}
         {sellers.data && !rows.length ? (
           <EmptyState
@@ -2617,113 +2693,205 @@ export function AdminProductsPage() {
         {products.isLoading ? <LoadingBlock rows={4} /> : null}
         {products.isError ? <ErrorState title="Listings could not load" onRetry={() => void products.refetch()} /> : null}
         {products.data && rows.length ? (
-          <div className="overflow-x-auto border border-line bg-surface">
-            <table className="min-w-full text-left text-[12.5px]" aria-label="Product listings">
-              <thead className="border-b border-line bg-paper text-[9.5px] uppercase tracking-[0.14em] text-muted">
-                <tr>
-                  <th scope="col" className="px-4 py-3 font-semibold">Listing</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Seller</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Status</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Price</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Available</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Submitted</th>
-                  <th scope="col" className="px-4 py-3 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {rows.map((product) => {
-                  const available = Number(product.stock ?? 0) - Number(product.reserved ?? 0);
-                  const threshold = Number(product.low_stock_threshold ?? 0);
-                  return (
-                    <tr key={product.id} className="hover:bg-paper/60">
-                      <td className="px-4 py-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden border border-line bg-sand/30">
-                            {product.image_url ? (
-                              <img src={product.image_url} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              <span className="text-[9px] uppercase tracking-wider text-muted">No photo</span>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <Link to={`/admin/products/${product.id}`} className="font-medium text-forest hover:text-terra">
-                                {product.name}
-                              </Link>
-                              {product.is_demo ? <Badge tone="sand">Demo</Badge> : null}
-                            </div>
-                            <p className="text-[10.5px] text-muted">
-                              {product.sku}
-                              {product.origin_verified ? ' · origin verified' : ''}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <Link to={`/admin/sellers/${product.seller_id}`} className="text-forest underline underline-offset-2">
-                          {product.seller_name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge status={productWorkflowStatus(product)} label={productWorkflowLabel(product)} />
-                        {product.moderation_note ? (
-                          <p className="mt-1 max-w-[14rem] text-[10.5px] text-terra">{product.moderation_note}</p>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-4 tabular-nums">{formatINR(product.price_paise)}</td>
-                      <td className="px-4 py-4 tabular-nums">
-                        {available}
-                        {available <= 0 ? (
-                          <p className="text-[10px] font-medium text-terra">Out of stock</p>
-                        ) : available <= threshold ? (
-                          <p className="text-[10px] font-medium text-[#7c5a1c]">At or below {threshold}</p>
-                        ) : null}
-                        {Number(product.reserved ?? 0) > 0 ? (
-                          <p className="text-[10px] text-muted">{product.reserved} reserved</p>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-4 text-muted">{product.submitted_at ? formatDate(product.submitted_at) : '—'}</td>
-                      <td className="px-4 py-4 text-right">
-                        <div className="flex flex-wrap items-center justify-end gap-1">
+          <>
+            {/* Mobile Product Moderation Cards */}
+            <div className="space-y-3.5 md:hidden">
+              {rows.map((product) => {
+                const available = Number(product.stock ?? 0) - Number(product.reserved ?? 0);
+                const threshold = Number(product.low_stock_threshold ?? 0);
+                return (
+                  <article
+                    key={product.id}
+                    className="rounded-xl border border-line bg-surface p-4 shadow-2xs"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/30">
+                        {product.image_url ? (
+                          <img src={product.image_url} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-[9px] uppercase tracking-wider text-muted">No photo</span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-1.5">
                           <Link
                             to={`/admin/products/${product.id}`}
-                            className="inline-block px-2 py-1 text-[11px] text-forest underline underline-offset-2 hover:text-terra"
+                            className="font-serif text-base font-semibold text-forest hover:text-terra line-clamp-1"
                           >
-                            Open
+                            {product.name}
                           </Link>
-                          {product.status !== 'approved' && product.status !== 'archived' ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={actionBusyId === product.id}
-                              onClick={() => void publishProduct(product.id)}
-                            >
-                              Publish
-                            </Button>
-                          ) : null}
-                          {product.status === 'approved' ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={actionBusyId === product.id}
-                              onClick={() => void unpublishProduct(product.id)}
-                            >
-                              Unpublish
-                            </Button>
-                          ) : null}
-                          {product.status !== 'archived' ? (
-                            <Button size="sm" variant="ghost" disabled={actionBusyId === product.id} onClick={() => setArchiveTarget(product)}>
-                              Archive
-                            </Button>
-                          ) : null}
+                          {product.is_demo ? <Badge tone="sand">Demo</Badge> : null}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        <p className="mt-0.5 text-[11px] text-muted">
+                          By <Link to={`/admin/sellers/${product.seller_id}`} className="font-medium text-forest hover:underline">{product.seller_name}</Link>
+                        </p>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="font-semibold text-ink text-sm">
+                            {formatINR(product.price_paise)}
+                          </span>
+                          <StatusBadge status={productWorkflowStatus(product)} label={productWorkflowLabel(product)} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2 text-xs text-muted">
+                      <span>
+                        Available: <strong className={available <= 0 ? 'text-terra' : available <= threshold ? 'text-amber-800' : 'text-ink'}>{available}</strong>
+                        {Number(product.reserved ?? 0) > 0 ? ` (${product.reserved} res)` : ''}
+                      </span>
+                      <span>{product.submitted_at ? formatDate(product.submitted_at) : 'Draft'}</span>
+                    </div>
+
+                    {product.moderation_note ? (
+                      <p className="mt-2 rounded bg-amber-50 p-2 text-[11px] text-amber-900 border border-amber-200">
+                        <strong>Moderation note:</strong> {product.moderation_note}
+                      </p>
+                    ) : null}
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line/60 pt-2.5">
+                      <Link
+                        to={`/admin/products/${product.id}`}
+                        className="flex-1 flex h-10 items-center justify-center rounded-lg border border-forest/30 bg-forest/5 text-xs font-semibold text-forest hover:bg-forest hover:text-white transition-colors"
+                      >
+                        Inspect Product →
+                      </Link>
+                      {product.status !== 'approved' && product.status !== 'archived' ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={actionBusyId === product.id}
+                          onClick={() => void publishProduct(product.id)}
+                          className="h-10"
+                        >
+                          Publish
+                        </Button>
+                      ) : null}
+                      {product.status === 'approved' ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={actionBusyId === product.id}
+                          onClick={() => void unpublishProduct(product.id)}
+                          className="h-10"
+                        >
+                          Unpublish
+                        </Button>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto border border-line bg-surface">
+              <table className="min-w-full text-left text-[12.5px]" aria-label="Product listings">
+                <thead className="border-b border-line bg-paper text-[9.5px] uppercase tracking-[0.14em] text-muted">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 font-semibold">Listing</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Seller</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Status</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Price</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Available</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Submitted</th>
+                    <th scope="col" className="px-4 py-3 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {rows.map((product) => {
+                    const available = Number(product.stock ?? 0) - Number(product.reserved ?? 0);
+                    const threshold = Number(product.low_stock_threshold ?? 0);
+                    return (
+                      <tr key={product.id} className="hover:bg-paper/60">
+                        <td className="px-4 py-4">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden border border-line bg-sand/30">
+                              {product.image_url ? (
+                                <img src={product.image_url} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <span className="text-[9px] uppercase tracking-wider text-muted">No photo</span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Link to={`/admin/products/${product.id}`} className="font-medium text-forest hover:text-terra">
+                                  {product.name}
+                                </Link>
+                                {product.is_demo ? <Badge tone="sand">Demo</Badge> : null}
+                              </div>
+                              <p className="text-[10.5px] text-muted">
+                                {product.sku}
+                                {product.origin_verified ? ' · origin verified' : ''}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <Link to={`/admin/sellers/${product.seller_id}`} className="text-forest underline underline-offset-2">
+                            {product.seller_name}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-4">
+                          <StatusBadge status={productWorkflowStatus(product)} label={productWorkflowLabel(product)} />
+                          {product.moderation_note ? (
+                            <p className="mt-1 max-w-[14rem] text-[10.5px] text-terra">{product.moderation_note}</p>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-4 tabular-nums">{formatINR(product.price_paise)}</td>
+                        <td className="px-4 py-4 tabular-nums">
+                          {available}
+                          {available <= 0 ? (
+                            <p className="text-[10px] font-medium text-terra">Out of stock</p>
+                          ) : available <= threshold ? (
+                            <p className="text-[10px] font-medium text-[#7c5a1c]">At or below {threshold}</p>
+                          ) : null}
+                          {Number(product.reserved ?? 0) > 0 ? (
+                            <p className="text-[10px] text-muted">{product.reserved} reserved</p>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-4 text-muted">{product.submitted_at ? formatDate(product.submitted_at) : '—'}</td>
+                        <td className="px-4 py-4 text-right">
+                          <div className="flex flex-wrap items-center justify-end gap-1">
+                            <Link
+                              to={`/admin/products/${product.id}`}
+                              className="inline-block px-2 py-1 text-[11px] text-forest underline underline-offset-2 hover:text-terra"
+                            >
+                              Open
+                            </Link>
+                            {product.status !== 'approved' && product.status !== 'archived' ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={actionBusyId === product.id}
+                                onClick={() => void publishProduct(product.id)}
+                              >
+                                Publish
+                              </Button>
+                            ) : null}
+                            {product.status === 'approved' ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={actionBusyId === product.id}
+                                onClick={() => void unpublishProduct(product.id)}
+                              >
+                                Unpublish
+                              </Button>
+                            ) : null}
+                            {product.status !== 'archived' ? (
+                              <Button size="sm" variant="ghost" disabled={actionBusyId === product.id} onClick={() => setArchiveTarget(product)}>
+                                Archive
+                              </Button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : null}
         {products.data && !rows.length ? (
           <EmptyState
@@ -4228,31 +4396,104 @@ export function AdminOrdersPage() {
         {orders.isLoading ? <LoadingBlock rows={4} /> : null}
         {orders.isError ? <ErrorState onRetry={() => void orders.refetch()} /> : null}
         {orders.data?.orders.length ? (
-          <div className="overflow-x-auto border border-line bg-surface">
-            <table className="min-w-full text-left text-[12.5px]">
-              <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
-                <tr><th className="px-4 py-3">Order</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Seller shipments</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Placed</th></tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {orders.data.orders.map((order) => (
-                  <tr key={order.orderNumber}>
-                    <td className="px-4 py-4">
+          <>
+            {/* Mobile Order Cards */}
+            <div className="space-y-3.5 md:hidden">
+              {orders.data.orders.map((order) => (
+                <article
+                  key={order.orderNumber}
+                  className="rounded-xl border border-line bg-surface p-4 shadow-2xs"
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-line/60 pb-2.5">
+                    <div>
                       <div className="flex items-center gap-1.5">
-                        <Link to={`/admin/orders/${order.orderNumber}`} className="font-medium text-forest hover:text-terra">{order.orderNumber}</Link>
+                        <Link
+                          to={`/admin/orders/${order.orderNumber}`}
+                          className="font-serif text-base font-semibold text-forest hover:text-terra"
+                        >
+                          {order.orderNumber}
+                        </Link>
                         {order.isDemo ? <Badge tone="sand">DEMO</Badge> : null}
                       </div>
-                      {order.refundCount ? <p className="text-[10.5px] text-terra">{order.refundCount} refund record{order.refundCount === 1 ? '' : 's'}</p> : null}
-                    </td>
-                    <td className="px-4 py-4">{order.customerName}<p className="text-[10.5px] text-muted">{order.email} · {order.destination}</p></td>
-                    <td className="px-4 py-4"><StatusBadge status={order.status} label={orderStatusLabel(order.status)} /></td>
-                    <td className="px-4 py-4"><div className="flex flex-wrap gap-1">{order.sellerStatuses.map((sellerStatus, index) => <StatusBadge key={`${sellerStatus}-${index}`} status={sellerStatus} label={sellerOrderStatusLabel(sellerStatus)} />)}</div></td>
-                    <td className="px-4 py-4">{formatINR(order.totalPaise)}</td>
-                    <td className="px-4 py-4 text-muted">{formatDate(order.placedAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <p className="mt-0.5 text-[11px] text-muted">{formatDate(order.placedAt)}</p>
+                    </div>
+                    <StatusBadge status={order.status} label={orderStatusLabel(order.status)} />
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-muted">Customer</span>
+                      <p className="font-medium text-ink">{order.customerName}</p>
+                      <p className="text-[10.5px] text-muted truncate">{order.destination}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase tracking-wider text-muted">Total Paid</span>
+                      <p className="font-semibold text-sm text-ink">{formatINR(order.totalPaise)}</p>
+                    </div>
+                  </div>
+
+                  {order.sellerStatuses.length ? (
+                    <div className="mt-3 border-t border-line/60 pt-2.5">
+                      <span className="text-[10px] uppercase tracking-wider text-muted block mb-1">
+                        Seller Shipments ({order.sellerStatuses.length}):
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {order.sellerStatuses.map((sellerStatus, index) => (
+                          <StatusBadge
+                            key={`${sellerStatus}-${index}`}
+                            status={sellerStatus}
+                            label={sellerOrderStatusLabel(sellerStatus)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {order.refundCount ? (
+                    <p className="mt-2 text-[10.5px] text-terra font-medium">
+                      ⚠️ {order.refundCount} refund record{order.refundCount === 1 ? '' : 's'}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-3.5 pt-2 border-t border-line/60">
+                    <Link
+                      to={`/admin/orders/${order.orderNumber}`}
+                      className="flex h-10 w-full items-center justify-center rounded-lg border border-forest/30 bg-forest/5 text-xs font-semibold text-forest hover:bg-forest hover:text-white transition-colors"
+                    >
+                      View Order &amp; Shipments →
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {/* Desktop Order Table */}
+            <div className="hidden md:block overflow-x-auto border border-line bg-surface">
+              <table className="min-w-full text-left text-[12.5px]">
+                <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
+                  <tr><th className="px-4 py-3">Order</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Seller shipments</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Placed</th></tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {orders.data.orders.map((order) => (
+                    <tr key={order.orderNumber}>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <Link to={`/admin/orders/${order.orderNumber}`} className="font-medium text-forest hover:text-terra">{order.orderNumber}</Link>
+                          {order.isDemo ? <Badge tone="sand">DEMO</Badge> : null}
+                        </div>
+                        {order.refundCount ? <p className="text-[10.5px] text-terra">{order.refundCount} refund record{order.refundCount === 1 ? '' : 's'}</p> : null}
+                      </td>
+                      <td className="px-4 py-4">{order.customerName}<p className="text-[10.5px] text-muted">{order.email} · {order.destination}</p></td>
+                      <td className="px-4 py-4"><StatusBadge status={order.status} label={orderStatusLabel(order.status)} /></td>
+                      <td className="px-4 py-4"><div className="flex flex-wrap gap-1">{order.sellerStatuses.map((sellerStatus, index) => <StatusBadge key={`${sellerStatus}-${index}`} status={sellerStatus} label={sellerOrderStatusLabel(sellerStatus)} />)}</div></td>
+                      <td className="px-4 py-4">{formatINR(order.totalPaise)}</td>
+                      <td className="px-4 py-4 text-muted">{formatDate(order.placedAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <EmptyState
             title={fulfilment ? 'No orders are awaiting dispatch' : 'No orders in this view'}

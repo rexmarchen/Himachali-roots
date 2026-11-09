@@ -50,6 +50,16 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  /* Prevent automatic text zoom on iOS Safari when focusing form inputs */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
   }
 
   /* Sleek custom scrollbar for luxury editorial feel on Windows */

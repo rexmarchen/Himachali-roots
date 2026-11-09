@@ -240,3 +240,4 @@ export const FALLBACK_DOC_LABELS: Record<string, string> = {
   resale_authorisation: 'Reseller authorisation from makers/brands',
   other: 'Other supporting document',
 };
+

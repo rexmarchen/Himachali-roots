@@ -301,8 +301,10 @@ function sellerPageTitle(pathname: string) {
 
 export function SellerLayout() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const drawerTriggerRef = useRef<HTMLButtonElement>(null);
+  const moreSheetRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
@@ -603,10 +605,218 @@ export function SellerLayout() {
         </header>
 
         {/* Content Outlet */}
-        <main className="flex-1 px-4 py-8 sm:px-6 lg:px-8">
+        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 pb-24 lg:pb-12">
           <Outlet />
         </main>
       </div>
+
+      {/* Mobile Seller Bottom Navigation Bar */}
+      <nav
+        aria-label="Seller quick navigation"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E4DACE] bg-[#172321] pb-[env(safe-area-inset-bottom)] text-[#F7F1E7] lg:hidden shadow-lg"
+      >
+        <div className="grid grid-cols-4 h-14">
+          <NavLink
+            to="/seller"
+            end
+            onClick={() => setMoreMenuOpen(false)}
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+                isActive ? 'text-[#D98263]' : 'text-white/70 hover:text-white'
+              }`
+            }
+          >
+            <StudioNavIcon type="dashboard" className="h-4.5 w-4.5" />
+            <span>Home</span>
+          </NavLink>
+          <NavLink
+            to="/seller/orders"
+            onClick={() => setMoreMenuOpen(false)}
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+                isActive ? 'text-[#D98263]' : 'text-white/70 hover:text-white'
+              }`
+            }
+          >
+            <StudioNavIcon type="orders" className="h-4.5 w-4.5" />
+            <span>Orders</span>
+          </NavLink>
+          <NavLink
+            to="/seller/products"
+            onClick={() => setMoreMenuOpen(false)}
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+                isActive ? 'text-[#D98263]' : 'text-white/70 hover:text-white'
+              }`
+            }
+          >
+            <StudioNavIcon type="catalogue" className="h-4.5 w-4.5" />
+            <span>Products</span>
+          </NavLink>
+          <button
+            type="button"
+            onClick={() => setMoreMenuOpen((open) => !open)}
+            className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+              moreMenuOpen ? 'text-[#D98263]' : 'text-white/70 hover:text-white'
+            }`}
+            aria-expanded={moreMenuOpen}
+          >
+            <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <circle cx="5" cy="12" r="1.5" fill="currentColor" />
+              <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+              <circle cx="19" cy="12" r="1.5" fill="currentColor" />
+            </svg>
+            <span>More</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Mobile "More" Slide-up Sheet */}
+      {moreMenuOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setMoreMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            ref={moreSheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="More seller tools"
+            className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-line bg-paper pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4 shadow-2xl"
+          >
+            <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-line" />
+            <div className="flex items-center justify-between border-b border-line px-5 pb-3">
+              <div>
+                <h3 className="font-serif text-lg text-forest">Seller Studio Tools</h3>
+                <p className="text-[11px] text-muted">{seller.businessName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMoreMenuOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-line/40 hover:text-ink"
+                aria-label="Close sheet"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 p-4 text-xs font-medium">
+              <Link
+                to="/seller/inventory"
+                onClick={() => setMoreMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg border border-line bg-surface p-3 text-ink hover:border-forest/40 transition-colors shadow-2xs"
+              >
+                <StudioNavIcon type="inventory" className="h-4 w-4 text-forest" />
+                <span>Inventory</span>
+              </Link>
+              <Link
+                to="/seller/earnings"
+                onClick={() => setMoreMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg border border-line bg-surface p-3 text-ink hover:border-forest/40 transition-colors shadow-2xs"
+              >
+                <StudioNavIcon type="payouts" className="h-4 w-4 text-forest" />
+                <span>Earnings &amp; Payouts</span>
+              </Link>
+              <Link
+                to="/seller/shipping"
+                onClick={() => setMoreMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg border border-line bg-surface p-3 text-ink hover:border-forest/40 transition-colors shadow-2xs"
+              >
+                <StudioNavIcon type="shipping" className="h-4 w-4 text-forest" />
+                <span>Shipping</span>
+              </Link>
+              <Link
+                to="/seller/requests"
+                onClick={() => setMoreMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg border border-line bg-surface p-3 text-ink hover:border-forest/40 transition-colors shadow-2xs"
+              >
+                <StudioNavIcon type="requests" className="h-4 w-4 text-forest" />
+                <span>Returns</span>
+              </Link>
+              <Link
+                to="/seller/analytics"
+                onClick={() => setMoreMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg border border-line bg-surface p-3 text-ink hover:border-forest/40 transition-colors shadow-2xs"
+              >
+                <StudioNavIcon type="analytics" className="h-4 w-4 text-forest" />
+                <span>Analytics</span>
+              </Link>
+              <Link
+                to="/seller/notifications"
+                onClick={() => setMoreMenuOpen(false)}
+                className="flex items-center justify-between rounded-lg border border-line bg-surface p-3 text-ink hover:border-forest/40 transition-colors shadow-2xs"
+              >
+                <div className="flex items-center gap-2.5">
+                  <StudioNavIcon type="notifications" className="h-4 w-4 text-forest" />
+                  <span>Notifications</span>
+                </div>
+                {unread > 0 ? (
+                  <span className="rounded-full bg-terra px-1.5 py-0.2 text-[10px] font-bold text-white">
+                    {unread}
+                  </span>
+                ) : null}
+              </Link>
+              <Link
+                to="/seller/profile"
+                onClick={() => setMoreMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg border border-line bg-surface p-3 text-ink hover:border-forest/40 transition-colors shadow-2xs"
+              >
+                <StudioNavIcon type="profile" className="h-4 w-4 text-forest" />
+                <span>Store Profile</span>
+              </Link>
+              <Link
+                to="/seller/application"
+                onClick={() => setMoreMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg border border-line bg-surface p-3 text-ink hover:border-forest/40 transition-colors shadow-2xs"
+              >
+                <StudioNavIcon type="compliance" className="h-4 w-4 text-forest" />
+                <span>Verification</span>
+              </Link>
+            </div>
+
+            <div className="mt-2 border-t border-line px-4 pt-3 space-y-2">
+              {seller.slug ? (
+                <Link
+                  to={`/makers/${seller.slug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => setMoreMenuOpen(false)}
+                  className="flex w-full items-center justify-between rounded-lg border border-line bg-surface px-3 py-2.5 text-xs text-ink hover:bg-line/20 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>🏪</span>
+                    <span>View Live Storefront</span>
+                  </span>
+                  <span className="text-terra">↗</span>
+                </Link>
+              ) : null}
+              <Link
+                to="/"
+                onClick={() => setMoreMenuOpen(false)}
+                className="flex w-full items-center justify-between rounded-lg border border-line bg-surface px-3 py-2.5 text-xs text-ink hover:bg-line/20 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <span>🏔</span>
+                  <span>Customer Marketplace</span>
+                </span>
+                <span>→</span>
+              </Link>
+              <button
+                type="button"
+                onClick={async () => {
+                  setMoreMenuOpen(false);
+                  await handleLogout();
+                }}
+                className="flex w-full items-center justify-center rounded-lg border border-line/60 bg-transparent px-3 py-2.5 text-xs text-muted hover:bg-danger-soft hover:text-danger transition-colors"
+              >
+                Sign out of studio
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -924,6 +1134,115 @@ function InventoryLine({ item }: { item: InventoryItem }) {
   );
 }
 
+function InventoryCard({ item }: { item: InventoryItem }) {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [quantity, setQuantity] = useState(String(item.quantity));
+  const [threshold, setThreshold] = useState(String(item.lowStockThreshold));
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    const parsed = Number(quantity);
+    if (!Number.isInteger(parsed) || parsed < 0) {
+      toast.push('Enter a whole number for stock.', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api(`/seller/inventory/${item.productId}`, {
+        method: 'POST',
+        body: {
+          quantity: parsed,
+          lowStockThreshold: threshold === '' ? undefined : Number(threshold),
+          note: note || undefined,
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: ['seller-inventory'] });
+      await queryClient.invalidateQueries({ queryKey: ['seller-products'] });
+      setNote('');
+      toast.push('Stock updated.');
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isLow = item.available <= item.lowStockThreshold;
+
+  return (
+    <article className="rounded-xl border border-line bg-surface p-4 shadow-2xs">
+      <div className="flex items-start justify-between gap-2 border-b border-line/60 pb-3">
+        <div>
+          <Link to={`/seller/products/${item.productId}/edit`} className="font-serif text-[15px] font-semibold text-forest hover:text-terra line-clamp-1">
+            {item.name}
+          </Link>
+          <p className="mt-0.5 text-[11px] text-muted">{item.sku} · {PRODUCT_WORKFLOW_LABELS[item.status] ?? humanise(item.status)}</p>
+        </div>
+        <span className="font-semibold text-ink text-sm shrink-0">{formatINR(item.pricePaise)}</span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-sand/20 p-2.5 text-center text-xs">
+        <div>
+          <span className="block text-[10px] uppercase tracking-wider text-muted">Available</span>
+          <span className={`font-bold text-sm ${isLow ? 'text-terra' : 'text-forest'}`}>{item.available}</span>
+        </div>
+        <div>
+          <span className="block text-[10px] uppercase tracking-wider text-muted">Reserved</span>
+          <span className="font-medium text-muted text-sm">{item.reserved}</span>
+        </div>
+        <div>
+          <span className="block text-[10px] uppercase tracking-wider text-muted">Total</span>
+          <span className="font-semibold text-ink text-sm">{item.quantity}</span>
+        </div>
+      </div>
+
+      <form onSubmit={save} className="mt-3.5 space-y-2.5 border-t border-line/60 pt-3">
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-[10.5px] font-medium text-muted">
+            On hand stock
+            <Input
+              value={quantity}
+              inputMode="numeric"
+              className="mt-1 w-full"
+              onChange={(event) => setQuantity(event.target.value.replace(/\D/g, ''))}
+              aria-label={`Stock on hand for ${item.name}`}
+            />
+          </label>
+          <label className="text-[10.5px] font-medium text-muted">
+            Low-stock alert
+            <Input
+              value={threshold}
+              inputMode="numeric"
+              className="mt-1 w-full"
+              onChange={(event) => setThreshold(event.target.value.replace(/\D/g, ''))}
+              aria-label={`Low stock threshold for ${item.name}`}
+            />
+          </label>
+        </div>
+        <div>
+          <label className="text-[10.5px] font-medium text-muted">
+            Reason / batch note (optional)
+            <Input
+              value={note}
+              className="mt-1 w-full"
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="e.g. fresh batch harvested"
+              aria-label={`Stock note for ${item.name}`}
+            />
+          </label>
+        </div>
+        <Button type="submit" size="sm" variant="secondary" loading={saving} className="w-full justify-center min-h-[38px]">
+          Update Stock
+        </Button>
+      </form>
+      <p className="mt-2 text-right text-[10px] text-muted">Updated {formatDate(item.updatedAt)}</p>
+    </article>
+  );
+}
+
 export function SellerInventoryPage() {
   const inventory = useQuery({
     queryKey: ['seller-inventory'],
@@ -947,21 +1266,33 @@ export function SellerInventoryPage() {
       {low ? (
         <div className="mt-5"><Alert tone="warning" title={`${low} listing${low === 1 ? '' : 's'} at or below the low-stock threshold`}>Restock before new orders arrive, or pause the listing.</Alert></div>
       ) : null}
-      <div className="mt-6 overflow-x-auto border border-line bg-surface">
+      <div className="mt-6">
         {items.length ? (
-          <table className="min-w-full text-left text-[12.5px]">
-            <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
-              <tr>
-                <th className="px-4 py-3">Product</th>
-                <th className="px-4 py-3">Availability</th>
-                <th className="px-4 py-3">Price</th>
-                <th className="px-4 py-3">Adjust stock</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {items.map((item) => <InventoryLine key={item.productId} item={item} />)}
-            </tbody>
-          </table>
+          <>
+            {/* Mobile Cards */}
+            <div className="space-y-3.5 md:hidden">
+              {items.map((item) => (
+                <InventoryCard key={item.productId} item={item} />
+              ))}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto border border-line bg-surface">
+              <table className="min-w-full text-left text-[12.5px]">
+                <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
+                  <tr>
+                    <th className="px-4 py-3">Product</th>
+                    <th className="px-4 py-3">Availability</th>
+                    <th className="px-4 py-3">Price</th>
+                    <th className="px-4 py-3">Adjust stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {items.map((item) => <InventoryLine key={item.productId} item={item} />)}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <EmptyState title="No inventory yet" body="Create a product draft; an inventory record is created automatically." action={<LinkButton to="/seller/products/new">Add a product</LinkButton>} />
         )}
@@ -1737,67 +2068,188 @@ export function SellerProductsPage() {
             action={<LinkButton to="/seller/products/new">Add product</LinkButton>}
           />
         ) : null}
-        <div className="overflow-x-auto border border-line bg-surface">
-          {products.data?.products.length ? (
-            <table className="min-w-full text-left text-[12.5px]">
-              <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
-                <tr>
-                  <th className="px-4 py-3">Product</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Price</th>
-                  <th className="px-4 py-3">Stock</th>
-                  <th className="px-4 py-3">Updated</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {products.data.products.map((product) => (
-                  <tr key={product.id} className="align-top">
-                    <td className="px-4 py-4">
-                      <div className="flex items-start gap-3">
-                        <div className="h-12 w-12 shrink-0 overflow-hidden bg-sand/40">
-                          {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-cover" /> : null}
+        {products.data?.products.length ? (
+          <>
+            {/* Mobile Product Card View */}
+            <div className="space-y-3.5 md:hidden">
+              {products.data.products.map((product) => (
+                <article
+                  key={product.id}
+                  className="rounded-xl border border-line bg-surface p-4 shadow-2xs"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-sand/30 border border-line">
+                      {product.imageUrl ? (
+                        <img
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-[10px] text-muted">
+                          No photo
                         </div>
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link to={`/seller/products/${product.id}/edit`} className="font-medium text-forest hover:text-terra">{product.name}</Link>
-                            {product.isDemo ? <DemoBadge /> : null}
-                          </div>
-                          <p className="text-[10.5px] text-muted">{product.sku} · {product.categoryName}</p>
-                          {product.moderationNote ? <p className="mt-1 max-w-xs text-[10.5px] text-[#8e4630]">Reviewer: {product.moderationNote}</p> : product.rejectionReason ? <p className="mt-1 max-w-xs text-[10.5px] text-terra">{product.rejectionReason}</p> : null}
-                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-1.5">
+                        <Link
+                          to={`/seller/products/${product.id}/edit`}
+                          className="font-serif text-[15px] font-semibold text-forest hover:text-terra line-clamp-1"
+                        >
+                          {product.name}
+                        </Link>
+                        {product.isDemo ? <DemoBadge /> : null}
                       </div>
-                    </td>
-                    <td className="px-4 py-4"><StatusBadge status={product.workflowStatus ?? product.status} label={PRODUCT_WORKFLOW_LABELS[product.workflowStatus ?? product.status]} /></td>
-                    <td className="px-4 py-4">{formatINR(product.pricePaise)}</td>
-                    <td className="px-4 py-4">
-                      <p>{product.stock}</p>
-                      {product.reserved > 0 ? <p className="text-[10.5px] text-muted">{product.reserved} reserved</p> : null}
-                    </td>
-                    <td className="px-4 py-4 text-muted">{formatDate(product.updatedAt)}</td>
-                    <td className="px-4 py-4">
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <LinkButton to={`/seller/products/${product.id}/edit`} size="sm" variant="secondary">Edit</LinkButton>
-                        {['draft', 'rejected', 'paused'].includes(product.status) || product.workflowStatus === 'changes_requested' ? (
-                          <Button size="sm" loading={busy === product.id} onClick={() => void act(product, 'submit')}>Submit</Button>
-                        ) : null}
-                        {product.status === 'approved' ? (
-                          <Button size="sm" variant="ghost" onClick={() => void act(product, 'pause')}>Pause</Button>
-                        ) : null}
-                        {product.status === 'paused' ? (
-                          <Button size="sm" variant="ghost" onClick={() => void act(product, 'resume')}>Resume</Button>
-                        ) : null}
-                        {product.status !== 'archived' ? (
-                          <Button size="sm" variant="ghost" onClick={() => void act(product, 'archive')}>Archive</Button>
-                        ) : null}
+                      <p className="mt-0.5 text-[11px] text-muted truncate">
+                        {product.sku} · {product.categoryName}
+                      </p>
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="font-semibold text-ink text-sm">
+                          {formatINR(product.pricePaise)}
+                        </span>
+                        <StatusBadge
+                          status={product.workflowStatus ?? product.status}
+                          label={PRODUCT_WORKFLOW_LABELS[product.workflowStatus ?? product.status]}
+                        />
                       </div>
-                    </td>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2.5 text-xs text-muted">
+                    <span>
+                      Stock: <strong className="text-ink">{product.stock}</strong>
+                      {product.reserved > 0 ? ` (${product.reserved} reserved)` : ''}
+                    </span>
+                    <span>Updated {formatDate(product.updatedAt)}</span>
+                  </div>
+
+                  {product.moderationNote ? (
+                    <p className="mt-2 rounded bg-amber-50 p-2 text-[11px] text-amber-900 border border-amber-200">
+                      <strong>Reviewer note:</strong> {product.moderationNote}
+                    </p>
+                  ) : product.rejectionReason ? (
+                    <p className="mt-2 rounded bg-rose-50 p-2 text-[11px] text-rose-800 border border-rose-200">
+                      <strong>Rejection reason:</strong> {product.rejectionReason}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-3.5 flex flex-wrap items-center gap-2 border-t border-line/60 pt-3">
+                    <LinkButton
+                      to={`/seller/products/${product.id}/edit`}
+                      size="sm"
+                      variant="secondary"
+                      className="flex-1 text-center justify-center min-h-[38px]"
+                    >
+                      Edit Product
+                    </LinkButton>
+                    {['draft', 'rejected', 'paused'].includes(product.status) || product.workflowStatus === 'changes_requested' ? (
+                      <Button
+                        size="sm"
+                        loading={busy === product.id}
+                        onClick={() => void act(product, 'submit')}
+                        className="flex-1 justify-center min-h-[38px]"
+                      >
+                        Submit
+                      </Button>
+                    ) : null}
+                    {product.status === 'approved' ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void act(product, 'pause')}
+                        className="min-h-[38px]"
+                      >
+                        Pause
+                      </Button>
+                    ) : null}
+                    {product.status === 'paused' ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void act(product, 'resume')}
+                        className="min-h-[38px]"
+                      >
+                        Resume
+                      </Button>
+                    ) : null}
+                    {product.status !== 'archived' ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void act(product, 'archive')}
+                        className="min-h-[38px] text-muted hover:text-danger"
+                      >
+                        Archive
+                      </Button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto border border-line bg-surface">
+              <table className="min-w-full text-left text-[12.5px]">
+                <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
+                  <tr>
+                    <th className="px-4 py-3">Product</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Price</th>
+                    <th className="px-4 py-3">Stock</th>
+                    <th className="px-4 py-3">Updated</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : null}
-        </div>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {products.data.products.map((product) => (
+                    <tr key={product.id} className="align-top">
+                      <td className="px-4 py-4">
+                        <div className="flex items-start gap-3">
+                          <div className="h-12 w-12 shrink-0 overflow-hidden bg-sand/40">
+                            {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-cover" /> : null}
+                          </div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Link to={`/seller/products/${product.id}/edit`} className="font-medium text-forest hover:text-terra">{product.name}</Link>
+                              {product.isDemo ? <DemoBadge /> : null}
+                            </div>
+                            <p className="text-[10.5px] text-muted">{product.sku} · {product.categoryName}</p>
+                            {product.moderationNote ? <p className="mt-1 max-w-xs text-[10.5px] text-[#8e4630]">Reviewer: {product.moderationNote}</p> : product.rejectionReason ? <p className="mt-1 max-w-xs text-[10.5px] text-terra">{product.rejectionReason}</p> : null}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4"><StatusBadge status={product.workflowStatus ?? product.status} label={PRODUCT_WORKFLOW_LABELS[product.workflowStatus ?? product.status]} /></td>
+                      <td className="px-4 py-4">{formatINR(product.pricePaise)}</td>
+                      <td className="px-4 py-4">
+                        <p>{product.stock}</p>
+                        {product.reserved > 0 ? <p className="text-[10.5px] text-muted">{product.reserved} reserved</p> : null}
+                      </td>
+                      <td className="px-4 py-4 text-muted">{formatDate(product.updatedAt)}</td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <LinkButton to={`/seller/products/${product.id}/edit`} size="sm" variant="secondary">Edit</LinkButton>
+                          {['draft', 'rejected', 'paused'].includes(product.status) || product.workflowStatus === 'changes_requested' ? (
+                            <Button size="sm" loading={busy === product.id} onClick={() => void act(product, 'submit')}>Submit</Button>
+                          ) : null}
+                          {product.status === 'approved' ? (
+                            <Button size="sm" variant="ghost" onClick={() => void act(product, 'pause')}>Pause</Button>
+                          ) : null}
+                          {product.status === 'paused' ? (
+                            <Button size="sm" variant="ghost" onClick={() => void act(product, 'resume')}>Resume</Button>
+                          ) : null}
+                          {product.status !== 'archived' ? (
+                            <Button size="sm" variant="ghost" onClick={() => void act(product, 'archive')}>Archive</Button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
       </div>
     </div>
   );
@@ -3384,35 +3836,95 @@ export function SellerOrdersPage() {
         {orders.isError ? <ErrorState onRetry={() => void orders.refetch()} /> : null}
         {orders.data?.orders.length === 0 ? <EmptyState title="No orders in this view" body="Paid orders from customers will appear here for confirmation." /> : null}
         {orders.data?.orders.length ? (
-          <div className="overflow-x-auto border border-line bg-surface">
-            <table className="min-w-full text-left text-[12.5px]">
-              <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
-                <tr>
-                  <th className="px-4 py-3">Reference</th>
-                  <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Value</th>
-                  <th className="px-4 py-3">Earning</th>
-                  <th className="px-4 py-3">Dispatch by</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {orders.data.orders.map((order) => (
-                  <tr key={order.id}>
-                    <td className="px-4 py-4">
-                      <Link to={`/seller/orders/${order.id}`} className="font-medium text-forest hover:text-terra">{order.reference}</Link>
-                      <p className="text-[10.5px] text-muted">{order.orderNumber} · {order.itemCount} item{order.itemCount === 1 ? '' : 's'}</p>
-                    </td>
-                    <td className="px-4 py-4">{order.customerName}<p className="text-[10.5px] text-muted">{order.destination}</p></td>
-                    <td className="px-4 py-4"><StatusBadge status={order.status} label={sellerOrderStatusLabel(order.status)} /></td>
-                    <td className="px-4 py-4">{formatINR(order.totalPaise)}</td>
-                    <td className="px-4 py-4">{formatINR(order.earningPaise)}</td>
-                    <td className="px-4 py-4">{order.dispatchBy ? formatDate(order.dispatchBy) : '—'}</td>
+          <>
+            {/* Mobile Card-Based Order View */}
+            <div className="space-y-3 md:hidden">
+              {orders.data.orders.map((order) => (
+                <article
+                  key={order.id}
+                  className="rounded-xl border border-line bg-surface p-4 shadow-2xs transition-shadow hover:shadow-xs"
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-line/60 pb-3">
+                    <div>
+                      <Link
+                        to={`/seller/orders/${order.id}`}
+                        className="font-semibold text-forest hover:text-terra"
+                      >
+                        {order.reference}
+                      </Link>
+                      <p className="mt-0.5 text-[11px] text-muted">
+                        {order.orderNumber} · {order.itemCount} item{order.itemCount === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                    <StatusBadge status={order.status} label={sellerOrderStatusLabel(order.status)} />
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-muted">Customer</span>
+                      <p className="font-medium text-ink">{order.customerName}</p>
+                      <p className="text-[11px] text-muted truncate">{order.destination}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase tracking-wider text-muted">Dispatch By</span>
+                      <p className="font-medium text-ink">{order.dispatchBy ? formatDate(order.dispatchBy) : '—'}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-3 text-xs">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-muted">Order Value</span>
+                      <p className="font-semibold text-ink">{formatINR(order.totalPaise)}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase tracking-wider text-[#66745A]">Net Earning</span>
+                      <p className="font-semibold text-[#66745A]">{formatINR(order.earningPaise)}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-2">
+                    <Link
+                      to={`/seller/orders/${order.id}`}
+                      className="flex h-10 w-full items-center justify-center rounded-lg border border-forest/30 bg-forest/5 text-xs font-semibold text-forest hover:bg-forest hover:text-white transition-colors"
+                    >
+                      View Order &amp; Fulfil →
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto border border-line bg-surface">
+              <table className="min-w-full text-left text-[12.5px]">
+                <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
+                  <tr>
+                    <th className="px-4 py-3">Reference</th>
+                    <th className="px-4 py-3">Customer</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Value</th>
+                    <th className="px-4 py-3">Earning</th>
+                    <th className="px-4 py-3">Dispatch by</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {orders.data.orders.map((order) => (
+                    <tr key={order.id}>
+                      <td className="px-4 py-4">
+                        <Link to={`/seller/orders/${order.id}`} className="font-medium text-forest hover:text-terra">{order.reference}</Link>
+                        <p className="text-[10.5px] text-muted">{order.orderNumber} · {order.itemCount} item{order.itemCount === 1 ? '' : 's'}</p>
+                      </td>
+                      <td className="px-4 py-4">{order.customerName}<p className="text-[10.5px] text-muted">{order.destination}</p></td>
+                      <td className="px-4 py-4"><StatusBadge status={order.status} label={sellerOrderStatusLabel(order.status)} /></td>
+                      <td className="px-4 py-4">{formatINR(order.totalPaise)}</td>
+                      <td className="px-4 py-4">{formatINR(order.earningPaise)}</td>
+                      <td className="px-4 py-4">{order.dispatchBy ? formatDate(order.dispatchBy) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : null}
       </div>
     </div>
@@ -3863,24 +4375,53 @@ export function SellerEarningsPage() {
           <p className="text-[11px] text-muted">{data.pagination.total} entries</p>
         </div>
         {data.entries.length ? (
-          <div className="mt-3 overflow-x-auto border border-line bg-surface">
-            <table className="min-w-full text-left text-[12.5px]">
-              <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
-                <tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Reference</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Amount</th></tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {data.entries.map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="px-4 py-3 text-muted">{formatDate(entry.createdAt)}</td>
-                    <td className="px-4 py-3">{humanise(entry.type)}</td>
-                    <td className="px-4 py-3"><span className="text-forest">{entry.reference}</span>{entry.orderNumber ? <p className="text-[10.5px] text-muted">{entry.orderNumber}</p> : null}</td>
-                    <td className="px-4 py-3"><StatusBadge status={entry.status} /></td>
-                    <td className="px-4 py-3 text-right">{formatINR(entry.amountPaise)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Mobile Ledger Cards */}
+            <div className="mt-3 space-y-3 md:hidden">
+              {data.entries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="rounded-xl border border-line bg-surface p-3.5 shadow-2xs"
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-line/60 pb-2.5">
+                    <div>
+                      <span className="font-semibold text-forest">{humanise(entry.type)}</span>
+                      <p className="text-[11px] text-muted">{formatDate(entry.createdAt)}</p>
+                    </div>
+                    <span className="font-semibold text-sm text-ink">{formatINR(entry.amountPaise)}</span>
+                  </div>
+                  <div className="mt-2.5 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-muted">Reference</span>
+                      <p className="font-mono text-[11px] text-forest">{entry.reference}</p>
+                      {entry.orderNumber ? <p className="text-[10.5px] text-muted">{entry.orderNumber}</p> : null}
+                    </div>
+                    <StatusBadge status={entry.status} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Ledger Table */}
+            <div className="mt-3 hidden md:block overflow-x-auto border border-line bg-surface">
+              <table className="min-w-full text-left text-[12.5px]">
+                <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
+                  <tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Reference</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Amount</th></tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {data.entries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td className="px-4 py-3 text-muted">{formatDate(entry.createdAt)}</td>
+                      <td className="px-4 py-3">{humanise(entry.type)}</td>
+                      <td className="px-4 py-3"><span className="text-forest">{entry.reference}</span>{entry.orderNumber ? <p className="text-[10.5px] text-muted">{entry.orderNumber}</p> : null}</td>
+                      <td className="px-4 py-3"><StatusBadge status={entry.status} /></td>
+                      <td className="px-4 py-3 text-right">{formatINR(entry.amountPaise)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : <p className="mt-3 border border-dashed border-sand px-4 py-8 text-center text-sm text-muted">No ledger entries yet.</p>}
         <Pagination page={page} totalPages={data.pagination.totalPages} onChange={setPage} />
       </section>

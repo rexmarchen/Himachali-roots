@@ -120,7 +120,7 @@ export function ProductCard({
               toggleWishlist.mutate(isSaved);
             }}
             aria-label={isSaved ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`}
-            className={`absolute right-2.5 top-2.5 flex h-10 w-10 items-center justify-center rounded-full border transition-all duration-200 sm:h-9 sm:w-9 ${
+            className={`absolute right-2 top-2 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border transition-all duration-200 ${
               isSaved
                 ? 'border-terra bg-terra text-white shadow-sm'
                 : 'border-line/70 bg-paper/90 text-ink/70 hover:bg-paper hover:text-terra'

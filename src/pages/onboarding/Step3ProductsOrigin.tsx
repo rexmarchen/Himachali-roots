@@ -258,3 +258,4 @@ export function Step3ProductsOrigin({ form, onChange, onNext, onBack }: Props) {
     </form>
   );
 }
+

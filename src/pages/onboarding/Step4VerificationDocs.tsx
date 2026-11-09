@@ -412,3 +412,4 @@ export function Step4VerificationDocs({ documents, onDocumentsUpdated, onNext, o
     </div>
   );
 }
+
