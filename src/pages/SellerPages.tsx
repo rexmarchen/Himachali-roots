@@ -2015,9 +2015,17 @@ export function SellerDashboardPage() {
 
 export function SellerProductsPage() {
   const [status, setStatus] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeActionProduct, setActiveActionProduct] = useState<SellerProduct | null>(null);
+  const [quickStockProduct, setQuickStockProduct] = useState<SellerProduct | null>(null);
+  const [quickStockQty, setQuickStockQty] = useState('');
+  const [quickPriceProduct, setQuickPriceProduct] = useState<SellerProduct | null>(null);
+  const [quickPriceRupees, setQuickPriceRupees] = useState('');
+  const [savingQuick, setSavingQuick] = useState(false);
+
   const products = useQuery({
     queryKey: ['seller-products', status],
-    queryFn: () => api<{ products: SellerProduct[] }>(`/seller/products${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+    queryFn: () => api<{ products: SellerProduct[] }>(`/seller/products${status && status !== 'low_stock' ? `?status=${encodeURIComponent(status)}` : ''}`),
   });
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -2031,6 +2039,7 @@ export function SellerProductsPage() {
       await queryClient.invalidateQueries({ queryKey: ['seller-products'] });
       await queryClient.invalidateQueries({ queryKey: ['seller-dashboard'] });
       toast.push('Product status updated.');
+      setActiveActionProduct(null);
     } catch (error) {
       toast.push(errorMessage(error), 'error');
     } finally {
@@ -2038,157 +2047,430 @@ export function SellerProductsPage() {
     }
   };
 
+  const handleQuickStockSave = async () => {
+    if (!quickStockProduct) return;
+    const qty = parseInt(quickStockQty, 10);
+    if (isNaN(qty) || qty < 0) {
+      toast.push('Please enter a valid stock quantity.', 'error');
+      return;
+    }
+    setSavingQuick(true);
+    try {
+      await api(`/seller/inventory/${quickStockProduct.id}`, {
+        method: 'POST',
+        body: {
+          quantity: qty,
+          note: 'Quick stock update via mobile',
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: ['seller-products'] });
+      await queryClient.invalidateQueries({ queryKey: ['seller-dashboard'] });
+      toast.push(`Stock for ${quickStockProduct.name} updated to ${qty}.`);
+      setQuickStockProduct(null);
+      setActiveActionProduct(null);
+    } catch (err) {
+      toast.push(errorMessage(err), 'error');
+    } finally {
+      setSavingQuick(false);
+    }
+  };
+
+  const handleQuickPriceSave = async () => {
+    if (!quickPriceProduct) return;
+    const rupees = parseFloat(quickPriceRupees);
+    if (isNaN(rupees) || rupees <= 0) {
+      toast.push('Please enter a valid selling price.', 'error');
+      return;
+    }
+    setSavingQuick(true);
+    try {
+      await api(`/seller/products/${quickPriceProduct.id}`, {
+        method: 'PATCH',
+        body: {
+          pricePaise: Math.round(rupees * 100),
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: ['seller-products'] });
+      await queryClient.invalidateQueries({ queryKey: ['seller-dashboard'] });
+      toast.push(`Price for ${quickPriceProduct.name} updated to ₹${rupees}.`);
+      setQuickPriceProduct(null);
+      setActiveActionProduct(null);
+    } catch (err) {
+      toast.push(errorMessage(err), 'error');
+    } finally {
+      setSavingQuick(false);
+    }
+  };
+
+  // Compute metrics
+  const allListings = products.data?.products ?? [];
+  const totalCount = allListings.length;
+  const activeCount = allListings.filter((p) => p.status === 'approved').length;
+  const pendingCount = allListings.filter((p) => p.status === 'pending' || p.workflowStatus === 'submitted').length;
+  const lowStockCount = allListings.filter((p) => p.stock > 0 && p.stock <= 5).length;
+  const draftCount = allListings.filter((p) => p.status === 'draft').length;
+  const rejectedCount = allListings.filter((p) => p.status === 'rejected' || p.workflowStatus === 'changes_requested').length;
+  const pausedCount = allListings.filter((p) => p.status === 'paused').length;
+
+  // Filter listings by status and search
+  const displayedProducts = allListings.filter((p) => {
+    if (status === 'low_stock' && !(p.stock > 0 && p.stock <= 5)) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchName = p.name?.toLowerCase().includes(q);
+      const matchSku = p.sku?.toLowerCase().includes(q);
+      const matchCat = p.categoryName?.toLowerCase().includes(q);
+      if (!matchName && !matchSku && !matchCat) return false;
+    }
+    return true;
+  });
+
   return (
     <div>
-      <PageHeader
-        eyebrow="Catalogue"
-        title="Products"
-        lede="Draft and edit listings, add photographs, keep stock honest, and submit changes for moderation."
-        actions={<LinkButton to="/seller/products/new">Add product</LinkButton>}
-      />
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <Select value={status} onChange={(event) => setStatus(event.target.value)} className="max-w-52">
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="pending">In review / changes requested</option>
-          <option value="approved">Live</option>
-          <option value="rejected">Rejected</option>
-          <option value="paused">Paused</option>
-          <option value="archived">Archived</option>
-        </Select>
-        <p className="text-[11px] text-muted">{products.data?.products.length ?? 0} listing{products.data?.products.length === 1 ? '' : 's'}</p>
+      {/* DESKTOP HEADER & FILTERS — UNCHANGED */}
+      <div className="hidden md:block">
+        <PageHeader
+          eyebrow="Catalogue"
+          title="Products"
+          lede="Draft and edit listings, add photographs, keep stock honest, and submit changes for moderation."
+          actions={<LinkButton to="/seller/products/new">Add product</LinkButton>}
+        />
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <Select value={status === 'low_stock' ? '' : status} onChange={(event) => setStatus(event.target.value)} className="max-w-52">
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="pending">In review / changes requested</option>
+            <option value="approved">Live</option>
+            <option value="rejected">Rejected</option>
+            <option value="paused">Paused</option>
+            <option value="archived">Archived</option>
+          </Select>
+          <p className="text-[11px] text-muted">{totalCount} listing{totalCount === 1 ? '' : 's'}</p>
+        </div>
       </div>
-      <div className="mt-6">
+
+      {/* MOBILE PREMIUM PRODUCT & ITEM MANAGEMENT (md:hidden) */}
+      <div className="md:hidden space-y-4 mb-5">
+        {/* Mobile Header */}
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D98263]">Seller Studio</p>
+            <h1 className="font-serif text-2xl font-bold text-[#101918]">My Products</h1>
+            <p className="text-xs text-[#172321]/70 mt-0.5">Manage your products, prices and inventory.</p>
+          </div>
+          <LinkButton
+            to="/seller/products/new"
+            size="sm"
+            className="bg-[#D98263] text-white hover:bg-[#c26e50] border-transparent font-semibold rounded-xl min-h-[42px] px-3.5 shadow-xs shrink-0 flex items-center gap-1.5"
+          >
+            <span>+ Add Product</span>
+          </LinkButton>
+        </div>
+
+        {/* A. Product Overview (4 Summary Cards in 2x2 Grid) */}
+        <div className="grid grid-cols-2 gap-2.5">
+          {/* Card 1: Total Products */}
+          <div
+            onClick={() => setStatus('')}
+            className={`p-3 rounded-xl border transition-all cursor-pointer ${
+              status === ''
+                ? 'border-[#172321] bg-[#172321] text-white shadow-xs'
+                : 'border-[#E4DACE] bg-white text-[#172321] hover:border-[#172321]/30'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">Total Products</span>
+              <span className="text-xs">📦</span>
+            </div>
+            <p className="font-serif text-2xl font-bold mt-1">{totalCount}</p>
+            <p className="text-[10px] opacity-75 mt-0.5">All catalogue items</p>
+          </div>
+
+          {/* Card 2: Active / Live */}
+          <div
+            onClick={() => setStatus(status === 'approved' ? '' : 'approved')}
+            className={`p-3 rounded-xl border transition-all cursor-pointer ${
+              status === 'approved'
+                ? 'border-[#10b981] bg-[#172321] text-white shadow-xs'
+                : 'border-[#E4DACE] bg-white text-[#172321] hover:border-emerald-300'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#10b981]">Active</span>
+              <span className="h-2 w-2 rounded-full bg-[#10b981] shadow-xs" />
+            </div>
+            <p className="font-serif text-2xl font-bold mt-1 text-[#10b981]">{activeCount}</p>
+            <p className="text-[10px] opacity-75 mt-0.5">Live in storefront</p>
+          </div>
+
+          {/* Card 3: Pending Approval */}
+          <div
+            onClick={() => setStatus(status === 'pending' ? '' : 'pending')}
+            className={`p-3 rounded-xl border transition-all cursor-pointer ${
+              status === 'pending'
+                ? 'border-[#D98263] bg-[#172321] text-white shadow-xs'
+                : 'border-[#E4DACE] bg-white text-[#172321] hover:border-[#D98263]/30'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#D98263]">Pending</span>
+              <span className="text-xs">⏳</span>
+            </div>
+            <p className="font-serif text-2xl font-bold mt-1 text-[#D98263]">{pendingCount}</p>
+            <p className="text-[10px] opacity-75 mt-0.5">Awaiting moderation</p>
+          </div>
+
+          {/* Card 4: Low Stock */}
+          <div
+            onClick={() => setStatus(status === 'low_stock' ? '' : 'low_stock')}
+            className={`p-3 rounded-xl border transition-all cursor-pointer ${
+              status === 'low_stock'
+                ? 'border-amber-500 bg-[#172321] text-white shadow-xs'
+                : 'border-[#E4DACE] bg-white text-[#172321] hover:border-amber-300'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Low Stock</span>
+              <span className="text-xs">⚠️</span>
+            </div>
+            <p className="font-serif text-2xl font-bold mt-1 text-amber-600">{lowStockCount}</p>
+            <p className="text-[10px] opacity-75 mt-0.5">Stock ≤ 5 units</p>
+          </div>
+        </div>
+
+        {/* B. Search and Filters */}
+        <div className="space-y-2.5 pt-1">
+          {/* Search Bar */}
+          <div className="relative">
+            <svg
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#172321]/45"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search products by title, SKU, or category..."
+              className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-[#E4DACE] bg-white text-sm text-[#101918] placeholder:text-[#172321]/45 focus:outline-none focus:border-[#D98263] focus:ring-1 focus:ring-[#D98263]"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-sand/40 text-muted flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Horizontal Scrollable Status Filter Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none">
+            {[
+              { id: '', label: 'All', count: totalCount },
+              { id: 'approved', label: 'Active', count: activeCount },
+              { id: 'pending', label: 'Pending', count: pendingCount },
+              { id: 'low_stock', label: 'Low Stock', count: lowStockCount },
+              { id: 'draft', label: 'Drafts', count: draftCount },
+              { id: 'rejected', label: 'Rejected', count: rejectedCount },
+              { id: 'paused', label: 'Paused', count: pausedCount },
+            ].map((chip) => {
+              const isSelected = status === chip.id;
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => setStatus(chip.id)}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-[#172321] text-white border-[#172321] shadow-xs'
+                      : 'bg-white text-[#172321]/80 border-[#E4DACE] hover:border-[#172321]/40'
+                  }`}
+                >
+                  <span>{chip.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-[#FAF7F2] text-[#172321]/60'
+                    }`}
+                  >
+                    {chip.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Listings Area */}
+      <div className="mt-4 md:mt-6">
         {products.isLoading ? <LoadingBlock rows={4} /> : null}
         {products.isError ? <ErrorState onRetry={() => void products.refetch()} /> : null}
-        {products.data?.products.length === 0 ? (
+        {!products.isLoading && displayedProducts.length === 0 ? (
           <EmptyState
-            title="No products in this view"
-            body="Create a draft, add at least one photograph and stock, then submit it for review."
-            action={<LinkButton to="/seller/products/new">Add product</LinkButton>}
+            title="No products found"
+            body={searchQuery ? 'No products match your search term. Try clearing the search or choosing a different filter.' : 'Create a draft, add at least one photograph and stock, then submit it for review.'}
+            action={searchQuery ? <Button size="sm" variant="secondary" onClick={() => { setSearchQuery(''); setStatus(''); }}>Clear Filters</Button> : <LinkButton to="/seller/products/new">Add product</LinkButton>}
           />
         ) : null}
-        {products.data?.products.length ? (
+
+        {displayedProducts.length > 0 ? (
           <>
-            {/* Mobile Product Card View */}
+            {/* C. REDESIGNED MOBILE PRODUCT CARDS (md:hidden) */}
             <div className="space-y-3.5 md:hidden">
-              {products.data.products.map((product) => (
+              {displayedProducts.map((product) => (
                 <article
                   key={product.id}
-                  className="rounded-xl border border-line bg-surface p-4 shadow-2xs"
+                  className="rounded-2xl border border-[#E4DACE] bg-white p-4 shadow-xs space-y-3 transition-all hover:border-[#D98263]/40"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-sand/30 border border-line">
+                  {/* Top Row: Image + Details */}
+                  <div className="flex items-start gap-3.5">
+                    {/* Consistent Aspect-Square Product Image */}
+                    <div className="relative h-20 w-20 sm:h-22 sm:w-22 shrink-0 overflow-hidden rounded-xl border border-[#E4DACE] bg-[#FAF7F2]">
                       {product.imageUrl ? (
                         <img
                           src={product.imageUrl}
                           alt={product.name}
+                          loading="lazy"
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center text-[10px] text-muted">
-                          No photo
+                        <div className="flex h-full w-full flex-col items-center justify-center p-2 text-center text-[10px] text-muted">
+                          <span className="text-base">📷</span>
+                          <span className="mt-0.5">No photo</span>
                         </div>
                       )}
+                      {product.isDemo && (
+                        <span className="absolute bottom-1 left-1 rounded bg-[#172321]/90 px-1 py-0.2 text-[9px] font-bold text-white">
+                          DEMO
+                        </span>
+                      )}
                     </div>
-                    <div className="min-w-0 flex-1">
+
+                    {/* Product Name, SKU & Price */}
+                    <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-start justify-between gap-1.5">
                         <Link
                           to={`/seller/products/${product.id}/edit`}
-                          className="font-serif text-[15px] font-semibold text-forest hover:text-terra line-clamp-1"
+                          className="font-serif text-base font-bold text-[#101918] hover:text-[#D98263] leading-snug line-clamp-2"
                         >
                           {product.name}
                         </Link>
-                        {product.isDemo ? <DemoBadge /> : null}
                       </div>
-                      <p className="mt-0.5 text-[11px] text-muted truncate">
-                        {product.sku} · {product.categoryName}
+
+                      <p className="text-[11px] text-[#172321]/60 truncate font-mono">
+                        {product.sku} <span className="opacity-40">·</span> {product.categoryName}
                       </p>
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="font-semibold text-ink text-sm">
+
+                      <div className="flex items-center justify-between gap-2 pt-0.5">
+                        <span className="font-serif text-lg font-bold text-[#101918]">
                           {formatINR(product.pricePaise)}
                         </span>
                         <StatusBadge
                           status={product.workflowStatus ?? product.status}
-                          label={PRODUCT_WORKFLOW_LABELS[product.workflowStatus ?? product.status]}
+                          label={PRODUCT_WORKFLOW_LABELS[product.workflowStatus ?? product.status] ?? humanise(product.status)}
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2.5 text-xs text-muted">
-                    <span>
-                      Stock: <strong className="text-ink">{product.stock}</strong>
-                      {product.reserved > 0 ? ` (${product.reserved} reserved)` : ''}
+                  {/* Middle Row: Stock Indicator & Metadata */}
+                  <div className="flex items-center justify-between border-t border-[#E4DACE]/60 pt-2.5 text-xs">
+                    {/* Understandable Stock Indicators */}
+                    <div>
+                      {product.stock <= 0 ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-[11px] font-semibold text-rose-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
+                          Out of Stock
+                        </span>
+                      ) : product.stock <= 5 ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-600 animate-pulse" />
+                          Low Stock ({product.stock} left)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                          {product.stock} in stock
+                          {product.reserved > 0 ? ` (${product.reserved} rsvd)` : ''}
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="text-[11px] text-muted">
+                      Updated {formatDate(product.updatedAt)}
                     </span>
-                    <span>Updated {formatDate(product.updatedAt)}</span>
                   </div>
 
+                  {/* Moderation / Rejection Alerts if applicable */}
                   {product.moderationNote ? (
-                    <p className="mt-2 rounded bg-amber-50 p-2 text-[11px] text-amber-900 border border-amber-200">
-                      <strong>Reviewer note:</strong> {product.moderationNote}
-                    </p>
+                    <div className="rounded-xl bg-amber-50/90 border border-amber-200 p-2.5 text-[11px] text-amber-900 leading-relaxed">
+                      <strong>Reviewer Note:</strong> {product.moderationNote}
+                    </div>
                   ) : product.rejectionReason ? (
-                    <p className="mt-2 rounded bg-rose-50 p-2 text-[11px] text-rose-800 border border-rose-200">
-                      <strong>Rejection reason:</strong> {product.rejectionReason}
-                    </p>
+                    <div className="rounded-xl bg-rose-50/90 border border-rose-200 p-2.5 text-[11px] text-rose-900 leading-relaxed">
+                      <strong>Rejection Reason:</strong> {product.rejectionReason}
+                    </div>
                   ) : null}
 
-                  <div className="mt-3.5 flex flex-wrap items-center gap-2 border-t border-line/60 pt-3">
+                  {/* D. Product Actions Row */}
+                  <div className="flex items-center gap-2 border-t border-[#E4DACE]/60 pt-3">
+                    {/* Edit Action */}
                     <LinkButton
                       to={`/seller/products/${product.id}/edit`}
                       size="sm"
                       variant="secondary"
-                      className="flex-1 text-center justify-center min-h-[38px]"
+                      className="flex-1 text-center justify-center min-h-[42px] font-semibold text-xs rounded-xl border-[#E4DACE]"
                     >
                       Edit Product
                     </LinkButton>
+
+                    {/* Submit / Pause Workflow Action */}
                     {['draft', 'rejected', 'paused'].includes(product.status) || product.workflowStatus === 'changes_requested' ? (
                       <Button
                         size="sm"
                         loading={busy === product.id}
                         onClick={() => void act(product, 'submit')}
-                        className="flex-1 justify-center min-h-[38px]"
+                        className="flex-1 justify-center min-h-[42px] bg-[#D98263] text-white hover:bg-[#c26e50] border-transparent font-semibold text-xs rounded-xl shadow-xs"
                       >
                         Submit
                       </Button>
-                    ) : null}
-                    {product.status === 'approved' ? (
+                    ) : product.status === 'approved' ? (
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => void act(product, 'pause')}
-                        className="min-h-[38px]"
+                        className="min-h-[42px] px-3.5 text-xs text-muted hover:text-ink border border-[#E4DACE] rounded-xl"
                       >
                         Pause
                       </Button>
                     ) : null}
-                    {product.status === 'paused' ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void act(product, 'resume')}
-                        className="min-h-[38px]"
-                      >
-                        Resume
-                      </Button>
-                    ) : null}
-                    {product.status !== 'archived' ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void act(product, 'archive')}
-                        className="min-h-[38px] text-muted hover:text-danger"
-                      >
-                        Archive
-                      </Button>
-                    ) : null}
+
+                    {/* More Actions Menu Button (⋯) */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveActionProduct(product)}
+                      className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-[#E4DACE] bg-white text-[#172321] hover:bg-[#FAF7F2] transition-colors"
+                      aria-label="More actions for this product"
+                    >
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="5" r="2" />
+                        <circle cx="12" cy="12" r="2" />
+                        <circle cx="12" cy="19" r="2" />
+                      </svg>
+                    </button>
                   </div>
                 </article>
               ))}
             </div>
 
-            {/* Desktop Table View */}
+            {/* DESKTOP TABLE VIEW — 100% UNCHANGED */}
             <div className="hidden md:block overflow-x-auto border border-line bg-surface">
               <table className="min-w-full text-left text-[12.5px]">
                 <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -2202,7 +2484,7 @@ export function SellerProductsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {products.data.products.map((product) => (
+                  {allListings.map((product) => (
                     <tr key={product.id} className="align-top">
                       <td className="px-4 py-4">
                         <div className="flex items-start gap-3">
@@ -2251,6 +2533,264 @@ export function SellerProductsPage() {
           </>
         ) : null}
       </div>
+
+      {/* MOBILE ACTION SHEET (⋯ MENU) */}
+      {activeActionProduct && (
+        <div className="fixed inset-0 z-50 flex items-end md:hidden">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setActiveActionProduct(null)}
+          />
+          <div className="relative w-full rounded-t-2xl border-t border-[#E4DACE] bg-[#FAF7F2] p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+            <div className="mx-auto h-1 w-12 rounded-full bg-[#E4DACE]" />
+
+            {/* Product Summary Header in Sheet */}
+            <div className="flex items-center gap-3 border-b border-[#E4DACE] pb-3.5">
+              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-[#E4DACE] bg-white">
+                {activeActionProduct.imageUrl ? (
+                  <img src={activeActionProduct.imageUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs text-muted">📷</div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-serif text-base font-bold text-[#101918] truncate">
+                  {activeActionProduct.name}
+                </h3>
+                <p className="text-[11px] text-muted truncate">
+                  {activeActionProduct.sku} · {formatINR(activeActionProduct.pricePaise)} · {activeActionProduct.stock} in stock
+                </p>
+                <div className="mt-1">
+                  <StatusBadge
+                    status={activeActionProduct.workflowStatus ?? activeActionProduct.status}
+                    label={PRODUCT_WORKFLOW_LABELS[activeActionProduct.workflowStatus ?? activeActionProduct.status] ?? humanise(activeActionProduct.status)}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveActionProduct(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-muted hover:text-ink text-sm shadow-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Sheet Actions List */}
+            <div className="space-y-1.5 pt-1">
+              <Link
+                to={`/seller/products/${activeActionProduct.id}/edit`}
+                onClick={() => setActiveActionProduct(null)}
+                className="flex items-center gap-3 w-full p-3 rounded-xl bg-white border border-[#E4DACE] text-xs font-semibold text-[#101918] hover:border-[#D98263]"
+              >
+                <span className="text-base">✏️</span>
+                <span className="flex-1 text-left">Edit Product Details &amp; Photos</span>
+                <span className="text-muted">→</span>
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickStockProduct(activeActionProduct);
+                  setQuickStockQty(String(activeActionProduct.stock));
+                  setActiveActionProduct(null);
+                }}
+                className="flex items-center gap-3 w-full p-3 rounded-xl bg-white border border-[#E4DACE] text-xs font-semibold text-[#101918] hover:border-[#D98263]"
+              >
+                <span className="text-base">📦</span>
+                <span className="flex-1 text-left">Quick Update Stock Quantity</span>
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                  {activeActionProduct.stock} units
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickPriceProduct(activeActionProduct);
+                  setQuickPriceRupees(String((activeActionProduct.pricePaise / 100).toFixed(0)));
+                  setActiveActionProduct(null);
+                }}
+                className="flex items-center gap-3 w-full p-3 rounded-xl bg-white border border-[#E4DACE] text-xs font-semibold text-[#101918] hover:border-[#D98263]"
+              >
+                <span className="text-base">💰</span>
+                <span className="flex-1 text-left">Quick Update Selling Price</span>
+                <span className="text-[11px] font-bold text-[#101918] bg-sand/30 px-2 py-0.5 rounded-md">
+                  {formatINR(activeActionProduct.pricePaise)}
+                </span>
+              </button>
+
+              {activeActionProduct.status === 'approved' && (
+                <Link
+                  to={`/shop/${activeActionProduct.slug}`}
+                  onClick={() => setActiveActionProduct(null)}
+                  className="flex items-center gap-3 w-full p-3 rounded-xl bg-white border border-[#E4DACE] text-xs font-semibold text-[#101918] hover:border-[#D98263]"
+                >
+                  <span className="text-base">👁️</span>
+                  <span className="flex-1 text-left">View Live on Dear Hills Storefront</span>
+                  <span className="text-muted">↗</span>
+                </Link>
+              )}
+
+              {activeActionProduct.status === 'approved' && (
+                <button
+                  type="button"
+                  onClick={() => void act(activeActionProduct, 'pause')}
+                  className="flex items-center gap-3 w-full p-3 rounded-xl bg-white border border-[#E4DACE] text-xs font-semibold text-amber-800 hover:border-amber-400"
+                >
+                  <span className="text-base">⏸️</span>
+                  <span className="flex-1 text-left">Pause Listing Temporarily</span>
+                </button>
+              )}
+
+              {activeActionProduct.status === 'paused' && (
+                <button
+                  type="button"
+                  onClick={() => void act(activeActionProduct, 'resume')}
+                  className="flex items-center gap-3 w-full p-3 rounded-xl bg-white border border-[#E4DACE] text-xs font-semibold text-emerald-800 hover:border-emerald-400"
+                >
+                  <span className="text-base">▶️</span>
+                  <span className="flex-1 text-left">Resume Live Listing</span>
+                </button>
+              )}
+
+              {activeActionProduct.status !== 'archived' && (
+                <button
+                  type="button"
+                  onClick={() => void act(activeActionProduct, 'archive')}
+                  className="flex items-center gap-3 w-full p-3 rounded-xl bg-white border border-rose-200 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                >
+                  <span className="text-base">🗄️</span>
+                  <span className="flex-1 text-left">Archive Listing</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK STOCK ADJUST MODAL */}
+      {quickStockProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setQuickStockProduct(null)} />
+          <div className="relative w-full max-w-sm rounded-2xl border border-[#E4DACE] bg-white p-5 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-[#101918]">Update Available Stock</h3>
+                <p className="text-xs text-muted truncate max-w-[220px]">{quickStockProduct.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickStockProduct(null)}
+                className="text-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#101918]">
+                Quantity in Stock (Units)
+              </label>
+              <Input
+                type="number"
+                min="0"
+                value={quickStockQty}
+                onChange={(e) => setQuickStockQty(e.target.value)}
+                placeholder="e.g. 15"
+                className="text-base font-bold text-center"
+              />
+              <p className="text-[11px] text-muted">
+                Currently recorded: <strong>{quickStockProduct.stock}</strong>
+                {quickStockProduct.reserved > 0 ? ` (${quickStockProduct.reserved} reserved in active orders)` : ''}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 border-t border-[#E4DACE]">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1"
+                onClick={() => setQuickStockProduct(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="flex-1 bg-[#D98263] border-transparent text-white"
+                loading={savingQuick}
+                onClick={() => void handleQuickStockSave()}
+              >
+                Save Stock
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK PRICE ADJUST MODAL */}
+      {quickPriceProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setQuickPriceProduct(null)} />
+          <div className="relative w-full max-w-sm rounded-2xl border border-[#E4DACE] bg-white p-5 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-[#101918]">Update Selling Price</h3>
+                <p className="text-xs text-muted truncate max-w-[220px]">{quickPriceProduct.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickPriceProduct(null)}
+                className="text-muted hover:text-ink text-sm p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#101918]">
+                Customer Price in Rupees (₹)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-muted">₹</span>
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={quickPriceRupees}
+                  onChange={(e) => setQuickPriceRupees(e.target.value)}
+                  placeholder="e.g. 850"
+                  className="pl-8 text-base font-bold text-center"
+                />
+              </div>
+              <p className="text-[11px] text-muted">
+                Current price: <strong>{formatINR(quickPriceProduct.pricePaise)}</strong>
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 border-t border-[#E4DACE]">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1"
+                onClick={() => setQuickPriceProduct(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="flex-1 bg-[#D98263] border-transparent text-white"
+                loading={savingQuick}
+                onClick={() => void handleQuickPriceSave()}
+              >
+                Save Price
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2792,9 +3332,11 @@ export function SellerProductEditorPage() {
   ];
 
   return (
-    <div className="space-y-6 pb-16">
-      {/* Top Header Bar */}
-      <div className="rounded-2xl border border-[#E4DACE] bg-gradient-to-r from-[#FAF7F2] via-white to-[#FAF3EF] p-5 sm:p-6 shadow-xs">
+    <div className="space-y-6 pb-28 md:pb-16">
+      {/* =========================================================================
+          DESKTOP TOP HEADER & STEP NAVIGATOR (100% UNCHANGED FOR DESKTOP)
+          ========================================================================= */}
+      <div className="hidden md:block rounded-2xl border border-[#E4DACE] bg-gradient-to-r from-[#FAF7F2] via-white to-[#FAF3EF] p-5 sm:p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
@@ -2897,6 +3439,107 @@ export function SellerProductEditorPage() {
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* =========================================================================
+          MOBILE TOP HEADER & HORIZONTAL STEP NAVIGATOR (md:hidden)
+          ========================================================================= */}
+      <div className="md:hidden space-y-3">
+        {/* Mobile Header Card */}
+        <div className="rounded-2xl border border-[#E4DACE] bg-gradient-to-br from-[#FAF7F2] via-white to-[#FAF3EF] p-4 shadow-xs">
+          <div className="flex items-center justify-between gap-2">
+            <Link
+              to="/seller/products"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[#172321]/80 hover:text-[#D98263]"
+            >
+              <span>←</span>
+              <span>Catalogue</span>
+            </Link>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#172321] text-white px-2 py-0.5 text-[10px] font-semibold">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#D98263]" />
+                {isNew ? 'New' : 'Edit'}
+              </span>
+              {!isNew && current ? (
+                <StatusBadge
+                  status={current.workflowStatus ?? current.status}
+                  label={PRODUCT_WORKFLOW_LABELS[current.workflowStatus ?? current.status] ?? humanise(current.status)}
+                />
+              ) : null}
+            </div>
+          </div>
+
+          <h1 className="mt-2.5 text-xl font-serif font-bold text-[#172321] leading-tight">
+            {isNew ? 'Add Himachali Product' : form.name || 'Edit Product Listing'}
+          </h1>
+          <p className="mt-1 text-xs text-[#172321]/70 leading-relaxed">
+            Fill required details step-by-step and submit for marketplace verification.
+          </p>
+
+          <div className="mt-3 pt-3 border-t border-[#E4DACE]/70 flex items-center justify-between gap-2">
+            <span className="text-[11px] text-[#172321]/60 font-medium">
+              {typeof activeStep === 'number'
+                ? `Step ${activeStep} of ${steps.length}: ${steps.find((s) => s.num === activeStep)?.label}`
+                : 'Viewing all sections'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setActiveStep(activeStep === 'all' ? 1 : 'all')}
+              className="text-xs font-semibold text-[#D98263] hover:underline"
+            >
+              {activeStep === 'all' ? 'Switch to Step Mode' : 'View All'}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Horizontal Step Carousel */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4">
+          {steps.map((s) => {
+            const isSelected = activeStep === s.num;
+            return (
+              <button
+                key={s.num}
+                type="button"
+                onClick={() => {
+                  setActiveStep(s.num);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs transition-all border ${
+                  isSelected
+                    ? 'border-[#D98263] bg-[#172321] text-white font-bold shadow-sm'
+                    : 'border-[#E4DACE] bg-white text-[#172321]/80 hover:border-[#D98263]/50'
+                }`}
+              >
+                <span>{s.icon}</span>
+                <span>{s.label.split(' ')[0]}</span>
+                {s.count !== undefined && s.count > 0 ? (
+                  <span
+                    className={`inline-flex items-center justify-center rounded-full px-1.5 text-[9px] font-bold ${
+                      isSelected ? 'bg-[#D98263] text-white' : 'bg-[#172321]/10 text-[#172321]'
+                    }`}
+                  >
+                    {s.count}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveStep('all');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs transition-all border ${
+              activeStep === 'all'
+                ? 'border-[#D98263] bg-[#172321] text-white font-bold shadow-sm'
+                : 'border-[#E4DACE] bg-white text-[#172321]/80 hover:border-[#D98263]/50'
+            }`}
+          >
+            <span>📜</span>
+            <span>All</span>
+          </button>
         </div>
       </div>
 
@@ -3736,7 +4379,10 @@ export function SellerProductEditorPage() {
         {/* =========================================================================
             BOTTOM ACTION BAR & CONFIRMATION
             ========================================================================= */}
-        <div className="rounded-2xl border border-[#E4DACE] bg-white p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        {/* =========================================================================
+            BOTTOM ACTION BAR (DESKTOP - 100% UNCHANGED)
+            ========================================================================= */}
+        <div className="hidden md:flex rounded-2xl border border-[#E4DACE] bg-white p-5 sm:p-6 shadow-sm flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-[#172321]">
               Ready to {isNew ? 'publish your product draft' : 'update your catalogue listing'}?
@@ -3770,6 +4416,68 @@ export function SellerProductEditorPage() {
             >
               ✓ {isNew ? 'Create & Submit for Review' : 'Save & Submit for Review'}
             </Button>
+          </div>
+        </div>
+
+        {/* =========================================================================
+            STICKY MOBILE BOTTOM ACTION BAR (md:hidden)
+            ========================================================================= */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#172321] text-white p-3 border-t border-white/10 shadow-2xl backdrop-blur-md pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="flex items-center justify-between gap-2">
+            {typeof activeStep === 'number' && activeStep > 1 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveStep(activeStep - 1);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="h-10 px-3 rounded-xl border border-white/20 bg-white/5 text-xs font-medium text-white/90 hover:bg-white/10 shrink-0"
+              >
+                ← Prev
+              </button>
+            ) : (
+              <Link
+                to="/seller/products"
+                className="h-10 px-3 rounded-xl border border-white/20 bg-white/5 text-xs font-medium text-white/90 hover:bg-white/10 flex items-center shrink-0"
+              >
+                Cancel
+              </Link>
+            )}
+
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={saving}
+              disabled={inReview}
+              onClick={() => void saveProduct(false)}
+              className="h-10 text-xs font-medium flex-1 text-[#172321] bg-[#FAF7F2] border-transparent"
+            >
+              {saving ? 'Saving...' : 'Save Draft'}
+            </Button>
+
+            {typeof activeStep === 'number' && activeStep < steps.length ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveStep(activeStep + 1);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="h-10 px-4 rounded-xl bg-[#D98263] text-white text-xs font-bold shadow-md hover:bg-[#c26e50] flex items-center justify-center gap-1 shrink-0"
+              >
+                <span>Step {activeStep + 1}</span>
+                <span>→</span>
+              </button>
+            ) : (
+              <Button
+                size="sm"
+                loading={saving}
+                disabled={inReview}
+                onClick={() => void saveProduct(true)}
+                className="h-10 px-4 rounded-xl bg-[#D98263] text-white text-xs font-bold shadow-md hover:bg-[#c26e50] border-transparent shrink-0"
+              >
+                ✓ Submit
+              </Button>
+            )}
           </div>
         </div>
       </div>

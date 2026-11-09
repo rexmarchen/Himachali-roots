@@ -76,7 +76,7 @@ export function LinkButton({
 /* -------------------------------- Inputs -------------------------------- */
 
 const fieldBase =
-  'w-full rounded-sm border border-sand bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/60 transition-colors focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/10 disabled:bg-paper disabled:text-muted';
+  'w-full rounded-sm border border-sand bg-surface px-3.5 py-2.5 text-base sm:text-sm text-ink placeholder:text-muted/60 transition-colors focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/10 disabled:bg-paper disabled:text-muted';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }>(
   function Input({ className = '', invalid, ...props }, ref) {

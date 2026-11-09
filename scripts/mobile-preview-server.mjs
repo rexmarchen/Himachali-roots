@@ -1376,7 +1376,7 @@ function handleProxy(req, res, targetOrigin) {
             } else {
               html = Buffer.concat(chunks).toString('utf8');
             }
-          } catch (e) {
+          } catch {
             html = Buffer.concat(chunks).toString('utf8');
           }
         }

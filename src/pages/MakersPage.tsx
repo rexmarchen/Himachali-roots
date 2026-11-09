@@ -536,103 +536,195 @@ export function MakersPage() {
 
         {/* Successful Maker Grid */}
         {!query.isLoading && !query.isError && makers.length > 0 && (
-          <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-x-6 gap-y-6 sm:gap-y-10 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {makers.map((maker: PublicMaker) => {
               const displayImage = maker.coverUrl || maker.imageUrl || maker.logoUrl || '/images/weaving.jpg';
               return (
-                <article
-                  key={maker.id}
-                  className="group flex flex-col justify-between overflow-hidden rounded-sm border border-sand bg-surface transition-all duration-300 hover:border-forest/30 hover:shadow-md"
-                >
-                  <Link to={`/makers/${maker.slug}`} className="block">
-                    {/* Maker Image with Badges */}
-                    <div className="relative aspect-[16/10] overflow-hidden bg-sand/30">
-                      <img
-                        src={displayImage}
-                        alt={`${maker.name} storefront`}
-                        loading="lazy"
-                        className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-forest/75 via-transparent to-transparent opacity-80" />
+                <div key={maker.id}>
+                  {/* MOBILE SPECIFIC MAKER CARD (sm:hidden) */}
+                  <article className="sm:hidden flex flex-col justify-between overflow-hidden rounded-2xl border border-[#E4DACE] bg-white shadow-xs transition-all hover:border-[#D98263]/40">
+                    <Link to={`/makers/${maker.slug}`} className="block">
+                      {/* Properly Cropped 16:9 Image with Floating Badges */}
+                      <div className="relative aspect-[16/9] w-full overflow-hidden bg-sand/30">
+                        <img
+                          src={displayImage}
+                          alt={`${maker.name} storefront`}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#101918]/80 via-transparent to-transparent" />
 
-                      {/* Top Badges */}
-                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
-                        {maker.region ? (
-                          <span className="inline-flex items-center gap-1 rounded-sm bg-forest/85 px-2.5 py-1 text-[11px] font-medium text-paper backdrop-blur-xs">
-                            <svg className="h-3 w-3 text-terra" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                            </svg>
-                            {maker.village ? `${maker.village}, ${maker.region}` : maker.region}
-                          </span>
-                        ) : <span />}
-
-                        {maker.isVerified && (
-                          <span className="inline-flex items-center gap-1 rounded-sm bg-surface/95 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-forest shadow-xs">
-                            <svg className="h-3 w-3 text-sage" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            Verified
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Bottom Image Overlay: Product Count */}
-                      <div className="absolute bottom-3 left-3 text-paper">
-                        <span className="text-[11px] tracking-wide text-sand/90">
-                          {maker.productCount} authentic creation{maker.productCount === 1 ? '' : 's'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Card Content */}
-                    <div className="p-5">
-                      <div className="flex items-start justify-between gap-2">
-                        <h2 className="font-serif text-2xl font-normal leading-snug text-forest group-hover:text-terra transition-colors">
-                          {maker.name}
-                        </h2>
-                        {maker.yearsOperating && (
-                          <span className="shrink-0 rounded-sm bg-sand/35 px-2 py-0.5 text-[10px] font-semibold text-muted">
-                            {maker.yearsOperating}+ yrs craft
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Tagline / Excerpt */}
-                      {maker.tagline && (
-                        <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-ink/75">
-                          {maker.tagline}
-                        </p>
-                      )}
-
-                      {/* Speciality Badges */}
-                      {maker.specialities && maker.specialities.length > 0 && (
-                        <div className="mt-3.5 flex flex-wrap gap-1.5">
-                          {maker.specialities.slice(0, 3).map((spec) => (
-                            <span
-                              key={spec}
-                              className="rounded-sm border border-sand bg-paper/60 px-2 py-0.5 text-[10px] font-medium text-muted"
-                            >
-                              {spec}
+                        {/* Top Badges */}
+                        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5">
+                          {maker.region ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[#101918]/90 px-2.5 py-1 text-[10.5px] font-medium text-white backdrop-blur-xs shadow-xs">
+                              <svg className="h-3 w-3 text-[#D98263]" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                              </svg>
+                              <span className="truncate max-w-[150px]">{maker.village ? `${maker.village}, ${maker.region}` : maker.region}</span>
                             </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </Link>
+                          ) : <span />}
 
-                  {/* Card Footer: Storefront Link */}
-                  <div className="border-t border-sand/70 bg-paper/30 px-5 py-3">
-                    <Link
-                      to={`/makers/${maker.slug}`}
-                      className="inline-flex w-full items-center justify-between text-xs font-semibold text-forest group-hover:text-terra transition-colors"
-                    >
-                      <span>Meet the maker</span>
-                      <span className="transition-transform duration-300 group-hover:translate-x-1" aria-hidden>
-                        →
-                      </span>
+                          {maker.isVerified && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#101918] shadow-xs">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                              Verified
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Bottom Image Overlay: Product Count */}
+                        <div className="absolute bottom-2.5 left-3 text-white">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-[#101918]/70 px-2 py-0.5 text-[11px] font-medium text-sand/90 backdrop-blur-xs">
+                            <span className="text-[#D98263]">✦</span> {maker.productCount} authentic creation{maker.productCount === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card Content */}
+                      <div className="p-4 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <h2 className="font-serif text-xl font-bold leading-snug text-[#101918]">
+                            {maker.name}
+                          </h2>
+                          {maker.yearsOperating && (
+                            <span className="shrink-0 rounded-md bg-[#FAF7F2] border border-[#E4DACE] px-2 py-0.5 text-[10px] font-semibold text-muted">
+                              {maker.yearsOperating}+ yrs
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Tagline / Excerpt */}
+                        {maker.tagline && (
+                          <p className="line-clamp-2 text-xs leading-relaxed text-[#172321]/75">
+                            {maker.tagline}
+                          </p>
+                        )}
+
+                        {/* Speciality Badges */}
+                        {maker.specialities && maker.specialities.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {maker.specialities.slice(0, 3).map((spec) => (
+                              <span
+                                key={spec}
+                                className="rounded-full border border-[#E4DACE] bg-[#FAF7F2] px-2 py-0.5 text-[10px] font-medium text-muted"
+                              >
+                                {spec}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </Link>
-                  </div>
-                </article>
+
+                    {/* Mobile Clear View Store Action */}
+                    <div className="border-t border-[#E4DACE]/70 bg-[#FAF7F2]/60 px-4 py-2.5">
+                      <Link
+                        to={`/makers/${maker.slug}`}
+                        className="inline-flex w-full min-h-[44px] items-center justify-between text-xs font-semibold text-[#101918] hover:text-[#D98263] transition-colors"
+                      >
+                        <span className="font-medium">View Store &amp; Products</span>
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white border border-[#E4DACE] text-[#D98263] text-sm" aria-hidden>
+                          →
+                        </span>
+                      </Link>
+                    </div>
+                  </article>
+
+                  {/* DESKTOP MAKER CARD (hidden sm:flex) — UNCHANGED */}
+                  <article
+                    className="hidden sm:flex flex-col justify-between overflow-hidden rounded-sm border border-sand bg-surface transition-all duration-300 hover:border-forest/30 hover:shadow-md"
+                  >
+                    <Link to={`/makers/${maker.slug}`} className="block">
+                      {/* Maker Image with Badges */}
+                      <div className="relative aspect-[16/10] overflow-hidden bg-sand/30">
+                        <img
+                          src={displayImage}
+                          alt={`${maker.name} storefront`}
+                          loading="lazy"
+                          className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-forest/75 via-transparent to-transparent opacity-80" />
+
+                        {/* Top Badges */}
+                        <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
+                          {maker.region ? (
+                            <span className="inline-flex items-center gap-1 rounded-sm bg-forest/85 px-2.5 py-1 text-[11px] font-medium text-paper backdrop-blur-xs">
+                              <svg className="h-3 w-3 text-terra" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                              </svg>
+                              {maker.village ? `${maker.village}, ${maker.region}` : maker.region}
+                            </span>
+                          ) : <span />}
+
+                          {maker.isVerified && (
+                            <span className="inline-flex items-center gap-1 rounded-sm bg-surface/95 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-forest shadow-xs">
+                              <svg className="h-3 w-3 text-sage" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                              Verified
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Bottom Image Overlay: Product Count */}
+                        <div className="absolute bottom-3 left-3 text-paper">
+                          <span className="text-[11px] tracking-wide text-sand/90">
+                            {maker.productCount} authentic creation{maker.productCount === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card Content */}
+                      <div className="p-5">
+                        <div className="flex items-start justify-between gap-2">
+                          <h2 className="font-serif text-2xl font-normal leading-snug text-forest group-hover:text-terra transition-colors">
+                            {maker.name}
+                          </h2>
+                          {maker.yearsOperating && (
+                            <span className="shrink-0 rounded-sm bg-sand/35 px-2 py-0.5 text-[10px] font-semibold text-muted">
+                              {maker.yearsOperating}+ yrs craft
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Tagline / Excerpt */}
+                        {maker.tagline && (
+                          <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-ink/75">
+                            {maker.tagline}
+                          </p>
+                        )}
+
+                        {/* Speciality Badges */}
+                        {maker.specialities && maker.specialities.length > 0 && (
+                          <div className="mt-3.5 flex flex-wrap gap-1.5">
+                            {maker.specialities.slice(0, 3).map((spec) => (
+                              <span
+                                key={spec}
+                                className="rounded-sm border border-sand bg-paper/60 px-2 py-0.5 text-[10px] font-medium text-muted"
+                              >
+                                {spec}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </Link>
+
+                    {/* Card Footer: Storefront Link */}
+                    <div className="border-t border-sand/70 bg-paper/30 px-5 py-3">
+                      <Link
+                        to={`/makers/${maker.slug}`}
+                        className="inline-flex w-full items-center justify-between text-xs font-semibold text-forest group-hover:text-terra transition-colors"
+                      >
+                        <span>Meet the maker</span>
+                        <span className="transition-transform duration-300 group-hover:translate-x-1" aria-hidden>
+                          →
+                        </span>
+                      </Link>
+                    </div>
+                  </article>
+                </div>
               );
             })}
           </div>

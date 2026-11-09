@@ -196,12 +196,12 @@ export function MakerDetailPage() {
             </div>
 
             {/* Actions: Share & Save */}
-            <div className="flex flex-wrap items-center gap-3 pt-2 sm:pt-0">
+            <div className="flex items-center gap-2.5 pt-2 sm:pt-0 w-full sm:w-auto">
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={handleShare}
-                className="flex items-center gap-2 border-[#E4DACE]"
+                className="flex-1 sm:flex-initial min-h-[44px] justify-center flex items-center gap-2 border-[#E4DACE]"
               >
                 <svg className="h-4 w-4 text-[#D98263]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
@@ -212,7 +212,7 @@ export function MakerDetailPage() {
                 size="sm"
                 variant={savedMaker ? 'primary' : 'secondary'}
                 onClick={toggleSave}
-                className="flex items-center gap-2"
+                className="flex-1 sm:flex-initial min-h-[44px] justify-center flex items-center gap-2"
               >
                 <svg className={`h-4 w-4 ${savedMaker ? 'fill-current text-white' : 'text-[#D98263]'}`} viewBox="0 0 24 24" stroke="currentColor" fill="none">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -323,26 +323,26 @@ export function MakerDetailPage() {
           </div>
 
           {/* Search within Store */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
             <input
               type="text"
               placeholder="Search this maker..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="rounded-lg border border-[#E4DACE] bg-white px-3.5 py-1.5 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-[#66745A]"
+              className="w-full sm:w-auto rounded-xl border border-[#E4DACE] bg-white px-3.5 py-2.5 sm:py-1.5 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-[#66745A]"
             />
           </div>
         </div>
 
         {/* Category Filter Pills */}
         {storeCategories.length > 2 ? (
-          <div className="mb-6 flex flex-wrap gap-2">
+          <div className="mb-6 flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none sm:flex-wrap">
             {storeCategories.map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setActiveCategory(cat)}
-                className={`rounded-full px-3.5 py-1 text-xs transition-colors ${
+                className={`shrink-0 rounded-full px-3.5 py-1 text-xs transition-colors ${
                   activeCategory === cat
                     ? 'bg-[#172321] text-white'
                     : 'bg-white text-ink border border-[#E4DACE] hover:bg-[#F7F1E7]'
