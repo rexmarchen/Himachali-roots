@@ -964,10 +964,10 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3.5 sm:gap-6 md:grid-cols-4">
           {bestsellers.map((item, index) => (
             <Link key={item.slug} to={`/shop/${item.slug}`} className="group min-w-0">
-              <div className="relative aspect-square overflow-hidden border border-line bg-sand/30">
+              <div className="relative aspect-square overflow-hidden rounded-2xl sm:rounded-none border border-[#E4DACE]/80 bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] shadow-[0_2px_8px_rgba(23,35,33,0.04)] sm:shadow-none">
                 {item.imageUrl ? (
                   <img
                     src={item.imageUrl}
@@ -979,16 +979,16 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
                 ) : (
                   <div className="flex h-full items-center justify-center text-[11px] text-muted">No photograph</div>
                 )}
-                <span className="absolute left-2 top-2 border border-line bg-paper/95 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-forest">
+                <span className="absolute left-2.5 top-2.5 rounded-full sm:rounded-none border border-line bg-paper/95 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-forest shadow-xs">
                   #{index + 1}
                 </span>
               </div>
-              <p className="mt-2 truncate text-[9.5px] uppercase tracking-[0.14em] text-muted">{item.sellerName}</p>
-              <h3 className="mt-0.5 line-clamp-2 font-serif text-[15px] leading-snug text-forest transition-colors group-hover:text-terra sm:text-base">
+              <p className="mt-2 truncate text-[10px] font-bold uppercase tracking-[0.14em] text-[#D98263]">{item.sellerName}</p>
+              <h3 className="mt-0.5 line-clamp-2 font-serif text-[15px] font-semibold sm:font-normal leading-snug text-forest transition-colors group-hover:text-terra sm:text-base">
                 {item.name}
               </h3>
               <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2">
-                <span className="text-[13px] font-medium text-ink">{formatINR(item.pricePaise)}</span>
+                <span className="text-[14px] font-bold text-ink sm:font-medium sm:text-[13px]">{formatINR(item.pricePaise)}</span>
                 <span className="text-[10px] text-muted">{item.unitsSold} sold</span>
               </div>
             </Link>

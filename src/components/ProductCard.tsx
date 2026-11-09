@@ -75,7 +75,7 @@ export function ProductCard({
   return (
     <article className="group relative flex flex-col justify-between transition-all duration-300">
       <div>
-        <div className="relative aspect-[4/5] w-full overflow-hidden bg-sand/30 border border-line/60">
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl sm:rounded-none bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] border border-[#E4DACE]/80 shadow-[0_2px_10px_rgba(23,35,33,0.04)] sm:shadow-none">
           <Link to={`/shop/${product.slug}`} className="block h-full w-full" aria-label={`View ${product.name}`}>
             {product.imageUrl && !imageError ? (
               <img
@@ -98,14 +98,19 @@ export function ProductCard({
           </Link>
 
           {/* Badges */}
-          <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5 pointer-events-none">
+          <div className="absolute left-2.5 top-2.5 flex flex-col items-start gap-1 pointer-events-none">
+            {product.region ? (
+              <span className="sm:hidden rounded-full bg-[#172321]/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-semibold text-white tracking-wider shadow-xs">
+                📍 {product.region}
+              </span>
+            ) : null}
             {soldOut ? (
-              <span className="border border-ink/20 bg-paper/95 px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-ink shadow-xs">
+              <span className="rounded-sm sm:rounded-none border border-ink/20 bg-paper/95 px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-ink shadow-xs">
                 Sold out
               </span>
             ) : null}
             {discountPercent ? (
-              <span className="border border-terra/30 bg-terra px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-white shadow-xs">
+              <span className="rounded-sm sm:rounded-none border border-terra/30 bg-terra px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.12em] text-white shadow-xs">
                 {campaignOriginal ? `${discountPercent}% off` : `${discountPercent}% less`}
               </span>
             ) : null}
@@ -120,13 +125,13 @@ export function ProductCard({
               toggleWishlist.mutate(isSaved);
             }}
             aria-label={isSaved ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`}
-            className={`absolute right-2 top-2 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border transition-all duration-200 ${
+            className={`absolute right-2 top-2 sm:right-2 sm:top-2 flex h-9 w-9 sm:h-11 sm:w-11 min-h-[38px] min-w-[38px] sm:min-h-[44px] sm:min-w-[44px] items-center justify-center rounded-full border transition-all duration-200 active:scale-90 ${
               isSaved
                 ? 'border-terra bg-terra text-white shadow-sm'
-                : 'border-line/70 bg-paper/90 text-ink/70 hover:bg-paper hover:text-terra'
+                : 'border-[#E4DACE]/80 bg-white/90 backdrop-blur-sm sm:bg-paper/90 text-ink/70 hover:bg-paper hover:text-terra shadow-2xs'
             }`}
           >
-            <svg viewBox="0 0 20 20" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" className="h-4 w-4">
+            <svg viewBox="0 0 20 20" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" className="h-3.5 w-3.5 sm:h-4 sm:w-4">
               <path
                 d="M10 16.5l-6-6a4.2 4.2 0 0 1 0-6 4.2 4.2 0 0 1 6 0l0 0 0 0a4.2 4.2 0 0 1 6 0 4.2 4.2 0 0 1 0 6l-6 6Z"
                 strokeWidth="1.6"
@@ -137,40 +142,60 @@ export function ProductCard({
         </div>
 
         {/* Content */}
-        <div className="mt-3.5 flex flex-col">
-          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-muted">
-            <span className="truncate max-w-[70%]">{product.sellerName}</span>
-            {product.region ? <span className="shrink-0">{product.region}</span> : null}
+        <div className="mt-2.5 sm:mt-3.5 flex flex-col">
+          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-muted">
+            <span className="truncate max-w-[70%] font-bold text-[#D98263]">{product.sellerName}</span>
+            {product.region ? <span className="hidden sm:inline shrink-0">{product.region}</span> : null}
           </div>
 
-          <h3 className="mt-1 line-clamp-2 font-serif text-[16px] leading-snug text-forest sm:text-[17px]">
+          <h3 className="mt-1 line-clamp-2 font-serif text-[15px] sm:text-[17px] font-semibold sm:font-normal leading-snug text-[#172321] group-hover:text-terra transition-colors duration-150">
             <Link to={`/shop/${product.slug}`} className="hover:text-terra transition-colors duration-150">
               {product.name}
             </Link>
           </h3>
 
-          <p className="mt-0.5 text-xs text-muted/90 truncate">
+          <p className="mt-0.5 text-[11px] sm:text-xs text-muted/90 truncate">
             {product.categoryName}
             {product.campaignName ? <span className="text-terra"> · {product.campaignName}</span> : null}
           </p>
         </div>
       </div>
 
-      <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 border-t border-line/50 pt-2.5">
-        <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-          <span className="text-[14px] font-medium text-ink">{formatINR(product.pricePaise)}</span>
-          {strikePrice ? <span className="text-xs text-muted/80 line-through">{formatINR(strikePrice)}</span> : null}
+      <div className="mt-2 flex items-center justify-between gap-1.5 border-t border-line/50 pt-2 sm:mt-2.5 sm:pt-2.5">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-1.5 sm:gap-2">
+          <span className="text-[15px] sm:text-[14px] font-bold sm:font-medium text-[#172321]">{formatINR(product.pricePaise)}</span>
+          {strikePrice ? <span className="text-[11px] sm:text-xs text-muted/70 line-through">{formatINR(strikePrice)}</span> : null}
         </div>
 
-        {product.ratingCount > 0 && product.ratingAverage ? (
-          <div className="flex items-center gap-1 text-[11px] text-muted">
-            <span className="text-terra">★</span>
-            <span className="font-medium text-ink">{product.ratingAverage.toFixed(1)}</span>
-            <span className="text-muted/60">({product.ratingCount})</span>
-          </div>
-        ) : !soldOut && product.stock <= 3 ? (
-          <span className="text-[10.5px] font-medium text-warning">Only {product.stock} left</span>
-        ) : null}
+        {/* Mobile Quick Add Button */}
+        {!soldOut && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              addToCart.mutate();
+            }}
+            disabled={addToCart.isPending}
+            className="sm:hidden flex items-center justify-center gap-1 rounded-full bg-[#172321] text-white px-2.5 py-1 text-[10.5px] font-semibold active:scale-95 disabled:opacity-50 shadow-2xs shrink-0"
+            aria-label={`Add ${product.name} to bag`}
+          >
+            <span>{addToCart.isPending ? '…' : '+ Bag'}</span>
+          </button>
+        )}
+
+        {/* Desktop rating or low stock info */}
+        <div className="hidden sm:block">
+          {product.ratingCount > 0 && product.ratingAverage ? (
+            <div className="flex items-center gap-1 text-[11px] text-muted">
+              <span className="text-terra">★</span>
+              <span className="font-medium text-ink">{product.ratingAverage.toFixed(1)}</span>
+              <span className="text-muted/60">({product.ratingCount})</span>
+            </div>
+          ) : !soldOut && product.stock <= 3 ? (
+            <span className="text-[10.5px] font-medium text-warning">Only {product.stock} left</span>
+          ) : null}
+        </div>
       </div>
 
       {showAddToCart ? (
@@ -189,7 +214,7 @@ export function ProductCard({
 
 export function ProductGrid({ products, showAddToCart = false }: { products: ProductSummary[]; showAddToCart?: boolean }) {
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-9 sm:gap-x-6 sm:gap-y-11 md:grid-cols-3 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:gap-x-6 sm:gap-y-11 md:grid-cols-3 xl:grid-cols-4">
       {products.map((product, index) => (
         <ProductCard key={product.id} product={product} priority={index < 4} showAddToCart={showAddToCart} />
       ))}

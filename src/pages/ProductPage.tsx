@@ -260,7 +260,7 @@ export function ProductPage() {
         {/* Left column: gallery and real listing facts */}
         <div>
           <div
-            className="relative aspect-square overflow-hidden rounded-sm border border-line bg-sand/30 shadow-xs sm:aspect-[4/5]"
+            className="relative aspect-square overflow-hidden rounded-2xl sm:rounded-sm border border-line bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] shadow-xs sm:aspect-[4/5]"
             onTouchStart={(event) => {
               touchStartX.current = event.touches[0]?.clientX ?? null;
             }}
@@ -285,11 +285,11 @@ export function ProductPage() {
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted">No photograph</div>
             )}
-            <div className="absolute left-4 top-4 flex flex-col gap-2">
+            <div className="absolute left-3.5 top-3.5 flex flex-col gap-2">
               {product.originVerified ? <Badge tone="forest">Origin verified</Badge> : null}
             </div>
             {product.harvestInfo ? (
-              <div className="absolute bottom-4 left-4 right-4 rounded-sm border border-sand/70 bg-white/92 px-3.5 py-2.5 text-xs text-forest shadow-xs backdrop-blur-md">
+              <div className="absolute bottom-4 left-3.5 right-3.5 rounded-xl sm:rounded-sm border border-sand/70 bg-white/92 px-3.5 py-2.5 text-xs text-forest shadow-xs backdrop-blur-md">
                 <p className="flex items-center gap-2 font-semibold">
                   <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
                   {product.harvestInfo}
@@ -297,6 +297,20 @@ export function ProductPage() {
                 {product.originPlace ? <p className="mt-0.5 text-[11px] text-muted">{product.originPlace}</p> : null}
               </div>
             ) : null}
+
+            {/* Mobile swipe dot indicator */}
+            {product.images.length > 1 && (
+              <div className="sm:hidden absolute bottom-2 left-0 right-0 z-10 flex justify-center gap-1.5 pointer-events-none">
+                {product.images.map((_, idx) => (
+                  <span
+                    key={idx}
+                    className={`h-1.5 rounded-full transition-all ${
+                      idx === selectedImage ? 'w-5 bg-[#172321]' : 'w-1.5 bg-[#172321]/30'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {product.images.length > 1 ? (
@@ -481,7 +495,7 @@ export function ProductPage() {
                     size="lg"
                     loading={addToCart.isPending}
                     onClick={() => addToCart.mutate()}
-                    className="flex w-full items-center justify-center gap-2 bg-forest font-semibold text-paper shadow-xs hover:bg-forest-deep"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl sm:rounded-sm min-h-[48px] bg-forest font-semibold text-paper shadow-xs hover:bg-forest-deep"
                   >
                     <ShoppingBagIcon className="h-4 w-4" />
                     <span>Add to Bag</span>
@@ -491,7 +505,7 @@ export function ProductPage() {
                     type="button"
                     disabled={buyNow.isPending}
                     onClick={() => buyNow.mutate()}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-sm bg-terra text-sm font-semibold tracking-[0.01em] text-white shadow-xs transition-all duration-150 hover:bg-[#b9694c] hover:shadow-md active:scale-[0.99] disabled:opacity-50"
+                    className="flex h-12 min-h-[48px] w-full items-center justify-center gap-2 rounded-xl sm:rounded-sm bg-terra text-sm font-semibold tracking-[0.01em] text-white shadow-xs transition-all duration-150 hover:bg-[#b9694c] hover:shadow-md active:scale-[0.99] disabled:opacity-50"
                   >
                     {buyNow.isPending ? <Spinner className="h-4 w-4" /> : (
                       <>
@@ -858,15 +872,15 @@ export function ProductPage() {
 
       {/* Sticky buy bar */}
       {showStickyBar && !soldOut && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-white/97 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-xl backdrop-blur-md transition-all duration-300 sm:px-4">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#E4DACE] bg-white/95 px-3.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl backdrop-blur-md transition-all duration-300 sm:px-4">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
               {image && (
-                <img src={image.url} alt="" className="hidden h-12 w-12 rounded-sm border border-line object-cover sm:block" />
+                <img src={image.url} alt="" className="h-10 w-10 rounded-lg border border-[#E4DACE] object-cover shrink-0" />
               )}
               <div className="min-w-0">
-                <p className="line-clamp-1 hidden text-xs font-semibold text-forest sm:block">{product.name}</p>
-                <p className="text-sm font-semibold text-forest sm:text-[11px] sm:font-normal sm:text-muted">
+                <p className="line-clamp-1 text-xs font-semibold text-forest">{product.name}</p>
+                <p className="text-sm font-bold text-terra sm:text-[11px] sm:font-normal sm:text-muted">
                   {formatINR(currentItemPrice)}
                   <span className="hidden sm:inline"> · {product.unit}{product.weightG ? ` · ${product.weightG} g` : ''}</span>
                 </p>
@@ -900,7 +914,7 @@ export function ProductPage() {
                 size="sm"
                 loading={addToCart.isPending}
                 onClick={() => addToCart.mutate()}
-                className="flex h-11 items-center gap-1.5 bg-forest font-medium text-paper hover:bg-forest-deep"
+                className="flex h-11 items-center gap-1.5 rounded-xl sm:rounded-sm bg-forest font-medium text-paper hover:bg-forest-deep"
               >
                 <ShoppingBagIcon className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Add to Bag</span>
@@ -911,7 +925,7 @@ export function ProductPage() {
                 type="button"
                 disabled={buyNow.isPending}
                 onClick={() => buyNow.mutate()}
-                className="flex h-11 items-center gap-1.5 rounded-sm bg-terra px-4 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#b9694c] disabled:opacity-60"
+                className="flex h-11 items-center gap-1.5 rounded-xl sm:rounded-sm bg-terra px-4 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#b9694c] disabled:opacity-60"
               >
                 {buyNow.isPending ? (
                   <Spinner className="h-3 w-3" />
