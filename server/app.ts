@@ -165,6 +165,17 @@ export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.E
         },
       }),
     );
+    // Public video assets: must-revalidate with immediate ETag verification to avoid stale video cache
+    app.use(
+      '/videos',
+      express.static(path.join(dist, 'videos'), {
+        index: false,
+        maxAge: 0,
+        setHeaders: (res) => {
+          res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+        },
+      }),
+    );
     app.use(express.static(dist, { index: false, maxAge: '1h' }));
     app.use((req, res, next) => {
       if ((req.method !== 'GET' && req.method !== 'HEAD') || req.path.startsWith('/api') || req.path.startsWith('/uploads')) {

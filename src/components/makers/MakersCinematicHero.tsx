@@ -46,9 +46,9 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         {/* Poster Image (shown immediately while video prepares or as fallback) */}
         <picture>
-          <source srcSet="/images/makers/makers-hero-poster.webp" type="image/webp" />
+          <source srcSet="/images/makers/winter-morning-poster-v2.webp" type="image/webp" />
           <img
-            src="/images/makers/makers-hero-poster.jpg"
+            src="/images/makers/winter-morning-poster-v2.jpg"
             alt=""
             className={`h-full w-full object-cover object-center transition-opacity duration-1000 ${
               videoLoaded && !videoError ? 'opacity-0' : 'opacity-100'
@@ -67,16 +67,16 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
             loop
             playsInline
             preload="auto"
-            poster="/images/makers/makers-hero-poster.webp"
+            poster="/images/makers/winter-morning-poster-v2.webp"
             onCanPlayThrough={() => setVideoLoaded(true)}
             onError={() => setVideoError(true)}
             className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-1000 ${
               videoLoaded ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            <source src="/videos/himalayan-makers-hero.mp4" type="video/mp4" />
-            <source src="/videos/himalayan-makers-hero-720.mp4" type="video/mp4" media="(max-width: 768px)" />
-            <source src="/videos/himalayan-makers-hero.webm" type="video/webm" />
+            <source src="/videos/winter-morning-himalayas-v2.mp4" type="video/mp4" />
+            <source src="/videos/winter-morning-himalayas-720-v2.mp4" type="video/mp4" media="(max-width: 768px)" />
+            <source src="/videos/winter-morning-himalayas-v2.webm" type="video/webm" />
           </video>
         )}
 
