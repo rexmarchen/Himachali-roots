@@ -109,7 +109,7 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
          ========================================================================= */}
       <div className="relative z-10 mx-auto max-w-5xl px-4 pt-10 pb-8 sm:px-6 sm:pt-20 sm:pb-16 lg:px-8 text-center flex-1 flex flex-col justify-center">
         {/* Eyebrow Pill */}
-        <div className="animate-hero-fade-up [animation-delay:150ms]">
+        <div className="animate-hero-fade-up [animation-delay:80ms]">
           <div className="inline-flex max-w-full items-center gap-1.5 sm:gap-2 rounded-full border border-[#D4A373]/40 bg-[#101918]/70 px-3 sm:px-4 py-1 sm:py-1.5 shadow-sm backdrop-blur-md">
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#E5B869] animate-pulse" />
             <span className="text-[8.5px] sm:text-[11px] font-bold uppercase tracking-[0.12em] sm:tracking-[0.22em] text-[#F4E8CE]">
@@ -119,20 +119,20 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
         </div>
 
         {/* Documentary Main Headline */}
-        <h1 className="mt-4 sm:mt-5 font-serif text-[26px] leading-[1.16] sm:text-5xl md:text-6xl lg:text-[70px] font-normal sm:leading-[1.08] tracking-[-0.015em] text-[#FAF7F2] drop-shadow-[0_4px_20px_rgba(0,0,0,0.85)] animate-hero-fade-up [animation-delay:300ms]">
+        <h1 className="mt-4 sm:mt-5 font-serif text-[26px] leading-[1.16] sm:text-5xl md:text-6xl lg:text-[70px] font-normal sm:leading-[1.08] tracking-[-0.015em] text-[#FAF7F2] drop-shadow-[0_4px_20px_rgba(0,0,0,0.85)] animate-hero-fade-up [animation-delay:160ms]">
           Bring the spirit of the <br className="sm:hidden" />
           mountains <br className="hidden sm:inline" />
           to the world.
         </h1>
 
         {/* Supporting Narrative */}
-        <p className="mt-3.5 sm:mt-5 max-w-2xl mx-auto font-sans text-xs sm:text-base md:text-lg leading-relaxed text-[#EDE3D6]/90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)] px-1 animate-hero-fade-up [animation-delay:450ms]">
+        <p className="mt-3.5 sm:mt-5 max-w-2xl mx-auto font-sans text-xs sm:text-base md:text-lg leading-relaxed text-[#EDE3D6]/90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)] px-1 animate-hero-fade-up [animation-delay:240ms]">
           From handwoven textiles and traditional crafts to mountain-grown foods and handmade treasures,
           Dear Hills helps independent Himalayan creators bring their work to more people.
         </p>
 
         {/* Primary & Secondary Action CTAs */}
-        <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 animate-hero-fade-up [animation-delay:600ms]">
+        <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 animate-hero-fade-up [animation-delay:320ms]">
           <Link
             to="/become-a-maker?offer=diwali"
             className="group w-full sm:w-auto inline-flex items-center justify-center gap-2.5 rounded-sm bg-[#D4A373] px-6 sm:px-7 py-3 sm:py-3.5 text-xs sm:text-sm font-semibold tracking-wide text-[#1B2824] shadow-lg transition-all duration-300 hover:bg-[#E5BC91] hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
@@ -162,7 +162,7 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
         </div>
 
         {/* Trust Badges Bar */}
-        <div className="mt-7 sm:mt-10 pt-4 sm:pt-6 border-t border-white/15 grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 max-w-3xl mx-auto text-left animate-hero-fade-up [animation-delay:750ms]">
+        <div className="mt-7 sm:mt-10 pt-4 sm:pt-6 border-t border-white/15 grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 max-w-3xl mx-auto text-left animate-hero-fade-up [animation-delay:400ms]">
           <div className="flex items-center gap-2.5 sm:gap-3 rounded-sm bg-black/25 px-3 py-2 backdrop-blur-xs border border-white/5">
             <span className="text-lg sm:text-xl shrink-0" aria-hidden>🏔️</span>
             <div className="min-w-0">

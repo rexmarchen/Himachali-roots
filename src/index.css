@@ -513,7 +513,7 @@
 @keyframes heroFadeUp {
   0% {
     opacity: 0;
-    transform: translate3d(0, 24px, 0);
+    transform: translate3d(0, 16px, 0);
   }
   100% {
     opacity: 1;
@@ -522,7 +522,6 @@
 }
 
 .animate-hero-fade-up {
-  animation: heroFadeUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  opacity: 0;
+  animation: heroFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
