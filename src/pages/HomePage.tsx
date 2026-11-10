@@ -85,6 +85,15 @@ const PRINCIPLES = [
 /* Photographs verified free of embedded watermarks: mountains and apple garden landscapes */
 const HERO_SLIDES = [
   {
+    id: 'himachali-cottage-sunrise',
+    src: '/images/home/himalayan-cottage-sunrise-closing.jpg',
+    srcSet:
+      '/images/home/himalayan-cottage-sunrise-closing-640.webp 640w, /images/home/himalayan-cottage-sunrise-closing-1024.webp 1024w, /images/home/himalayan-cottage-sunrise-closing-1600.webp 1600w, /images/home/himalayan-cottage-sunrise-closing.webp 2048w',
+    alt: 'Traditional Himachali stone-and-timber cottage with slate roof overlooking terraced mountain valleys and snow-capped Himalayan peaks at golden dawn',
+    place: 'Tirthan & Kullu Valleys',
+    caption: 'Sunlit mountain homes preserving generations of Himalayan craft',
+  },
+  {
     id: 'himalayan-morning-ridges',
     src: '/images/home/himalayan-ridges-morning.jpg',
     srcSet:
@@ -1001,6 +1010,132 @@ function ClosingMomentSection() {
   );
 }
 
+function SellerBannerSection({ counts }: { counts: { products: number; sellers: number; regions: number } }) {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [isRevealed, setIsRevealed] = useState(false);
+
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setIsRevealed(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsRevealed(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.18 },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <section ref={sectionRef} className="mx-auto max-w-[88rem] px-5 py-16 sm:px-8 lg:px-10 xl:px-12">
+      <div className="relative isolate overflow-hidden rounded-3xl border border-forest/30 bg-forest-deep text-paper shadow-2xl min-h-[460px] flex items-center">
+        {/* Authentic Himachali Stone Cottage & Snow Peaks at Sunrise */}
+        <picture className="absolute inset-0 -z-20 overflow-hidden">
+          <source
+            type="image/webp"
+            srcSet="/images/home/himalayan-cottage-sunrise-closing-640.webp 640w, /images/home/himalayan-cottage-sunrise-closing-1024.webp 1024w, /images/home/himalayan-cottage-sunrise-closing-1600.webp 1600w, /images/home/himalayan-cottage-sunrise-closing.webp 2048w"
+            sizes="(max-width: 1400px) 100vw, 1400px"
+          />
+          <img
+            src="/images/home/himalayan-cottage-sunrise-closing.jpg"
+            alt="Traditional Himachali stone-and-timber cottage with slate roof overlooking terraced mountain valleys and snow-capped Himalayan peaks at golden dawn"
+            loading="lazy"
+            decoding="async"
+            width={2048}
+            height={1152}
+            className="h-full w-full object-cover object-[center_36%] scale-[1.03] transition-transform duration-1000 ease-out hover:scale-105"
+          />
+        </picture>
+
+        {/* Cinematic Scrims: Dark forest gradient on the left for crisp text contrast, sunlit valley on the right */}
+        <div
+          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-forest-deep/95 via-forest-deep/85 to-forest-deep/50 sm:via-forest-deep/80 sm:to-forest-deep/30"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-forest-deep/95 via-forest-deep/50 to-transparent sm:hidden"
+          aria-hidden
+        />
+
+        <div className="relative z-10 w-full grid gap-10 px-8 py-12 sm:px-12 sm:py-16 lg:grid-cols-[1.3fr_0.7fr] lg:items-center">
+          <div
+            className={`transition-all duration-1000 ease-out ${
+              isRevealed ? 'opacity-100 translate-y-0 filter-none' : 'opacity-0 translate-y-7 blur-[2px]'
+            }`}
+          >
+            {/* Opening Eyebrow with Amber Glow Pill */}
+            <div className="mb-4 inline-flex items-center gap-2.5 rounded-full border border-sand/30 bg-forest/80 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-sand/90 backdrop-blur-md">
+              <span className="h-1.5 w-1.5 rounded-full bg-butter/95 animate-pulse" />
+              <span>Where Himalayan Craft Meets the World</span>
+            </div>
+
+            <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl text-paper leading-[1.15] tracking-tight">
+              Born in the high valleys.
+              <br />
+              <span className="italic text-butter/95 font-serif">Cherished across the world.</span>
+            </h2>
+
+            <p className="mt-4 max-w-xl text-sm sm:text-base leading-relaxed text-paper/85 font-light">
+              Every handwoven Kinnauri shawl, cold-pressed apricot kernel oil, and wild mountain tea carries a lineage of quiet mastery. Dear Hills gives independent Himalayan creators a direct, dignified shelf to reach conscious homes across India.
+            </p>
+
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <LinkButton to="/become-a-maker?offer=diwali" variant="terra" size="lg" className="shadow-lg hover:shadow-xl transition-all">
+                Become a Maker
+              </LinkButton>
+              <Link
+                to="/policies/seller-terms"
+                className="inline-flex items-center gap-1.5 text-xs text-sand/90 hover:text-paper font-medium underline underline-offset-4 transition-colors"
+              >
+                <span>Read seller KYC & platform terms</span>
+                <span>→</span>
+              </Link>
+            </div>
+          </div>
+
+          <div
+            className={`border-t border-white/20 pt-8 lg:border-l lg:border-t-0 lg:pl-12 lg:pt-0 backdrop-blur-[2px] transition-all duration-1000 delay-200 ease-out ${
+              isRevealed ? 'opacity-100 translate-y-0 filter-none' : 'opacity-0 translate-y-7 blur-[2px]'
+            }`}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sand/80">
+              Community Impact
+            </p>
+            <dl className="mt-5 grid grid-cols-3 gap-4">
+              <div className="rounded-xl bg-forest-deep/60 p-3.5 border border-white/10 shadow-inner">
+                <dt className="text-[10px] uppercase tracking-[0.12em] text-paper/70 font-medium">Listings</dt>
+                <dd className="mt-1 font-serif text-2xl sm:text-3xl text-paper font-semibold">{counts.products}</dd>
+              </div>
+              <div className="rounded-xl bg-forest-deep/60 p-3.5 border border-white/10 shadow-inner">
+                <dt className="text-[10px] uppercase tracking-[0.12em] text-paper/70 font-medium">Makers</dt>
+                <dd className="mt-1 font-serif text-2xl sm:text-3xl text-paper font-semibold">{counts.sellers}</dd>
+              </div>
+              <div className="rounded-xl bg-forest-deep/60 p-3.5 border border-white/10 shadow-inner">
+                <dt className="text-[10px] uppercase tracking-[0.12em] text-paper/70 font-medium">Districts</dt>
+                <dd className="mt-1 font-serif text-2xl sm:text-3xl text-paper font-semibold">{counts.regions}</dd>
+              </div>
+            </dl>
+            <div className="mt-5">
+              <DemoBadge>100% direct artisan revenue model</DemoBadge>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -1308,70 +1443,8 @@ export function HomePage() {
         </section>
       ) : null}
 
-      {/* Seller Application Callout Banner */}
-      <section className="mx-auto max-w-[88rem] px-5 py-16 sm:px-8 lg:px-10 xl:px-12">
-        <div className="relative isolate overflow-hidden rounded-2xl border border-forest/20 bg-forest text-paper shadow-xl">
-          {/* Authentic harvest lifestyle background image - Photo 5 */}
-          <div className="absolute inset-0 -z-10 opacity-25 mix-blend-luminosity">
-            <picture>
-              <source
-                type="image/webp"
-                srcSet="/images/home/himalayan-harvest-lifestyle-720.webp 720w, /images/home/himalayan-harvest-lifestyle-1100.webp 1100w, /images/home/himalayan-harvest-lifestyle.webp 1376w"
-              />
-              <img
-                src="/images/home/himalayan-harvest-lifestyle.jpg"
-                alt="Local mountain farmers harvesting wild sea buckthorn and herbs along high mountain terraces"
-                loading="lazy"
-                decoding="async"
-                className="h-full w-full object-cover object-[center_35%] scale-[1.03]"
-              />
-            </picture>
-          </div>
-          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-forest via-forest/90 to-forest/80" />
-
-          <div className="relative z-10 grid gap-10 px-8 py-12 sm:px-12 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">For Makers & Growers</p>
-            <h2 className="mt-3 max-w-xl font-serif text-3xl sm:text-4xl text-paper leading-tight">
-              If you make it in Himachal, there should be a shelf for it.
-            </h2>
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-paper/75">
-              Apply with your business details, workshop location and craft categories. Every applicant is verified before
-              a storefront is published.
-            </p>
-            <div className="mt-7 flex flex-wrap items-center gap-4">
-              <LinkButton to="/sell" variant="terra" size="md">
-                Apply to Sell
-              </LinkButton>
-              <Link to="/policies/seller-terms" className="text-xs text-sand underline underline-offset-4 hover:text-paper">
-                Read seller KYC & platform fee terms →
-              </Link>
-            </div>
-          </div>
-
-          <div className="border-t border-white/20 pt-6 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sand/80">Active In This Build</p>
-            <dl className="mt-4 grid grid-cols-3 gap-4">
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.1em] text-paper/60">Listings</dt>
-                <dd className="mt-1 font-serif text-3xl text-paper">{data.counts.products}</dd>
-              </div>
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.1em] text-paper/60">Makers</dt>
-                <dd className="mt-1 font-serif text-3xl text-paper">{data.counts.sellers}</dd>
-              </div>
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.1em] text-paper/60">Districts</dt>
-                <dd className="mt-1 font-serif text-3xl text-paper">{data.counts.regions}</dd>
-              </div>
-            </dl>
-            <div className="mt-4">
-              <DemoBadge>Demonstration figures</DemoBadge>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+      {/* Seller Application Callout Banner (Born in the High Valleys) */}
+      <SellerBannerSection counts={data.counts} />
 
       {/* Regional filter pills */}
       <section className="mx-auto max-w-[88rem] px-5 pb-8 sm:px-8 lg:px-10 xl:px-12">
