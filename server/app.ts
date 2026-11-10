@@ -187,7 +187,10 @@ export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.E
         res.status(503).type('text/plain').send('Frontend build not found. Run `npm run build`.');
         return;
       }
-      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Surrogate-Control', 'no-store');
       res.sendFile(indexPath);
     });
   } else {
