@@ -10,8 +10,7 @@ RUN npm ci --no-audit --no-fund
 
 COPY . .
 ENV NODE_OPTIONS="--max-old-space-size=450"
-RUN npm run build \
-    && npm prune --omit=dev
+RUN npm run build
 
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production
