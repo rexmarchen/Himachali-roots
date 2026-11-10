@@ -86,6 +86,9 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
         />
 
         {/* Master Atmospheric Gradient Overlays for Guaranteed Text Legibility */}
+        {/* Left-side directional scrim for text legibility while keeping the sunlit house and peaks bright on the right */}
+        <div className="absolute inset-y-0 left-0 w-full md:w-3/5 bg-gradient-to-r from-[#101918]/85 via-[#101918]/50 to-transparent pointer-events-none" />
+
         {/* Top Shadow for navigation contrast */}
         <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-[#101918]/85 via-[#101918]/45 to-transparent pointer-events-none" />
 
