@@ -5,6 +5,7 @@ import type { PublicMaker, MakersQueryResponse } from '@shared/types';
 import { api } from '@/lib/api';
 import { usePageMeta } from '@/lib/usePageMeta';
 import { Breadcrumbs, Button, LinkButton } from '@/components/ui';
+import { MakersCinematicHero } from '@/components/makers/MakersCinematicHero';
 
 const CATEGORY_CHIPS = [
   { label: 'All Crafts', slug: 'all' },
@@ -124,59 +125,74 @@ export function MakersPage() {
   const makers = query.data?.makers ?? [];
   const total = query.data?.pagination?.total ?? makers.length;
 
+  const scrollToDirectory = () => {
+    const el = document.getElementById('makers-directory');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const HERITAGE_PILLS = [
+    { label: 'Kullu Valley', region: 'Kullu' },
+    { label: 'Kangra Foothills', region: 'Kangra' },
+    { label: 'Kinnaur Highlands', region: 'Kinnaur' },
+    { label: 'Lahaul & Spiti', region: 'Lahaul and Spiti' },
+    { label: 'Ravi Valley Chamba', region: 'Chamba' },
+    { label: 'Shimla Ridge', region: 'Shimla' },
+  ];
+
   return (
     <div className="min-h-screen bg-paper text-ink selection:bg-forest selection:text-paper">
-      {/* Editorial Navigation Breadcrumbs */}
-      <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-        <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Makers & Artisans' }]} />
-      </div>
-
-      {/* Diwali Maker Cohort Invitation Banner */}
-      <div className="mx-auto max-w-7xl px-4 pt-3 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-md border border-[#D4A373]/50 bg-gradient-to-r from-[#2B1B17] via-[#382017] to-[#2B1B17] px-4 py-3 text-paper shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <span className="text-base">🪔</span>
-            <p className="text-xs text-[#F7EBE1]">
-              <strong className="text-[#F4D06F]">Diwali Maker Initiative:</strong> Are you crafting or growing in Himachal? Sell this Diwali with <strong>0% Platform Fee</strong> &amp; free storytelling.
-            </p>
-          </div>
-          <Link
-            to="/become-a-maker?offer=diwali"
-            className="shrink-0 text-xs font-semibold text-[#F4D06F] hover:text-white underline underline-offset-2 transition-colors"
-          >
-            Join as a Maker &rarr;
-          </Link>
-        </div>
-      </div>
+      {/* =========================================================================
+          SECTION A: CINEMATIC HIMALAYAN DOCUMENTARY HERO
+         ========================================================================= */}
+      <MakersCinematicHero onExploreClick={scrollToDirectory} />
 
       {/* =========================================================================
-          SECTION A: EDITORIAL HERO
+          SECTION B: MAKER DISCOVERY, SEARCH & CONTROLS TRANSITION
          ========================================================================= */}
-      <section className="relative overflow-hidden border-b border-sand bg-[#fbf7f0] pt-6 pb-12 sm:pb-16 lg:pt-10 lg:pb-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid items-center gap-10 lg:grid-cols-12 lg:gap-14">
-            {/* Hero Left: Editorial Story & Search */}
-            <div className="lg:col-span-7">
-              <div className="inline-flex items-center gap-2 rounded-full border border-forest/15 bg-surface/80 px-3.5 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-terra">
-                <span className="h-1.5 w-1.5 rounded-full bg-terra animate-pulse" />
-                PEOPLE, NOT LABELS
+      <div id="makers-directory" className="scroll-mt-4">
+        {/* Editorial Navigation Breadcrumbs */}
+        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+          <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Makers & Artisans' }]} />
+        </div>
+
+        {/* Diwali Maker Cohort Invitation Banner */}
+        <div className="mx-auto max-w-7xl px-4 pt-3 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-md border border-[#D4A373]/50 bg-gradient-to-r from-[#2B1B17] via-[#382017] to-[#2B1B17] px-4 py-3 text-paper shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">🪔</span>
+              <p className="text-xs text-[#F7EBE1]">
+                <strong className="text-[#F4D06F]">Diwali Maker Initiative:</strong> Are you crafting or growing in Himachal? Sell this Diwali with <strong>0% Platform Fee</strong> &amp; free storytelling.
+              </p>
+            </div>
+            <Link
+              to="/become-a-maker?offer=diwali"
+              className="shrink-0 text-xs font-semibold text-[#F4D06F] hover:text-white underline underline-offset-2 transition-colors"
+            >
+              Join as a Maker &rarr;
+            </Link>
+          </div>
+        </div>
+
+        {/* Integrated Search & Valley Exploration Container */}
+        <div className="mx-auto max-w-7xl px-4 pt-6 pb-2 sm:px-6 lg:px-8">
+          <div className="rounded-xl border border-sand bg-white/70 p-5 sm:p-6 shadow-xs backdrop-blur-xs">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h2 className="font-serif text-xl sm:text-2xl text-forest">
+                  Explore Independent Himalayan Workshops
+                </h2>
+                <p className="text-xs text-muted mt-1">
+                  Connect directly with verified weavers, tea masters, woodcarvers and wild apiaries.
+                </p>
               </div>
 
-              <h1 className="mt-4 font-serif text-3xl leading-[1.08] text-forest sm:text-5xl lg:text-6xl">
-                Meet the hands behind the Himalayas.
-              </h1>
-
-              <p className="mt-5 max-w-2xl font-sans text-base leading-relaxed text-ink/75 sm:text-lg">
-                Every piece has a place, a person, and a story. Discover independent craftspeople, traditional
-                handloom weavers, small tea estates, and high-altitude farmers preserving Himalayan traditions and
-                bringing their craft to your home.
-              </p>
-
               {/* Integrated Search Box */}
-              <form onSubmit={handleSearchSubmit} className="mt-8 max-w-xl">
-                <div className="relative flex items-center shadow-sm">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-forest/50">
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <form onSubmit={handleSearchSubmit} className="w-full md:max-w-md">
+                <div className="relative flex items-center shadow-xs">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-forest/50">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                   </div>
@@ -185,7 +201,7 @@ export function MakersPage() {
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                     placeholder="Find a maker, craft, village or speciality..."
-                    className="w-full rounded-sm border border-sand bg-surface py-3.5 pl-11 pr-28 text-sm text-ink placeholder:text-muted/70 transition-all focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/10"
+                    className="w-full rounded-sm border border-sand bg-surface py-2.5 pl-10 pr-24 text-xs text-ink placeholder:text-muted/70 transition-all focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/10"
                   />
                   <div className="absolute right-1.5 flex items-center gap-1">
                     {searchInput && (
@@ -195,7 +211,7 @@ export function MakersPage() {
                           setSearchInput('');
                           updateParams({ q: null });
                         }}
-                        className="rounded px-2 py-1 text-xs text-muted hover:text-forest"
+                        className="rounded px-1.5 py-0.5 text-xs text-muted hover:text-forest"
                         title="Clear search"
                       >
                         ✕
@@ -203,50 +219,40 @@ export function MakersPage() {
                     )}
                     <button
                       type="submit"
-                      className="rounded-sm bg-forest px-4 py-2 text-xs font-semibold tracking-wide text-paper hover:bg-forest-deep transition-colors"
+                      className="rounded-sm bg-forest px-3.5 py-1.5 text-xs font-semibold tracking-wide text-paper hover:bg-forest-deep transition-colors"
                     >
                       Search
                     </button>
                   </div>
                 </div>
               </form>
-
-              {/* Supporting Valley Tags */}
-              <div className="mt-6 flex flex-wrap items-center gap-2 text-xs text-muted">
-                <span className="font-semibold text-forest/70">Heritage Regions:</span>
-                {['Kullu Valley', 'Kangra Foothills', 'Kinnaur Highlands', 'Lahaul & Spiti', 'Ravi Valley Chamba'].map((valley) => (
-                  <span
-                    key={valley}
-                    className="inline-flex items-center rounded-sm border border-sand/80 bg-surface/60 px-2 py-0.5 text-[11px] text-ink/75"
-                  >
-                    {valley}
-                  </span>
-                ))}
-              </div>
             </div>
 
-            {/* Hero Right: High-Quality Himalayan Artisan Photograph */}
-            <div className="relative lg:col-span-5">
-              <div className="relative mx-auto aspect-[4/3] max-w-lg overflow-hidden rounded-sm border border-forest/10 bg-sand/30 shadow-md sm:aspect-[5/4] lg:max-w-none">
-                <img
-                  src="/images/makers-hands.jpg"
-                  alt="Himalayan artisan hands guiding authentic wool loom"
-                  className="h-full w-full object-cover transition-transform duration-700 hover:scale-105"
-                  loading="eager"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-forest/85 via-forest/20 to-transparent" />
-                <div className="absolute bottom-0 inset-x-0 p-5 text-paper">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sand/80">Centuries of Craft</p>
-                  <p className="font-serif text-lg leading-snug sm:text-xl">
-                    "Every warp and weft is drawn from mountain sheep wool, spun by hand when winter snows settle."
-                  </p>
-                  <p className="mt-1 text-[11px] text-paper/70">— Artisan Loom Collective, Naggar</p>
-                </div>
-              </div>
+            {/* Heritage Valleys Quick Filter Pills */}
+            <div className="mt-4 pt-3.5 border-t border-sand/60 flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-semibold text-forest/75 text-xs">Heritage Valleys:</span>
+              {HERITAGE_PILLS.map((pill) => {
+                const isSelected = selectedRegion === pill.region;
+                return (
+                  <button
+                    key={pill.region}
+                    type="button"
+                    onClick={() => updateParams({ region: isSelected ? null : pill.region })}
+                    className={`inline-flex items-center rounded-sm px-2.5 py-1 text-xs transition-colors ${
+                      isSelected
+                        ? 'bg-forest text-paper font-semibold shadow-xs'
+                        : 'border border-sand bg-surface/80 text-ink/75 hover:border-forest/40 hover:text-forest'
+                    }`}
+                  >
+                    <span>{pill.label}</span>
+                    {isSelected && <span className="ml-1 text-[10px]">✕</span>}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
       {/* =========================================================================
           SECTION B: MAKER DISCOVERY CONTROLS & FILTERING

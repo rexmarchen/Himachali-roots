@@ -419,6 +419,14 @@
   .animate-marquee {
     animation: none !important;
   }
+  .animate-mist-drift {
+    animation: none !important;
+  }
+  .animate-hero-fade-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
   .reveal-opening,
   .reveal-opening.is-revealed {
     opacity: 1 !important;
@@ -479,3 +487,42 @@
 .animate-pop {
   animation: popInBounce 0.75s cubic-bezier(0.28, 0.84, 0.42, 1) forwards;
 }
+
+/* Atmospheric mist drift */
+@keyframes mistDrift {
+  0% {
+    transform: translate3d(-3%, 0, 0) scale(1.04);
+    opacity: 0.16;
+  }
+  50% {
+    transform: translate3d(2%, -1.5%, 0) scale(1.08);
+    opacity: 0.28;
+  }
+  100% {
+    transform: translate3d(-1.5%, 0, 0) scale(1.04);
+    opacity: 0.16;
+  }
+}
+
+.animate-mist-drift {
+  animation: mistDrift 24s ease-in-out infinite alternate;
+  will-change: transform, opacity;
+}
+
+/* Staggered entrance for documentary hero elements */
+@keyframes heroFadeUp {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-hero-fade-up {
+  animation: heroFadeUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
