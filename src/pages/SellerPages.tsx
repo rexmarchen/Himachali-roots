@@ -3018,8 +3018,8 @@ export function SellerProductEditorPage() {
         toast.push(`${file.name}: only JPEG, PNG, or WebP images are permitted.`, 'error');
         continue;
       }
-      if (file.size > 8 * 1024 * 1024) {
-        toast.push(`${file.name} is larger than the 8MB limit.`, 'error');
+      if (file.size > 5 * 1024 * 1024) {
+        toast.push(`${file.name} is larger than the 5 MB limit.`, 'error');
         continue;
       }
       added.push({
@@ -3142,6 +3142,17 @@ export function SellerProductEditorPage() {
           missing['compliance.storage'] = 'Describe how the product should be stored.';
         }
       }
+      if (complianceGroup === 'raw_produce') {
+        if (form.varietyGrade.trim().length < 2) {
+          missing.varietyGrade = 'State the variety, grade or size of the produce.';
+        }
+        if (form.harvestInfo.trim().length < 3) {
+          missing.harvestInfo = 'Describe the harvest date or season.';
+        }
+        if (form.dispatchConditions.trim().length < 3) {
+          missing.dispatchConditions = 'Explain packing and dispatch conditions.';
+        }
+      }
       if (needsMaterialDetails && form.materials.trim().length < 3) {
         missing.materials = 'Describe the fibre or material composition.';
       }
@@ -3157,7 +3168,7 @@ export function SellerProductEditorPage() {
         setFields(missing);
         toast.push('Add the category-specific information before submitting for review.', 'error');
         const provenanceOnly = Object.keys(missing).every((key) =>
-          ['materials', 'dimensions', 'careInstructions'].includes(key),
+          ['materials', 'dimensions', 'careInstructions', 'varietyGrade', 'harvestInfo', 'dispatchConditions'].includes(key),
         );
         setActiveStep(provenanceOnly ? 3 : 7);
         return;
@@ -4329,7 +4340,40 @@ export function SellerProductEditorPage() {
                 </>
               ) : null}
 
-              {complianceGroup !== 'food' ? (
+              {complianceGroup === 'raw_produce' ? (
+                <div className="sm:col-span-2 border border-[#E4DACE] bg-[#FAF7F2] p-4">
+                  <p className="text-sm font-medium text-[#172321]">Fresh-produce declarations come from the provenance step</p>
+                  <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-[#66745A]">
+                    <li>
+                      Variety or grade:{' '}
+                      {form.varietyGrade.trim() ? <span className="text-[#172321]">{form.varietyGrade.trim()}</span> : 'not recorded yet'}
+                    </li>
+                    <li>
+                      Harvest timing and origin:{' '}
+                      {form.harvestInfo.trim() ? <span className="text-[#172321]">{form.harvestInfo.trim()}</span> : 'not recorded yet'}
+                    </li>
+                    <li>
+                      Dispatch and packaging:{' '}
+                      {form.dispatchConditions.trim() ? (
+                        <span className="text-[#172321]">{form.dispatchConditions.trim()}</span>
+                      ) : (
+                        'not recorded yet'
+                      )}
+                    </li>
+                    <li>
+                      Net packed weight:{' '}
+                      {form.weightG ? <span className="text-[#172321]">{form.weightG} g</span> : 'not recorded yet'}
+                    </li>
+                  </ul>
+                  <p className="mt-3 text-xs leading-relaxed text-[#66745A]">
+                    Fresh, unprocessed produce does not need an FSSAI packaged-food label here. Your own food-safety
+                    obligations still apply.
+                  </p>
+                  <Button type="button" variant="secondary" size="sm" className="mt-3" onClick={() => setActiveStep(3)}>
+                    Edit provenance details
+                  </Button>
+                </div>
+              ) : complianceGroup !== 'food' ? (
                 <div className="sm:col-span-2 border border-[#E4DACE] bg-[#FAF7F2] p-4">
                   <p className="text-sm font-medium text-[#172321]">These details come from the provenance step</p>
                   <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-[#66745A]">
@@ -5026,6 +5070,207 @@ interface EarningsResponse {
   commissionNote: string;
 }
 
+interface PayoutDetailsResponse {
+  configured: boolean;
+  payoutStatus: string;
+  details: {
+    beneficiaryName: string;
+    bankName: string;
+    accountNumberMasked: string;
+    ifscCode: string;
+    accountType: string;
+    upiId: string;
+  } | null;
+}
+
+const PAYOUT_STATUS_COPY: Record<string, string> = {
+  not_started: 'Not set up yet',
+  pending_configuration: 'Bank details needed',
+  pending_verification: 'Pending Dear Hills review',
+  verified: 'Verified for manual settlement',
+  blocked: 'Payouts on hold',
+};
+
+function SellerPayoutSection() {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const payout = useQuery({
+    queryKey: ['seller-payout-details'],
+    queryFn: () => api<PayoutDetailsResponse>('/seller/payout-details'),
+  });
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    beneficiaryName: '',
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+    accountType: 'savings',
+    upiId: '',
+  });
+
+  const beginEdit = () => {
+    const details = payout.data?.details;
+    setForm({
+      beneficiaryName: details?.beneficiaryName ?? '',
+      bankName: details?.bankName ?? '',
+      accountNumber: '',
+      ifscCode: details?.ifscCode ?? '',
+      accountType: details?.accountType === 'current' ? 'current' : 'savings',
+      upiId: details?.upiId ?? '',
+    });
+    setEditing(true);
+  };
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await api('/seller/payout-details', {
+        method: 'POST',
+        body: {
+          beneficiaryName: form.beneficiaryName.trim(),
+          bankName: form.bankName.trim(),
+          accountNumber: form.accountNumber.trim(),
+          ifscCode: form.ifscCode.trim(),
+          accountType: form.accountType,
+          upiId: form.upiId.trim() || undefined,
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: ['seller-payout-details'] });
+      await queryClient.invalidateQueries({ queryKey: ['seller-application'] });
+      setEditing(false);
+      toast.push('Payout details saved. The Dear Hills team must verify them before a manual settlement is released.');
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (payout.isLoading) return <LoadingBlock rows={2} />;
+  if (payout.isError || !payout.data) return <ErrorState onRetry={() => void payout.refetch()} />;
+  const data = payout.data;
+  const details = data.details;
+
+  return (
+    <section className="border border-line bg-surface p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl">Payout details</h2>
+          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted">
+            Payouts are made manually by bank transfer or UPI after a settlement batch is reviewed. Changing these details
+            returns the account to review; no money moves automatically.
+          </p>
+        </div>
+        <StatusBadge status={data.payoutStatus} label={PAYOUT_STATUS_COPY[data.payoutStatus] ?? humanise(data.payoutStatus)} />
+      </div>
+
+      {data.payoutStatus === 'blocked' ? (
+        <div className="mt-4">
+          <Alert tone="error" title="Payouts are on hold">
+            The Dear Hills team has paused settlements for this store. Contact support before expecting a payout.
+          </Alert>
+        </div>
+      ) : data.payoutStatus === 'pending_verification' ? (
+        <div className="mt-4">
+          <Alert tone="info" title="Awaiting verification">
+            Your bank details are saved but not yet verified. The team checks them manually before releasing a settlement.
+          </Alert>
+        </div>
+      ) : data.payoutStatus === 'verified' ? (
+        <div className="mt-4">
+          <Alert tone="success" title="Details verified">
+            These details are cleared for manual settlement. Changing them will require another review.
+          </Alert>
+        </div>
+      ) : null}
+
+      {editing ? (
+        <form onSubmit={save} className="mt-5 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Account holder name" required>
+              <Input
+                required
+                value={form.beneficiaryName}
+                onChange={(event) => setForm({ ...form, beneficiaryName: event.target.value })}
+                autoComplete="name"
+              />
+            </Field>
+            <Field label="Bank name" required>
+              <Input
+                required
+                value={form.bankName}
+                onChange={(event) => setForm({ ...form, bankName: event.target.value })}
+              />
+            </Field>
+            <Field
+              label="Account number"
+              required
+              hint={details ? 'Re-enter the full number to confirm' : '9–18 digits'}
+            >
+              <Input
+                required
+                inputMode="numeric"
+                pattern="[0-9]{9,18}"
+                value={form.accountNumber}
+                onChange={(event) => setForm({ ...form, accountNumber: event.target.value.replace(/\D/g, '').slice(0, 18) })}
+                autoComplete="off"
+              />
+            </Field>
+            <Field label="IFSC code" required hint="11 characters">
+              <Input
+                required
+                maxLength={11}
+                value={form.ifscCode}
+                onChange={(event) => setForm({ ...form, ifscCode: event.target.value.toUpperCase().slice(0, 11) })}
+                autoComplete="off"
+              />
+            </Field>
+            <Field label="Account type" required>
+              <Select
+                value={form.accountType}
+                onChange={(event) => setForm({ ...form, accountType: event.target.value })}
+              >
+                <option value="savings">Savings</option>
+                <option value="current">Current</option>
+              </Select>
+            </Field>
+            <Field label="UPI ID" hint="Optional">
+              <Input
+                value={form.upiId}
+                onChange={(event) => setForm({ ...form, upiId: event.target.value })}
+                autoComplete="off"
+              />
+            </Field>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" loading={saving}>Save and send for verification</Button>
+            <Button type="button" variant="ghost" disabled={saving} onClick={() => setEditing(false)}>Cancel</Button>
+          </div>
+        </form>
+      ) : details ? (
+        <div className="mt-5 space-y-4">
+          <dl className="grid gap-3 text-[12.5px] sm:grid-cols-2 lg:grid-cols-3">
+            <div><dt className="text-muted">Account holder</dt><dd className="mt-0.5">{details.beneficiaryName || '—'}</dd></div>
+            <div><dt className="text-muted">Bank</dt><dd className="mt-0.5">{details.bankName || '—'}</dd></div>
+            <div><dt className="text-muted">Account</dt><dd className="mt-0.5 font-mono">{details.accountNumberMasked || '—'}</dd></div>
+            <div><dt className="text-muted">IFSC</dt><dd className="mt-0.5 font-mono">{details.ifscCode || '—'}</dd></div>
+            <div><dt className="text-muted">Account type</dt><dd className="mt-0.5">{humanise(details.accountType || 'savings')}</dd></div>
+            <div><dt className="text-muted">UPI ID</dt><dd className="mt-0.5">{details.upiId || '—'}</dd></div>
+          </dl>
+          <Button variant="secondary" onClick={beginEdit}>Update payout details</Button>
+        </div>
+      ) : (
+        <div className="mt-5">
+          <p className="text-sm text-muted">No payout details are on file. Add them so a manual settlement can be prepared.</p>
+          <Button className="mt-3" onClick={beginEdit}>Add payout details</Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function SellerEarningsPage() {
   const [page, setPage] = useState(1);
   const earnings = useQuery({
@@ -5054,6 +5299,7 @@ export function SellerEarningsPage() {
         batch, transfers funds through the business bank account or UPI, and records the reference. No payout is implied until
         that reference exists.
       </Alert>
+      <SellerPayoutSection />
       <section>
         <h2 className="text-xl">Settlement batches</h2>
         {data.settlements.length ? (

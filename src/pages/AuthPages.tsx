@@ -56,6 +56,8 @@ interface GoogleSignInResult {
   user?: unknown;
   linkingRequired?: boolean;
   linkToken?: string;
+  mfaRequired?: boolean;
+  challengeToken?: string;
   email?: string;
   message?: string;
 }
@@ -77,6 +79,8 @@ function GoogleAuthSection({
   const { config } = useAuth();
   const [linking, setLinking] = useState<{ linkToken: string; email: string } | null>(null);
   const [linkPassword, setLinkPassword] = useState('');
+  const [mfa, setMfa] = useState<{ challengeToken: string } | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [linkingBusy, setLinkingBusy] = useState(false);
 
@@ -96,6 +100,10 @@ function GoogleAuthSection({
       const result = await api<GoogleSignInResult>('/auth/google', { method: 'POST', body: { credential } });
       if (result.linkingRequired && result.linkToken) {
         setLinking({ linkToken: result.linkToken, email: result.email ?? '' });
+        return;
+      }
+      if (result.mfaRequired && result.challengeToken) {
+        setMfa({ challengeToken: result.challengeToken });
         return;
       }
       await onAuthenticated();
@@ -124,6 +132,26 @@ function GoogleAuthSection({
     }
   };
 
+  const verifyMfa = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!mfa) return;
+    setLinkingBusy(true);
+    setError(null);
+    try {
+      await api('/auth/mfa/verify', {
+        method: 'POST',
+        body: { challengeToken: mfa.challengeToken, code: mfaCode },
+      });
+      setMfa(null);
+      setMfaCode('');
+      await onAuthenticated();
+    } catch (mfaError) {
+      setError(errorMessage(mfaError));
+    } finally {
+      setLinkingBusy(false);
+    }
+  };
+
   return (
     <div className="mt-6">
       <div className="mb-5 flex items-center gap-3" aria-hidden="true">
@@ -136,7 +164,41 @@ function GoogleAuthSection({
           <Alert tone="error">{error}</Alert>
         </div>
       ) : null}
-      {linking ? (
+      {mfa ? (
+        <form onSubmit={verifyMfa} className="space-y-3">
+          <Alert tone="info" title="Two-step verification">
+            Enter the current 6-digit code from your authenticator app to finish signing in.
+          </Alert>
+          <Field label="6-digit code" required hint="From your authenticator app">
+            <Input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]*"
+              maxLength={6}
+              required
+              autoFocus
+              value={mfaCode}
+              onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            />
+          </Field>
+          <Button type="submit" size="lg" className="w-full" loading={linkingBusy} disabled={mfaCode.length !== 6}>
+            Verify and continue
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            disabled={linkingBusy}
+            onClick={() => {
+              setMfa(null);
+              setMfaCode('');
+              setError(null);
+            }}
+          >
+            Cancel
+          </Button>
+        </form>
+      ) : linking ? (
         <form onSubmit={linkExisting} className="space-y-3">
           <Alert tone="info" title="Link your existing account">
             An account already uses {linking.email}. Enter that account’s password once to link Google sign-in. Accounts are
@@ -181,6 +243,8 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
   const navigate = useNavigate();
@@ -203,7 +267,20 @@ export function LoginPage() {
     setError(null);
     setFields({});
     try {
-      await api('/auth/login', { method: 'POST', body: { email, password } });
+      if (challengeToken) {
+        await api('/auth/mfa/verify', { method: 'POST', body: { challengeToken, code: mfaCode } });
+        await completeSignIn();
+        return;
+      }
+      const result = await api<{ mfaRequired?: boolean; challengeToken?: string }>('/auth/login', {
+        method: 'POST',
+        body: { email, password },
+      });
+      if (result.mfaRequired && result.challengeToken) {
+        setChallengeToken(result.challengeToken);
+        setPassword('');
+        return;
+      }
       await completeSignIn();
     } catch (loginError) {
       setError(errorMessage(loginError));
@@ -227,57 +304,98 @@ export function LoginPage() {
         </p>
       }
     >
-      <form onSubmit={submit} className="space-y-4">
-        {error ? <Alert tone="error">{error}</Alert> : null}
-        <Field label="Email address" required error={fields.email}>
-          <Input
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            invalid={Boolean(fields.email)}
-          />
-        </Field>
-        <Field label="Password" required error={fields.password}>
-          <div className="relative">
+      {challengeToken ? (
+        <form onSubmit={submit} className="space-y-4">
+          {error ? <Alert tone="error">{error}</Alert> : null}
+          <Alert tone="info" title="Two-step verification">
+            Open your authenticator app and enter the current 6-digit code for Dear Hills.
+          </Alert>
+          <p className="text-[12.5px] text-muted">
+            Signing in as <span className="text-ink">{email}</span>
+          </p>
+          <Field label="6-digit code" required hint="From your authenticator app">
             <Input
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]*"
+              maxLength={6}
               required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              invalid={Boolean(fields.password)}
-              className="pr-14"
+              autoFocus
+              value={mfaCode}
+              onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-            >
-              {showPassword ? 'Hide' : 'Show'}
-            </button>
-          </div>
-        </Field>
-        <div className="flex justify-end">
-          <Link to="/forgot-password" className="text-[11.5px] text-muted underline underline-offset-4 hover:text-forest">
-            Forgot your password?
-          </Link>
-        </div>
-        <Button type="submit" size="lg" className="w-full" loading={submitting}>
-          Sign in
-        </Button>
-      </form>
+          </Field>
+          <Button type="submit" size="lg" className="w-full" loading={submitting} disabled={mfaCode.length !== 6}>
+            Verify and sign in
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            onClick={() => {
+              setChallengeToken(null);
+              setMfaCode('');
+              setError(null);
+            }}
+          >
+            Use a different account
+          </Button>
+        </form>
+      ) : (
+        <>
+          <form onSubmit={submit} className="space-y-4">
+            {error ? <Alert tone="error">{error}</Alert> : null}
+            <Field label="Email address" required error={fields.email}>
+              <Input
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                invalid={Boolean(fields.email)}
+              />
+            </Field>
+            <Field label="Password" required error={fields.password}>
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  invalid={Boolean(fields.password)}
+                  className="pr-14"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </Field>
+            <div className="flex justify-end">
+              <Link to="/forgot-password" className="text-[11.5px] text-muted underline underline-offset-4 hover:text-forest">
+                Forgot your password?
+              </Link>
+            </div>
+            <Button type="submit" size="lg" className="w-full" loading={submitting}>
+              Sign in
+            </Button>
+          </form>
 
-      <GoogleAuthSection text="signin_with" onAuthenticated={() => completeSignIn('Signed in with Google.')} />
+          <GoogleAuthSection text="signin_with" onAuthenticated={() => completeSignIn('Signed in with Google.')} />
 
-      <p className="mt-6 text-center text-[11.5px] text-muted">
-        New to DEAR HILLS?{' '}
-        <Link to="/register" className="text-forest underline underline-offset-4 hover:text-terra">
-          Create an account
-        </Link>
-      </p>
+          <p className="mt-6 text-center text-[11.5px] text-muted">
+            New to DEAR HILLS?{' '}
+            <Link to="/register" className="text-forest underline underline-offset-4 hover:text-terra">
+              Create an account
+            </Link>
+          </p>
+        </>
+      )}
     </AuthShell>
   );
 }

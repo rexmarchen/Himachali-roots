@@ -393,6 +393,11 @@ export function AdminLayout() {
     queryFn: () => api<OverviewResponse>('/admin/overview'),
     staleTime: 30_000,
   });
+  const mfaStatus = useQuery({
+    queryKey: ['mfa-status'],
+    queryFn: () => api<{ enabled: boolean }>('/auth/mfa'),
+    staleTime: 60_000,
+  });
   const metrics = overview.data?.metrics;
 
   const currentNav = useMemo(() => {
@@ -944,6 +949,18 @@ export function AdminLayout() {
 
         <main id="admin-main" tabIndex={-1} className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-[1440px]">
+            {mfaStatus.data && !mfaStatus.data.enabled ? (
+              <div className="mb-4">
+                <Alert tone="warning" title="Protect this administrator account">
+                  Two-step verification is not enabled. Administrators can verify payouts, issue refunds and change settlement
+                  state; enable a TOTP authenticator in{' '}
+                  <Link to="/account/profile" className="underline underline-offset-2">
+                    Profile &amp; security
+                  </Link>
+                  .
+                </Alert>
+              </div>
+            ) : null}
             <ErrorBoundary>
               <Outlet />
             </ErrorBoundary>
@@ -1822,6 +1839,16 @@ interface AdminSellerDetail {
     store_status?: string;
     store_status_reason?: string | null;
     payout_status?: string;
+    payoutDetails?: {
+      beneficiaryName?: string;
+      bankName?: string;
+      accountLast4?: string;
+      accountNumber?: string;
+      ifscCode?: string;
+      accountType?: string;
+      upiId?: string;
+      updatedAt?: string;
+    } | null;
     seller_category?: string | null;
     rejection_reason?: string | null;
     operatingAddress?: unknown;
@@ -1885,6 +1912,9 @@ export function AdminSellerDetailPage() {
   const [previewDoc, setPreviewDoc] = useState<AdminSellerDetail['documents'][0] | null>(null);
   const [adjustAmount, setAdjustAmount] = useState('');
   const [adjustNote, setAdjustNote] = useState('');
+  const [payoutAction, setPayoutAction] = useState<'verify' | 'hold' | 'release' | null>(null);
+  const [payoutNote, setPayoutNote] = useState('');
+  const [payoutBusy, setPayoutBusy] = useState(false);
   const detail = useQuery({
     queryKey: ['admin-seller', id],
     queryFn: () => api<AdminSellerDetail>(`/admin/sellers/${id}`),
@@ -1914,6 +1944,37 @@ export function AdminSellerDetailPage() {
       toast.push(errorMessage(error), 'error');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const submitPayoutAction = async () => {
+    if (!payoutAction) return;
+    const note = payoutNote.trim();
+    if (payoutAction !== 'release' && note.length < 5) {
+      toast.push(payoutAction === 'hold' ? 'Give a reason of at least 5 characters.' : 'Record what was checked (5+ characters).', 'error');
+      return;
+    }
+    setPayoutBusy(true);
+    try {
+      const path = payoutAction === 'verify' ? 'verify' : payoutAction === 'hold' ? 'hold' : 'release';
+      await api(`/admin/sellers/${id}/payouts/${path}`, {
+        method: 'POST',
+        body: payoutAction === 'hold' ? { reason: note } : { note: note || undefined },
+      });
+      toast.push(
+        payoutAction === 'verify'
+          ? 'Payout details marked verified. No payout was initiated.'
+          : payoutAction === 'hold'
+            ? 'Payout hold placed. Eligible ledger entries are now excluded from settlements.'
+            : 'Payout hold released. No payout was initiated.',
+      );
+      setPayoutAction(null);
+      setPayoutNote('');
+      await refresh();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setPayoutBusy(false);
     }
   };
 
@@ -1973,6 +2034,13 @@ export function AdminSellerDetailPage() {
   const shipping = (application?.shipping ?? {}) as Record<string, unknown>;
   const payout = (application?.payout ?? {}) as Record<string, unknown>;
   const agreement = (application?.agreement ?? {}) as Record<string, unknown>;
+  const payoutDetails = seller.payoutDetails;
+  const payoutStatus = String(seller.payout_status ?? 'not_started');
+  const accountMasked = payoutDetails?.accountLast4
+    ? `••••••••${payoutDetails.accountLast4}`
+    : payoutDetails?.accountNumber
+      ? `••••••••${String(payoutDetails.accountNumber).slice(-4)}`
+      : '—';
 
   return (
     <div className="space-y-7">
@@ -2210,6 +2278,47 @@ export function AdminSellerDetailPage() {
         </div>
         <aside className="space-y-5">
           <section className="border border-line bg-surface p-5">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <h2 className="text-lg">Payout details</h2>
+              <StatusBadge status={payoutStatus} />
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted">
+              Seller-entered. Verify the account out-of-band before releasing a manual settlement. This console never
+              initiates a bank transfer.
+            </p>
+            {payoutDetails ? (
+              <dl className="mt-3 space-y-2 text-[12.5px]">
+                <div className="flex justify-between gap-3"><dt className="text-muted">Account holder</dt><dd className="text-right">{text(payoutDetails.beneficiaryName)}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-muted">Bank</dt><dd className="text-right">{text(payoutDetails.bankName)}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-muted">Account</dt><dd className="text-right font-mono">{accountMasked}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-muted">IFSC</dt><dd className="text-right font-mono">{text(payoutDetails.ifscCode)}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-muted">Type</dt><dd className="text-right">{humanise(payoutDetails.accountType ?? 'savings')}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-muted">UPI</dt><dd className="text-right">{text(payoutDetails.upiId)}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-muted">Updated</dt><dd className="text-right">{payoutDetails.updatedAt ? formatDate(payoutDetails.updatedAt) : '—'}</dd></div>
+              </dl>
+            ) : (
+              <p className="mt-3 border border-dashed border-sand px-3 py-3 text-center text-[12px] text-muted">
+                The seller has not submitted payout details.
+              </p>
+            )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {payoutDetails && payoutStatus !== 'verified' && payoutStatus !== 'blocked' ? (
+                <Button size="sm" onClick={() => { setPayoutAction('verify'); setPayoutNote(''); }}>
+                  Verify details
+                </Button>
+              ) : null}
+              {payoutStatus === 'blocked' ? (
+                <Button size="sm" onClick={() => { setPayoutAction('release'); setPayoutNote(''); }}>
+                  Release payout hold
+                </Button>
+              ) : (
+                <Button size="sm" variant="danger" onClick={() => { setPayoutAction('hold'); setPayoutNote(''); }}>
+                  Place payout hold
+                </Button>
+              )}
+            </div>
+          </section>
+          <section className="border border-line bg-surface p-5">
             <h2 className="text-lg">Ledger</h2>
             <dl className="mt-3 space-y-2 text-[12.5px]">
               <div className="flex justify-between"><dt className="text-muted">Platform Fee</dt><dd>{formatINR(metrics?.commission ?? 0)}</dd></div>
@@ -2233,6 +2342,56 @@ export function AdminSellerDetailPage() {
           </section>
         </aside>
       </div>
+
+      <Modal
+        open={Boolean(payoutAction)}
+        onClose={() => { setPayoutAction(null); setPayoutNote(''); }}
+        title={
+          payoutAction === 'hold'
+            ? 'Place payout hold'
+            : payoutAction === 'release'
+              ? 'Release payout hold'
+              : 'Verify payout details'
+        }
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => { setPayoutAction(null); setPayoutNote(''); }}>Cancel</Button>
+            <Button
+              variant={payoutAction === 'hold' ? 'danger' : 'primary'}
+              loading={payoutBusy}
+              onClick={() => void submitPayoutAction()}
+            >
+              {payoutAction === 'hold' ? 'Place hold' : payoutAction === 'release' ? 'Release hold' : 'Mark verified'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {payoutAction === 'hold' ? (
+            <Alert tone="warning">
+              Pending and eligible ledger entries are excluded from settlement batches until the hold is released. The
+              seller sees the store as blocked for payouts.
+            </Alert>
+          ) : payoutAction === 'verify' ? (
+            <Alert tone="info">
+              Confirm the account holder, bank, IFSC and account number through your own banking channel. A recorded note is
+              required for the audit trail. This does not move money.
+            </Alert>
+          ) : (
+            <Alert tone="info">
+              Releasing the hold makes held entries eligible for a future settlement batch. No payout is initiated by this
+              action.
+            </Alert>
+          )}
+          <Field
+            label={payoutAction === 'hold' ? 'Reason for hold' : 'Review note'}
+            required={payoutAction !== 'release'}
+            hint={payoutAction === 'release' ? 'Optional' : 'At least 5 characters'}
+          >
+            <Textarea rows={3} value={payoutNote} onChange={(event) => setPayoutNote(event.target.value)} maxLength={500} />
+          </Field>
+        </div>
+      </Modal>
 
       <Modal
         open={Boolean(decision)}

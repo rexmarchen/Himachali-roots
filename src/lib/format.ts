@@ -67,13 +67,13 @@ export const SELLER_STATUS_LABELS: Record<SellerStatus, string> = {
 };
 
 export function statusTone(status: string): string {
-  if (['approved', 'delivered', 'fulfilled', 'paid', 'published', 'settled', 'eligible', 'active'].includes(status)) {
+  if (['approved', 'delivered', 'fulfilled', 'paid', 'published', 'settled', 'eligible', 'active', 'verified'].includes(status)) {
     return 'bg-forest/10 text-forest border-forest/20';
   }
-  if (['pending', 'pending_payment', 'submitted', 'under_review', 'requested', 'processing', 'in_progress'].includes(status)) {
+  if (['pending', 'pending_payment', 'submitted', 'under_review', 'requested', 'processing', 'in_progress', 'pending_verification', 'pending_configuration'].includes(status)) {
     return 'bg-[#b9892f]/10 text-[#7c5a1c] border-[#b9892f]/25';
   }
-  if (['rejected', 'cancelled', 'failed', 'suspended', 'refunded', 'reversed', 'expired'].includes(status)) {
+  if (['rejected', 'cancelled', 'failed', 'suspended', 'refunded', 'reversed', 'expired', 'blocked'].includes(status)) {
     return 'bg-terra/10 text-[#8e4630] border-terra/25';
   }
   if (['shipped', 'out_for_delivery', 'in_transit'].includes(status)) {

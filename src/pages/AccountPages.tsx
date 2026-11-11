@@ -934,6 +934,203 @@ export function NotificationsPage() {
   );
 }
 
+interface MfaStatus {
+  enabled: boolean;
+  pending: boolean;
+  enrolledAt: string | null;
+  recommendedForRole: boolean;
+  required: boolean;
+}
+
+function MfaSettings({ hasPassword }: { hasPassword: boolean }) {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const status = useQuery({ queryKey: ['mfa-status'], queryFn: () => api<MfaStatus>('/auth/mfa') });
+  const [enrolment, setEnrolment] = useState<{ secret: string; otpauthUri: string } | null>(null);
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [disableOpen, setDisableOpen] = useState(false);
+
+  const startEnrolment = async () => {
+    setBusy(true);
+    try {
+      const result = await api<{ secret: string; otpauthUri: string }>('/auth/mfa/enrol', { method: 'POST' });
+      setEnrolment({ secret: result.secret, otpauthUri: result.otpauthUri });
+      setCode('');
+      await queryClient.invalidateQueries({ queryKey: ['mfa-status'] });
+      toast.push('Add the secret to your authenticator app, then confirm with a code.');
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmEnrolment = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await api('/auth/mfa/confirm', { method: 'POST', body: { code } });
+      setEnrolment(null);
+      setCode('');
+      await queryClient.invalidateQueries({ queryKey: ['mfa-status'] });
+      toast.push('Two-step verification enabled. You will need a code at every sign-in.');
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disableMfa = async (event?: FormEvent) => {
+    event?.preventDefault();
+    setBusy(true);
+    try {
+      await api('/auth/mfa/disable', {
+        method: 'POST',
+        body: { code, password: hasPassword ? password : undefined },
+      });
+      setDisableOpen(false);
+      setCode('');
+      setPassword('');
+      await queryClient.invalidateQueries({ queryKey: ['mfa-status'] });
+      toast.push('Two-step verification disabled.');
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (status.isLoading) return <LoadingBlock rows={2} />;
+  if (status.isError || !status.data) return <ErrorState onRetry={() => void status.refetch()} />;
+  const data = status.data;
+
+  return (
+    <section className="border border-line bg-surface p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl">Two-step verification</h2>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted">
+            A time-based code from an authenticator app is required after your password. This protects the account even if
+            the password is reused or stolen. Keep the authenticator backed up; recovery requires an operator.
+          </p>
+        </div>
+        <Badge tone={data.enabled ? 'forest' : 'neutral'}>{data.enabled ? 'Enabled' : 'Not enabled'}</Badge>
+      </div>
+
+      {data.recommendedForRole && !data.enabled ? (
+        <div className="mt-4">
+          <Alert tone="warning" title="Administrator account">
+            Enable two-step verification for this account. Administrator sessions can verify payouts, issue refunds and
+            change settlement state.
+          </Alert>
+        </div>
+      ) : null}
+
+      {data.enabled ? (
+        <div className="mt-4 space-y-4">
+          <p className="text-[12.5px] text-muted">
+            Enabled{data.enrolledAt ? ` on ${formatDate(data.enrolledAt)}` : ''}. A code is requested at every sign-in.
+          </p>
+          <Button variant="danger" onClick={() => { setDisableOpen(true); setCode(''); setPassword(''); }}>
+            Disable two-step verification
+          </Button>
+        </div>
+      ) : enrolment ? (
+        <form onSubmit={confirmEnrolment} className="mt-4 space-y-4">
+          <Alert tone="info" title="Add this secret to your authenticator app">
+            In Google Authenticator, Microsoft Authenticator, 1Password, Aegis or a similar app, choose “Add account” and
+            enter this secret manually. The setup URI is shown for apps that accept it.
+          </Alert>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="border border-line bg-paper px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-muted">Secret</p>
+              <p className="mt-1 break-all font-mono text-[13px] text-ink">{enrolment.secret}</p>
+            </div>
+            <div className="border border-line bg-paper px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-muted">Setup URI</p>
+              <p className="mt-1 break-all font-mono text-[11px] text-muted">{enrolment.otpauthUri}</p>
+            </div>
+          </div>
+          <Field label="6-digit code from the app" required hint="Confirms the secret was added">
+            <Input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]*"
+              maxLength={6}
+              required
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            />
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" loading={busy} disabled={code.length !== 6}>Confirm and enable</Button>
+            <Button type="button" variant="ghost" disabled={busy} onClick={() => { setEnrolment(null); setCode(''); }}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div className="mt-4">
+          <Button onClick={() => void startEnrolment()} loading={busy}>
+            {data.pending ? 'Start enrolment again' : 'Set up two-step verification'}
+          </Button>
+          {data.pending ? (
+            <p className="mt-2 text-[11.5px] text-muted">
+              An earlier enrolment was not confirmed. Starting again replaces the pending secret.
+            </p>
+          ) : null}
+        </div>
+      )}
+
+      <Modal
+        open={disableOpen}
+        onClose={() => setDisableOpen(false)}
+        title="Disable two-step verification"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDisableOpen(false)}>Cancel</Button>
+            <Button variant="danger" loading={busy} onClick={() => void disableMfa()}>
+              Disable
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={disableMfa} className="space-y-4">
+          <Alert tone="warning">
+            Removing the second factor makes this account protectable by password alone. Only do this when replacing the
+            authenticator device.
+          </Alert>
+          {hasPassword ? (
+            <Field label="Current password" required>
+              <Input
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </Field>
+          ) : null}
+          <Field label="6-digit code from the app" required>
+            <Input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]*"
+              maxLength={6}
+              required
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            />
+          </Field>
+        </form>
+      </Modal>
+    </section>
+  );
+}
+
 export function ProfilePage() {
   const { user, refresh } = useAuth();
   const toast = useToast();
@@ -1132,6 +1329,7 @@ export function ProfilePage() {
           </div>
         </div>
       </section>
+      <MfaSettings hasPassword={hasPassword} />
       <section className="border border-terra/30 bg-[#fff8f4] p-5 sm:p-6">
         <h2 className="text-xl text-[#7d3d28]">Account deletion</h2>
         <p className="mt-2 text-[12.5px] leading-relaxed text-[#7d3d28]/80">
