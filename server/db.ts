@@ -50,12 +50,15 @@ function tableExists(db: Db, table: string): boolean {
 function reconcileLegacySchema(db: Db): void {
   if (tableExists(db, 'users')) {
     addColumn(db, 'users', 'password_changed_at', 'TEXT');
+    addColumn(db, 'users', 'mfa_secret', 'TEXT');
+    addColumn(db, 'users', 'mfa_enabled_at', 'TEXT');
   }
   if (tableExists(db, 'seller_profiles')) {
     addColumn(db, 'seller_profiles', 'seller_category', 'TEXT');
     addColumn(db, 'seller_profiles', 'store_status', "TEXT NOT NULL DEFAULT 'setup_incomplete'");
     addColumn(db, 'seller_profiles', 'store_status_reason', 'TEXT');
     addColumn(db, 'seller_profiles', 'payout_status', "TEXT NOT NULL DEFAULT 'not_started'");
+    addColumn(db, 'seller_profiles', 'payout_status_before_hold', 'TEXT');
     addColumn(db, 'seller_profiles', 'logo_url', 'TEXT');
     addColumn(db, 'seller_profiles', 'cover_url', 'TEXT');
   }
@@ -312,7 +315,47 @@ export function openDatabase(filename: string): Db {
 
   migrateTransactionalOutbox(db);
   markMigration(db, 11);
+
+  migrateMfa(db);
+  markMigration(db, 12);
+
+  migratePayoutHoldStatus(db);
+  markMigration(db, 13);
   return db;
+}
+
+/**
+ * A payout hold must not erase whether the seller's bank details were already
+ * verified. The pre-hold status is restored on release so that releasing a hold
+ * cannot silently approve details that still await review.
+ */
+function migratePayoutHoldStatus(db: Db): void {
+  addColumn(db, 'seller_profiles', 'payout_status_before_hold', 'TEXT');
+}
+
+/**
+ * TOTP second factors. The pending secret lives in `users.mfa_secret` until the
+ * user confirms a code; `mfa_enabled_at` is the switch login consults. The
+ * challenge table makes the second step single-use and expiring.
+ */
+function migrateMfa(db: Db): void {
+  addColumn(db, 'users', 'mfa_secret', 'TEXT');
+  addColumn(db, 'users', 'mfa_enabled_at', 'TEXT');
+  if (!tableExists(db, 'mfa_challenges')) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS mfa_challenges (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL UNIQUE,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_mfa_challenges_user ON mfa_challenges(user_id);
+      CREATE INDEX IF NOT EXISTS idx_mfa_challenges_expires ON mfa_challenges(expires_at);
+    `);
+  }
 }
 
 function migrateTransactionalOutbox(db: Db): void {

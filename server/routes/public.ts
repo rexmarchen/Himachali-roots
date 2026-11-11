@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
@@ -483,22 +484,37 @@ export function publicRouter(db: Db): Router {
     res.json({ status: 'ok', uptimeSeconds: Math.round(process.uptime()), timestamp: new Date().toISOString() });
   });
 
-  // Readiness checks the only essential dependency: SQLite and its schema level.
+  // Readiness checks the only essential dependency: SQLite and the schema that
+  // authentication and sessions actually query. A migration row alone did not
+  // catch an auth-schema mismatch in production.
   const readiness = (_req: Request, res: Response) => {
     let databaseOk = true;
+    let authOk = true;
     let migration = 0;
     try {
       queryOne(db, 'SELECT 1 AS ok');
       migration = queryOne<{ version: number }>(db, 'SELECT MAX(version) AS version FROM schema_migrations')?.version ?? 0;
+      queryOne(
+        db,
+        `SELECT u.id, u.email, u.password_hash, u.is_disabled, u.email_verified,
+                u.mfa_secret, u.mfa_enabled_at,
+                COALESCE(p.full_name, '') AS full_name
+           FROM users u LEFT JOIN profiles p ON p.id = u.id LIMIT 1`,
+      );
+      queryOne(db, 'SELECT token_hash, user_id, expires_at, last_seen_at FROM sessions LIMIT 1');
+      queryOne(db, 'SELECT id, user_id, token_hash, attempts, expires_at FROM mfa_challenges LIMIT 1');
+      if (typeof crypto.argon2Sync !== 'function') authOk = false;
     } catch {
       databaseOk = false;
+      authOk = false;
     }
-    const ready = databaseOk && migration >= 6;
+    const ready = databaseOk && authOk && migration >= 12;
     res.status(ready ? 200 : 503).json({
       status: ready ? 'ok' : 'degraded',
       ready,
       database: databaseOk ? 'up' : 'down',
-      schema: migration >= 6 ? 'current' : 'outdated',
+      schema: migration >= 12 && authOk ? 'current' : 'outdated',
+      auth: authOk ? 'ok' : 'mismatch',
       timestamp: new Date().toISOString(),
     });
   };

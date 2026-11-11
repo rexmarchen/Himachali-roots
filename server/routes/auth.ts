@@ -21,6 +21,7 @@ import {
   verifyPassword,
 } from '../lib/auth.js';
 import { PasswordService } from '../core/security/PasswordService.js';
+import { MfaService } from '../core/security/MfaService.js';
 import { verifyGoogleIdToken as verifyGoogleIdTokenWithGoogle, type GoogleProfile } from '../lib/google.js';
 import { audit } from '../lib/audit.js';
 import { parse, unauthorized, badRequest, conflict, forbidden, AppError } from '../lib/http.js';
@@ -58,6 +59,8 @@ const googleLinkSchema = z.object({
 });
 
 const LINK_CHALLENGE_MINUTES = 10;
+const MFA_CHALLENGE_MINUTES = 10;
+const MFA_MAX_ATTEMPTS = 5;
 // A real scrypt comparison runs even when the email is unknown, so response
 // timing does not reveal whether an account exists.
 const DUMMY_PASSWORD_HASH = hashPassword('not-a-real-account-password-0');
@@ -69,6 +72,15 @@ interface AuthUserRow {
   is_disabled: number;
   email_verified: number;
   full_name: string;
+  mfa_secret?: string | null;
+  mfa_enabled_at?: string | null;
+}
+
+interface MfaChallengeRow {
+  id: string;
+  user_id: string;
+  attempts: number;
+  expires_at: string;
 }
 
 interface IdentityRow {
@@ -94,6 +106,7 @@ function findUserByEmail(db: Db, email: string): AuthUserRow | undefined {
   return queryOne<AuthUserRow>(
     db,
     `SELECT u.id, u.email, u.password_hash, u.is_disabled, u.email_verified,
+            u.mfa_secret, u.mfa_enabled_at,
             COALESCE(p.full_name, '') AS full_name
        FROM users u LEFT JOIN profiles p ON p.id = u.id
       WHERE u.email = ?`,
@@ -183,6 +196,41 @@ function signInResponse(db: Db, req: Request, res: Response, userId: string) {
 
 function disabledError() {
   return forbidden('This account is disabled. Contact support if you believe this is a mistake.');
+}
+
+function mfaEnabled(user: { mfa_secret?: string | null; mfa_enabled_at?: string | null }): boolean {
+  return Boolean(user.mfa_secret && user.mfa_enabled_at);
+}
+
+/**
+ * Creates a single-use challenge after the password (or a linked Google
+ * identity) has been verified. The raw token goes to the client; only its hash
+ * is stored. Any earlier unused challenge for the user is revoked.
+ */
+function issueMfaChallenge(db: Db, userId: string): { challengeToken: string; expiresAt: string } {
+  const token = randomToken(32);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + MFA_CHALLENGE_MINUTES * 60_000).toISOString();
+  execute(db, 'DELETE FROM mfa_challenges WHERE expires_at <= ? OR used_at IS NOT NULL', now.toISOString());
+  execute(db, 'DELETE FROM mfa_challenges WHERE user_id = ? AND used_at IS NULL', userId);
+  execute(
+    db,
+    `INSERT INTO mfa_challenges (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)`,
+    newId('mfc_'),
+    userId,
+    sha256(token),
+    expiresAt,
+  );
+  return { challengeToken: token, expiresAt };
+}
+
+function mfaRequiredResponse(db: Db, userId: string) {
+  return {
+    ok: false,
+    mfaRequired: true,
+    ...issueMfaChallenge(db, userId),
+    message: 'Enter the 6-digit code from your authenticator app to finish signing in.',
+  };
 }
 
 function authLimiter(max: number) {
@@ -282,6 +330,10 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
       const upgradedHash = PasswordService.hash(input.password);
       execute(db, 'UPDATE users SET password_hash = ? WHERE id = ?', upgradedHash, user.id);
     }
+    if (mfaEnabled(user)) {
+      res.json(mfaRequiredResponse(db, user.id));
+      return;
+    }
     const body = signInResponse(db, req, res, user.id);
     res.json(body);
   });
@@ -292,6 +344,170 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
     destroySession(db, sessionToken(req));
     clearSessionCookie(req, res);
     res.json({ ok: true });
+  });
+
+  /**
+   * Second step of a TOTP sign-in. The challenge proves the first factor was
+   * accepted; the code proves possession of the enrolled authenticator. A
+   * challenge is single-use, expires after ten minutes and allows five attempts.
+   */
+  router.post('/mfa/verify', authLimiter(15), (req, res) => {
+    const input = parse(
+      z.object({
+        challengeToken: z.string().min(20, 'Start signing in again.').max(200),
+        code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code.'),
+      }),
+      req.body,
+    );
+    const now = new Date().toISOString();
+    const challenge = queryOne<MfaChallengeRow>(
+      db,
+      `SELECT id, user_id, attempts, expires_at FROM mfa_challenges
+        WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?`,
+      sha256(input.challengeToken),
+      now,
+    );
+    if (!challenge) {
+      throw unauthorized('That verification request has expired. Sign in again.');
+    }
+    if (challenge.attempts >= MFA_MAX_ATTEMPTS) {
+      execute(db, 'DELETE FROM mfa_challenges WHERE id = ?', challenge.id);
+      throw unauthorized('Too many incorrect codes. Sign in again to start over.');
+    }
+
+    const user = queryOne<AuthUserRow>(
+      db,
+      `SELECT u.id, u.email, u.password_hash, u.is_disabled, u.email_verified,
+              u.mfa_secret, u.mfa_enabled_at, COALESCE(p.full_name, '') AS full_name
+         FROM users u LEFT JOIN profiles p ON p.id = u.id WHERE u.id = ?`,
+      challenge.user_id,
+    );
+    if (!user || user.is_disabled) {
+      execute(db, 'DELETE FROM mfa_challenges WHERE id = ?', challenge.id);
+      throw unauthorized();
+    }
+    if (!user.mfa_secret || !MfaService.verifyToken(user.mfa_secret, input.code)) {
+      execute(db, 'UPDATE mfa_challenges SET attempts = attempts + 1 WHERE id = ?', challenge.id);
+      throw unauthorized('That code is not correct.');
+    }
+
+    const body = tx(db, () => {
+      execute(db, 'UPDATE mfa_challenges SET used_at = ? WHERE id = ?', now, challenge.id);
+      execute(db, 'DELETE FROM mfa_challenges WHERE user_id = ? AND used_at IS NULL', user.id);
+      return signInResponse(db, req, res, user.id);
+    });
+    audit(db, { id: user.id, email: user.email }, 'auth.mfa.signin', 'user', user.id);
+    res.json(body);
+  });
+
+  router.get('/mfa', requireAuth, (req, res) => {
+    const user = queryOne<{ mfa_secret: string | null; mfa_enabled_at: string | null }>(
+      db,
+      'SELECT mfa_secret, mfa_enabled_at FROM users WHERE id = ?',
+      req.user!.id,
+    );
+    const enabled = mfaEnabled(user ?? {});
+    res.json({
+      enabled,
+      pending: Boolean(user?.mfa_secret && !user.mfa_enabled_at),
+      enrolledAt: user?.mfa_enabled_at ?? null,
+      recommendedForRole: req.user!.roles.includes('admin'),
+      required: enabled,
+    });
+  });
+
+  /**
+   * Starts enrolment but does not switch enforcement on. The secret stays
+   * pending until `/mfa/confirm` proves the authenticator can produce a code.
+   */
+  router.post('/mfa/enrol', authLimiter(10), requireAuth, (req, res) => {
+    const user = queryOne<{ email: string; mfa_secret: string | null; mfa_enabled_at: string | null }>(
+      db,
+      'SELECT email, mfa_secret, mfa_enabled_at FROM users WHERE id = ?',
+      req.user!.id,
+    );
+    if (!user) throw unauthorized();
+    if (mfaEnabled(user)) {
+      throw conflict('Two-step verification is already enabled. Disable it before enrolling a new authenticator.');
+    }
+    const secret = MfaService.generateSecret();
+    execute(
+      db,
+      'UPDATE users SET mfa_secret = ?, mfa_enabled_at = NULL, updated_at = ? WHERE id = ?',
+      secret,
+      new Date().toISOString(),
+      req.user!.id,
+    );
+    audit(db, req.user!, 'auth.mfa.enrol_started', 'user', req.user!.id);
+    res.status(201).json({
+      secret,
+      otpauthUri: MfaService.getOtpAuthUri(user.email, secret, 'Dear Hills'),
+      message: 'Add this secret to an authenticator app, then confirm with a 6-digit code.',
+    });
+  });
+
+  router.post('/mfa/confirm', authLimiter(10), requireAuth, (req, res) => {
+    const input = parse(z.object({ code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code.') }), req.body);
+    const user = queryOne<{ mfa_secret: string | null; mfa_enabled_at: string | null }>(
+      db,
+      'SELECT mfa_secret, mfa_enabled_at FROM users WHERE id = ?',
+      req.user!.id,
+    );
+    if (!user?.mfa_secret) {
+      throw badRequest('Start enrolment first so an authenticator secret exists.');
+    }
+    if (mfaEnabled(user)) {
+      throw conflict('Two-step verification is already enabled.');
+    }
+    if (!MfaService.verifyToken(user.mfa_secret, input.code)) {
+      throw badRequest('That code is not correct. Check the authenticator clock and try again.');
+    }
+    execute(
+      db,
+      'UPDATE users SET mfa_enabled_at = ?, updated_at = ? WHERE id = ?',
+      new Date().toISOString(),
+      new Date().toISOString(),
+      req.user!.id,
+    );
+    audit(db, req.user!, 'auth.mfa.enabled', 'user', req.user!.id);
+    res.json({ ok: true, enabled: true, message: 'Two-step verification is now required at sign-in.' });
+  });
+
+  router.post('/mfa/disable', authLimiter(10), requireAuth, (req, res) => {
+    const input = parse(
+      z.object({
+        code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code.'),
+        password: z.string().max(200).optional(),
+      }),
+      req.body,
+    );
+    const user = queryOne<{ password_hash: string; mfa_secret: string | null; mfa_enabled_at: string | null }>(
+      db,
+      'SELECT password_hash, mfa_secret, mfa_enabled_at FROM users WHERE id = ?',
+      req.user!.id,
+    );
+    if (!user || !mfaEnabled(user) || !user.mfa_secret) {
+      throw badRequest('Two-step verification is not enabled.');
+    }
+    if (hasUsablePassword(user.password_hash)) {
+      if (!input.password || !verifyPassword(input.password, user.password_hash)) {
+        throw unauthorized('Enter your current password to disable two-step verification.');
+      }
+    }
+    if (!MfaService.verifyToken(user.mfa_secret, input.code)) {
+      throw unauthorized('That code is not correct.');
+    }
+    tx(db, () => {
+      execute(
+        db,
+        'UPDATE users SET mfa_secret = NULL, mfa_enabled_at = NULL, updated_at = ? WHERE id = ?',
+        new Date().toISOString(),
+        req.user!.id,
+      );
+      execute(db, 'DELETE FROM mfa_challenges WHERE user_id = ?', req.user!.id);
+    });
+    audit(db, req.user!, 'auth.mfa.disabled', 'user', req.user!.id);
+    res.json({ ok: true, enabled: false, message: 'Two-step verification disabled.' });
   });
 
   /**
@@ -311,12 +527,17 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
       const user = queryOne<AuthUserRow>(
         db,
         `SELECT u.id, u.email, u.password_hash, u.is_disabled, u.email_verified,
+                u.mfa_secret, u.mfa_enabled_at,
                 COALESCE(p.full_name, '') AS full_name
            FROM users u LEFT JOIN profiles p ON p.id = u.id WHERE u.id = ?`,
         identity.user_id,
       );
       if (!user) throw unauthorized();
       if (user.is_disabled) throw disabledError();
+      if (mfaEnabled(user)) {
+        res.json(mfaRequiredResponse(db, user.id));
+        return;
+      }
       touchGoogleIdentity(db, user.id, profile);
       const body = signInResponse(db, req, res, user.id);
       audit(db, { id: user.id, email: user.email }, 'auth.google.signin', 'user', user.id);
@@ -363,12 +584,17 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
         const racedUser = queryOne<AuthUserRow>(
           db,
           `SELECT u.id, u.email, u.password_hash, u.is_disabled, u.email_verified,
+                  u.mfa_secret, u.mfa_enabled_at,
                   COALESCE(p.full_name, '') AS full_name
              FROM users u LEFT JOIN profiles p ON p.id = u.id WHERE u.id = ?`,
           raced.user_id,
         );
         if (!racedUser) throw error;
         if (racedUser.is_disabled) throw disabledError();
+        if (mfaEnabled(racedUser)) {
+          res.json(mfaRequiredResponse(db, racedUser.id));
+          return;
+        }
         const body = signInResponse(db, req, res, racedUser.id);
         res.json(body);
         return;
