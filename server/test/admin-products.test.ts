@@ -337,6 +337,25 @@ describe('Admin Product Management', () => {
       const row = queryOne<{ status: string }>(db, 'SELECT status FROM products WHERE id = ?', created.body.id);
       expect(row?.status).toBe('draft');
     });
+
+    it('refuses to approve a regulated product through PATCH when category information is missing', async () => {
+      const created = await mutate(adminAgent.post('/api/admin/products')).send({
+        name: 'Draft Weave Approved By Patch',
+        pricePaise: 90_000,
+        stock: 4,
+        description: 'A handwoven runner that should not be approved without its material description.',
+      });
+      expect(created.status).toBe(201);
+
+      const patched = await mutate(adminAgent.patch(`/api/admin/products/${created.body.id}`)).send({
+        status: 'approved',
+      });
+      expect(patched.status).toBe(400);
+      expect(patched.body.error.fields).toHaveProperty('materials');
+
+      const row = queryOne<{ status: string }>(db, 'SELECT status FROM products WHERE id = ?', created.body.id);
+      expect(row?.status).toBe('draft');
+    });
   });
 
   describe('Access Control & Security', () => {

@@ -35,6 +35,20 @@ const sessionSameSite: 'lax' | 'strict' | 'none' =
 
 const databasePath = process.env.DATABASE_PATH ?? path.resolve(process.cwd(), 'data', 'pahadi-roots.db');
 
+/**
+ * Express `trust proxy` accepts a hop count or a subnet list. A production
+ * deployment behind Caddy/nginx must trust the proxy or every client shares
+ * the proxy's rate-limit bucket. Operators can still disable it explicitly.
+ */
+function trustProxySetting(): boolean | number {
+  const raw = process.env.TRUST_PROXY?.trim();
+  if (raw) {
+    if (/^\d+$/.test(raw)) return Number(raw);
+    return bool(raw, false);
+  }
+  return isProduction ? 1 : false;
+}
+
 function resolveStorageDirectory(configured: string | undefined, subdir: string): string {
   if (configured && configured.trim()) {
     return path.resolve(configured.trim());
@@ -71,7 +85,7 @@ export const env = {
   databasePath,
   uploadDir,
   privateDocsDir,
-  trustProxy: bool(process.env.TRUST_PROXY, false),
+  trustProxy: trustProxySetting(),
   sessionDays: int(process.env.SESSION_DAYS, 30),
   sessionIdleDays: int(process.env.SESSION_IDLE_DAYS, 7),
   sessionSameSite,
@@ -127,6 +141,7 @@ export const env = {
     email: process.env.SHIPROCKET_EMAIL ?? '',
     password: process.env.SHIPROCKET_PASSWORD ?? '',
     pickupLocation: process.env.SHIPROCKET_PICKUP_LOCATION ?? '',
+    webhookSecret: (process.env.SHIPPING_WEBHOOK_SECRET ?? '').trim(),
     get configured() {
       return Boolean(this.email && this.password);
     },
@@ -145,6 +160,9 @@ export function assertProductionConfig(): string[] {
     if (!env.appUrl.startsWith('https://')) problems.push('CRITICAL: APP_URL must be an https:// URL in production.');
     if (!env.razorpay.configured) problems.push('Razorpay keys are not configured — live checkout is disabled and orders remain pending payment.');
     if (!env.razorpay.webhookSecret) problems.push('RAZORPAY_WEBHOOK_SECRET is not configured — payment captures will not be verified by webhook.');
+    if (!env.shiprocket.webhookSecret) {
+      problems.push('SHIPPING_WEBHOOK_SECRET is not configured — courier webhooks are rejected in production.');
+    }
     if (!env.email.configured) {
       problems.push('No transactional email provider is configured — Resend (RESEND_API_KEY) or SMTP is required for order email.');
     } else if (env.email.fromIsPlaceholder) {

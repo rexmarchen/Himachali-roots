@@ -1,7 +1,9 @@
 import type { Express } from 'express';
 import request from 'supertest';
+import crypto from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { closeDb, execute, queryOne, type Db } from '../db.js';
+import { env } from '../env.js';
 import { commissionOn, resolveCommissionBp } from '../lib/pricing.js';
 import { checkCourierServiceability } from '../lib/shipping.js';
 import { markOrderPaid } from '../lib/orders.js';
@@ -230,11 +232,51 @@ describe('Automated Shipping & Courier Lifecycle', () => {
     expect(duplicateWebhookRes.status).toBe(200);
     expect(duplicateWebhookRes.body.processed).toBe(false); // Ignored duplicate
   });
+
+  it('rejects unauthenticated courier webhooks once a shipping secret is configured', async () => {
+    const originalSecret = env.shiprocket.webhookSecret;
+    const secret = 'shipping_webhook_test_secret';
+    (env.shiprocket as { webhookSecret: string }).webhookSecret = secret;
+    try {
+      const payload = {
+        awb: 'DH_AWB_UNAUTHENTICATED',
+        current_status: 'DELIVERED',
+        current_status_desc: 'Delivered to recipient.',
+      };
+
+      const anonymous = await request(app).post('/api/webhooks/shipping').send(payload);
+      expect(anonymous.status).toBe(401);
+
+      const wrongToken = await request(app)
+        .post('/api/webhooks/shipping')
+        .set('x-shipping-token', 'wrong_secret')
+        .send(payload);
+      expect(wrongToken.status).toBe(401);
+
+      const withToken = await request(app)
+        .post('/api/webhooks/shipping')
+        .set('x-shipping-token', secret)
+        .send(payload);
+      expect(withToken.status).toBe(200);
+
+      const raw = JSON.stringify(payload);
+      const signature = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+      const withSignature = await request(app)
+        .post('/api/webhooks/shipping')
+        .set('content-type', 'application/json')
+        .set('x-shipping-signature', signature)
+        .send(raw);
+      expect(withSignature.status).toBe(200);
+    } finally {
+      (env.shiprocket as { webhookSecret: string }).webhookSecret = originalSecret;
+    }
+  });
 });
 
 describe('Admin Payout Controls & Holds', () => {
   it('allows an administrator to place and release a payout hold with audit reasons', async () => {
     const admin = await login(app, 'admin@test.local');
+    execute(db, "UPDATE seller_profiles SET payout_status = 'verified' WHERE id = ?", IDS.seller);
 
     // Place payout hold
     const holdRes = await mutate(admin.post(`/api/admin/sellers/${IDS.seller}/payouts/hold`))
@@ -261,6 +303,68 @@ describe('Admin Payout Controls & Holds', () => {
       IDS.seller,
     );
     expect(sellerProfileReleased!.payout_status).toBe('verified');
+  });
+
+  it('restores the pre-hold payout status instead of approving details on release', async () => {
+    const admin = await login(app, 'admin@test.local');
+    execute(db, "UPDATE seller_profiles SET payout_status = 'pending_verification' WHERE id = ?", IDS.seller);
+
+    const hold = await mutate(admin.post(`/api/admin/sellers/${IDS.seller}/payouts/hold`)).send({
+      reason: 'Account ownership needs a second check',
+    });
+    expect(hold.status).toBe(200);
+
+    const release = await mutate(admin.post(`/api/admin/sellers/${IDS.seller}/payouts/release`)).send({});
+    expect(release.status).toBe(200);
+
+    const status = queryOne<{ payout_status: string }>(
+      db,
+      'SELECT payout_status FROM seller_profiles WHERE id = ?',
+      IDS.seller,
+    );
+    expect(status?.payout_status).toBe('pending_verification');
+  });
+
+  it('excludes held ledger entries from a settlement batch', async () => {
+    const now = new Date().toISOString();
+    execute(
+      db,
+      `INSERT INTO seller_ledger_entries
+         (id, seller_id, type, amount_paise, status, reference, available_at, created_at)
+       VALUES ('led_hold_test', ?, 'sale', 50000, 'eligible', 'hold-test-sale', ?, ?)`,
+      IDS.seller,
+      now,
+      now,
+    );
+    const admin = await login(app, 'admin@test.local');
+    const hold = await mutate(admin.post(`/api/admin/sellers/${IDS.seller}/payouts/hold`)).send({
+      reason: 'Bank account ownership still under review',
+    });
+    expect(hold.status).toBe(200);
+
+    const blocked = await mutate(admin.post('/api/admin/settlements')).send({
+      sellerId: IDS.seller,
+      periodStart: new Date(Date.now() - 60 * 60_000).toISOString(),
+      periodEnd: new Date(Date.now() + 60 * 60_000).toISOString(),
+    });
+    expect(blocked.status).toBe(409);
+
+    const release = await mutate(admin.post(`/api/admin/sellers/${IDS.seller}/payouts/release`)).send({
+      note: 'Ownership evidence accepted',
+    });
+    expect(release.status).toBe(200);
+
+    // Releasing a hold restores the pre-hold status. Payout details still need
+    // their own verification before a batch can be prepared.
+    execute(db, "UPDATE seller_profiles SET payout_status = 'verified' WHERE id = ?", IDS.seller);
+
+    const created = await mutate(admin.post('/api/admin/settlements')).send({
+      sellerId: IDS.seller,
+      periodStart: new Date(Date.now() - 60 * 60_000).toISOString(),
+      periodEnd: new Date(Date.now() + 60 * 60_000).toISOString(),
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.entryCount).toBe(1);
   });
 
   it('rejects unauthorized users from placing payout holds', async () => {
@@ -302,6 +406,14 @@ describe('Admin Payout Controls & Holds', () => {
     expect(saveRes.body.details.accountNumberMasked).toBe('••••••••3645');
     expect(saveRes.body.details.ifscCode).toBe('SBIN0001234');
 
+    // Seller entry alone is not verification: the bank details await review.
+    const pending = queryOne<{ payout_status: string }>(
+      db,
+      'SELECT payout_status FROM seller_profiles WHERE id = ?',
+      IDS.seller,
+    );
+    expect(pending?.payout_status).toBe('pending_verification');
+
     // 4. Retrieve saved details as seller
     const getRes = await seller.get('/api/seller/payout-details');
     expect(getRes.status).toBe(200);
@@ -315,6 +427,15 @@ describe('Admin Payout Controls & Holds', () => {
     expect(adminSellerRes.body.seller.payoutDetails).toBeDefined();
     expect(adminSellerRes.body.seller.payoutDetails.accountNumber).toBe('304918273645');
     expect(adminSellerRes.body.seller.payoutDetails.ifscCode).toBe('SBIN0001234');
+
+    const verifyRes = await mutate(admin.post(`/api/admin/sellers/${IDS.seller}/payouts/verify`)).send({
+      note: 'Bank details checked against cancelled cheque on file',
+    });
+    expect(verifyRes.status).toBe(200);
+    expect(
+      queryOne<{ payout_status: string }>(db, 'SELECT payout_status FROM seller_profiles WHERE id = ?', IDS.seller)
+        ?.payout_status,
+    ).toBe('verified');
   });
 
   it('admin can view comprehensive payouts overview metrics and eligible review queue', async () => {

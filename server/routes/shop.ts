@@ -7,8 +7,13 @@ import { addToCart, CART_COOKIE, ensureCart, getCartView, removeCartItem, setCar
 import { badRequest, conflict, notFound, parse, unauthorized } from '../lib/http.js';
 import { createOrder, getOrderView, initializeOrderPayment, markOrderPaid, notifyOrderPaid } from '../lib/orders.js';
 import { evaluateCoupon } from '../lib/pricing.js';
-import { verifyCheckoutSignature, verifyWebhookSignature } from '../lib/payments.js';
+import { fetchRazorpayPayment, type RazorpayPayment, verifyCheckoutSignature, verifyShippingWebhook, verifyWebhookSignature } from '../lib/payments.js';
 import { notify } from '../lib/email.js';
+
+export interface ShopRouterDeps {
+  /** Injected so provider verification can be tested without network calls. */
+  fetchRazorpayPayment: (paymentId: string, providerOrderId: string) => Promise<RazorpayPayment>;
+}
 
 const addressSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
@@ -25,8 +30,9 @@ function cartTokenFrom(req: { cookies?: unknown }): string | null {
   return cookies?.[CART_COOKIE] ?? null;
 }
 
-export function shopRouter(db: Db): Router {
+export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
   const router = Router();
+  const fetchPayment = deps.fetchRazorpayPayment ?? ((paymentId: string) => fetchRazorpayPayment(paymentId));
 
   router.get('/cart', (req, res) => {
     const { cart, token } = ensureCart(db, req.user?.id ?? null, cartTokenFrom(req));
@@ -153,18 +159,67 @@ export function shopRouter(db: Db): Router {
     if (!verifyCheckoutSignature(input.razorpayOrderId, input.razorpayPaymentId, input.razorpaySignature)) {
       throw badRequest('Payment signature verification failed. No payment was recorded.');
     }
-    const payment = queryOne<{ order_id: string; amount_paise: number; status: string }>(
+    const payment = queryOne<{ order_id: string; amount_paise: number; status: string; provider: string }>(
       db,
-      'SELECT order_id, amount_paise, status FROM payments WHERE provider_order_id = ?',
+      'SELECT order_id, amount_paise, status, provider FROM payments WHERE provider_order_id = ?',
       input.razorpayOrderId,
     );
     if (!payment) throw notFound('Payment record not found for this order.');
+    if (payment.provider !== 'razorpay') {
+      throw badRequest('That payment was not created for online checkout.');
+    }
     const order = queryOne<{ user_id: string; status: string }>(db, 'SELECT user_id, status FROM orders WHERE id = ?', payment.order_id);
     if (!order) throw notFound('Order not found.');
     if (order.user_id !== req.user!.id) throw unauthorized('This payment does not belong to your account.');
     if (payment.status === 'paid') {
       res.json({ order: getOrderView(db, payment.order_id), alreadyProcessed: true });
       return;
+    }
+    if (payment.status === 'failed' || payment.status === 'cancelled') {
+      throw conflict('That payment attempt did not succeed. Start a new payment.');
+    }
+
+    // A valid checkout signature proves the payment id was issued for this
+    // key. Confirm the authoritative provider record before releasing stock or
+    // creating seller earnings.
+    const providerPayment = await fetchPayment(input.razorpayPaymentId, input.razorpayOrderId);
+    const mismatch = (type: string, summary: Record<string, unknown>) =>
+      execute(
+        db,
+        `INSERT OR IGNORE INTO payment_events (id, provider, provider_event_id, order_id, type, summary)
+         VALUES (?, 'razorpay', ?, ?, ?, ?)`,
+        `pev_checkout_${input.razorpayPaymentId}`.slice(0, 80),
+        `checkout:${input.razorpayPaymentId}:${type}`.slice(0, 120),
+        payment.order_id,
+        type,
+        JSON.stringify(summary),
+      );
+
+    if (providerPayment.id !== input.razorpayPaymentId || providerPayment.order_id !== input.razorpayOrderId) {
+      mismatch('payment.reference_mismatch', {
+        expectedOrderId: input.razorpayOrderId,
+        providerOrderId: providerPayment.order_id,
+        expectedPaymentId: input.razorpayPaymentId,
+        providerPaymentId: providerPayment.id,
+      });
+      throw badRequest('The payment reference does not match this order.');
+    }
+    if ((providerPayment.currency ?? 'INR').toUpperCase() !== 'INR') {
+      mismatch('payment.currency_mismatch', { expected: 'INR', received: providerPayment.currency });
+      throw badRequest('The payment currency does not match this order.');
+    }
+    if (Number(providerPayment.amount) !== payment.amount_paise) {
+      mismatch('payment.amount_mismatch', {
+        expected: payment.amount_paise,
+        received: providerPayment.amount,
+      });
+      throw badRequest('The paid amount does not match the order total.');
+    }
+    if (providerPayment.status !== 'captured' && providerPayment.captured !== true) {
+      throw conflict(
+        `Razorpay reports this payment as "${providerPayment.status}". It has not been captured, so the order is still awaiting payment.`,
+        'payment_not_captured',
+      );
     }
 
     markOrderPaid(db, {
@@ -173,8 +228,8 @@ export function shopRouter(db: Db): Router {
       providerEventId: `checkout:${input.razorpayPaymentId}`,
       providerPaymentId: input.razorpayPaymentId,
       providerOrderId: input.razorpayOrderId,
-      amountPaise: payment.amount_paise,
-      method: 'checkout',
+      amountPaise: Number(providerPayment.amount),
+      method: providerPayment.method ?? 'checkout',
       summary: { source: 'checkout_verification' },
     });
     await notifyOrderPaid(db, payment.order_id);
@@ -255,7 +310,18 @@ export function shopRouter(db: Db): Router {
           );
           if (payment) {
             const amount = Number(entity.amount ?? 0);
-            if (amount !== payment.amount_paise) {
+            if (entity.status && entity.status !== 'captured') {
+              execute(
+                db,
+                `INSERT OR IGNORE INTO payment_events (id, provider, provider_event_id, order_id, type, summary)
+                 VALUES (?, 'razorpay', ?, ?, ?, ?)`,
+                `pev_${providerEventId}`.slice(0, 80),
+                providerEventId,
+                payment.order_id,
+                'payment.not_captured',
+                JSON.stringify({ paymentId: entity.id, status: entity.status }),
+              );
+            } else if (amount !== payment.amount_paise) {
               execute(
                 db,
                 `INSERT OR IGNORE INTO payment_events (id, provider, provider_event_id, order_id, type, summary)
@@ -312,7 +378,11 @@ export function shopRouter(db: Db): Router {
             JSON.stringify({ paymentId: entity.id }),
           );
         }
-      } else if (eventType === 'refund.processed' || eventType === 'refund.created') {
+      } else if (
+        eventType === 'refund.processed' ||
+        eventType === 'refund.created' ||
+        eventType === 'refund.failed'
+      ) {
         const entity = (body.payload?.refund?.entity ?? {}) as {
           id?: string;
           payment_id?: string;
@@ -326,7 +396,25 @@ export function shopRouter(db: Db): Router {
             'SELECT id, order_id, status FROM refunds WHERE provider_refund_id = ?',
             entity.id,
           );
-          if (refund && entity.status === 'processed') {
+          if (refund && (eventType === 'refund.failed' || entity.status === 'failed')) {
+            if (refund.status !== 'completed') {
+              execute(
+                db,
+                "UPDATE refunds SET status = 'failed', provider_status = ? WHERE id = ?",
+                entity.status ?? 'failed',
+                refund.id,
+              );
+            }
+            execute(
+              db,
+              `INSERT OR IGNORE INTO payment_events (id, provider, provider_event_id, order_id, type, summary)
+               VALUES (?, 'razorpay', ?, ?, 'refund.failed', ?)`,
+              `pev_${providerEventId}`.slice(0, 80),
+              providerEventId,
+              refund.order_id,
+              JSON.stringify({ refundId: entity.id, status: entity.status }),
+            );
+          } else if (refund && entity.status === 'processed') {
             finalizeRefund(db, refund.id, entity.id, entity.status);
             const order = queryOne<{ email: string; user_id: string; order_number: string }>(
               db,
@@ -382,6 +470,23 @@ export function shopRouter(db: Db): Router {
   
   // Courier tracking webhook (Shiprocket / Logistics provider)
   router.post(['/webhooks/shipping', '/webhooks/shiprocket'], async (req, res) => {
+    const raw = (req as typeof req & { rawBody?: Buffer }).rawBody;
+    if (env.shiprocket.webhookSecret) {
+      const valid = verifyShippingWebhook({
+        rawBody: raw,
+        signature: req.get('x-shipping-signature') ?? req.get('x-shiprocket-signature'),
+        token: req.get('x-shipping-token') ?? req.get('x-api-key'),
+      });
+      if (!valid) {
+        res.status(401).json({ error: 'Invalid shipping webhook credentials.' });
+        return;
+      }
+    } else if (env.isProduction) {
+      // Fail closed in production: an unauthenticated courier callback can
+      // change delivery state and release seller earnings.
+      res.status(503).json({ error: 'Shipping webhook secret not configured.' });
+      return;
+    }
     try {
       const { processShippingWebhook } = await import('../lib/shipping.js');
       const result = await processShippingWebhook(db, req.body as Record<string, unknown>);

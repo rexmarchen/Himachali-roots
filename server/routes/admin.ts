@@ -700,12 +700,16 @@ export function adminRouter(db: Db): Router {
       care_instructions: string | null;
       weight_g: number | null;
       compliance_json: string | null;
+      variety_grade: string | null;
+      harvest_info: string | null;
+      dispatch_conditions: string | null;
       category_slug: string | null;
       category_name: string | null;
     }>(
       db,
       `SELECT p.id, p.name, p.status, p.seller_id, p.description, p.materials, p.dimensions,
               p.care_instructions, p.weight_g, p.compliance_json,
+              p.variety_grade, p.harvest_info, p.dispatch_conditions,
               c.slug AS category_slug, c.name AS category_name,
               (SELECT COUNT(*) FROM product_images pi WHERE pi.product_id = p.id) AS images
          FROM products p LEFT JOIN categories c ON c.id = p.category_id
@@ -1062,6 +1066,61 @@ export function adminRouter(db: Db): Router {
     const now = new Date().toISOString();
     const nextStatus = input.status ?? product.status;
 
+    // A status change to approved must not bypass the same category-specific
+    // publication checks used by the publish endpoint. Re-check whenever the
+    // listing is being approved or its compliance-relevant fields change.
+    if (
+      nextStatus === 'approved' &&
+      (input.status === 'approved' ||
+        input.categoryId !== undefined ||
+        input.materials !== undefined ||
+        input.weightG !== undefined ||
+        input.careInstructions !== undefined)
+    ) {
+      const current = queryOne<{
+        materials: string | null;
+        dimensions: string | null;
+        care_instructions: string | null;
+        weight_g: number | null;
+        compliance_json: string | null;
+        variety_grade: string | null;
+        harvest_info: string | null;
+        dispatch_conditions: string | null;
+        category_id: string | null;
+      }>(
+        db,
+        `SELECT materials, dimensions, care_instructions, weight_g, compliance_json,
+                variety_grade, harvest_info, dispatch_conditions, category_id
+           FROM products WHERE id = ?`,
+        product.id,
+      );
+      const categoryId = input.categoryId ?? current?.category_id ?? null;
+      const category = categoryId
+        ? queryOne<{ slug: string; name: string }>(db, 'SELECT slug, name FROM categories WHERE id = ?', categoryId)
+        : undefined;
+      const application = latestApplication(db, product.seller_id);
+      const applicationData = parseJson<Record<string, unknown>>(application?.data_json ?? null, {});
+      const compliance = validateProductCompliance({
+        categorySlug: category?.slug,
+        categoryName: category?.name,
+        product: {
+          materials: input.materials !== undefined ? input.materials : (current?.materials ?? null),
+          dimensions: current?.dimensions ?? null,
+          care_instructions:
+            input.careInstructions !== undefined ? input.careInstructions : (current?.care_instructions ?? null),
+          weight_g: input.weightG !== undefined ? input.weightG : (current?.weight_g ?? null),
+          compliance_json: current?.compliance_json ?? null,
+          variety_grade: current?.variety_grade ?? null,
+          harvest_info: current?.harvest_info ?? null,
+          dispatch_conditions: current?.dispatch_conditions ?? null,
+        },
+        sellerFssaiNumber: typeof applicationData.fssaiNumber === 'string' ? applicationData.fssaiNumber : null,
+      });
+      if (Object.keys(compliance.errors).length) {
+        throw badRequest(firstComplianceError(compliance.errors), compliance.errors);
+      }
+    }
+
     tx(db, () => {
       execute(
         db,
@@ -1133,12 +1192,16 @@ export function adminRouter(db: Db): Router {
       care_instructions: string | null;
       weight_g: number | null;
       compliance_json: string | null;
+      variety_grade: string | null;
+      harvest_info: string | null;
+      dispatch_conditions: string | null;
       category_slug: string | null;
       category_name: string | null;
     }>(
       db,
       `SELECT p.id, p.status, p.seller_id, p.materials, p.dimensions, p.care_instructions, p.weight_g,
-              p.compliance_json, c.slug AS category_slug, c.name AS category_name
+              p.compliance_json, p.variety_grade, p.harvest_info, p.dispatch_conditions,
+              c.slug AS category_slug, c.name AS category_name
          FROM products p LEFT JOIN categories c ON c.id = p.category_id
         WHERE p.id = ?`,
       req.params.id,
@@ -2037,7 +2100,7 @@ export function adminRouter(db: Db): Router {
         (SELECT COALESCE(SUM(amount_paise), 0) FROM seller_ledger_entries WHERE status = 'pending') AS pendingAllocationsPaise,
         (SELECT COUNT(*) FROM seller_orders WHERE status IN ('pending', 'confirmed', 'packed', 'shipped')) AS ordersAwaitingDelivery,
         (SELECT COUNT(*) FROM seller_orders WHERE status = 'delivered' AND delivered_at > datetime('now', '-7 days')) AS ordersInReturnWindow,
-        (SELECT COALESCE(SUM(amount_paise), 0) FROM seller_ledger_entries WHERE status = 'eligible' AND settlement_id IS NULL AND (available_at IS NULL OR available_at <= datetime('now'))) AS eligibleReviewPaise,
+        (SELECT COALESCE(SUM(amount_paise), 0) FROM seller_ledger_entries WHERE status = 'eligible' AND settlement_id IS NULL AND hold_reason IS NULL AND (available_at IS NULL OR available_at <= datetime('now'))) AS eligibleReviewPaise,
         (SELECT COALESCE(SUM(net_paise), 0) FROM settlement_batches WHERE status = 'draft') AS approvedBatchesPaise,
         (SELECT COALESCE(SUM(net_paise), 0) FROM settlement_batches WHERE status = 'paid') AS settledPaise,
         (SELECT COALESCE(SUM(ABS(amount_paise)), 0) FROM seller_ledger_entries WHERE type IN ('reversal', 'adjustment') OR status = 'reversed') AS reversedPaise,
@@ -2214,9 +2277,9 @@ export function adminRouter(db: Db): Router {
       }),
       req.body,
     );
-    const seller = queryOne<{ id: string; business_name: string }>(
+    const seller = queryOne<{ id: string; business_name: string; payout_status: string }>(
       db,
-      'SELECT id, business_name FROM seller_profiles WHERE id = ?',
+      'SELECT id, business_name, payout_status FROM seller_profiles WHERE id = ?',
       req.params.id,
     );
     if (!seller) throw notFound('Seller not found.');
@@ -2225,7 +2288,10 @@ export function adminRouter(db: Db): Router {
     tx(db, () => {
       execute(
         db,
-        "UPDATE seller_profiles SET payout_status = 'blocked' WHERE id = ?",
+        `UPDATE seller_profiles
+            SET payout_status_before_hold = CASE WHEN payout_status = 'blocked' THEN payout_status_before_hold ELSE payout_status END,
+                payout_status = 'blocked'
+          WHERE id = ?`,
         seller.id,
       );
       execute(
@@ -2254,17 +2320,25 @@ export function adminRouter(db: Db): Router {
       }),
       req.body,
     );
-    const seller = queryOne<{ id: string; business_name: string }>(
+    const seller = queryOne<{ id: string; business_name: string; payout_status: string; payout_status_before_hold: string | null; payout_details_json: string | null }>(
       db,
-      'SELECT id, business_name FROM seller_profiles WHERE id = ?',
+      'SELECT id, business_name, payout_status, payout_status_before_hold, payout_details_json FROM seller_profiles WHERE id = ?',
       req.params.id,
     );
     if (!seller) throw notFound('Seller not found.');
 
+    const restored =
+      seller.payout_status_before_hold && seller.payout_status_before_hold !== 'blocked'
+        ? seller.payout_status_before_hold
+        : seller.payout_details_json
+          ? 'pending_verification'
+          : 'not_started';
+
     tx(db, () => {
       execute(
         db,
-        "UPDATE seller_profiles SET payout_status = 'verified' WHERE id = ?",
+        'UPDATE seller_profiles SET payout_status = ?, payout_status_before_hold = NULL WHERE id = ?',
+        restored,
         seller.id,
       );
       execute(
@@ -2280,6 +2354,46 @@ export function adminRouter(db: Db): Router {
     });
 
     res.json({ ok: true, message: `Payout hold released for ${seller.business_name}.` });
+  });
+
+  /**
+   * Seller-entered bank details are not trusted until an administrator has
+   * checked them. This is a manual review step, not a bank-account validation
+   * service.
+   */
+  router.post('/sellers/:id/payouts/verify', (req, res) => {
+    const input = parse(
+      z.object({
+        note: z.string().trim().min(5, 'Record what was checked.').max(500),
+      }),
+      req.body,
+    );
+    const seller = queryOne<{ id: string; business_name: string; payout_details_json: string | null; payout_status: string }>(
+      db,
+      'SELECT id, business_name, payout_details_json, payout_status FROM seller_profiles WHERE id = ?',
+      req.params.id,
+    );
+    if (!seller) throw notFound('Seller not found.');
+    if (!seller.payout_details_json) {
+      throw badRequest('The seller has not submitted payout details yet.');
+    }
+    if (seller.payout_status === 'blocked') {
+      throw conflict('Release the payout hold before verifying payout details.');
+    }
+
+    execute(
+      db,
+      "UPDATE seller_profiles SET payout_status = 'verified', payout_status_before_hold = NULL, updated_at = ? WHERE id = ?",
+      new Date().toISOString(),
+      seller.id,
+    );
+    audit(db, req.user!, 'seller.payout_details_verified', 'seller_profile', seller.id, {
+      payoutStatus: seller.payout_status,
+    }, {
+      payoutStatus: 'verified',
+      note: input.note,
+    });
+    res.json({ ok: true, message: `Payout details verified for ${seller.business_name}.` });
   });
 
   /* ------------------------------ Customers ---------------------------- */

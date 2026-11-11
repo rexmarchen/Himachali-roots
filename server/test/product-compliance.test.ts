@@ -26,6 +26,7 @@ describe('category publication compliance', () => {
     expect(complianceGroupFor('knitwear')).toBe('clothing');
     expect(complianceGroupFor('caps-and-headwear')).toBe('clothing');
     expect(complianceGroupFor('woodcraft')).toBe('craft');
+    expect(complianceGroupFor('fruits-and-fresh-produce')).toBe('raw_produce');
     expect(complianceGroupFor('stationery')).toBe('general');
   });
 
@@ -92,5 +93,28 @@ describe('category publication compliance', () => {
     const result = validateProductCompliance({ categorySlug: 'stationery', product: baseProduct });
     expect(result.group).toBe('general');
     expect(result.errors).toEqual({});
+  });
+
+  it('requires harvest transparency, not packaged-food labelling, for fresh produce', () => {
+    const missing = validateProductCompliance({ categorySlug: 'fruits-and-fresh-produce', product: baseProduct });
+    expect(missing.group).toBe('raw_produce');
+    expect(missing.errors).toMatchObject({
+      varietyGrade: expect.any(String),
+      harvestInfo: expect.any(String),
+      dispatchConditions: expect.any(String),
+    });
+    expect(missing.errors['compliance.fssaiLicense']).toBeUndefined();
+    expect(missing.errors['compliance.ingredients']).toBeUndefined();
+
+    const complete = validateProductCompliance({
+      categorySlug: 'fruits-and-fresh-produce',
+      product: {
+        ...baseProduct,
+        variety_grade: 'Royal Delicious · Extra Fancy',
+        harvest_info: 'October 2026 harvest, Kotgarh valley',
+        dispatch_conditions: 'Ventilated 5-ply cartons, 48-hour express dispatch',
+      },
+    });
+    expect(complete.errors).toEqual({});
   });
 });

@@ -21,6 +21,13 @@ beforeEach(() => {
 });
 
 describe('public storefront', () => {
+  it('sends a restrictive Permissions-Policy header', async () => {
+    const response = await request(app).get('/api/config');
+    expect(response.status).toBe(200);
+    expect(String(response.headers['permissions-policy'])).toContain('camera=()');
+    expect(String(response.headers['permissions-policy'])).toContain('microphone=()');
+  });
+
   it('serves the home payload used by the landing page', async () => {
     execute(db, 'UPDATE products SET is_featured = 1 WHERE id = ?', IDS.product);
     execute(db, "UPDATE products SET region = 'Kullu' WHERE id = ?", IDS.product);

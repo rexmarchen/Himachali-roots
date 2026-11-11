@@ -148,6 +148,17 @@ describe('seller ledger and settlements', () => {
       periodEnd: new Date(Date.now() + 3600_000).toISOString(),
     };
 
+    // Bank/UPI details are independent of the ledger: an unverified seller
+    // cannot have a settlement batch prepared for them.
+    const unverified = await mutate(admin.post('/api/admin/settlements')).send({
+      sellerId: IDS.seller,
+      ...period,
+    });
+    expect(unverified.status).toBe(409);
+    expect(unverified.body.error.message).toContain('not verified');
+
+    execute(db, "UPDATE seller_profiles SET payout_status = 'verified' WHERE id = ?", IDS.seller);
+
     const tooEarly = await mutate(admin.post('/api/admin/settlements')).send({
       sellerId: IDS.seller,
       ...period,
@@ -169,6 +180,15 @@ describe('seller ledger and settlements', () => {
     expect(created.status).toBe(201);
     expect(created.body.netPaise).toBe(88_000);
     expect(created.body.entryCount).toBe(2);
+
+    // Details changed after the batch was prepared must block the payment too.
+    execute(db, "UPDATE seller_profiles SET payout_status = 'pending_verification' WHERE id = ?", IDS.seller);
+    const staleDetails = await mutate(admin.post(`/api/admin/settlements/${created.body.batchId}/pay`)).send({
+      providerReference: 'BANK-REF-0000',
+    });
+    expect(staleDetails.status).toBe(409);
+    expect(staleDetails.body.error.message).toContain('not verified');
+    execute(db, "UPDATE seller_profiles SET payout_status = 'verified' WHERE id = ?", IDS.seller);
 
     const paid = await mutate(admin.post(`/api/admin/settlements/${created.body.batchId}/pay`)).send({
       providerReference: 'BANK-REF-1234',

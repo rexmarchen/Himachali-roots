@@ -1654,10 +1654,14 @@ export function sellerRouter(db: Db): Router {
       care_instructions: string | null;
       changes_requested_at: string | null;
       compliance_json: string | null;
+      variety_grade: string | null;
+      harvest_info: string | null;
+      dispatch_conditions: string | null;
     }>(
       db,
       `SELECT p.id, p.name, p.status, p.description, p.price_paise, p.weight_g, p.sku, p.category_id,
               p.materials, p.dimensions, p.care_instructions, p.changes_requested_at, p.compliance_json,
+              p.variety_grade, p.harvest_info, p.dispatch_conditions,
               c.slug AS category_slug, c.name AS category_name
          FROM products p LEFT JOIN categories c ON c.id = p.category_id
         WHERE p.id = ? AND p.seller_id = ?`,
@@ -2642,7 +2646,7 @@ export function sellerRouter(db: Db): Router {
     execute(
       db,
       `UPDATE seller_profiles
-          SET payout_details_json = ?, payout_status = 'verified', updated_at = ?
+          SET payout_details_json = ?, payout_status = 'pending_verification', updated_at = ?
         WHERE id = ?`,
       JSON.stringify(cleanDetails),
       new Date().toISOString(),
@@ -2658,7 +2662,8 @@ export function sellerRouter(db: Db): Router {
 
     res.json({
       ok: true,
-      message: 'Bank payout details updated successfully for manual settlements.',
+      message:
+        'Bank payout details saved. They are pending review by the Dear Hills team before any manual settlement is released.',
       details: {
         beneficiaryName: cleanDetails.beneficiaryName,
         bankName: cleanDetails.bankName,

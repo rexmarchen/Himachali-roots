@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { Express } from 'express';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { closeDb, execute, queryAll, queryOne, type Db } from '../db.js';
 import { env } from '../env.js';
 import {
@@ -14,6 +14,7 @@ import {
   orderView,
   resetDb,
   seedFixtures,
+  setRazorpayPaymentOverride,
   setupTestApp,
   sellerOrderFor,
 } from './helpers.js';
@@ -312,6 +313,10 @@ describe('payment verification and obsolete route deprecation', () => {
     (env.razorpay as any).keySecret = originalKeySecret;
   });
 
+  afterEach(() => {
+    setRazorpayPaymentOverride(null);
+  });
+
   it('verifies valid HMAC signature, transitions order to paid, and is idempotent on duplicate replay', async () => {
     const customer = await login(app, 'customer@test.local');
     await addToCart(app, customer, IDS.product, 1);
@@ -415,6 +420,139 @@ describe('payment verification and obsolete route deprecation', () => {
 
     expect(response.status).toBe(401);
     expect(response.body.error.message).toContain('does not belong to your account');
+  });
+
+  it('rejects a provider payment recorded against a different order', async () => {
+    const customer = await login(app, 'customer@test.local');
+    await addToCart(app, customer, IDS.product, 1);
+    const created = await checkout(app, customer);
+    const orderId = created.body.order.id as string;
+    const razorpayOrderId = 'order_rzp_mismatch_order';
+    const razorpayPaymentId = 'pay_rzp_mismatch_order';
+
+    execute(
+      db,
+      'UPDATE payments SET provider_order_id = ?, provider = ? WHERE order_id = ?',
+      razorpayOrderId,
+      'razorpay',
+      orderId,
+    );
+
+    setRazorpayPaymentOverride((paymentId) => ({
+      id: paymentId,
+      order_id: 'order_rzp_someone_else',
+      amount: 100,
+      currency: 'INR',
+      status: 'captured',
+      method: 'card',
+    }));
+
+    const signature = crypto
+      .createHmac('sha256', TEST_KEY_SECRET)
+      .update(razorpayOrderId + '|' + razorpayPaymentId)
+      .digest('hex');
+
+    const response = await mutate(customer.post('/api/payments/verify')).send({
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature: signature,
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toContain('payment reference does not match');
+    const order = queryOne<{ status: string }>(db, 'SELECT status FROM orders WHERE id = ?', orderId);
+    expect(order?.status).toBe('pending_payment');
+  });
+
+  it('rejects a provider payment whose amount does not match the order total', async () => {
+    const customer = await login(app, 'customer@test.local');
+    await addToCart(app, customer, IDS.product, 1);
+    const created = await checkout(app, customer);
+    const orderId = created.body.order.id as string;
+    const razorpayOrderId = 'order_rzp_mismatch_amount';
+    const razorpayPaymentId = 'pay_rzp_mismatch_amount';
+
+    execute(
+      db,
+      'UPDATE payments SET provider_order_id = ?, provider = ? WHERE order_id = ?',
+      razorpayOrderId,
+      'razorpay',
+      orderId,
+    );
+
+    setRazorpayPaymentOverride((paymentId, providerOrderId) => ({
+      id: paymentId,
+      order_id: providerOrderId,
+      amount: 100,
+      currency: 'INR',
+      status: 'captured',
+      method: 'card',
+    }));
+
+    const signature = crypto
+      .createHmac('sha256', TEST_KEY_SECRET)
+      .update(razorpayOrderId + '|' + razorpayPaymentId)
+      .digest('hex');
+
+    const response = await mutate(customer.post('/api/payments/verify')).send({
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature: signature,
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toContain('paid amount does not match');
+    const order = queryOne<{ status: string }>(db, 'SELECT status FROM orders WHERE id = ?', orderId);
+    expect(order?.status).toBe('pending_payment');
+  });
+
+  it('does not mark an order paid when the provider has not captured the payment', async () => {
+    const customer = await login(app, 'customer@test.local');
+    await addToCart(app, customer, IDS.product, 1);
+    const created = await checkout(app, customer);
+    const orderId = created.body.order.id as string;
+    const razorpayOrderId = 'order_rzp_not_captured';
+    const razorpayPaymentId = 'pay_rzp_not_captured';
+
+    execute(
+      db,
+      'UPDATE payments SET provider_order_id = ?, provider = ? WHERE order_id = ?',
+      razorpayOrderId,
+      'razorpay',
+      orderId,
+    );
+
+    setRazorpayPaymentOverride((paymentId, providerOrderId) => {
+      const payment = queryOne<{ amount_paise: number }>(
+        db,
+        'SELECT amount_paise FROM payments WHERE provider_order_id = ?',
+        providerOrderId,
+      );
+      return {
+        id: paymentId,
+        order_id: providerOrderId,
+        amount: payment?.amount_paise ?? 0,
+        currency: 'INR',
+        status: 'authorized',
+        method: 'card',
+      };
+    });
+
+    const signature = crypto
+      .createHmac('sha256', TEST_KEY_SECRET)
+      .update(razorpayOrderId + '|' + razorpayPaymentId)
+      .digest('hex');
+
+    const response = await mutate(customer.post('/api/payments/verify')).send({
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature: signature,
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.message).toContain('has not been captured');
+    const order = queryOne<{ status: string }>(db, 'SELECT status FROM orders WHERE id = ?', orderId);
+    expect(order?.status).toBe('pending_payment');
   });
 
   it('confirms deprecated unauthenticated payment endpoints return 404', async () => {

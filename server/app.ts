@@ -11,17 +11,19 @@ import { attachUser } from './lib/auth.js';
 import { corsMiddleware, csrfGuard, errorMiddleware } from './lib/http.js';
 import { authRouter, type AuthRouterDeps } from './routes/auth.js';
 import { publicRouter, sitemapRouter } from './routes/public.js';
-import { shopRouter } from './routes/shop.js';
+import { shopRouter, type ShopRouterDeps } from './routes/shop.js';
 import { accountRouter } from './routes/account.js';
 import { sellerRouter } from './routes/seller.js';
 import { adminRouter } from './routes/admin.js';
 
 import { MetricsRegistry } from './core/telemetry/metrics.js';
 
-export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.Express {
+export type AppDeps = Partial<AuthRouterDeps> & Partial<ShopRouterDeps>;
+
+export function createApp(db: Db, deps: AppDeps = {}): express.Express {
   const app = express();
   app.disable('x-powered-by');
-  if (env.trustProxy) app.set('trust proxy', 1);
+  if (env.trustProxy !== false) app.set('trust proxy', env.trustProxy);
 
   app.use((req, res, next) => {
     const supplied = req.get('x-request-id');
@@ -87,6 +89,13 @@ export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.E
 
   app.use('/api', corsMiddleware);
 
+  app.use((_req, res, next) => {
+    // Disable browser features the storefront never needs. Payment Sheet/Checkout
+    // does not require any of these device APIs.
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), usb=()');
+    next();
+  });
+
   app.use(
     express.json({
       limit: '250kb',
@@ -119,7 +128,7 @@ export function createApp(db: Db, deps: Partial<AuthRouterDeps> = {}): express.E
   });
   app.use('/api/auth', authRouter(db, deps));
   app.use('/api', publicRouter(db));
-  app.use('/api', shopRouter(db));
+  app.use('/api', shopRouter(db, deps));
   app.use('/api/account', accountRouter(db));
   app.use('/api/seller', sellerRouter(db));
   app.use('/api/admin', adminRouter(db));

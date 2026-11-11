@@ -103,6 +103,25 @@ export async function createRazorpayRefund(
   });
 }
 
+export interface RazorpayPayment {
+  id: string;
+  order_id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  method?: string;
+  captured?: boolean;
+}
+
+/**
+ * Fetches the authoritative payment record. A checkout signature proves the
+ * payment id was issued for this key, but only the provider record proves it
+ * was captured, for the right order, in the right amount and currency.
+ */
+export async function fetchRazorpayPayment(paymentId: string): Promise<RazorpayPayment> {
+  return razorpayRequest<RazorpayPayment>(`/payments/${encodeURIComponent(paymentId)}`);
+}
+
 /** Razorpay Checkout handler signature: HMAC_SHA256(`${order_id}|${payment_id}`, key_secret). */
 export function verifyCheckoutSignature(providerOrderId: string, paymentId: string, signature: string): boolean {
   if (!env.razorpay.configured || !signature) return false;
@@ -121,6 +140,33 @@ export function verifyWebhookSignature(rawBody: Buffer | string, signature: stri
     .update(rawBody)
     .digest('hex');
   return timingSafeEqualHex(expected, signature);
+}
+
+/**
+ * Courier webhooks are authenticated with a shared secret because Shiprocket
+ * does not sign its callback body. Accept either an HMAC-SHA256 signature of
+ * the raw body or the configured secret as a constant-time token header.
+ */
+export function verifyShippingWebhook(input: {
+  rawBody: Buffer | string | undefined;
+  signature?: string | undefined;
+  token?: string | undefined;
+}): boolean {
+  const secret = env.shiprocket.webhookSecret;
+  if (!secret) return false;
+
+  const signature = input.signature?.trim();
+  if (signature) {
+    const provided = signature.startsWith('sha256=') ? signature.slice(7) : signature;
+    const expected = crypto.createHmac('sha256', secret).update(input.rawBody ?? '').digest('hex');
+    if (timingSafeEqualHex(expected, provided)) return true;
+  }
+
+  const token = input.token?.trim();
+  if (!token) return false;
+  const expected = Buffer.from(secret);
+  const received = Buffer.from(token);
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
 function timingSafeEqualHex(expected: string, received: string): boolean {

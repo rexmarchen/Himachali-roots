@@ -7,7 +7,7 @@
  * product is legally compliant in every circumstance.
  */
 
-export type ComplianceGroup = 'food' | 'textile' | 'clothing' | 'craft' | 'general';
+export type ComplianceGroup = 'food' | 'raw_produce' | 'textile' | 'clothing' | 'craft' | 'general';
 
 export interface ComplianceField {
   key: string;
@@ -23,7 +23,6 @@ export interface ComplianceGuide {
 }
 
 const FOOD_SLUGS = new Set([
-  'fruits-and-fresh-produce',
   'tea-and-infusions',
   'dry-fruit-and-nuts',
   'pantry-and-preserves',
@@ -37,6 +36,16 @@ const FOOD_SLUGS = new Set([
   'bakery',
 ]);
 
+// Fresh, unprocessed orchard and farm produce is not a packaged food. It needs
+// harvest, variety/grade and dispatch transparency, not an FSSAI packaged-food
+// label or an ingredients list.
+const RAW_PRODUCE_SLUGS = new Set([
+  'fruits-and-fresh-produce',
+  'fresh-produce',
+  'raw-produce',
+  'fruit-and-vegetables',
+]);
+
 const CLOTHING_SLUGS = new Set(['knitwear', 'caps-and-headwear', 'clothing', 'apparel', 'accessories']);
 const TEXTILE_SLUGS = new Set(['shawls-and-weaves', 'textiles', 'handloom', 'wool-textiles']);
 
@@ -47,6 +56,13 @@ function normalise(value: string | null | undefined): string {
 export function complianceGroupFor(categorySlug: string | null | undefined, categoryName?: string | null): ComplianceGroup {
   const slug = normalise(categorySlug);
   const name = normalise(categoryName);
+  if (
+    RAW_PRODUCE_SLUGS.has(slug) ||
+    /(fresh.?produce|raw.?produce|orchard|fruit-and-vegetable)/.test(slug) ||
+    /(fresh produce|raw produce|orchard harvest)/.test(name)
+  ) {
+    return 'raw_produce';
+  }
   if (FOOD_SLUGS.has(slug) || /(food|tea|honey|pickle|oil|pulse|spice|bakery|fruit|nut|preserve)/.test(slug) || /(food|tea|honey|pickle|oil|pulse|spice|bakery|fruit|nut|preserve)/.test(name)) {
     return 'food';
   }
@@ -63,6 +79,17 @@ export function complianceGroupFor(categorySlug: string | null | undefined, cate
 }
 
 export const COMPLIANCE_GUIDES: Record<ComplianceGroup, ComplianceGuide> = {
+  raw_produce: {
+    group: 'raw_produce',
+    label: 'Fresh fruit and raw produce',
+    summary:
+      'Fresh, unprocessed produce needs the variety or grade, harvest timing, net weight and dispatch conditions so buyers know exactly what will arrive and when.',
+    fields: [
+      { key: 'varietyGrade', label: 'Variety or grade', message: 'State the variety, grade or size of the produce.' },
+      { key: 'harvestInfo', label: 'Harvest timing', message: 'Describe the harvest date or season.' },
+      { key: 'dispatchConditions', label: 'Dispatch conditions', message: 'Explain packing and dispatch conditions.' },
+    ],
+  },
   food: {
     group: 'food',
     label: 'Food, farm and pantry products',
@@ -121,6 +148,9 @@ interface ComplianceProduct {
   care_instructions: string | null;
   weight_g: number | null;
   compliance_json: string | null;
+  variety_grade?: string | null;
+  harvest_info?: string | null;
+  dispatch_conditions?: string | null;
 }
 
 function readCompliance(raw: string | null): Record<string, string> {
@@ -152,6 +182,21 @@ export function validateProductCompliance(input: {
   const group = complianceGroupFor(input.categorySlug, input.categoryName);
   const errors: Record<string, string> = {};
   const compliance = readCompliance(input.product.compliance_json);
+
+  if (group === 'raw_produce') {
+    if ((input.product.variety_grade ?? '').trim().length < 2) {
+      errors.varietyGrade = 'State the variety, grade or size of the produce.';
+    }
+    if ((input.product.harvest_info ?? '').trim().length < 3) {
+      errors.harvestInfo = 'Describe the harvest date or season.';
+    }
+    if ((input.product.dispatch_conditions ?? '').trim().length < 3) {
+      errors.dispatchConditions = 'Explain packing and dispatch conditions.';
+    }
+    if (!input.product.weight_g || input.product.weight_g <= 0) {
+      errors.weightG = 'Add the net packed weight so the declared quantity is accurate.';
+    }
+  }
 
   if (group === 'food') {
     const licence = compliance.fssaiLicense || (input.sellerFssaiNumber ?? '').trim();

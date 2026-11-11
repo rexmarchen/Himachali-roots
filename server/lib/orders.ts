@@ -1546,11 +1546,45 @@ export async function decideRefund(
   if (!refund.provider_payment_id) {
     throw badRequest('This refund has no provider payment to reverse.', { method: 'Manual refund required.' });
   }
+
+  // Claim the refund before calling the provider so a double-click or two
+  // concurrent reviewers cannot create two provider refunds.
+  const claim = execute(
+    db,
+    `UPDATE refunds SET status = 'processing', decided_by = ?, decided_at = ?, provider_status = 'submitting'
+      WHERE id = ? AND status IN ('requested', 'failed')`,
+    params.actor.id,
+    new Date().toISOString(),
+    refund.id,
+  );
+  if (Number(claim.changes) !== 1) {
+    throw conflict('This refund is already being processed.');
+  }
+
   const { createRazorpayRefund } = await import('./payments.js');
-  const providerRefund = await createRazorpayRefund(refund.provider_payment_id, refund.amount_paise, {
-    refund_id: refund.id,
-    reason: 'Marketplace refund',
-  });
+  let providerRefund: import('./payments.js').RazorpayRefund;
+  try {
+    providerRefund = await createRazorpayRefund(refund.provider_payment_id, refund.amount_paise, {
+      refund_id: refund.id,
+      reason: 'Marketplace refund',
+    });
+  } catch (error) {
+    execute(
+      db,
+      "UPDATE refunds SET status = 'failed', provider_status = 'submission_failed' WHERE id = ?",
+      refund.id,
+    );
+    execute(
+      db,
+      `INSERT OR IGNORE INTO payment_events (id, provider, provider_event_id, order_id, type, summary)
+       VALUES (?, 'razorpay', ?, ?, 'refund.submission_failed', ?)`,
+      newId('pev_'),
+      `refund:${refund.id}:submission_failed`.slice(0, 120),
+      refund.order_id,
+      JSON.stringify({ refundId: refund.id, error: error instanceof Error ? error.message : String(error) }),
+    );
+    throw error;
+  }
   execute(
     db,
     `UPDATE refunds SET status = 'processing', decided_by = ?, decided_at = ?, provider_refund_id = ?,
@@ -1925,6 +1959,20 @@ export function generateSettlement(
   periodEnd: string,
 ): { batchId: string; reference: string; netPaise: number; entryCount: number } {
   return tx(db, () => {
+    const seller = queryOne<{ payout_status: string }>(
+      db,
+      'SELECT payout_status FROM seller_profiles WHERE id = ?',
+      sellerId,
+    );
+    if (!seller) throw notFound('Seller not found.');
+    if (seller.payout_status === 'blocked') {
+      throw conflict('Payouts are on hold for this seller. Release the payout hold before creating a settlement.');
+    }
+    if (seller.payout_status !== 'verified') {
+      throw conflict(
+        'The seller’s payout details are not verified. Review the bank/UPI details before creating a settlement batch.',
+      );
+    }
     const entries = queryAll<{
       id: string;
       type: string;
@@ -1933,6 +1981,7 @@ export function generateSettlement(
       db,
       `SELECT id, type, amount_paise FROM seller_ledger_entries
         WHERE seller_id = ? AND status = 'eligible' AND settlement_id IS NULL
+          AND hold_reason IS NULL
           AND (available_at IS NULL OR available_at <= ?)
           AND created_at >= ? AND created_at <= ?
         ORDER BY created_at`,
@@ -2016,6 +2065,28 @@ export function markSettlementPaid(
     if (!batch) throw notFound('Settlement not found.');
     if (batch.status === 'paid') throw conflict('This settlement is already marked paid.');
     if (batch.status === 'reversed') throw conflict('This settlement was reversed.');
+    const seller = queryOne<{ payout_status: string }>(
+      db,
+      'SELECT payout_status FROM seller_profiles WHERE id = ?',
+      batch.seller_id,
+    );
+    if (seller?.payout_status === 'blocked') {
+      throw conflict('Payouts are on hold for this seller. Release the payout hold before marking a settlement paid.');
+    }
+    if (seller?.payout_status !== 'verified') {
+      throw conflict(
+        'The seller’s payout details are not verified. Verify the bank/UPI details before marking this settlement paid.',
+      );
+    }
+    const held = queryOne<{ count: number }>(
+      db,
+      `SELECT COUNT(*) AS count FROM seller_ledger_entries
+        WHERE settlement_id = ? AND hold_reason IS NOT NULL`,
+      batchId,
+    );
+    if ((held?.count ?? 0) > 0) {
+      throw conflict('This settlement includes ledger entries under a payout hold. Release the hold first.');
+    }
     execute(
       db,
       `UPDATE settlement_batches SET status = 'paid', provider_reference = ?, paid_at = ?, note = ? WHERE id = ?`,

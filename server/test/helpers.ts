@@ -1,12 +1,27 @@
 import crypto from 'node:crypto';
 import type { Express } from 'express';
 import request from 'supertest';
-import { createApp } from '../app.js';
+import { createApp, type AppDeps } from '../app.js';
 import { execute, initDb, queryAll, queryOne, type Db } from '../db.js';
 import { hashPassword } from '../lib/auth.js';
-import type { AuthRouterDeps } from '../routes/auth.js';
+import type { RazorpayPayment } from '../lib/payments.js';
 
 export const TEST_PASSWORD = 'TestPass123!';
+
+/**
+ * Tests use the default provider stub (a captured payment matching the local
+ * row). Individual tests can override it to simulate a mismatched, unreleased
+ * or otherwise hostile provider response.
+ */
+let razorpayPaymentOverride:
+  | ((paymentId: string, providerOrderId: string) => RazorpayPayment | Promise<RazorpayPayment>)
+  | null = null;
+
+export function setRazorpayPaymentOverride(
+  override: ((paymentId: string, providerOrderId: string) => RazorpayPayment | Promise<RazorpayPayment>) | null,
+): void {
+  razorpayPaymentOverride = override;
+}
 
 export const IDS = {
   admin: 'usr_test_admin',
@@ -30,9 +45,29 @@ export const ADDRESS = {
   pincode: '171001',
 };
 
-export function setupTestApp(deps: Partial<AuthRouterDeps> = {}): { app: Express; db: Db } {
+export function setupTestApp(deps: AppDeps = {}): { app: Express; db: Db } {
   const db = initDb(':memory:');
-  const app = createApp(db, deps);
+  const app = createApp(db, {
+    // The provider boundary is stubbed in tests. The fake reads the expected
+    // amount from the local payment row so the verification logic still runs.
+    fetchRazorpayPayment: async (paymentId, providerOrderId) => {
+      if (razorpayPaymentOverride) return razorpayPaymentOverride(paymentId, providerOrderId);
+      const payment = queryOne<{ amount_paise: number }>(
+        db,
+        'SELECT amount_paise FROM payments WHERE provider_order_id = ?',
+        providerOrderId,
+      );
+      return {
+        id: paymentId,
+        order_id: providerOrderId,
+        amount: payment?.amount_paise ?? 0,
+        currency: 'INR',
+        status: 'captured',
+        method: 'card',
+      };
+    },
+    ...deps,
+  });
   return { app, db };
 }
 
