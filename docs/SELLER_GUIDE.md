@@ -118,7 +118,7 @@ After delivery, a customer may request a return within the policy window. The ad
 The seller dashboard shows sales, commission, estimated earnings and ledger balances.
 
 - Commission is charged on **product value after discounts**, excluding shipping and taxes.
-- The default is 15%, but a seller-specific or category rule may apply. The rate used on an order is snapshotted with that order.
+- The default is 12%, but a seller-specific or category rule may apply. The rate used on an order is snapshotted with that order.
 - Shipping is retained by the marketplace as logistics revenue; it is not part of seller earnings.
 - A paid order creates **pending** ledger entries.
 - Delivery makes entries eligible, but they become available after the 7-day return window.
@@ -130,6 +130,8 @@ The dashboard is an operational view, not a tax invoice or a bank statement. Rec
 ## 7. Settlements
 
 Go to **Seller → Earnings** to see ledger entries and settlement batches.
+
+The same page carries **Payout details**. A seller can add or replace the account holder, bank, account number, IFSC and optional UPI ID. Saving returns the account to **Pending Dear Hills review**; it is not verified automatically. An administrator checks the details out-of-band and marks them verified. A seller who replaces a verified account should expect a short review delay before the next settlement. No settlement batch is created, and no batch is marked paid, until the details are verified and any payout hold is released.
 
 A typical cycle:
 

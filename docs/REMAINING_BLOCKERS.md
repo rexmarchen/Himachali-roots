@@ -2,7 +2,7 @@
 
 This document separates what has been built and verified from what still requires external approvals, credentials, legal work or further engineering. It is intentionally conservative: a feature is not "done" because code exists, and an integration is not "configured" because environment variables have names.
 
-Last reviewed: 27 October 2026.
+Last reviewed: 11 November 2026.
 
 ## Verified in this build
 
@@ -26,7 +26,10 @@ Last reviewed: 27 October 2026.
 - The Docker image was built and smoke-tested in an earlier pass: unprivileged user, SPA and API on one origin, readiness with the current schema, administrator login and a verified SQLite backup. This validates the deployment artifact locally, not the live host.
 - `npm run smoke` passed 28/28 non-admin live HTTP checks in an earlier development run (33 with admin credentials); it was not re-run against production.
 - A seller-lifecycle E2E run passed 53/53 checks against a disposable API and database in an earlier run.
-- The legacy-migration test upgrades a pre-onboarding (v1–v2) database to migration 8 with rows preserved; `integrity_check` and foreign-key checks are clean in the test database.
+- The legacy-migration test upgrades a pre-onboarding (v1–v2) database to migration 13 with rows preserved; `integrity_check` and foreign-key checks are clean in the test database.
+- TOTP two-step verification is implemented for every account, with a single-use ten-minute challenge, five-attempt limit and operator-only reset command.
+- Seller payout details require administrator verification before a settlement batch can be created or paid; releasing a payout hold restores the pre-hold status.
+- Uploaded images are re-encoded through `sharp`, with EXIF/GPS removed and dimensions bounded.
 - On 27 October 2026, `npm run typecheck`, `npm run lint`, `npm test` (154 tests / 18 files) and `npm run build` all passed. The live host returned real JSON for `/api/health`, `/api/health/ready`, `/api/config`, `/api/products` and `/api/auth/me`, with payments unconfigured and 0 products.
 
 Evidence and exact outcomes are in [Verification](VERIFICATION.md).
@@ -105,15 +108,15 @@ Evidence and exact outcomes are in [Verification](VERIFICATION.md).
 
 **Unblock:** Complete and date every policy, remove draft banners, and publish business/grievance details. This is a gating requirement, not a wording polish.
 
-### 8. Administrator MFA is absent
+### 8. Administrator MFA is implemented but not yet enforced
 
-**State:** Strong scrypt passwords, session expiry, secure cookies, rate limits, RBAC and audit logs are implemented. The admin CLI enforces password complexity.
+**State:** TOTP enrolment, confirmation, single-use login challenges, attempt limiting and password-plus-code disable are implemented and covered by tests. Any user can enrol from **Account → Profile & security**; the admin console shows a warning until the account enrols. Recovery is a shell command (`npm run mfa:reset -- <email>`), not a web endpoint.
 
-**Missing:** TOTP/WebAuthn second factor, device/session management and step-up authentication for refunds/settlements.
+**Missing:** An organisational policy requiring enrolment, step-up authentication for high-risk actions (refunds, settlement payment), device/session management, and confirmation that every production administrator has actually enrolled.
 
-**Risk:** A stolen administrator password gives full marketplace control. Restrict admin access, use unique credentials and monitor sessions until MFA is added.
+**Risk:** A stolen administrator password still gives full marketplace control until the second factor is enrolled on that account.
 
-**Unblock:** Add MFA before handling meaningful money, or enforce compensating network/identity controls.
+**Unblock:** Enrol every named administrator, record who has done so, keep the admin banner clear, and restrict admin access until enrolment is complete.
 
 ### 9. Observability and operational hardening are incomplete
 

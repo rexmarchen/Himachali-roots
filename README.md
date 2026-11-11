@@ -102,12 +102,13 @@ Set `RESEND_API_KEY` plus a verified `EMAIL_FROM` domain to send order, verifica
 | `npm run seed` | Seed demo data if the catalogue is empty |
 | `npm run reset` | Delete local data and reseed (destructive) |
 | `npm run admin:create -- <email> "<name>"` | Provision an administrator |
+| `npm run mfa:reset -- <email>` | Clear a lost TOTP second factor (shell access) |
 | `npm run db:backup` | Consistent SQLite snapshot into `backups/` |
 | `npm run db:verify -- <file>` | Read-only integrity/schema check of a backup |
 | `npm run smoke` | Live HTTP smoke test against a running development API |
 | `npm run typecheck` | Client, server and test TypeScript checks |
 | `npm run lint` | ESLint |
-| `npm test` | 154 Vitest/Supertest tests |
+| `npm test` | 232 Vitest/Supertest tests |
 | `npm run check` | Typecheck + lint + tests + production build |
 
 ## Project structure
@@ -123,6 +124,7 @@ server/
   routes/               auth, public, shop, account, seller, admin
   test/                 integration and security tests
   scripts/create-admin.ts
+  scripts/reset-mfa.ts
 src/
   App.tsx               lazy-loaded route tree and guards
   pages/                storefront, auth, account, seller and admin pages
@@ -138,7 +140,7 @@ docs/                   environment, deployment, seller, launch and status docs
 
 - **Money** is stored as integer paise. No floating-point arithmetic is used for prices or ledger entries.
 - **Prices are GST-inclusive.** `tax_rate_bp` defaults to `0` until a chartered accountant confirms rates and HSN treatment. The tax component is snapshotted but not added to the payable total. Tax configuration and tax invoices remain launch blockers.
-- **Commission** is charged on product value after discounts, excluding shipping and taxes. Resolution order is seller rule → category rule → global rule. The default is 15% (`1500` bp). Rate and amount are snapshotted on each seller order.
+- **Commission** is charged on product value after discounts, excluding shipping and taxes. Resolution order is seller rule → category rule → global rule. The default is 12% (`1200` bp). Rate and amount are snapshotted on each seller order.
 - **Shipping** is marketplace revenue. A flat ₹79 applies below ₹1,499 after discounts; ₹1,499+ ships free. Thresholds are configurable.
 - **Stock** is reserved atomically at checkout and released if payment expires or the order is cancelled before dispatch. Shipping decrements both on-hand and reserved quantities.
 - **Ledger timing:** verified payment creates pending sale and commission entries. Delivery makes them eligible; funds become available after a 7-day return window. Approved refunds post proportional deductions and commission reversals.

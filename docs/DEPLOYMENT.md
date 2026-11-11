@@ -115,6 +115,8 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
 
    The password is prompted without echo. For automated provisioning, set `ADMIN_PASSWORD` for that single command and unset it afterwards. Never seed demo products into production.
 
+   After the first sign-in, enable two-step verification from **Account → Profile & security → Two-step verification**. When it is enabled, password and Google sign-in both require a TOTP code. If the authenticator device is lost, an operator with shell access clears it with `npm run mfa:reset -- <email>`; there is deliberately no web recovery endpoint for the second factor.
+
 4. Start once in the foreground to confirm:
 
    ```bash
@@ -134,7 +136,7 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
    }
    ```
 
-   `/api/health` and `/api/health/ready` are readiness checks and return `503` when the database is unreachable or the schema is not current (migration 8). `/api/health/live` checks only that the process is alive. Readiness intentionally does not disclose payment or email configuration; confirm those from startup warnings or the admin console.
+   `/api/health` and `/api/health/ready` are readiness checks and return `503` when the database is unreachable or the schema is not current (migration 13). `/api/health/live` checks only that the process is alive. Readiness intentionally does not disclose payment or email configuration; confirm those from startup warnings or the admin console.
 
 5. Configure the reverse proxy and systemd (below).
 
@@ -483,6 +485,17 @@ Before deploying:
 4. Start the new build and check `/api/health/ready` returns `200` with `"schema": "current"`.
 
 There are no down migrations. Restoring the pre-upgrade backup is the rollback path; do not point an older binary at a version 8 database.
+
+### Payout, MFA and upload migration (schema versions 12–13)
+
+Version 12 adds the TOTP columns on `users` and the single-use `mfa_challenges` table. Version 13 adds `seller_profiles.payout_status_before_hold`.
+
+After deploying this build:
+
+1. Back up, open the copy with the new build, and run `npm run db:verify -- <backup.db>`. Confirm `schema_migrations` ends at `13`, `integrity_check` is `ok`, and there are no foreign-key violations.
+2. Review every seller that already has bank/UPI details on file. Settlements now require `payout_status = 'verified'`, and details saved by sellers enter `pending_verification`. Use **Admin → Sellers → Payout details** to check each account out-of-band and mark it verified. Sellers with no details on file cannot be settled.
+3. If an administrator already had a second factor in an external system, enrol it again from **Account → Profile & security**; this build has no import path.
+4. Check `/api/health/ready` returns `200` with `"schema": "current"`; it now also verifies the MFA schema.
 
 ## Backup
 

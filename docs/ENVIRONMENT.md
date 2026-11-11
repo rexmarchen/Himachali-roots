@@ -2,6 +2,8 @@
 
 PAHADI ROOTS reads configuration from the process environment and an optional `.env` file at the repository root. `server/env.ts` loads `.env` with Node's `process.loadEnvFile`; variables already present in the process environment take precedence. Do not commit `.env`.
 
+The server requires **Node.js 24.7.0 or newer**, because password hashing uses the native `crypto.argon2Sync` API.
+
 Start from the template:
 
 ```powershell
@@ -17,7 +19,7 @@ Copy-Item .env.example .env
 | `NODE_ENV` | `development` | Set `production` for a production build. Production enables HSTS/CSP, serves `dist/`, and force-disables development helpers. |
 | `PORT` | `8787` | API and production SPA port. |
 | `APP_URL` | `http://localhost:5173` | Public origin, no trailing slash. Production for this project is `https://www.dearhills.in`; it controls secure cookies, trusted origins and links in email. `APP_BASE_URL` is accepted as an alias and takes precedence when both are set. |
-| `TRUST_PROXY` | `0` | Set `1` behind Caddy/Nginx/Cloudflare so secure-cookie detection and rate limiting see the real client IP. |
+| `TRUST_PROXY` | `0` (production: `1`) | Hop count or subnet list for Express `trust proxy`. Behind Caddy/Nginx/Cloudflare this must trust the proxy so secure-cookie detection and rate limiting see the real client IP. In production it defaults to one hop when unset; set `0` to disable explicitly. |
 | `ALLOWED_ORIGINS` | empty | Comma-separated extra browser origins permitted to call the API with credentials. Only for a split SPA/API deployment; same-origin needs none. Each entry must be HTTPS in production. |
 | `VITE_API_BASE_URL` | empty | Build-time client setting. The API origin used by the browser (for example `https://api.shop.example`). Leave unset to call same-origin `/api`. |
 | `SESSION_DAYS` | `30` | Absolute session lifetime and cookie lifetime in days. |
@@ -42,9 +44,9 @@ Private seller documents are stored under `PRIVATE_DOCS_DIR` (default `storage/p
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `DEFAULT_COMMISSION_BP` | `1500` | Global commission in basis points (1500 = 15%). Seller and category rules take precedence. |
-| `FLAT_SHIPPING_PAISE` | `7900` | ₹79 in paise, charged below the free-shipping threshold after discounts. |
-| `FREE_SHIPPING_THRESHOLD_PAISE` | `149900` | ₹1,499 in paise. |
+| `DEFAULT_COMMISSION_BP` | `1200` | Global commission in basis points (1200 = 12%). Seller and category rules take precedence. |
+| `FLAT_SHIPPING_PAISE` | `2900` | ₹29 in paise, charged below the free-shipping threshold after discounts. |
+| `FREE_SHIPPING_THRESHOLD_PAISE` | `69900` | ₹699 in paise. |
 | `RESERVATION_MINUTES` | `30` | Unpaid orders expire and release reserved stock after this period. A sweep runs at startup and every minute. |
 
 Tax rates are deliberately **not** configured globally. `tax_rate_bp` defaults to `0` and GST-inclusive prices snapshot a zero tax component until rates are confirmed and set per product/category. Tax invoices are not generated. Both are launch blockers (see [Remaining blockers](REMAINING_BLOCKERS.md)).
@@ -96,13 +98,14 @@ Webhook endpoint:
 POST {APP_URL}/api/webhooks/razorpay
 ```
 
-Subscribe to `payment.captured`, `order.paid`, `payment.failed`, `refund.processed` and `refund.created`. The handler:
+Subscribe to `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`, `refund.created` and `refund.failed`. The handler:
 
 - verifies `x-razorpay-signature` as HMAC-SHA256 over the raw body;
 - deduplicates provider event IDs;
+- ignores payment entities that are not captured and records `payment.not_captured`;
 - checks that the captured amount equals the stored payable amount and records an amount mismatch instead of marking paid if they differ;
 - records raw provider events in `payment_events`;
-- finalises refunds matched by provider refund/payment IDs.
+- finalises refunds matched by provider refund/payment IDs and records provider refund failures.
 
 ### Transactional email (Resend or SMTP)
 
@@ -126,6 +129,7 @@ Provider resolution is `RESEND_API_KEY` → SMTP → none. Without either provid
 | Variable | Status |
 | --- | --- |
 | `SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_PICKUP_LOCATION` | Parsed but **not implemented**. Dispatch is manual (carrier name, tracking number and shipment events). Setting these does not change behaviour. |
+| `SHIPPING_WEBHOOK_SECRET` | Shared secret for `POST /api/webhooks/shipping` (also `/api/webhooks/shiprocket`). When set, callbacks must send an HMAC-SHA256 signature in `x-shipping-signature` (or `x-shiprocket-signature`), or the secret as `x-shipping-token` / `x-api-key`. When unset, callbacks are open in development and rejected with `503` in production. |
 | `SENTRY_DSN` | Parsed but **not wired**. Errors are written as structured JSON to stdout/stderr. |
 
 ## Production startup checks
@@ -135,16 +139,16 @@ With `NODE_ENV=production`, the server:
 - serves the built SPA from `dist/` and falls back to `index.html` for client-side routes;
 - enables HSTS, a strict CSP and secure cookies when `APP_URL` is HTTPS;
 - refuses to start (exit code 1) if development payment/auth helpers are enabled, `APP_URL` is not HTTPS, `SESSION_IDLE_DAYS` is outside `1..SESSION_DAYS`, `SESSION_COOKIE_SAMESITE=none` is used without HTTPS, or an `ALLOWED_ORIGINS` entry is not HTTPS;
-- warns if Razorpay is not configured, no email provider is configured, `EMAIL_FROM`/`ADMIN_NOTIFICATION_EMAIL` still use `.example` addresses, the database file is missing, `TRUST_PROXY` is disabled, or `GOOGLE_CLIENT_ID` is absent/malformed. Google sign-in is then hidden; password login still works.
+- warns if Razorpay is not configured, `RAZORPAY_WEBHOOK_SECRET` or `SHIPPING_WEBHOOK_SECRET` is missing, no email provider is configured, `EMAIL_FROM`/`ADMIN_NOTIFICATION_EMAIL` still use `.example` addresses, the database file is missing, `TRUST_PROXY` is disabled, or `GOOGLE_CLIENT_ID` is absent/malformed. Google sign-in is then hidden; password login still works.
 
-Warnings are not hard failures for missing payment/email credentials: this permits an intentionally catalogue-only deployment. A storefront that accepts checkout without a payment provider is not a live-commerce configuration. Payment-gateway integration is out of scope for this build; adding live keys does not by itself make payments and refunds production-ready.
+Warnings are not hard failures for missing payment/email credentials: this permits an intentionally catalogue-only deployment. A storefront that accepts checkout without a payment provider is not a live-commerce configuration. Razorpay checkout, verification and refund code exists, but live readiness still requires production keys, registered webhooks, and a controlled test-mode/staging exercise before taking real money.
 
 Health endpoints:
 
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /api/health/live` | Process liveness only. Does not touch the database. |
-| `GET /api/health/ready` | Readiness: database reachable and schema current (migration 8). Returns `503` when not ready. |
+| `GET /api/health/ready` | Readiness: database reachable and schema current (migration 13, including the MFA tables). Returns `503` when not ready. |
 | `GET /api/health` | Alias of readiness, kept for existing monitors. |
 
 Readiness deliberately does not disclose payment, SMTP or storage configuration. Check those through startup warnings and the admin console, not a public endpoint.

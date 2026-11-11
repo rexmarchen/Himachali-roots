@@ -33,7 +33,7 @@ Nothing below should be assumed complete merely because the software supports it
 - [ ] Registration verification, password reset, order, cancellation, return and refund emails delivered to a real inbox; `notifications` rows show `sent` with provider ids.
 - [ ] Courier accounts and pickup addresses operational. Understand that shipping is manual; no Shiprocket adapter exists.
 - [ ] Separate production and staging environments and credentials.
-- [ ] Administrator accounts are individual, named and have unique strong passwords. **MFA is not implemented**; compensate with restricted access, short session review, audit monitoring and network controls until MFA is added.
+- [ ] Administrator accounts are individual, named and have unique strong passwords. TOTP two-step verification exists and is recommended; **enrol every administrator from Account → Profile & security** and keep the console banner clear. Recovery is operator-only: `npm run mfa:reset -- <email>`.
 - [ ] `.env` permissions restricted; no secrets in the repository, screenshots, tickets or logs.
 - [ ] Backup destination, encryption key ownership and restore runbook agreed.
 - [ ] Error/log aggregation selected. `SENTRY_DSN` is not wired in the current build.
