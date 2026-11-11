@@ -7,6 +7,7 @@ interface Props {
   documents: ApplicationDocument[];
   submitting: boolean;
   onSubmit: (e: FormEvent) => void;
+  onAgreementsChange: (updates: Partial<WizardForm['agreements']>) => void;
   onJumpToStep: (step: number) => void;
   onBack: () => void;
 }
@@ -16,6 +17,7 @@ export function StepReviewSubmit({
   documents,
   submitting,
   onSubmit,
+  onAgreementsChange,
   onJumpToStep,
   onBack,
 }: Props) {
@@ -253,7 +255,12 @@ export function StepReviewSubmit({
           <input
             type="checkbox"
             checked={agreementChecked}
-            onChange={(e) => setAgreementChecked(e.target.checked)}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setAgreementChecked(checked);
+              // The single seller-terms checkbox also covers the commission disclosure.
+              onAgreementsChange({ sellerAgreement: checked, commissionDisclosure: checked });
+            }}
             className="mt-0.5 h-4 w-4 rounded-xs border-line text-forest focus:ring-terra"
           />
           <span className="text-forest">
@@ -269,7 +276,10 @@ export function StepReviewSubmit({
           <input
             type="checkbox"
             checked={authenticityChecked}
-            onChange={(e) => setAuthenticityChecked(e.target.checked)}
+            onChange={(e) => {
+              setAuthenticityChecked(e.target.checked);
+              onAgreementsChange({ authenticityPolicy: e.target.checked });
+            }}
             className="mt-0.5 h-4 w-4 rounded-xs border-line text-forest focus:ring-terra"
           />
           <span className="text-forest">
@@ -282,7 +292,10 @@ export function StepReviewSubmit({
           <input
             type="checkbox"
             checked={privacyChecked}
-            onChange={(e) => setPrivacyChecked(e.target.checked)}
+            onChange={(e) => {
+              setPrivacyChecked(e.target.checked);
+              onAgreementsChange({ privacyPolicy: e.target.checked });
+            }}
             className="mt-0.5 h-4 w-4 rounded-xs border-line text-forest focus:ring-terra"
           />
           <span className="text-forest">

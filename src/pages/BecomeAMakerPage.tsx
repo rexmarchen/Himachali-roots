@@ -37,6 +37,7 @@ function toPayload(form: WizardForm) {
     tagline: form.tagline.trim(),
     story: form.story.trim(),
     region: form.region.trim() || 'Kangra',
+    village: form.village.trim(),
     address: {
       line1: form.address.line1.trim(),
       line2: form.address.line2.trim(),
@@ -460,6 +461,9 @@ export function BecomeAMakerPage() {
             documents={appData?.documents ?? []}
             submitting={submitting}
             onJumpToStep={(s) => goToStep(s)}
+            onAgreementsChange={(updates) =>
+              setForm((prev) => ({ ...prev, agreements: { ...prev.agreements, ...updates } }))
+            }
             onSubmit={(e) => void handleSubmitApplication(e)}
             onBack={() => goToStep(4)}
           />

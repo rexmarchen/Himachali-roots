@@ -50,8 +50,8 @@ export function Step1Account({ user, onSuccess, onSwitchAccount, fullName, phone
       setError('Please enter a valid email address.');
       return;
     }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long.');
+    if (password.length < 10) {
+      setError('Password must be at least 10 characters long.');
       return;
     }
     if (password !== confirmPassword) {
@@ -71,6 +71,7 @@ export function Step1Account({ user, onSuccess, onSwitchAccount, fullName, phone
           fullName: name.trim(),
           email: email.trim().toLowerCase(),
           password,
+          acceptedTerms: true,
         },
       });
       onUpdateContact(name.trim(), cleanPhone);
@@ -277,7 +278,7 @@ export function Step1Account({ user, onSuccess, onSwitchAccount, fullName, phone
             />
           </Field>
 
-          <Field label="Password" required hint="At least 8 characters">
+          <Field label="Password" required hint="At least 10 characters, including a letter and a number">
             <div className="relative">
               <Input
                 required
