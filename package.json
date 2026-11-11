@@ -5,7 +5,7 @@
   "description": "PAHADI ROOTS — a curated multi-vendor marketplace for authentic Himachali products.",
   "type": "module",
   "engines": {
-    "node": ">=22.5"
+    "node": ">=24.7.0"
   },
   "scripts": {
     "dev": "concurrently -k -n api,web -c green,cyan \"npm:dev:api\" \"npm:dev:web\"",
@@ -26,6 +26,7 @@
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
     "admin:create": "tsx server/scripts/create-admin.ts",
+    "mfa:reset": "tsx server/scripts/reset-mfa.ts",
     "mobile:preview": "node scripts/mobile-preview-server.mjs"
   },
   "dependencies": {
@@ -45,6 +46,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.4",
+    "sharp": "^0.35.5",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -64,7 +66,6 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "globals": "^16.4.0",
     "puppeteer-core": "^25.16.0",
-    "sharp": "^0.35.5",
     "supertest": "^7.1.4",
     "tailwindcss": "^4.1.16",
     "tsx": "^4.20.6",
