@@ -1,19 +1,25 @@
 import fs from 'node:fs';
 import type { Express } from 'express';
 import request from 'supertest';
+import sharp from 'sharp';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { closeDb, execute, queryAll, queryOne, type Db } from '../db.js';
 import { IDS, login, mutate, resetDb, seedFixtures, setupTestApp } from './helpers.js';
 
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n');
-const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+let JPEG: Buffer;
 
 let app: Express;
 let db: Db;
 const uploadedFiles: string[] = [];
 
-beforeAll(() => {
+beforeAll(async () => {
   ({ app, db } = setupTestApp());
+  JPEG = await sharp({
+    create: { width: 24, height: 16, channels: 3, background: { r: 38, g: 61, b: 50 } },
+  })
+    .jpeg({ quality: 90 })
+    .toBuffer();
 });
 
 afterAll(() => {

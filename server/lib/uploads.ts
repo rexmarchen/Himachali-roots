@@ -1,9 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import type { NextFunction, Request, Response } from 'express';
 import multer from 'multer';
+import sharp from 'sharp';
 import { env } from '../env.js';
 import { badRequest } from './http.js';
+
+const MAX_IMAGE_DIMENSION = 2000;
+// Reject decompression bombs before decoding a huge canvas.
+const MAX_IMAGE_PIXELS = 40_000_000;
 
 export const IMAGE_TYPES: Record<string, string> = {
   'image/jpeg': '.jpg',
@@ -40,8 +46,46 @@ function storageFor(directory: string, allowed: Record<string, string>, prefix =
   });
 }
 
+/**
+ * Re-encodes an uploaded photo so stored files are not the exact bytes a client
+ * supplied. This strips EXIF/GPS metadata, applies the camera orientation,
+ * bounds the pixel dimensions and keeps the declared format. The input pixel
+ * limit protects against decompression bombs.
+ */
+async function optimiseUploadedImage(file: Express.Multer.File): Promise<void> {
+  const extension = path.extname(file.filename).toLowerCase();
+  const format = extension === '.png' ? 'png' : extension === '.webp' ? 'webp' : 'jpeg';
+  const temporaryPath = `${file.path}.optimising`;
+  try {
+    const base = sharp(file.path, { failOn: 'error', limitInputPixels: MAX_IMAGE_PIXELS })
+      .rotate()
+      .resize({
+        width: MAX_IMAGE_DIMENSION,
+        height: MAX_IMAGE_DIMENSION,
+        fit: 'inside',
+        withoutEnlargement: true,
+      });
+    const pipeline =
+      format === 'png'
+        ? base.png({ compressionLevel: 9 })
+        : format === 'webp'
+          ? base.webp({ quality: 82, effort: 4 })
+          : base.jpeg({ quality: 85, mozjpeg: true });
+    await pipeline.toFile(temporaryPath);
+    fs.renameSync(temporaryPath, file.path);
+    file.size = fs.statSync(file.path).size;
+  } catch (error) {
+    try {
+      fs.unlinkSync(temporaryPath);
+    } catch {
+      // Nothing to clean up.
+    }
+    throw error;
+  }
+}
+
 export function imageUpload() {
-  return multer({
+  const upload = multer({
     storage: storageFor(env.uploadDir, IMAGE_TYPES),
     limits: { fileSize: 5 * 1024 * 1024, files: 1 },
     fileFilter: (_req, file, cb) => {
@@ -52,6 +96,35 @@ export function imageUpload() {
       cb(null, true);
     },
   });
+
+  return {
+    single(field: string) {
+      const middleware = upload.single(field);
+      return (req: Request, res: Response, next: NextFunction): void => {
+        middleware(req, res, (error: unknown) => {
+          if (error) {
+            next(error);
+            return;
+          }
+          const file = req.file;
+          if (!file) {
+            next();
+            return;
+          }
+          void optimiseUploadedImage(file)
+            .then(() => next())
+            .catch(() => {
+              try {
+                fs.unlinkSync(file.path);
+              } catch {
+                // The temp file may already be gone.
+              }
+              next(badRequest('That image could not be processed. Upload a valid JPEG, PNG, or WebP file.'));
+            });
+        });
+      };
+    },
+  };
 }
 
 export function documentUpload() {

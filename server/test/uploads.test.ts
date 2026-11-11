@@ -1,17 +1,36 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import type { Express } from 'express';
+import sharp from 'sharp';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { closeDb, queryOne, type Db } from '../db.js';
+import { env } from '../env.js';
 import { IDS, login, mutate, resetDb, seedFixtures, setupTestApp } from './helpers.js';
 
 let app: Express;
 let db: Db;
 
-const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+let JPEG: Buffer;
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n');
 
-beforeAll(() => {
+async function makeJpeg(options: { orientation?: number; width?: number; height?: number } = {}): Promise<Buffer> {
+  const width = options.width ?? 24;
+  const height = options.height ?? 16;
+  const base = sharp({
+    create: {
+      width,
+      height,
+      channels: 3,
+      background: { r: 38, g: 61, b: 50 },
+    },
+  });
+  const withMetadata = options.orientation ? base.withMetadata({ orientation: options.orientation }) : base;
+  return withMetadata.jpeg({ quality: 90 }).toBuffer();
+}
+
+beforeAll(async () => {
   ({ app, db } = setupTestApp());
+  JPEG = await makeJpeg();
 });
 
 afterAll(() => {
@@ -56,6 +75,30 @@ describe('secure uploads', () => {
       .field('alt', 'A text file')
       .attach('image', Buffer.from('plain text'), { filename: 'evil.txt', contentType: 'text/plain' });
     expect(badMime.status).toBe(400);
+  });
+
+  it('re-encodes stored images, strips metadata and bounds dimensions', async () => {
+    const seller = await login(app, 'seller@test.local');
+    const withMetadata = await makeJpeg({ orientation: 6, width: 2400, height: 1600 });
+    expect((await sharp(withMetadata).metadata()).exif).toBeDefined();
+
+    const response = await mutate(seller.post(`/api/seller/products/${IDS.product}/images`))
+      .field('alt', 'A large camera image with orientation metadata')
+      .attach('image', withMetadata, { filename: 'camera.jpg', contentType: 'image/jpeg' });
+    expect(response.status).toBe(201);
+
+    const storedPath = path.join(env.uploadDir, path.basename(response.body.url as string));
+    try {
+      const metadata = await sharp(storedPath).metadata();
+      expect(metadata.format).toBe('jpeg');
+      expect(metadata.width).toBeLessThanOrEqual(2000);
+      expect(metadata.height).toBeLessThanOrEqual(2000);
+      // EXIF, including GPS and camera identifiers, must not survive.
+      expect(metadata.exif).toBeUndefined();
+      expect(metadata.orientation).toBeUndefined();
+    } finally {
+      if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+    }
   });
 
   it('keeps seller documents private and lets only the owner or an admin read them', async () => {
