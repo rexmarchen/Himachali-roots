@@ -105,6 +105,10 @@ Set `RESEND_API_KEY` plus a verified `EMAIL_FROM` domain to send order, verifica
 | `npm run mfa:reset -- <email>` | Clear a lost TOTP second factor (shell access) |
 | `npm run db:backup` | Consistent SQLite snapshot into `backups/` |
 | `npm run db:verify -- <file>` | Read-only integrity/schema check of a backup |
+| `npm run drill:restore -- <file> [--serve]` | Restore a backup into a throwaway directory and verify it; `--serve` boots the built server against the copy |
+| `npm run diagnose` | Read-only production check: runtime, argon2, integrity, migrations and auth columns |
+| `npm run audit:demo-data [-- --strict]` | Read-only audit of demo/test/placeholder data (never deletes) |
+| `npm run report:payouts` | Read-only settlement and payout verification report |
 | `npm run smoke` | Live HTTP smoke test against a running development API |
 | `npm run typecheck` | Client, server and test TypeScript checks |
 | `npm run lint` | ESLint |
