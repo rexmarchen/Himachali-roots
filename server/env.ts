@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -153,6 +154,14 @@ export const env = {
 export function assertProductionConfig(): string[] {
   const problems: string[] = [];
   if (env.isProduction) {
+    // Password hashing uses the native argon2Sync API (Node >= 24.7.0). A host
+    // running an older runtime fails every sign-in with a 500 while health checks
+    // stay green, so refuse to start instead of shipping a broken login.
+    if (typeof crypto.argon2Sync !== 'function') {
+      problems.push(
+        `CRITICAL: crypto.argon2Sync is unavailable on Node ${process.versions.node} — password sign-in would fail. Node >= 24.7.0 is required.`,
+      );
+    }
     if (env.allowDevPayments || env.simulatedCheckoutEnabled || bool(process.env.SIMULATED_CHECKOUT_ENABLED, false)) {
       problems.push('CRITICAL: SIMULATED_CHECKOUT_ENABLED and ALLOW_DEV_PAYMENTS must never be enabled in production.');
     }

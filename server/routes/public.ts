@@ -503,17 +503,18 @@ export function publicRouter(db: Db): Router {
       );
       queryOne(db, 'SELECT token_hash, user_id, expires_at, last_seen_at FROM sessions LIMIT 1');
       queryOne(db, 'SELECT id, user_id, token_hash, attempts, expires_at FROM mfa_challenges LIMIT 1');
+      queryOne(db, 'SELECT id, payout_status, payout_status_before_hold FROM seller_profiles LIMIT 1');
       if (typeof crypto.argon2Sync !== 'function') authOk = false;
     } catch {
       databaseOk = false;
       authOk = false;
     }
-    const ready = databaseOk && authOk && migration >= 12;
+    const ready = databaseOk && authOk && migration >= 13;
     res.status(ready ? 200 : 503).json({
       status: ready ? 'ok' : 'degraded',
       ready,
       database: databaseOk ? 'up' : 'down',
-      schema: migration >= 12 && authOk ? 'current' : 'outdated',
+      schema: migration >= 13 && authOk ? 'current' : 'outdated',
       auth: authOk ? 'ok' : 'mismatch',
       timestamp: new Date().toISOString(),
     });

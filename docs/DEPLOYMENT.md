@@ -25,7 +25,7 @@ Run **one** Node instance against a given SQLite database. SQLite uses WAL and s
 - registration, login, Google sign-in, carts, checkout, seller and admin screens cannot work;
 - browser calls to `/api/*` return 404 (or the SPA HTML, depending on rewrites) and fail rather than creating a fake local session.
 
-**Current status (27 October 2026):** `https://www.dearhills.in` is served by the Express 5 + SQLite process behind Caddy (response header `Server: Caddy`). `/api/health`, `/api/health/ready`, `/api/config`, `/api/products` and `/api/auth/me` return real API JSON. `/api/config` reports `payments.configured: false` and `devPaymentsEnabled: false`; the production catalogue currently contains 0 products and 3 categories. Do not treat the hosted instance as a trading shop until catalogue and operational checks are complete.
+**Current status (11 November 2026):** `https://www.dearhills.in` is served by the Express 5 + SQLite process behind Caddy (response header `Server: Caddy`). `/api/health`, `/api/health/ready`, `/api/config`, `/api/products` and `/api/auth/me` return real API JSON. `/api/config` reports `payments.configured: true` in **live** mode with `webhookConfigured: false`, and `devPaymentsEnabled: false`. The served `index.html` is an older build (2,333 bytes, `Last-Modified` 10 November 2026) than the current release commit. Do not treat the hosted instance as a trading shop until the release is deployed and the checklist is complete.
 
 A Vercel-only deployment is a preview and not a working shop. Production must run the Node process and SQLite volume as described above, or use the Docker/Caddy or Railway paths.
 
@@ -36,7 +36,7 @@ A Vercel-only deployment is a preview and not a working shop. Production must ru
 ## Prerequisites
 
 - Linux server (Ubuntu 24.04 LTS or similar) with a non-root service user
-- Node.js 22.5+ (Node 24 LTS line recommended)
+- Node.js **24.7.0 or newer** (required for `crypto.argon2Sync`; the production server refuses to start without it)
 - A domain with DNS pointing at the server
 - Persistent disk for database and uploads
 - Reverse proxy with automatic TLS (Caddy is the simplest option)
@@ -132,6 +132,7 @@ sudo chown -R pahadi:pahadi /opt/pahadi-roots /var/lib/pahadi-roots
      "ready": true,
      "database": "up",
      "schema": "current",
+     "auth": "ok",
      "timestamp": "2026-10-26T17:00:00.000Z"
    }
    ```
@@ -292,18 +293,21 @@ For a new host or a move:
 
 Terminate TLS at Caddy/Nginx and redirect HTTP to HTTPS. `APP_URL` must exactly match the HTTPS origin used by the browser; a mismatch causes cookie and Origin/CSRF failures. If the SPA and API are split across hosts, follow the split-origin section in [Environment](ENVIRONMENT.md#split-spa-and-api) instead of guessing at CORS settings.
 
-## Payment gateway — out of scope for this build
+## Payment gateway — configured, live, and gated
 
-Payment-gateway integration is explicitly **out of scope** for this production-readiness pass. No Cashfree, PhonePe, Stripe or new Razorpay features were added. The repository contains a pre-existing, configuration-gated Razorpay adapter (Orders, Checkout signature verification, webhook HMAC verification, Refunds API). It is not configured in production (`payments.configured: false`) and has not been exercised against Razorpay's live service.
+Razorpay is integrated and **is configured in production in live mode** as observed on 11 November 2026 (`payments.configured: true`, `mode: "live"`, `webhookConfigured: false`). That combination is dangerous: checkout can attempt to accept real money while webhook confirmation is missing. Do not treat payments as launch-ready.
 
-The safe operating posture is:
+Operating rules:
 
 1. Keep `ALLOW_DEV_PAYMENTS` and `SIMULATED_CHECKOUT_ENABLED` false. Production startup refuses if either is enabled.
-2. Without a configured provider, checkout creates `pending_payment` orders and never marks them paid.
-3. Do not advertise online payment, instant refunds or automatic settlement.
-4. Treat the Razorpay section in [Remaining blockers](REMAINING_BLOCKERS.md) as a prerequisite for a future, separately scoped integration. If keys are ever added, run a small live transaction and refund end to end before accepting orders, and verify the order becomes paid once, the event lands in `payment_events`, the seller order moves to `pending`, and amount-mismatch paths are visible to an administrator.
+2. Do not accept real customer money until the merchant onboarding, webhook registration and the test-mode matrix in [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md) section E are PRODUCTION-VERIFIED.
+3. If the webhook secret is genuinely absent, either register the endpoint and set `RAZORPAY_WEBHOOK_SECRET` in the same window, or switch checkout off until it is ready. Do not leave live keys accepting payments that no webhook confirms.
+4. Run the full test-mode matrix before enabling live retries: one payment per order, duplicate webhook idempotency, amount/order/currency mismatch, non-captured payment, failure and expiry, full and partial refunds, cancellation before dispatch, and a post-delivery return with proportionate commission reversal.
+5. Do not advertise online payment, instant refunds or automatic settlement until each path is verified.
 
-Manual refunds record a request, an approval, and a separate completed action with a verified bank/UPI reference. No money moves through this application.
+Server-side checks in this release: checkout verifies the provider payment id, order, currency, amount and capture state before marking an order paid; refunds are claimed before the provider call and failures are recorded; the webhook requires a valid HMAC signature; a mismatch is audited and leaves the order unpaid. See `server/lib/payments.ts` and the settlement gates in `server/lib/orders.ts`.
+
+Manual refunds record a request, an approval, and a separate completed action with a verified bank/UPI reference. No money moves through this application, and seller payouts remain manual — see [PAYOUT_OPERATIONS.md](PAYOUT_OPERATIONS.md).
 
 ## Email go-live
 
@@ -408,12 +412,13 @@ Until a host and credentials are supplied, external staging deployment is blocke
 
 ## Release procedure
 
-1. Take a database backup and a storage snapshot. Verify the backup file with `npm run db:verify -- <backup.db>`.
-2. Deploy code to a new release directory; run `npm ci && npm run build`.
-3. Apply schema migrations by starting the new process (the app is additive and applies schema/migrations on open). **Back up first**; there are no down migrations.
-4. Restart the service and check `/api/health/live` and `/api/health/ready`.
-5. Smoke-test password login, Google sign-in (if configured), catalogue, cart, checkout (or deliberate failure path), seller order visibility and admin login.
-6. Keep the previous release until the new one is stable.
+1. Take a database backup and a storage snapshot. Verify the backup file with `npm run db:verify -- <backup.db>`, and rehearse the restore with `npm run drill:restore -- <backup.db> --serve`.
+2. Run `npm run diagnose` on the host and require no critical findings (Node ≥ 24.7.0, argon2 available, integrity ok, no FK violations, migrations end at 13, auth/payout columns present).
+3. Deploy code to a new release directory; run `npm ci && npm run build`.
+4. Apply schema migrations by starting the new process (the app is additive and applies schema/migrations on open). **Back up first**; there are no down migrations.
+5. Restart the service and check `/api/health/live` and `/api/health/ready`. Readiness must report `database: up`, `schema: current` and `auth: ok`.
+6. Smoke-test password login, Google sign-in (if configured), catalogue, cart, checkout (or deliberate failure path), seller order visibility and admin login.
+7. Keep the previous release until the new one is stable.
 
 Because schema changes are applied automatically, do not point an older binary at a newer database without a tested rollback plan.
 
@@ -545,7 +550,7 @@ Do not delete private documents while they are referenced by seller applications
 
 ## Restore
 
-Practice this on a staging host before an incident.
+Practice this on a staging host before an incident. Locally, `npm run drill:restore -- <backup.db> --serve` copies the backup into a throwaway directory, checks SHA256, integrity, foreign keys, migrations and columns, then boots the built server against the copy and probes readiness, an unknown-account login and the catalogue.
 
 1. Stop the service:
 
@@ -589,11 +594,15 @@ Practice this on a staging host before an incident.
 
 ## Monitoring
 
-- Health: `GET /api/health/live` frequently and `GET /api/health/ready` every minute from an external monitor; alert on non-200, `ready != true` or `schema != current`.
+Full alert matrix, log-hygiene rules and the credential-rotation runbook live in [MONITORING_AND_ALERTS.md](MONITORING_AND_ALERTS.md).
+
+- Health: `GET /api/health/live` frequently and `GET /api/health/ready` every minute from an external monitor; alert on non-200, `ready != true`, `schema != current` or `auth != ok`.
+- Diagnostics: `npm run diagnose` is read-only and reports runtime, argon2 availability, integrity, foreign keys, migration level and auth/payout columns.
 - Logs: ship JSON logs to a log service. Watch `unhandled_request_error`, `payment_provider_error`, `razorpay_webhook_failed`, `startup_failed`, `expiry_sweep_failed`. Authentication and account-linking actions are recorded in `audit_logs`; review failed sign-in patterns and linking decisions.
 - Disk: alert at 80% for database, uploads and backups. WAL growth can indicate long-running readers or a stuck writer.
-- Payments: reconcile Razorpay settlements against `payments` and `refund` records daily; the admin payments screen is not a substitute for provider reconciliation.
-- Backups: verify restore quarterly, not merely that a file exists.
+- Payments: reconcile Razorpay payments and refunds daily; the admin payments screen is not a substitute for provider reconciliation.
+- Payouts: run `npm run report:payouts` daily and treat exit code 2 as a freeze-payouts incident.
+- Backups: verify a restore quarterly with `npm run drill:restore`, not merely that a file exists.
 - `SENTRY_DSN` is not wired yet; use log aggregation or add an error-reporting integration before launch.
 
 ## Moving to PostgreSQL or Supabase
