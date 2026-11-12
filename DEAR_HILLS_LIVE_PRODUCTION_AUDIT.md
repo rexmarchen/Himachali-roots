@@ -1146,3 +1146,35 @@ These cannot be closed by repository code alone and keep the launch decision at 
 - **Code-level readiness:** materially improved; the P0 findings that were code defects now have fixes and regression tests, and payout administration, administrator MFA and upload hardening are implemented locally.
 - **Live production readiness:** unchanged at **NO-GO** until the fixed artifact is deployed and the production-only gates in N.6 are evidenced.
 - **Verified vs unverified:** the local test suite is code-verified behaviour in an in-memory database, not proof about the live server, live database, real payments, real email, or real seller/customer accounts. The MFA flow has not been exercised against the production database, and no live account was created or modified.
+
+## Appendix 5 — Release engineering round 2 (12 November 2026)
+
+This appendix records the release branch, operational tooling and local evidence gathered after Appendix 4. It does **not** change the production verdict: no deployment, migration, payment, DNS, email or data change was performed.
+
+### A5.1 Release branch
+
+- Branch: `release/production-2026-11-11` (local only; not pushed).
+- Atomic commits: dependency/MFA script, auth/MFA, uploads, payment/settlement security, payout/MFA UI, onboarding, docs, ops tooling, readiness fail-fast, launch registers.
+- All work was committed; `git status` is clean after the final commit.
+- `npm ci`, `npm run check` (typecheck, 0 lint errors / 14 pre-existing warnings, **25 files / 232 tests**, build) and `npm audit --omit=dev` (**0 vulnerabilities**) passed on the release tree.
+- Artifact hashes are recorded in the phase report. They must be recomputed after the final commit before any deploy.
+
+### A5.2 New operational evidence
+
+| Item | Status | Evidence | Remaining risk |
+|---|---|---|---|
+| Read-only production diagnostic | LOCAL-TEST | `npm run diagnose` on the development database: Node 24.21.0, argon2 available, integrity ok, 0 FK violations, and it correctly flagged a migration-11 schema with missing MFA/payout columns | Production database not yet inspected |
+| Demo-data audit | LOCAL-TEST | `npm run audit:demo-data` found 5 demo sellers, 27 demo products, 5 demo orders, 10 placeholder emails in the **development** database; nothing deleted | Production counts unknown |
+| Payout verification report | LOCAL-TEST | `npm run report:payouts` returned 0 critical findings and flagged one unverified seller holding ₹13,872 eligible | Production sellers not yet verified |
+| Backup restore drill | LOCAL-TEST | `npm run drill:restore -- <backup> --serve`: SHA256 match, integrity ok, 0 FK violations, migration 13, 19 tables, then booted the built server and returned live 200, ready 200 (`auth: ok`), unknown-account login 401, catalogue 200 | Clean-host drill on separate infrastructure still outstanding |
+| Argon2 fail-fast | CODE-VERIFIED | Production startup now refuses to run when `crypto.argon2Sync` is missing; readiness reports `auth: mismatch` | Needs deployment to take effect |
+| Readiness depth | CODE-VERIFIED | Readiness requires migration 13 and queries the payout-hold column; docs and code now agree | Live still runs the old build |
+| Live old artifact | PRODUCTION-VERIFIED | `index.html` is 2,333 bytes (`Last-Modified` 10 Nov 2026) versus 2,373 bytes locally | Deployment provenance unresolved |
+| Live payment configuration | PRODUCTION-VERIFIED | `/api/config`: `configured: true`, `mode: "live"`, `webhookConfigured: false` | Live keys with no webhook confirmation is a payment-integrity risk |
+| Live login 500 | BLOCKED | Unknown-email login returns 401 (argon2 works); the failing path is post-password/session hydration and needs the production stack trace | Root cause unproven |
+
+### A5.3 Interpretation
+
+The local restore drill proves a backup can be restored and the built server can read it. It does **not** prove the production backup is restorable on the production host, and it does not validate uploaded-file restoration. The demo audit and payout report are read-only and were exercised only against the development database. The live login failure remains unexplained without logs; the new diagnostic and fail-fast checks narrow the space but are not a fix until deployed.
+
+Launch status remains **NO-GO**.
