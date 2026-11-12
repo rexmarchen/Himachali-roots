@@ -82,7 +82,14 @@ export function errorMiddleware(error: unknown, req: Request, res: Response, _ne
       method: req.method,
       path: req.path,
       error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error && !process.env.NODE_ENV?.startsWith('prod') ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
+      code:
+        typeof error === 'object' && error && 'code' in error
+          ? String((error as { code: unknown }).code)
+          : undefined,
+      // Stack traces go to the server log only, never to the client. Without
+      // them a production 500 (such as the live login failure) is undebuggable.
+      stack: error instanceof Error ? error.stack : undefined,
     }),
   );
   res.status(500).json({ error: { code: 'internal_error', message: 'Something went wrong on our side. Please try again.' } });

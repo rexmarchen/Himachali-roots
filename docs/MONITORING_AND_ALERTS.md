@@ -12,6 +12,7 @@ end to end.
 |---|---|---|
 | Request ids | Every response carries `X-Request-Id`; a supplied id is reused only if it matches `[A-Za-z0-9._-]{8,64}` | CODE-VERIFIED |
 | Structured logs | JSON lines with `level`, `msg`, and specific fields; startup logs `pahadi_roots_api_started` | CODE-VERIFIED |
+| 500 diagnostics | `unhandled_request_error` logs the request id, method, path, error name/code and stack server-side; the client still receives only a generic message | CODE-VERIFIED |
 | Liveness | `GET /api/health/live` never touches dependencies | CODE-VERIFIED |
 | Readiness | `GET /api/health/ready` checks SQLite, the auth tables/columns, migration 13 and `crypto.argon2Sync`; returns 503 with `auth: "mismatch"` or `schema: "outdated"` | CODE-VERIFIED |
 | In-process metrics | `MetricsRegistry` records path, method, status and duration per request | CODE-VERIFIED |
