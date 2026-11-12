@@ -2,7 +2,7 @@
 
 This is an operational checklist for taking PAHADI ROOTS from a tested build to a live marketplace. It is **not legal, tax or accounting advice**. Indian marketplace obligations depend on the entity, turnover, product categories and how payments/fulfilment are structured. Have a lawyer and a chartered accountant review the final model.
 
-Nothing below should be assumed complete merely because the software supports it. Tick an item only when a named person has verified the evidence.
+Nothing below should be assumed complete merely because the software supports it. Tick an item only when a named person has verified the evidence. Legal, tax and grievance gates are tracked with owners in [LEGAL_LAUNCH_REGISTER.md](LEGAL_LAUNCH_REGISTER.md); monitoring and rotation in [MONITORING_AND_ALERTS.md](MONITORING_AND_ALERTS.md); payouts in [PAYOUT_OPERATIONS.md](PAYOUT_OPERATIONS.md).
 
 ## A. Business, tax and legal
 
@@ -19,7 +19,7 @@ Nothing below should be assumed complete merely because the software supports it
 - [ ] Seller KYC and business verification process defined, including beneficial ownership, bank account verification and periodic re-verification.
 - [ ] Product restrictions reviewed: no wildlife/forest produce requiring permits, no restricted medicines, no prohibited weapons, no unsupported therapeutic claims.
 - [ ] Origin, GI, organic, handmade and certification claims have documentary evidence. The software must not display a badge without it.
-- [ ] Payment aggregator onboarding complete for the actual business entity and marketplace model. **Payment-gateway integration is out of scope for this build**; do not tick this until a separately scoped integration is implemented and verified.
+- [ ] Payment aggregator onboarding complete for the actual business entity and marketplace model. Do not accept real customer money until this is signed off. The provider integration exists in code; onboarding, webhook registration and reconciliation are the gates.
 - [ ] DPDP Act notice, consent, purpose limitation, retention, erasure and breach-response process reviewed. Data processing agreements with vendors in place.
 - [ ] Insurance (cyber, professional indemnity, product liability as applicable) considered.
 - [ ] Intellectual property for the name/logo cleared; contributor/photography licences documented.
@@ -27,7 +27,7 @@ Nothing below should be assumed complete merely because the software supports it
 ## B. Accounts and secrets
 
 - [ ] Production domain and TLS active.
-- [ ] *(Only if a payment integration is separately scoped)* Razorpay live keys and webhook secret in the production secret store; webhook configured with payment and refund events. The current build leaves payments unconfigured and must not claim online payment.
+- [ ] Razorpay live keys and `RAZORPAY_WEBHOOK_SECRET` in the production secret store; the webhook endpoint registered with payment and refund events. Live keys are present but `webhookConfigured: false` was observed on 11 November 2026 — treat that as NO-GO for accepting real payments until fixed and verified.
 - [ ] Google OAuth Web client created with only the real production JavaScript origin (and localhost for development); `GOOGLE_CLIENT_ID` set in production. No client secret is used by this flow.
 - [ ] Fresh Resend API key created for this deployment (never a key that appeared in chat, docs or source control); sending domain verified with SPF, DKIM and DMARC; `EMAIL_FROM` and `ADMIN_NOTIFICATION_EMAIL` are monitored real addresses.
 - [ ] Registration verification, password reset, order, cancellation, return and refund emails delivered to a real inbox; `notifications` rows show `sent` with provider ids.
@@ -36,11 +36,11 @@ Nothing below should be assumed complete merely because the software supports it
 - [ ] Administrator accounts are individual, named and have unique strong passwords. TOTP two-step verification exists and is recommended; **enrol every administrator from Account → Profile & security** and keep the console banner clear. Recovery is operator-only: `npm run mfa:reset -- <email>`.
 - [ ] `.env` permissions restricted; no secrets in the repository, screenshots, tickets or logs.
 - [ ] Backup destination, encryption key ownership and restore runbook agreed.
-- [ ] Error/log aggregation selected. `SENTRY_DSN` is not wired in the current build.
+- [ ] Error/log aggregation selected and alert routing proven. `SENTRY_DSN` is not wired in the current build; see [MONITORING_AND_ALERTS.md](MONITORING_AND_ALERTS.md).
 
 ## C. Catalogue and content
 
-- [ ] Demo seed is **not** present in production. Confirm no `(demo)` sellers, `.test` emails or `is_demo` products.
+- [ ] Demo seed is **not** present in production. Run `npm run audit:demo-data -- --strict` and require a clean exit; it must show no `(demo)` sellers, `.test` emails or `is_demo` products. Deletion follows [DEMO_DATA_CLEANUP_PLAN.md](DEMO_DATA_CLEANUP_PLAN.md) with an approval gate.
 - [ ] Production category taxonomy created and reviewed under **Admin → Categories**. Do not seed demo categories into production.
 - [ ] Every seller application, identity document and registration reviewed and recorded.
 - [ ] Every product reviewed for accurate title, materials, dimensions, ingredients, allergens, care, origin and stock.
@@ -74,7 +74,7 @@ Nothing below should be assumed complete merely because the software supports it
 - [ ] Reverse proxy request-body limit is at least 6 MB and no larger than necessary.
 - [ ] Rate limiting behaviour tested; note it is in-process and not suitable for multiple app instances without a shared store.
 - [ ] Database schema/migrations applied with a backup taken first; no down migration is available.
-- [ ] Backups run on schedule and a full restore has been tested on a separate host.
+- [ ] Backups run on schedule and a full restore has been tested: `npm run drill:restore -- <backup> --serve` passes locally, and the same restore has been repeated on separate infrastructure.
 - [ ] Disk, memory and process supervision alerts configured.
 - [ ] Admin audit log reviewed for test actions and the log is retained appropriately.
 
@@ -97,7 +97,7 @@ Nothing below should be assumed complete merely because the software supports it
 - [ ] Seller dispatch SLA (currently stated as two working days) is realistic for every seller.
 - [ ] Packing, labelling, pickups, lost-parcel and RTO procedures documented.
 - [ ] Customer support macros and escalation path cover cancellation, return, damage, missing parcel and payment failure.
-- [ ] Refund authority, limits and dual control defined. One person should not be able to create and pay a settlement without review.
+- [ ] Refund authority, limits and dual control defined. One person should not be able to create and pay a settlement without review; `npm run report:payouts` flags same-actor payments.
 - [ ] Seller suspension/offboarding process and outstanding-settlement handling defined.
 - [ ] Inventory reconciliation procedure exists for offline sales.
 - [ ] Data retention and deletion process for accounts, KYC documents and order records is documented and lawful.
