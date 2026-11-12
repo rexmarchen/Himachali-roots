@@ -103,6 +103,7 @@ Set `RESEND_API_KEY` plus a verified `EMAIL_FROM` domain to send order, verifica
 | `npm run reset` | Delete local data and reseed (destructive) |
 | `npm run admin:create -- <email> "<name>"` | Provision an administrator |
 | `npm run mfa:reset -- <email>` | Clear a lost TOTP second factor (shell access) |
+| `npm run email:retry [-- --send]` | Dry-run or send failed transactional email (sending is explicit) |
 | `npm run db:backup` | Consistent SQLite snapshot into `backups/` |
 | `npm run db:verify -- <file>` | Read-only integrity/schema check of a backup |
 | `npm run drill:restore -- <file> [--serve]` | Restore a backup into a throwaway directory and verify it; `--serve` boots the built server against the copy |

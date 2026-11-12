@@ -31,6 +31,7 @@
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
     "admin:create": "tsx server/scripts/create-admin.ts",
     "mfa:reset": "tsx server/scripts/reset-mfa.ts",
+    "email:retry": "tsx server/scripts/retry-emails.ts",
     "mobile:preview": "node scripts/mobile-preview-server.mjs"
   },
   "dependencies": {

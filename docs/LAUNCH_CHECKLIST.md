@@ -30,7 +30,7 @@ Nothing below should be assumed complete merely because the software supports it
 - [ ] Razorpay live keys and `RAZORPAY_WEBHOOK_SECRET` in the production secret store; the webhook endpoint registered with payment and refund events. Live keys are present but `webhookConfigured: false` was observed on 11 November 2026 — treat that as NO-GO for accepting real payments until fixed and verified.
 - [ ] Google OAuth Web client created with only the real production JavaScript origin (and localhost for development); `GOOGLE_CLIENT_ID` set in production. No client secret is used by this flow.
 - [ ] Fresh Resend API key created for this deployment (never a key that appeared in chat, docs or source control); sending domain verified with SPF, DKIM and DMARC; `EMAIL_FROM` and `ADMIN_NOTIFICATION_EMAIL` are monitored real addresses.
-- [ ] Registration verification, password reset, order, cancellation, return and refund emails delivered to a real inbox; `notifications` rows show `sent` with provider ids.
+- [ ] Registration verification, password reset, order, cancellation, return and refund emails delivered to a real inbox; `notifications` rows show `sent` with provider ids. Follow [EMAIL_AND_DNS_GO_LIVE.md](EMAIL_AND_DNS_GO_LIVE.md).
 - [ ] Courier accounts and pickup addresses operational. Understand that shipping is manual; no Shiprocket adapter exists.
 - [ ] Separate production and staging environments and credentials.
 - [ ] Administrator accounts are individual, named and have unique strong passwords. TOTP two-step verification exists and is recommended; **enrol every administrator from Account → Profile & security** and keep the console banner clear. Recovery is operator-only: `npm run mfa:reset -- <email>`.
@@ -80,7 +80,7 @@ Nothing below should be assumed complete merely because the software supports it
 
 ## E. Payments and money
 
-- [ ] A real Razorpay test-mode payment succeeds, appears once, and moves the seller order to `pending`.
+- [ ] A real Razorpay test-mode payment succeeds, appears once, and moves the seller order to `pending`. Run the full matrix in [PAYMENT_TEST_MATRIX.md](PAYMENT_TEST_MATRIX.md).
 - [ ] A duplicate webhook does not double-apply payment or ledger entries.
 - [ ] A failed payment is represented correctly and stock is released on expiry.
 - [ ] An amount-mismatch webhook is recorded and does **not** mark the order paid.
