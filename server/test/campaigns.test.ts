@@ -19,7 +19,7 @@ import {
 let app: Express;
 let db: Db;
 
-const POSTER = '/images/campaigns/pahadi-festive-glow-diwali-1672.webp';
+const POSTER = '/images/campaigns/dearhills-christmas-campaign-1672.webp';
 const SLUG = 'pahadi-festive-glow';
 
 beforeAll(() => {

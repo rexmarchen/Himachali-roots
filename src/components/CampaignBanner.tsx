@@ -6,48 +6,67 @@ export function CampaignBanner({
   campaign,
   priority = true,
 }: {
-  campaign: CampaignSummary | null | undefined;
+  campaign?: CampaignSummary | null;
   priority?: boolean;
 }) {
-  // The banner only exists when an administrator has published a live campaign
-  // with a real poster. There is no placeholder or invented fallback.
-  if (!campaign?.posterUrl) return null;
-
-  const href = `/offers/${campaign.slug}`;
+  const sellerUrl = '/become-a-maker';
+  const posterWebp = '/images/campaigns/dearhills-christmas-campaign-1672.webp';
+  const posterJpg = '/images/campaigns/dearhills-christmas-campaign.jpg';
+  const altText =
+    campaign?.posterAlt ??
+    'Dear Hills Christmas Campaign — This Christmas, Let Your Craft Shine. Join Dear Hills and showcase your handmade creations, local products and more to a wider audience. Become a Seller.';
 
   return (
-    <section aria-labelledby="festive-campaign-heading" className="w-full pt-3 pb-2 sm:pt-4 sm:pb-3">
+    <section aria-labelledby="festive-campaign-heading" className="w-full pt-2 pb-2 sm:pt-4 sm:pb-3">
       <h2 id="festive-campaign-heading" className="sr-only">
-        {campaign.name} — Diwali in Himachal Offers
+        Dear Hills Christmas Campaign — This Christmas, Let Your Craft Shine
       </h2>
-      <div className="mx-auto w-full max-w-3xl sm:max-w-4xl lg:max-w-[860px] xl:max-w-[900px] px-4 sm:px-6">
-        <Link
-          to={href}
-          aria-label={`${campaign.name}: view the festive Himachali collection`}
-          className="group relative block w-full overflow-hidden rounded-xl sm:rounded-2xl border border-[#2D241C]/25 bg-[#14120E] shadow-xl transition-all duration-300 hover:border-terra/40 hover:shadow-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terra"
-        >
-          <img
-            src={campaign.posterUrl}
-            srcSet={posterSrcSet(campaign.posterUrl)}
-            sizes="(min-width: 1280px) 900px, (min-width: 1024px) 860px, (min-width: 640px) 720px, 100vw"
-            alt={campaign.posterAlt ?? `${campaign.name} — authentic Himachali goods from local makers`}
-            width={1672}
-            height={941}
-            loading={priority ? 'eager' : 'lazy'}
-            fetchPriority={priority ? 'high' : 'auto'}
-            decoding="async"
-            className="block h-auto w-full aspect-[1672/941] object-contain transition-transform duration-500 ease-out group-hover:scale-[1.008]"
-          />
-        </Link>
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
-          <p className="text-bark/80">
-            <span className="font-semibold text-terra">✨ Diwali Maker Special:</span> Selling mountain craft or harvest?
-          </p>
+      <div className="mx-auto w-full max-w-3xl sm:max-w-4xl lg:max-w-[960px] xl:max-w-[1024px] px-4 sm:px-6">
+        <div className="group relative block w-full overflow-hidden rounded-xl sm:rounded-2xl border border-[#2D241C]/25 bg-[#14120E] shadow-xl transition-all duration-300 hover:border-amber-500/30 hover:shadow-2xl">
+          {/* Main banner graphic with optimized WebP srcset + fallback JPG */}
+          <picture>
+            <source
+              type="image/webp"
+              srcSet={
+                posterSrcSet(posterWebp) ??
+                '/images/campaigns/dearhills-christmas-campaign-480.webp 480w, /images/campaigns/dearhills-christmas-campaign-800.webp 800w, /images/campaigns/dearhills-christmas-campaign-1200.webp 1200w, /images/campaigns/dearhills-christmas-campaign-1672.webp 1672w'
+              }
+              sizes="(min-width: 1280px) 1024px, (min-width: 1024px) 960px, (min-width: 640px) 768px, 100vw"
+            />
+            <img
+              src={posterJpg}
+              alt={altText}
+              width={1024}
+              height={576}
+              loading={priority ? 'eager' : 'lazy'}
+              fetchPriority={priority ? 'high' : 'auto'}
+              decoding="async"
+              className="block h-auto w-full aspect-[16/9] object-contain transition-transform duration-500 ease-out group-hover:scale-[1.006]"
+            />
+          </picture>
+
+          {/* Accessible whole-banner clickable layer */}
           <Link
-            to="/become-a-maker?offer=diwali"
-            className="font-medium text-forest hover:text-terra underline underline-offset-4 transition-colors"
+            to={sellerUrl}
+            aria-label="Dear Hills Christmas Campaign: This Christmas, Let Your Craft Shine. Become a Seller"
+            className="absolute inset-0 z-10 block cursor-pointer focus:outline-none"
+            tabIndex={-1}
+          />
+
+          {/* Responsive, accessible CTA overlay positioned precisely over the 'Become a Seller' button */}
+          <Link
+            to={sellerUrl}
+            aria-label="Become a Seller"
+            title="Become a Seller on Dear Hills"
+            className="absolute z-20 block rounded-full cursor-pointer transition-all duration-200 hover:ring-2 hover:ring-amber-300/80 hover:bg-white/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-400"
+            style={{
+              left: '8%',
+              top: '67%',
+              width: '21.7%',
+              height: '8.35%',
+            }}
           >
-            Apply to sell this festive season &rarr;
+            <span className="sr-only">Become a Seller</span>
           </Link>
         </div>
       </div>

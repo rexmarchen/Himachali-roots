@@ -1374,14 +1374,14 @@ export function HomePage() {
             data.campaign?.posterUrl
               ? data.campaign
               : {
-                  id: 'cmp_diwali_2026',
-                  name: 'Pahadi Festive Glow',
-                  slug: 'pahadi-festive-glow',
+                  id: 'cmp_christmas_2026',
+                  name: 'Dear Hills Christmas Campaign',
+                  slug: 'christmas-craft-shine',
                   description:
-                    'A Diwali collection from Himachali makers: handwoven wool, Kangra tea, orchard walnuts, wildflower honey and Chamba embroidery.',
-                  posterUrl: '/images/campaigns/pahadi-festive-glow-diwali-1672.webp',
+                    'This Christmas, Let Your Craft Shine. Join Dear Hills and showcase your handmade creations, local products and more to a wider audience.',
+                  posterUrl: '/images/campaigns/dearhills-christmas-campaign-1672.webp',
                   posterAlt:
-                    'Pahadi Festive Glow — Diwali in Himachal: festive poster with diya lights, mountain silhouettes and the Pahadi Roots wordmark.',
+                    'Dear Hills Christmas Campaign — This Christmas, Let Your Craft Shine. Join Dear Hills and showcase your handmade creations, local products and more to a wider audience. Become a Seller.',
                   status: 'active',
                   startsAt: null,
                   endsAt: null,

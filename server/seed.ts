@@ -1197,8 +1197,8 @@ export async function seed(db: Db, options: { reset?: boolean } = {}): Promise<v
       'Pahadi Festive Glow',
       'pahadi-festive-glow',
       'A Diwali collection from Himachali makers: handwoven wool, Kangra tea, orchard walnuts, wildflower honey and Chamba embroidery. Only the products listed in this offer carry a promotional price.',
-      '/images/campaigns/pahadi-festive-glow-diwali-1672.webp',
-      'Pahadi Festive Glow — Diwali in Himachal: a festive poster with diya lights, mountain silhouettes and the DEAR HILLS wordmark.',
+      '/images/campaigns/dearhills-christmas-campaign-1672.webp',
+      'Dear Hills Christmas Campaign — This Christmas, Let Your Craft Shine. Become a Seller.',
       now,
       now,
     );

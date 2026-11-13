@@ -43,9 +43,9 @@ const FALLBACK_DIWALI_DATA: CampaignResponse = {
     slug: 'pahadi-festive-glow',
     description:
       'A Diwali collection from Himachali makers: handwoven wool, Kangra tea, orchard walnuts, wildflower honey and Chamba embroidery. Dispatched directly from Himachal Pradesh with festive savings.',
-    posterUrl: '/images/campaigns/pahadi-festive-glow-diwali-1672.webp',
+    posterUrl: '/images/campaigns/dearhills-christmas-campaign-1672.webp',
     posterAlt:
-      'Pahadi Festive Glow — Diwali in Himachal: festive poster with diya lights, mountain silhouettes and the Pahadi Roots wordmark.',
+      'Dear Hills Christmas Campaign — This Christmas, Let Your Craft Shine. Become a Seller.',
     status: 'active',
     startsAt: null,
     endsAt: null,
