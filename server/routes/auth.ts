@@ -305,6 +305,7 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
     const cart = ensureCart(db, userId, (req.cookies as Record<string, string> | undefined)?.[CART_COOKIE] ?? null);
     setCartCookie(res, cart.token);
     const devVerifyUrl = await issueVerification(db, { id: userId, email, fullName: input.fullName });
+    audit(db, { id: userId, email }, 'auth.register', 'user', userId);
     res.status(201).json({
       user: getSessionUser(db, userId),
       devVerifyUrl,
@@ -323,9 +324,13 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
     const storedHash = user && hasUsablePassword(user.password_hash) ? user.password_hash : DUMMY_PASSWORD_HASH;
     const valid = verifyPassword(input.password, storedHash) && Boolean(user && hasUsablePassword(user.password_hash));
     if (!user || !valid) {
+      audit(db, user ? { id: user.id, email: user.email } : null, 'auth.signin.failed', 'user', user?.id ?? normalizeEmail(input.email));
       throw unauthorized('That email and password combination is not recognised.');
     }
-    if (user.is_disabled) throw disabledError();
+    if (user.is_disabled) {
+      audit(db, { id: user.id, email: user.email }, 'auth.signin.disabled', 'user', user.id);
+      throw disabledError();
+    }
     if (PasswordService.needsRehash(user.password_hash)) {
       const upgradedHash = PasswordService.hash(input.password);
       execute(db, 'UPDATE users SET password_hash = ? WHERE id = ?', upgradedHash, user.id);
@@ -335,10 +340,14 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
       return;
     }
     const body = signInResponse(db, req, res, user.id);
+    audit(db, { id: user.id, email: user.email }, 'auth.signin', 'user', user.id);
     res.json(body);
   });
 
   router.post('/logout', (req, res) => {
+    if (req.user) {
+      audit(db, req.user, 'auth.signout', 'user', req.user.id);
+    }
     // Clear the cookie even when the session is already expired so a browser
     // cannot keep sending a dead identifier.
     destroySession(db, sessionToken(req));

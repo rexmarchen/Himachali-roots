@@ -23,7 +23,7 @@ export type AppDeps = Partial<AuthRouterDeps> & Partial<ShopRouterDeps>;
 export function createApp(db: Db, deps: AppDeps = {}): express.Express {
   const app = express();
   app.disable('x-powered-by');
-  if (env.trustProxy !== false) app.set('trust proxy', env.trustProxy);
+  if (env.trustProxy) app.set('trust proxy', 1);
 
   app.use((req, res, next) => {
     const supplied = req.get('x-request-id');

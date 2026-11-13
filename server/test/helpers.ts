@@ -50,7 +50,7 @@ export function setupTestApp(deps: AppDeps = {}): { app: Express; db: Db } {
   const app = createApp(db, {
     // The provider boundary is stubbed in tests. The fake reads the expected
     // amount from the local payment row so the verification logic still runs.
-    fetchRazorpayPayment: async (paymentId, providerOrderId) => {
+    fetchRazorpayPayment: async (paymentId: string, providerOrderId: string) => {
       if (razorpayPaymentOverride) return razorpayPaymentOverride(paymentId, providerOrderId);
       const payment = queryOne<{ amount_paise: number }>(
         db,

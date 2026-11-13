@@ -125,6 +125,29 @@ describe('registration and sessions', () => {
     expect(logout.status).toBe(200);
     expect((await agent.get('/api/auth/me')).body.user).toBeNull();
   });
+
+  it('records audit log entries for login, failed login and logout', async () => {
+    // 1. Successful login
+    const agent = await login(app, 'customer@test.local');
+    const signinLog = db.prepare("SELECT * FROM audit_logs WHERE action = 'auth.signin' AND actor_email = ? ORDER BY created_at DESC LIMIT 1").get('customer@test.local') as { action: string; actor_email: string } | undefined;
+    expect(signinLog).toBeTruthy();
+    expect(signinLog?.action).toBe('auth.signin');
+
+    // 2. Failed login
+    await mutate(request(app).post('/api/auth/login')).send({
+      email: 'customer@test.local',
+      password: 'wrong-password',
+    });
+    const failedLog = db.prepare("SELECT * FROM audit_logs WHERE action = 'auth.signin.failed' AND actor_email = ? ORDER BY created_at DESC LIMIT 1").get('customer@test.local') as { action: string; actor_email: string } | undefined;
+    expect(failedLog).toBeTruthy();
+    expect(failedLog?.action).toBe('auth.signin.failed');
+
+    // 3. Logout
+    await mutate(agent.post('/api/auth/logout')).send({});
+    const logoutLog = db.prepare("SELECT * FROM audit_logs WHERE action = 'auth.signout' AND actor_email = ? ORDER BY created_at DESC LIMIT 1").get('customer@test.local') as { action: string; actor_email: string } | undefined;
+    expect(logoutLog).toBeTruthy();
+    expect(logoutLog?.action).toBe('auth.signout');
+  });
 });
 
 describe('role-based access control', () => {
