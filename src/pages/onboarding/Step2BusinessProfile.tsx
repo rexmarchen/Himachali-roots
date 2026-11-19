@@ -67,6 +67,15 @@ export function Step2BusinessProfile({ form, onChange, onNext, onBack }: Props) 
       setError('Please enter your street address or landmark.');
       return;
     }
+    const cleanPhone = form.phone.trim().replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setError('Please enter a valid 10-digit Indian contact mobile number (starting with 6, 7, 8, or 9).');
+      return;
+    }
+    if (form.sellerCategory === 'food_producer' && !form.fssaiNumber.trim()) {
+      setError('Food producers must provide an FSSAI registration or license number.');
+      return;
+    }
     if (!/^\d{6}$/.test(form.address.pincode.trim())) {
       setError('Please enter a valid 6-digit Indian PIN code.');
       return;
@@ -139,11 +148,31 @@ export function Step2BusinessProfile({ form, onChange, onNext, onBack }: Props) 
             />
           </Field>
 
-          <Field label="Legal / Registered Name" hint="If registered as a firm or cooperative">
+          <Field label="One-line Tagline" hint="e.g. Handwoven pure desi woolens from Sangla">
             <Input
-              value={form.businessRegistrationNumber ? form.businessName : ''}
-              placeholder="Legal entity name (optional)"
+              value={form.tagline}
+              maxLength={140}
+              placeholder="Brief summary of your craft or harvest"
               onChange={(e) => onChange({ tagline: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Contact Mobile Number" required hint="10-digit Indian mobile number for order dispatch & SMS">
+            <Input
+              required
+              maxLength={10}
+              value={form.phone}
+              placeholder="e.g. 9816012345"
+              onChange={(e) => onChange({ phone: e.target.value.replace(/\D/g, '') })}
+            />
+          </Field>
+          <Field label="Business Registration / Udyam / Society No." hint="Optional if registered as a firm, MSME, or cooperative">
+            <Input
+              value={form.businessRegistrationNumber}
+              placeholder="e.g. UDYAM-HP-01-0012345 or Society Reg (optional)"
+              onChange={(e) => onChange({ businessRegistrationNumber: e.target.value })}
             />
           </Field>
         </div>
@@ -323,10 +352,89 @@ export function Step2BusinessProfile({ form, onChange, onNext, onBack }: Props) 
             </Field>
           </div>
         ) : null}
+
+        {form.sellerCategory === 'food_producer' ? (
+          <div className="rounded-sm bg-warm-paper/50 p-4 border border-line space-y-3">
+            <p className="text-xs font-semibold text-forest uppercase tracking-wider">
+              Food Safety & Preparation Details
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="FSSAI Registration / License Number" required hint="14-digit FSSAI number">
+                <Input
+                  required
+                  value={form.fssaiNumber}
+                  placeholder="e.g. 20923001000123"
+                  maxLength={14}
+                  onChange={(e) =>
+                    onChange({
+                      fssaiNumber: e.target.value.replace(/\D/g, ''),
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Preparation Location & Unit" required hint="Where the food is made or bottled">
+                <Input
+                  required
+                  value={form.categoryAnswers?.kitchenLocation ?? ''}
+                  placeholder="e.g. Naggar workshop / kitchen unit"
+                  onChange={(e) =>
+                    onChange({
+                      categoryAnswers: { ...form.categoryAnswers, kitchenLocation: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+            </div>
+            <Field label="Ingredients & Preservation Method" hint="e.g. Traditional sun-drying, organic mustard oil, unpasteurized honey">
+              <Input
+                value={form.categoryAnswers?.preservation ?? ''}
+                placeholder="Preservation methods used"
+                onChange={(e) =>
+                  onChange({
+                    categoryAnswers: { ...form.categoryAnswers, preservation: e.target.value },
+                  })
+                }
+              />
+            </Field>
+          </div>
+        ) : null}
+
+        {form.sellerCategory === 'retailer' ? (
+          <div className="rounded-sm bg-warm-paper/50 p-4 border border-line space-y-3">
+            <p className="text-xs font-semibold text-forest uppercase tracking-wider">
+              Retailer & Resale Authorization
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Makers or Brands Stocked" required hint="Which Himachali artisans or producers you represent">
+                <Input
+                  required
+                  value={form.categoryAnswers?.authorizedBrands ?? ''}
+                  placeholder="e.g. Chamba Rumal artisans, Kullu weavers"
+                  onChange={(e) =>
+                    onChange({
+                      categoryAnswers: { ...form.categoryAnswers, authorizedBrands: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Storage & Dispatch Facility" hint="How products are kept safe from moisture/damage">
+                <Input
+                  value={form.categoryAnswers?.storageFacility ?? ''}
+                  placeholder="e.g. Temperature-controlled dry warehouse in Mandi"
+                  onChange={(e) =>
+                    onChange({
+                      categoryAnswers: { ...form.categoryAnswers, storageFacility: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Navigation Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-line">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-3 pt-4 border-t border-line">
         <Button type="button" variant="secondary" onClick={onBack}>
           &larr; Back to Account
         </Button>

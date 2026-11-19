@@ -9,6 +9,7 @@ import { EcommerceSearchBar } from './EcommerceSearchBar';
 const NAV = [
   { label: 'Shop', to: '/shop' },
   { label: 'Makers', to: '/makers' },
+  { label: 'Journal', to: '/blog' },
   { label: 'How we source', to: '/sourcing' },
   { label: 'Our Story', to: '/about' },
 ];
@@ -16,7 +17,7 @@ const NAV = [
 function Wordmark({ compact = false, light = false }: { compact?: boolean; light?: boolean }) {
   return (
     <Link to="/" className="group flex items-center gap-2.5 sm:gap-3" aria-label="DEAR HILLS home">
-      <svg viewBox="0 0 48 48" className="h-8 w-8 sm:h-9 sm:w-9 lg:h-10 lg:w-10 xl:h-11 xl:w-11 shrink-0 drop-shadow-xs" aria-hidden>
+      <svg viewBox="0 0 48 48" className="h-8 w-8 sm:h-9 sm:w-9 lg:h-9 lg:w-9 xl:h-10 xl:w-10 shrink-0 drop-shadow-xs" aria-hidden>
         <rect width="48" height="48" rx="2" fill={light ? '#F7F3EB' : '#243D32'} />
         <path d="M9 35 20 15l5 11 4-6 9 15H9Z" fill={light ? '#243D32' : '#F7F3EB'} />
         <path d="M16 35 25 21l6 14H16Z" fill="#C77759" />
@@ -24,7 +25,7 @@ function Wordmark({ compact = false, light = false }: { compact?: boolean; light
       </svg>
       <span className="leading-none">
         <span
-          className={`block font-serif text-[17px] sm:text-[19px] lg:text-[22px] xl:text-[24px] tracking-[0.02em] transition-colors duration-200 ${
+          className={`block font-serif text-[17px] sm:text-[18px] lg:text-[20px] xl:text-[22px] tracking-[0.02em] transition-colors duration-200 ${
             light ? 'text-[#FFFEFA] group-hover:text-sand' : 'text-forest group-hover:text-terra'
           }`}
         >
@@ -32,7 +33,7 @@ function Wordmark({ compact = false, light = false }: { compact?: boolean; light
         </span>
         {!compact ? (
           <span
-            className={`mt-0.5 sm:mt-1 block text-[7.5px] sm:text-[8.5px] lg:text-[10px] xl:text-[10.5px] font-semibold uppercase tracking-[0.28em] transition-colors duration-200 ${
+            className={`mt-0.5 sm:mt-1 block text-[7.5px] sm:text-[8px] lg:text-[9px] xl:text-[9.5px] font-semibold uppercase tracking-[0.28em] transition-colors duration-200 ${
               light ? 'text-white/75' : 'text-muted'
             }`}
           >
@@ -77,7 +78,7 @@ function AccountMenu({ light = false }: { light?: boolean }) {
     return (
       <Link
         to="/login"
-        className={`inline-flex min-h-11 lg:min-h-12 items-center px-2.5 sm:px-3 text-[12.5px] sm:text-xs lg:text-[14px] font-medium transition-colors ${
+        className={`inline-flex min-h-11 lg:min-h-12 items-center px-2.5 sm:px-3 text-[12.5px] sm:text-xs lg:text-[13px] font-medium transition-colors ${
           light ? 'text-white/90 hover:text-white' : 'text-ink hover:text-terra'
         }`}
       >
@@ -91,7 +92,7 @@ function AccountMenu({ light = false }: { light?: boolean }) {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className={`flex min-h-11 lg:min-h-12 items-center gap-2 px-1.5 text-[12.5px] sm:text-xs lg:text-[14px] font-medium transition-colors ${
+        className={`flex min-h-11 lg:min-h-12 items-center gap-2 px-1.5 text-[12.5px] sm:text-xs lg:text-[13px] font-medium transition-colors ${
           light ? 'text-white hover:text-sand' : 'text-ink hover:text-terra'
         }`}
         aria-expanded={open}
@@ -186,6 +187,8 @@ function HeritageAnnouncementBar({ customText, light = false }: { customText?: s
   const { config } = useAuth();
   const freeShippingThreshold = config?.shipping.freeThresholdPaise ?? 0;
 
+  if (!customText) return null;
+
   return (
     <div
       className={`border-b transition-colors duration-300 ${
@@ -195,27 +198,13 @@ function HeritageAnnouncementBar({ customText, light = false }: { customText?: s
     >
       <div className="mx-auto flex min-h-8 sm:min-h-9 lg:min-h-10 max-w-[88rem] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 xl:px-10 py-1.5 sm:py-2 text-[11px] sm:text-xs lg:text-[13px] font-medium tracking-[0.02em]">
         <div className="flex items-center gap-2 min-w-0">
-          <Link
-            to="/offers/pahadi-festive-glow"
-            className="flex items-center gap-1.5 font-bold text-butter hover:text-white transition-colors shrink-0"
-          >
-            <span>🪔</span>
-            <span className="underline underline-offset-4 decoration-butter/60">Diwali Shubh Aarambh</span>
-          </Link>
-          <span className="opacity-40 hidden sm:inline" aria-hidden>·</span>
           <p className="line-clamp-1 truncate">
-            {customText || 'Up to 30% Off Pure Himalayan Harvest & Handlooms · 0% Platform Fee'}
+            {customText}
           </p>
         </div>
         {freeShippingThreshold > 0 ? (
           <p className="hidden shrink-0 text-sand xl:block">Free shipping over {formatINR(freeShippingThreshold)}</p>
         ) : null}
-        <Link
-          to="/offers/pahadi-festive-glow"
-          className="hidden shrink-0 items-center gap-1.5 text-sand transition-colors hover:text-white md:flex font-semibold"
-        >
-          <span>Explore Diwali Offers</span> <span aria-hidden>→</span>
-        </Link>
       </div>
     </div>
   );
@@ -295,7 +284,7 @@ function CartLink({ count, compact = false, light = false }: { count: number; co
       }
       aria-label={`Shopping bag with ${count} item${count === 1 ? '' : 's'}`}
     >
-      <Icon name="bag" className={compact ? 'h-4.5 w-4.5 lg:h-5 lg:w-5' : 'h-4 w-4 lg:h-5 lg:w-5'} />
+      <Icon name="bag" className={compact ? 'h-4 w-4 lg:h-[18px] lg:w-[18px]' : 'h-4 w-4 lg:h-5 lg:w-5'} />
       {!compact ? <span className="hidden sm:inline">Bag</span> : null}
       <span
         className={
@@ -418,17 +407,23 @@ function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur-md text-ink shadow-2xs">
-      <HeritageAnnouncementBar
-        customText={announcement?.active && announcement.text ? announcement.text : undefined}
-      />
+    <header
+      className={`sticky top-0 z-40 border-b border-line bg-paper/95 text-ink shadow-2xs ${
+        // backdrop-filter makes the header a containing block for the fixed
+        // mobile menu, which would clip it to the header height.
+        mobileOpen ? '' : 'backdrop-blur-md'
+      }`}
+    >
+      {announcement?.active && announcement.text ? (
+        <HeritageAnnouncementBar customText={announcement.text} />
+      ) : null}
 
-      <div className="mx-auto flex h-13 sm:h-14 lg:h-16 max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-4 px-4 sm:px-6 lg:px-8 xl:px-10">
+      <div className="mx-auto flex h-13 sm:h-14 max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-4 px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="shrink-0">
           <Wordmark />
         </div>
 
-        <div className="mx-2 hidden flex-1 md:flex lg:mx-3 min-w-[200px] sm:min-w-[220px] lg:min-w-[260px] xl:min-w-[300px] max-w-lg lg:max-w-xl xl:max-w-2xl">
+        <div className="mx-2 hidden flex-1 md:flex lg:mx-3 min-w-[200px] sm:min-w-[220px] lg:min-w-[260px] xl:min-w-[300px] max-w-lg lg:max-w-lg xl:max-w-xl">
           <EcommerceSearchBar inputId="site-search-desktop" />
         </div>
 
@@ -439,7 +434,7 @@ function Header() {
               <Link
                 key={item.to}
                 to={item.to}
-                className={`border-b-2 py-1.5 text-[12.5px] lg:text-[13px] xl:text-[13.5px] font-medium transition-colors ${
+                className={`border-b-2 py-1.5 text-[12px] lg:text-[12.5px] xl:text-[13px] font-medium transition-colors ${
                   active
                     ? 'border-terra text-forest font-semibold'
                     : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
@@ -449,14 +444,6 @@ function Header() {
               </Link>
             );
           })}
-
-          <Link
-            to="/offers/pahadi-festive-glow"
-            className="hidden 2xl:inline-flex items-center gap-1 rounded-full border border-terra/30 bg-terra/10 px-2.5 py-0.5 text-[11px] lg:text-xs font-bold text-terra transition-all hover:bg-terra/20 shadow-xs"
-          >
-            <span>🪔</span>
-            <span>Diwali Offers</span>
-          </Link>
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5">
@@ -465,7 +452,7 @@ function Header() {
             className="hidden h-9.5 w-9.5 lg:h-10 lg:w-10 items-center justify-center text-ink transition-colors hover:text-terra sm:inline-flex"
             aria-label="Saved items"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-[18px] w-[18px] lg:h-5 lg:w-5" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-[17px] w-[17px] lg:h-[18px] lg:w-[18px]" aria-hidden>
               <path
                 d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
                 strokeWidth="1.6"
@@ -513,8 +500,8 @@ function Header() {
         <EcommerceSearchBar inputId="site-search-mobile" />
       </div>
 
-      <div className="hidden border-t md:block border-line bg-[#EFE9DD]/90 text-ink">
-        <div className="mx-auto flex max-w-[88rem] items-center px-4 sm:px-6 lg:px-8 xl:px-10 py-1.5 sm:py-2 text-[11.5px] sm:text-xs lg:text-[13px] font-medium">
+      <div className="hidden border-t border-line bg-[#EFE9DD]/90 text-ink md:block">
+        <div className="mx-auto flex max-w-[88rem] items-center px-4 sm:px-6 lg:px-8 xl:px-10 py-1.5 text-[11px] sm:text-[11.5px] lg:text-[12px] font-medium">
           <div className="no-scrollbar flex w-full items-center gap-1 lg:gap-1.5 overflow-x-auto whitespace-nowrap">
             <Link
               to="/shop"
@@ -543,16 +530,6 @@ function Header() {
                 {item.label}
               </Link>
             ))}
-            <Link
-              to="/offers/pahadi-festive-glow"
-              className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-bold text-[#C06041] hover:bg-terra/10 transition-colors flex items-center gap-1.5"
-            >
-              <span>🪔</span>
-              <span>Diwali Offers</span>
-              <span className="rounded-full bg-terra/20 border border-terra/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-terra">
-                30% off
-              </span>
-            </Link>
             <Link
               to="/shop?category=gifting"
               className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-semibold text-terra hover:bg-forest/10 transition-colors"
@@ -903,6 +880,7 @@ function Footer() {
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">Information & Trust</h3>
             <ul className="mt-4 space-y-2.5 text-sm text-paper/75">
               <li><Link to="/about" className="hover:text-sand transition-colors">Our story & philosophy</Link></li>
+              <li><Link to="/blog" className="hover:text-sand transition-colors">Mountain Journal &amp; Guides</Link></li>
               <li><Link to="/policies/shipping" className="hover:text-sand transition-colors">Shipping & delivery</Link></li>
               <li><Link to="/policies/returns" className="hover:text-sand transition-colors">Returns & refunds</Link></li>
               <li><Link to="/policies/authenticity" className="hover:text-sand transition-colors">Authenticity & product claims</Link></li>

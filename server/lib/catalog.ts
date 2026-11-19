@@ -40,7 +40,9 @@ function mapSummary(row: SummaryRow): ProductSummary {
     compareAtPricePaise: row.compare_at_price_paise,
     originalPricePaise: campaignPrice === null ? null : row.price_paise,
     discountPercent:
-      campaignPrice === null ? null : Math.round(((row.price_paise - campaignPrice) / row.price_paise) * 100),
+      campaignPrice === null || row.price_paise <= 0
+        ? null
+        : Math.round(((row.price_paise - campaignPrice) / row.price_paise) * 100),
     campaignSlug: null,
     campaignName: null,
     imageUrl: row.image_url,

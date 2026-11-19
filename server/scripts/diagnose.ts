@@ -90,11 +90,20 @@ const environmentKeys = [
   'ADMIN_NOTIFICATION_EMAIL',
 ];
 
+const hasEmailProvider = Boolean(process.env.RESEND_API_KEY?.trim() || process.env.SMTP_HOST?.trim());
+const isProd = (process.env.NODE_ENV ?? 'development') === 'production';
+
 const envReport = environmentKeys.map((key) => ({ key, set: Boolean(process.env[key]?.trim()) }));
+const coreKeysOk = environmentKeys
+  .filter((k) => k !== 'RESEND_API_KEY' && k !== 'SMTP_HOST')
+  .every((k) => Boolean(process.env[k]?.trim()));
+
+const envOk = coreKeysOk && (!isProd || hasEmailProvider);
+
 record(
-  envReport.every((entry) => entry.set) ? 'ok' : 'warn',
+  envOk ? 'ok' : 'warn',
   'environment',
-  `set=${envReport.filter((entry) => entry.set).length}/${envReport.length}`,
+  `core_keys=${environmentKeys.filter((k) => k !== 'RESEND_API_KEY' && k !== 'SMTP_HOST').filter((k) => Boolean(process.env[k]?.trim())).length}/12; email_provider=${hasEmailProvider ? 'configured' : isProd ? 'missing' : 'none (development mode)'}`,
 );
 
 if (fs.existsSync(databasePath)) {

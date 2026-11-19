@@ -166,11 +166,68 @@ export function ProductPage() {
   });
 
   const metaProduct = productQuery.data?.product;
+  const productJsonLd = metaProduct
+    ? {
+        '@context': 'https://schema.org/',
+        '@type': 'Product',
+        name: metaProduct.name,
+        image: metaProduct.images.map((img) =>
+          img.url.startsWith('http') ? img.url : `https://www.dearhills.in${img.url}`,
+        ),
+        description: metaProduct.shortDescription || metaProduct.description,
+        sku: metaProduct.sku || metaProduct.id,
+        brand: {
+          '@type': 'Brand',
+          name: 'Dear Hills',
+        },
+        countryOfOrigin: {
+          '@type': 'Country',
+          name: 'India',
+        },
+        offers: {
+          '@type': 'Offer',
+          url: `https://www.dearhills.in/shop/${metaProduct.slug}`,
+          priceCurrency: 'INR',
+          price: (metaProduct.pricePaise / 100).toFixed(2),
+          priceValidUntil: '2027-12-31',
+          availability:
+            metaProduct.stock <= 0
+              ? 'https://schema.org/OutOfStock'
+              : 'https://schema.org/InStock',
+          itemCondition: 'https://schema.org/NewCondition',
+          seller: {
+            '@type': 'Organization',
+            name: metaProduct.seller?.name || 'Dear Hills Artisan',
+          },
+        },
+        breadcrumb: {
+          '@context': 'https://schema.org/',
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+            { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://www.dearhills.in/shop' },
+            {
+              '@type': 'ListItem',
+              position: 3,
+              name: metaProduct.name,
+              item: `https://www.dearhills.in/shop/${metaProduct.slug}`,
+            },
+          ],
+        },
+      }
+    : undefined;
+
   usePageMeta({
-    title: metaProduct ? `${metaProduct.name} · Dear Hills` : 'Product · Dear Hills',
-    description: metaProduct?.shortDescription ?? 'An authentic Himachali product from a reviewed local maker.',
+    title: metaProduct
+      ? `${metaProduct.name} — Authentic Handcrafted Himachal | Dear Hills`
+      : 'Authentic Himalayan Product · Dear Hills',
+    description:
+      metaProduct?.shortDescription ||
+      (metaProduct?.description ? metaProduct.description.slice(0, 155) : undefined) ||
+      'An authentic Himachali handcrafted product from a reviewed local maker with verified provenance.',
     canonicalPath: metaProduct ? `/shop/${metaProduct.slug}` : '/shop',
     image: metaProduct?.images[0]?.url ?? null,
+    jsonLd: productJsonLd,
   });
 
   if (productQuery.isLoading) {

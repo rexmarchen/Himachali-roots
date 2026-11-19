@@ -8,7 +8,7 @@ interface MakersCinematicHeroProps {
 
 export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [videoLoaded, setVideoLoaded] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [videoError, setVideoError] = useState(false);
 
   useEffect(() => {
@@ -22,43 +22,53 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
       return;
     }
 
+    // Do not initiate play on data-saver connections to preserve user bandwidth
+    const connection = (navigator as unknown as { connection?: { saveData?: boolean } })?.connection;
+    if (connection?.saveData) {
+      return;
+    }
+
+    // Gracefully attempt autoplay; keep poster active until playback actually paints
     const playPromise = video.play();
     if (playPromise !== undefined) {
-      playPromise
-        .then(() => {
-          setVideoLoaded(true);
-        })
-        .catch(() => {
-          // Autoplay policy or low-power mode prevention: fallback gracefully
-          setVideoError(true);
-        });
+      playPromise.catch(() => {
+        // Autoplay policy or low-power mode prevention: fallback gracefully to poster
+        setVideoError(true);
+      });
     }
   }, []);
 
   return (
     <section
       aria-label="Cinematic Himalayan Makers Introduction"
-      className="relative min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] w-full overflow-hidden bg-[#101918] text-white flex flex-col justify-between"
+      className="relative min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] w-full overflow-hidden bg-[#14201c] bg-[radial-gradient(ellipse_at_65%_35%,_#2e3d36_0%,_#16221f_50%,_#0e1514_100%)] text-white flex flex-col justify-between"
     >
       {/* =========================================================================
           1. CINEMATIC VIDEO BACKGROUND & POSTER FALLBACK
          ========================================================================= */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        {/* Poster Image (shown immediately while video prepares or as fallback) */}
-        <picture>
-          <source srcSet="/images/makers/winter-morning-poster-v2.webp" type="image/webp" />
+        {/* Layer 1: Instant High-Res Mountain Poster (ALWAYS rendered, 0ms visual wait) */}
+        <picture className="absolute inset-0 h-full w-full">
+          <source
+            media="(max-width: 768px)"
+            srcSet="/images/makers/winter-morning-poster-720.webp"
+            type="image/webp"
+          />
+          <source
+            srcSet="/images/makers/winter-morning-poster-v2.webp"
+            type="image/webp"
+          />
           <img
             src="/images/makers/winter-morning-poster-v2.jpg"
-            alt=""
-            className={`h-full w-full object-cover object-center transition-opacity duration-1000 ${
-              videoLoaded && !videoError ? 'opacity-0' : 'opacity-100'
-            }`}
+            alt="Sunlit Himalayan mountain village at dawn in winter"
+            className="h-full w-full object-cover object-center"
             loading="eager"
             fetchPriority="high"
+            decoding="async"
           />
         </picture>
 
-        {/* Cinematic Looping Drone Video */}
+        {/* Layer 2: Looping Ambient Drone Video (smoothly dissolves in ONLY when playback actually renders) */}
         {!videoError && (
           <video
             ref={videoRef}
@@ -66,17 +76,25 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
             muted
             loop
             playsInline
-            preload="auto"
-            poster="/images/makers/winter-morning-poster-v2.webp"
-            onCanPlayThrough={() => setVideoLoaded(true)}
+            preload="metadata"
+            onPlaying={() => setIsVideoPlaying(true)}
+            onTimeUpdate={(e) => {
+              if (e.currentTarget.currentTime > 0.1 && !isVideoPlaying) {
+                setIsVideoPlaying(true);
+              }
+            }}
             onError={() => setVideoError(true)}
-            className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-1000 ${
-              videoLoaded ? 'opacity-100' : 'opacity-0'
+            className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-700 ease-out ${
+              isVideoPlaying ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            <source src="/videos/winter-morning-himalayas-v2.mp4" type="video/mp4" />
-            <source src="/videos/winter-morning-himalayas-720-v2.mp4" type="video/mp4" media="(max-width: 768px)" />
+            <source
+              src="/videos/winter-morning-himalayas-720-v2.mp4"
+              type="video/mp4"
+              media="(max-width: 768px)"
+            />
             <source src="/videos/winter-morning-himalayas-v2.webm" type="video/webm" />
+            <source src="/videos/winter-morning-himalayas-v2.mp4" type="video/mp4" />
           </video>
         )}
 
@@ -137,7 +155,7 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
         {/* Primary & Secondary Action CTAs */}
         <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 animate-hero-fade-up [animation-delay:320ms]">
           <Link
-            to="/become-a-maker?offer=diwali"
+            to="/become-a-maker"
             className="group w-full sm:w-auto inline-flex items-center justify-center gap-2.5 rounded-sm bg-[#D4A373] px-6 sm:px-7 py-3 sm:py-3.5 text-xs sm:text-sm font-semibold tracking-wide text-[#1B2824] shadow-lg transition-all duration-300 hover:bg-[#E5BC91] hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
           >
             <span>Become a Maker</span>

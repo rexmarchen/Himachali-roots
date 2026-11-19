@@ -19,6 +19,7 @@ import { newId } from '../lib/ids.js';
 import { getPolicy, getSiteContent } from '../lib/site.js';
 import { paymentProviderStatus } from '../lib/payments.js';
 import { notify } from '../lib/email.js';
+import { BLOG_POSTS } from '../../shared/blog.js';
 
 function optInt(value: unknown): number | undefined {
   if (value === undefined || value === null || value === '') return undefined;
@@ -38,11 +39,12 @@ export function publicRouter(db: Db): Router {
     const content = getSiteContent(db);
     const categories = listCategories(db).filter((category) => !category.parentId);
     const makers = listPublicSellers(db).slice(0, 3);
-    const products = listProducts(db, { featured: true, pageSize: 4, sort: 'newest' });
-    const newArrivals = listProducts(db, { pageSize: 4, sort: 'newest' });
+    const products = listProducts(db, { featured: true, pageSize: 8, sort: 'newest' });
+    const newArrivals = listProducts(db, { pageSize: 8, sort: 'newest' });
+    const catalogPreview = listProducts(db, { pageSize: 12, sort: 'popular' });
     const gifting =
       content.homepage.gifting.categorySlug
-        ? listProducts(db, { category: content.homepage.gifting.categorySlug, pageSize: 3 })
+        ? listProducts(db, { category: content.homepage.gifting.categorySlug, pageSize: 4 })
         : { items: [] };
 
     const bestsellerRows = queryAll<{
@@ -122,6 +124,7 @@ export function publicRouter(db: Db): Router {
       })),
       featured: products.items,
       newArrivals: newArrivals.items,
+      catalogPreview: catalogPreview.items,
       gifting: gifting.items,
       regions: getRegions(db).slice(0, 6),
       reviews: reviews.map((review) => ({
@@ -164,7 +167,7 @@ export function publicRouter(db: Db): Router {
       featured: req.query.featured === 'true',
       sort,
       page: optInt(req.query.page) ?? 1,
-      pageSize: optInt(req.query.pageSize) ?? 12,
+      pageSize: optInt(req.query.pageSize) ?? 24,
     });
     res.json({
       ...result,
@@ -174,7 +177,10 @@ export function publicRouter(db: Db): Router {
         regions: getRegions(db),
         priceRangePaise: queryOne<{ min: number | null; max: number | null }>(
           db,
-          "SELECT MIN(price_paise) AS min, MAX(price_paise) AS max FROM products WHERE status = 'approved'",
+          `SELECT MIN(p.price_paise) AS min, MAX(p.price_paise) AS max
+             FROM products p
+             JOIN seller_profiles s ON s.id = p.seller_id
+            WHERE p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'`,
         ),
       },
     });
@@ -187,7 +193,7 @@ export function publicRouter(db: Db): Router {
   router.get('/campaigns/:slug', (req, res) => {
     const rawSlug = String(req.params.slug).toLowerCase();
     let campaign = getCampaignBySlug(db, String(req.params.slug));
-    if (!campaign && ['diwali', 'diwali-offer', 'festive', 'festive-glow', 'pahadi-festive'].includes(rawSlug)) {
+    if (!campaign && ['seasonal', 'seasonal-collection', 'festive', 'festive-glow', 'pahadi-festive'].includes(rawSlug)) {
       campaign =
         getFeaturedCampaign(db) ??
         queryOne<CampaignRow>(db, "SELECT * FROM campaigns WHERE status = 'active' ORDER BY created_at DESC LIMIT 1");
@@ -542,21 +548,54 @@ function auditSupport(db: Db, id: string, email: string, ip: string): void {
 
 export function sitemapRouter(db: Db): Router {
   const router = Router();
-  router.get('/sitemap.xml', (_req, res) => {
-    const base = env.appUrl;
-    const staticPaths = ['/', '/shop', '/makers', '/about', '/sourcing', '/contact', '/faq'];
+
+  function resolveSitemapBase(req: Request): string {
+    if (env.isProduction) return 'https://www.dearhills.in';
+    const host = req.get('x-forwarded-host') || req.get('host') || '';
+    if (host.includes('dearhills.in')) return 'https://www.dearhills.in';
+    if (host) {
+      const proto = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
+      return `${proto}://${host}`;
+    }
+    return env.appUrl.startsWith('http') ? env.appUrl : 'https://www.dearhills.in';
+  }
+
+  router.get('/sitemap.xml', (req, res) => {
+    const base = resolveSitemapBase(req);
+    const staticEntries = [
+      { path: '/', priority: '1.0', changefreq: 'daily' },
+      { path: '/shop', priority: '0.9', changefreq: 'daily' },
+      { path: '/blog', priority: '0.8', changefreq: 'daily' },
+      { path: '/makers', priority: '0.8', changefreq: 'weekly' },
+      { path: '/about', priority: '0.7', changefreq: 'monthly' },
+      { path: '/sourcing', priority: '0.7', changefreq: 'monthly' },
+      { path: '/contact', priority: '0.6', changefreq: 'monthly' },
+      { path: '/faq', priority: '0.6', changefreq: 'monthly' },
+    ];
+
     const policyPaths = ['shipping', 'returns', 'privacy', 'terms', 'seller-terms', 'authenticity', 'cookies'].map(
       (key) => `/policies/${key}`,
     );
-    const products = queryAll<{ slug: string; updated_at: string }>(
+
+    const categories = queryAll<{ slug: string }>(
       db,
-      `SELECT p.slug, p.updated_at FROM products p JOIN seller_profiles s ON s.id = p.seller_id
-        WHERE p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'`,
+      "SELECT slug FROM categories WHERE is_active = 1 ORDER BY sort_order ASC",
     );
+
+    const products = queryAll<{ slug: string; name: string; updated_at: string; image_url: string | null }>(
+      db,
+      `SELECT p.slug, p.name, p.updated_at,
+              (SELECT url FROM product_images WHERE product_id = p.id ORDER BY sort_order ASC LIMIT 1) as image_url
+       FROM products p
+       JOIN seller_profiles s ON s.id = p.seller_id
+       WHERE p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'`,
+    );
+
     const sellers = queryAll<{ slug: string }>(
       db,
       "SELECT slug FROM seller_profiles WHERE status = 'approved' AND store_status = 'active'",
     );
+
     const campaigns = queryAll<Pick<CampaignRow, 'id' | 'slug' | 'status' | 'starts_at' | 'ends_at'>>(
       db,
       "SELECT id, slug, status, starts_at, ends_at FROM campaigns WHERE status = 'active'",
@@ -564,23 +603,71 @@ export function sitemapRouter(db: Db): Router {
       (campaign) =>
         effectiveCampaignStatus(campaign) === 'active' && campaignStats(db, campaign.id).productCount > 0,
     );
+
     const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
     const urls = [
-      ...staticPaths.map((path) => `<url><loc>${escape(base + path)}</loc></url>`),
-      ...policyPaths.map((path) => `<url><loc>${escape(base + path)}</loc></url>`),
-      ...campaigns.map((campaign) => `<url><loc>${escape(`${base}/offers/${campaign.slug}`)}</loc></url>`),
-      ...sellers.map((seller) => `<url><loc>${escape(`${base}/makers/${seller.slug}`)}</loc></url>`),
-      ...products.map(
-        (product) =>
-          `<url><loc>${escape(`${base}/shop/${product.slug}`)}</loc><lastmod>${escape(product.updated_at.slice(0, 10))}</lastmod></url>`,
+      ...staticEntries.map(
+        (entry) =>
+          `<url><loc>${escape(base + entry.path)}</loc><changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`,
+      ),
+      ...categories.map(
+        (category) =>
+          `<url><loc>${escape(`${base}/categories/${category.slug}`)}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`,
+      ),
+      ...campaigns.map(
+        (campaign) =>
+          `<url><loc>${escape(`${base}/offers/${campaign.slug}`)}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`,
+      ),
+      ...sellers.map(
+        (seller) =>
+          `<url><loc>${escape(`${base}/makers/${seller.slug}`)}</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>`,
+      ),
+      ...products.map((product) => {
+        const fullImg = product.image_url
+          ? product.image_url.startsWith('http')
+            ? product.image_url
+            : `${base}${product.image_url}`
+          : null;
+        const imgTag = fullImg
+          ? `<image:image><image:loc>${escape(fullImg)}</image:loc><image:title>${escape(product.name)}</image:title></image:image>`
+          : '';
+        return `<url><loc>${escape(`${base}/shop/${product.slug}`)}</loc><lastmod>${escape(product.updated_at.slice(0, 10))}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority>${imgTag}</url>`;
+      }),
+      ...BLOG_POSTS.map((post) => {
+        const fullImg = post.coverImage.startsWith('http') ? post.coverImage : `${base}${post.coverImage}`;
+        return `<url><loc>${escape(`${base}/blog/${post.slug}`)}</loc><lastmod>${escape(post.publishedAt)}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority><image:image><image:loc>${escape(fullImg)}</image:loc><image:title>${escape(post.title)}</image:title></image:image></url>`;
+      }),
+      ...policyPaths.map(
+        (path) =>
+          `<url><loc>${escape(base + path)}</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>`,
       ),
     ].join('');
-    res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
-  });
-  router.get('/robots.txt', (_req, res) => {
+
     res
-      .type('text/plain')
-      .send(`User-agent: *\nAllow: /\nDisallow: /account\nDisallow: /admin\nDisallow: /sell\nDisallow: /checkout\nDisallow: /api\nSitemap: ${env.appUrl}/sitemap.xml\n`);
+      .type('application/xml')
+      .set('Cache-Control', 'public, max-age=3600, s-maxage=86400')
+      .send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">${urls}</urlset>`);
   });
+
+  router.get('/robots.txt', (req, res) => {
+    const base = resolveSitemapBase(req);
+    res
+      .type('text/plain; charset=utf-8')
+      .set('Cache-Control', 'public, max-age=86400')
+      .send(`User-agent: *
+Allow: /
+Disallow: /account
+Disallow: /admin
+Disallow: /seller
+Disallow: /sell
+Disallow: /checkout
+Disallow: /api/
+Disallow: /onboarding
+
+Sitemap: ${base}/sitemap.xml
+`);
+  });
+
   return router;
 }

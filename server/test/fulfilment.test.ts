@@ -138,7 +138,7 @@ describe('seller ledger and settlements', () => {
 
     const earnings = await seller.get('/api/seller/earnings');
     expect(earnings.status).toBe(200);
-    expect(earnings.body.totals.eligible).toBe(88_000);
+    expect(earnings.body.totals.eligible).toBe(0);
     expect(earnings.body.totals.pending).toBe(0);
     expect(earnings.body.entries).toHaveLength(2);
 
@@ -172,6 +172,9 @@ describe('seller ledger and settlements', () => {
       new Date(Date.now() - 1000).toISOString(),
       IDS.seller,
     );
+
+    const matureEarnings = await seller.get('/api/seller/earnings');
+    expect(matureEarnings.body.totals.eligible).toBe(88_000);
 
     const created = await mutate(admin.post('/api/admin/settlements')).send({
       sellerId: IDS.seller,

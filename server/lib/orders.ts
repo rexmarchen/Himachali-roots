@@ -1278,8 +1278,12 @@ export function refreshOrderStatus(db: Db, orderId: string): string {
   let next = order.status;
   if (statuses.every((status) => status === 'cancelled')) next = 'cancelled';
   else if (statuses.every((status) => ['delivered', 'returned', 'refunded', 'cancelled'].includes(status))) next = 'fulfilled';
-  else if (statuses.some((status) => ['shipped', 'delivered', 'returned'].includes(status))) next = 'partially_fulfilled';
-  else if (order.paid_at) next = 'paid';
+  else if (statuses.every((status) => ['shipped', 'delivered', 'returned', 'cancelled'].includes(status))) {
+    // All items dispatched and in transit across mountain courier networks
+    next = 'partially_fulfilled';
+  } else if (statuses.some((status) => ['shipped', 'delivered', 'returned'].includes(status))) {
+    next = 'partially_fulfilled';
+  } else if (order.paid_at) next = 'paid';
 
   const refunded = queryOne<{ total: number }>(
     db,
@@ -1982,13 +1986,13 @@ export function generateSettlement(
       `SELECT id, type, amount_paise FROM seller_ledger_entries
         WHERE seller_id = ? AND status = 'eligible' AND settlement_id IS NULL
           AND hold_reason IS NULL
+          AND (available_at IS NULL OR (available_at >= ? AND available_at <= ?))
           AND (available_at IS NULL OR available_at <= ?)
-          AND created_at >= ? AND created_at <= ?
         ORDER BY created_at`,
       sellerId,
-      new Date().toISOString(),
       periodStart,
       periodEnd,
+      new Date().toISOString(),
     );
     if (entries.length === 0) throw badRequest('No eligible ledger entries in that period.');
 

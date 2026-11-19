@@ -51,8 +51,8 @@ export function Step3ProductsOrigin({ form, onChange, onNext, onBack }: Props) {
       setError('Please select at least one product category.');
       return;
     }
-    if (form.originNarrative.trim().length < 20) {
-      setError('Please provide a brief origin narrative (at least 20 characters) explaining where your materials come from.');
+    if (form.originNarrative.trim().length < 40) {
+      setError('Please provide an origin narrative (at least 40 characters) explaining where and how your products are made.');
       return;
     }
     if (!form.dispatchSameAsOperating) {
@@ -247,7 +247,7 @@ export function Step3ProductsOrigin({ form, onChange, onNext, onBack }: Props) {
       </div>
 
       {/* Navigation Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-line">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-3 pt-4 border-t border-line">
         <Button type="button" variant="secondary" onClick={onBack}>
           &larr; Back to Business
         </Button>

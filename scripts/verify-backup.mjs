@@ -13,8 +13,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-let target = path.resolve(process.argv[2] ?? '');
-if (!process.argv[2] || !fs.existsSync(target)) {
+let target = path.resolve(process.argv[2] ?? path.join(process.cwd(), 'backups'));
+if (!fs.existsSync(target)) {
   console.error(JSON.stringify({ level: 'error', msg: 'backup_not_found', usage: 'npm run db:verify -- <backup.db>' }));
   process.exit(1);
 }

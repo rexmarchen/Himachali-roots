@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 
-interface PageMeta {
+export interface PageMeta {
   title: string;
   description?: string;
   canonicalPath?: string;
   image?: string | null;
+  jsonLd?: Record<string, unknown> | Array<Record<string, unknown>>;
+  noindex?: boolean;
 }
 
 function setMeta(attr: 'name' | 'property', key: string, content: string | null): () => void {
@@ -50,32 +52,65 @@ function setCanonical(href: string | null): () => void {
   };
 }
 
+function setJsonLd(json: Record<string, unknown> | Array<Record<string, unknown>> | undefined): () => void {
+  if (!json) return () => {};
+  let script = document.head.querySelector<HTMLScriptElement>('#route-json-ld');
+  const previous = script?.textContent ?? null;
+  if (!script) {
+    script = document.createElement('script');
+    script.id = 'route-json-ld';
+    script.type = 'application/ld+json';
+    document.head.appendChild(script);
+  }
+  script.textContent = JSON.stringify(json);
+  return () => {
+    const current = document.head.querySelector<HTMLScriptElement>('#route-json-ld');
+    if (!current) return;
+    if (previous === null) current.remove();
+    else current.textContent = previous;
+  };
+}
+
 /**
  * Sets the document title and social/search metadata for a route and restores
- * the previous values when the route unmounts. Kept deliberately small: this
- * app is client-rendered and has no per-route metadata layer yet.
+ * the previous values when the route unmounts.
  */
-export function usePageMeta({ title, description, canonicalPath, image }: PageMeta): void {
+export function usePageMeta({ title, description, canonicalPath, image, jsonLd, noindex }: PageMeta): void {
   useEffect(() => {
     const previousTitle = document.title;
     document.title = title;
-    const canonical = canonicalPath ? `${window.location.origin}${canonicalPath}` : null;
-    const imageUrl = image ? (image.startsWith('http') ? image : `${window.location.origin}${image}`) : null;
+
+    const origin = window.location.hostname.includes('dearhills.in')
+      ? 'https://www.dearhills.in'
+      : window.location.origin;
+
+    const canonical = canonicalPath ? `${origin}${canonicalPath}` : null;
+    const imageUrl = image ? (image.startsWith('http') ? image : `${origin}${image}`) : null;
 
     const restores = [
       setMeta('name', 'description', description ?? null),
       setMeta('property', 'og:title', title),
       setMeta('property', 'og:description', description ?? null),
       setMeta('property', 'og:image', imageUrl),
+      setMeta('property', 'og:url', canonical ?? origin),
       setMeta('name', 'twitter:card', 'summary_large_image'),
       setMeta('name', 'twitter:title', title),
       setMeta('name', 'twitter:description', description ?? null),
+      setMeta('name', 'twitter:image', imageUrl),
+      setMeta(
+        'name',
+        'robots',
+        noindex
+          ? 'noindex, nofollow'
+          : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
+      ),
       setCanonical(canonical),
+      setJsonLd(jsonLd),
     ];
 
     return () => {
       document.title = previousTitle;
       for (const restore of restores) restore();
     };
-  }, [title, description, canonicalPath, image]);
+  }, [title, description, canonicalPath, image, jsonLd, noindex]);
 }

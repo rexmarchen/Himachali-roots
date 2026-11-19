@@ -1391,7 +1391,11 @@ export function sellerRouter(db: Db): Router {
   router.post('/products', (req, res) => {
     const id = sellerId(req);
     const input = parse(productSchema, req.body);
-    if (input.compareAtPricePaise && input.compareAtPricePaise < input.pricePaise) {
+    if (
+      input.compareAtPricePaise !== null &&
+      input.compareAtPricePaise !== undefined &&
+      input.compareAtPricePaise < input.pricePaise
+    ) {
       throw badRequest('Compare-at price must be at least the selling price.', {
         compareAtPricePaise: 'Must be at least the selling price.',
       });
@@ -1476,7 +1480,11 @@ export function sellerRouter(db: Db): Router {
       throw conflict('This listing is in review and cannot be edited until a reviewer responds.');
     }
     const input = parse(productSchema, req.body);
-    if (input.compareAtPricePaise && input.compareAtPricePaise < input.pricePaise) {
+    if (
+      input.compareAtPricePaise !== null &&
+      input.compareAtPricePaise !== undefined &&
+      input.compareAtPricePaise < input.pricePaise
+    ) {
       throw badRequest('Compare-at price must be at least the selling price.', {
         compareAtPricePaise: 'Must be at least the selling price.',
       });
@@ -1980,7 +1988,7 @@ export function sellerRouter(db: Db): Router {
     const id = sellerId(req);
     const input = parse(
       z.object({
-        action: z.enum(env.isTest ? ['confirm', 'accept', 'pack', 'ship', 'deliver', 'cancel', 'reject'] : ['confirm', 'accept', 'pack', 'ship', 'cancel', 'reject']),
+        action: z.enum(!env.isProduction ? ['confirm', 'accept', 'pack', 'ship', 'deliver', 'cancel', 'reject'] : ['confirm', 'accept', 'pack', 'ship', 'cancel', 'reject']),
         carrier: z.string().trim().max(80).optional(),
         trackingNumber: z.string().trim().max(120).optional(),
         trackingUrl: z.string().trim().url().max(500).optional().or(z.literal('')),
@@ -2369,14 +2377,16 @@ export function sellerRouter(db: Db): Router {
       pageSize,
       (page - 1) * pageSize,
     );
+    const nowIso = new Date().toISOString();
     const totals = queryOne<{ pending: number; eligible: number; settled: number; reversed: number }>(
       db,
       `SELECT
         COALESCE(SUM(CASE WHEN status = 'pending' THEN amount_paise ELSE 0 END),0) AS pending,
-        COALESCE(SUM(CASE WHEN status = 'eligible' THEN amount_paise ELSE 0 END),0) AS eligible,
+        COALESCE(SUM(CASE WHEN status = 'eligible' AND (available_at IS NULL OR available_at <= ?) THEN amount_paise ELSE 0 END),0) AS eligible,
         COALESCE(SUM(CASE WHEN status = 'settled' THEN amount_paise ELSE 0 END),0) AS settled,
         COALESCE(SUM(CASE WHEN status = 'reversed' THEN amount_paise ELSE 0 END),0) AS reversed
        FROM seller_ledger_entries WHERE seller_id = ?`,
+      nowIso,
       id,
     );
     

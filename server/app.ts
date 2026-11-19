@@ -15,6 +15,7 @@ import { shopRouter, type ShopRouterDeps } from './routes/shop.js';
 import { accountRouter } from './routes/account.js';
 import { sellerRouter } from './routes/seller.js';
 import { adminRouter } from './routes/admin.js';
+import { getSeoMetadata, injectSeoIntoHtml } from './lib/seo.js';
 
 import { MetricsRegistry } from './core/telemetry/metrics.js';
 
@@ -174,18 +175,21 @@ export function createApp(db: Db, deps: AppDeps = {}): express.Express {
         },
       }),
     );
-    // Public video assets: must-revalidate with immediate ETag verification to avoid stale video cache
+    // Public video assets: 30 days cache with stale-while-revalidate for instant repeat loads
     app.use(
       '/videos',
       express.static(path.join(dist, 'videos'), {
         index: false,
-        maxAge: 0,
+        maxAge: '30d',
         setHeaders: (res) => {
-          res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+          res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
         },
       }),
     );
     app.use(express.static(dist, { index: false, maxAge: '1h' }));
+    let cachedRawIndexHtml: string | null = null;
+    let cachedRawIndexMtime = 0;
+
     app.use((req, res, next) => {
       if ((req.method !== 'GET' && req.method !== 'HEAD') || req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
         next();
@@ -196,11 +200,31 @@ export function createApp(db: Db, deps: AppDeps = {}): express.Express {
         res.status(503).type('text/plain').send('Frontend build not found. Run `npm run build`.');
         return;
       }
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Surrogate-Control', 'no-store');
-      res.sendFile(indexPath);
+
+      try {
+        const stats = fs.statSync(indexPath);
+        if (!cachedRawIndexHtml || stats.mtimeMs > cachedRawIndexMtime) {
+          cachedRawIndexHtml = fs.readFileSync(indexPath, 'utf8');
+          cachedRawIndexMtime = stats.mtimeMs;
+        }
+
+        const host = req.get('x-forwarded-host') || req.get('host') || undefined;
+        const seo = getSeoMetadata(db, req.path, host, req.query as Record<string, string | undefined>);
+        const transformedHtml = injectSeoIntoHtml(cachedRawIndexHtml, seo);
+
+        if (seo.noindex) {
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+          res.setHeader('Pragma', 'no-cache');
+        } else {
+          // Public pages: no-cache ensures browsers always check ETag and immediately load new fingerprinted bundles on deployment
+          res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+        }
+
+        res.type('text/html; charset=utf-8').send(transformedHtml);
+      } catch {
+        res.sendFile(indexPath);
+      }
     });
   } else {
     // Development fallback when dist is not built yet: redirect browser requests to Vite dev server

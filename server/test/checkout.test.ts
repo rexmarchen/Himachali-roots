@@ -304,13 +304,13 @@ describe('payment verification and obsolete route deprecation', () => {
   const TEST_KEY_SECRET = 'test_secret_key_for_hmac_sha256_32char';
 
   beforeEach(() => {
-    (env.razorpay as any).keyId = 'rzp_test_mock_key';
-    (env.razorpay as any).keySecret = TEST_KEY_SECRET;
+    (env.razorpay as unknown as { keyId: string; keySecret: string }).keyId = 'rzp_test_mock_key';
+    (env.razorpay as unknown as { keyId: string; keySecret: string }).keySecret = TEST_KEY_SECRET;
   });
 
   afterAll(() => {
-    (env.razorpay as any).keyId = originalKeyId;
-    (env.razorpay as any).keySecret = originalKeySecret;
+    (env.razorpay as unknown as { keyId: string; keySecret: string }).keyId = originalKeyId;
+    (env.razorpay as unknown as { keyId: string; keySecret: string }).keySecret = originalKeySecret;
   });
 
   afterEach(() => {

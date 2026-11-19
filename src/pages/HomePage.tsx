@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -7,7 +7,7 @@ import { formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
 import { api } from '@/lib/api';
 import { usePageMeta } from '@/lib/usePageMeta';
-import { ProductCard } from '@/components/ProductCard';
+import { ProductCard, ProductGrid } from '@/components/ProductCard';
 import { CampaignBanner } from '@/components/CampaignBanner';
 import {
   Badge,
@@ -45,6 +45,7 @@ interface HomeResponse {
   }[];
   featured: ProductSummary[];
   newArrivals: ProductSummary[];
+  catalogPreview?: ProductSummary[];
   gifting: ProductSummary[];
   regions: { region: string; productCount: number }[];
   reviews: {
@@ -241,24 +242,13 @@ function CinematicHero() {
         />
       </div>
 
-      <div className="relative z-30 mx-auto flex w-full max-w-[88rem] flex-1 flex-col justify-end px-4 pb-6 pt-6 sm:px-8 sm:pb-14 sm:pt-24 lg:px-12 lg:pb-16 lg:pt-36">
+      <div className="relative z-30 mx-auto flex w-full max-w-[88rem] flex-1 flex-col justify-end px-4 pb-6 pt-6 sm:px-8 sm:pb-14 sm:pt-24 lg:px-12 lg:pb-28 lg:pt-24 xl:pb-32 xl:pt-20">
         <div className="max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-black/40 px-3.5 py-1.5 sm:px-4 sm:py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/95 shadow-sm backdrop-blur-md sm:text-xs lg:text-[12.5px]">
               <span className="h-2 w-2 rounded-full bg-terra" aria-hidden />
               <span>Rooted in Himachal Pradesh</span>
             </div>
-
-            <Link
-              to="/offers/pahadi-festive-glow"
-              className="inline-flex items-center gap-1.5 rounded-full border border-butter/50 bg-black/50 px-3 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs lg:text-[12.5px] font-bold text-butter shadow-sm backdrop-blur-md transition-all hover:bg-black/75 hover:border-butter"
-            >
-              <span>🪔</span>
-              <span>Diwali Festive Offers</span>
-              <span className="rounded bg-terra px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-white">
-                30% Off
-              </span>
-            </Link>
           </div>
 
           <h1 className="mt-3 font-serif text-[2.2rem] font-normal leading-[1.05] tracking-[-0.02em] text-white drop-shadow-md sm:mt-5 sm:text-5xl md:text-6xl lg:text-[4.6rem] xl:text-[5.4rem]">
@@ -281,14 +271,6 @@ function CinematicHero() {
                 →
               </span>
             </LinkButton>
-
-            <Link
-              to="/offers/pahadi-festive-glow"
-              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-butter/60 bg-black/50 px-5 py-3 sm:px-7 sm:py-4 text-sm sm:text-base font-semibold text-butter shadow-sm backdrop-blur-md transition-all hover:border-butter hover:bg-black/75"
-            >
-              <span>🪔</span>
-              <span>Diwali Special Edition</span>
-            </Link>
 
             <Link
               to="/makers"
@@ -653,21 +635,21 @@ function MakersCelebrationSection({ makers }: { makers: MakerSummary[] }) {
           ))}
         </div>
 
-        {/* Diwali Maker Onboarding Invitation */}
+        {/* Himalayan Maker Onboarding Invitation */}
         <div className="mt-12 rounded-xl border border-[#D4A373]/40 bg-[#FAF5EE] p-6 sm:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6 shadow-xs">
           <div className="max-w-2xl">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E07A5F]/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[#C06041]">
-              🪔 Diwali Maker Initiative
+              🏔️ Himalayan Maker Initiative
             </span>
             <h3 className="mt-2 font-serif text-2xl text-forest">
               Are you crafting or harvesting in Himachal?
             </h3>
             <p className="mt-1 text-xs leading-relaxed text-ink/75 sm:text-sm">
-              Launch your festive storefront this Diwali with <strong>0% Commission for 6 months</strong>, free craft storytelling, and insured doorstep dispatch from all 12 districts.
+              Launch your independent storefront on DEAR HILLS with <strong>0% Commission for 6 months</strong>, free craft storytelling, and insured doorstep dispatch from all 12 districts.
             </p>
           </div>
           <div className="shrink-0">
-            <LinkButton to="/become-a-maker?offer=diwali" variant="terra" size="md">
+            <LinkButton to="/become-a-maker" variant="terra" size="md">
               Sell on DEAR HILLS &rarr;
             </LinkButton>
           </div>
@@ -1091,7 +1073,7 @@ function SellerBannerSection({ counts }: { counts: { products: number; sellers: 
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-4">
-              <LinkButton to="/become-a-maker?offer=diwali" variant="terra" size="lg" className="shadow-lg hover:shadow-xl transition-all">
+              <LinkButton to="/become-a-maker" variant="terra" size="lg" className="shadow-lg hover:shadow-xl transition-all">
                 Become a Maker
               </LinkButton>
               <Link
@@ -1217,7 +1199,7 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
           </div>
 
           {/* Carousel Arrows */}
-          <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2">
             <button
               type="button"
               onClick={() => scroll('left')}
@@ -1249,7 +1231,7 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {products.map((product, index) => (
-            <div key={product.id} className="min-w-0 sm:w-[280px] lg:w-[300px] sm:shrink-0 flex">
+            <div key={product.id} className="w-full min-w-0 sm:w-[280px] lg:w-[300px] sm:shrink-0 flex">
               <ProductCard product={product} priority={index < 4} />
             </div>
           ))}
@@ -1286,7 +1268,7 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
             <Link
               key={item.slug}
               to={`/shop/${item.slug}`}
-              className="group min-w-0 flex flex-col justify-between bg-white rounded-lg border border-[#E4DACE]/75 shadow-[0_1px_4px_rgba(23,35,33,0.03)] p-1.5 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none transition-all"
+              className="group w-full min-w-0 flex flex-col justify-between bg-white rounded-lg border border-[#E4DACE]/75 shadow-[0_1px_4px_rgba(23,35,33,0.03)] p-1.5 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none transition-all"
             >
               <div>
                 <div className="relative aspect-square overflow-hidden rounded-md sm:rounded-none border border-[#E4DACE]/40 sm:border-line/60 bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE]">
@@ -1322,19 +1304,220 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
   );
 }
 
+function NewArrivalsSection({ products }: { products: ProductSummary[] }) {
+  if (!products.length) return null;
+
+  return (
+    <section className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 py-10 sm:py-14 border-b border-line/40">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-8">
+        <div>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-terra">
+              Fresh Harvest &amp; Craft
+            </span>
+            <span className="h-px w-8 bg-line" aria-hidden />
+          </div>
+          <h2 className="mt-2 font-serif text-[1.65rem] sm:text-[2rem] lg:text-[2.25rem] font-medium text-forest">
+            New Arrivals from the Valleys
+          </h2>
+          <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
+            Recently reviewed batches dispatched directly from small workshops and family orchards across Himachal.
+          </p>
+        </div>
+        <Link
+          to="/shop?sort=newest"
+          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-forest underline underline-offset-4 hover:text-terra shrink-0"
+        >
+          <span>View all new arrivals</span>
+          <span aria-hidden>&rarr;</span>
+        </Link>
+      </div>
+
+      <ProductGrid products={products.slice(0, 8)} showAddToCart />
+    </section>
+  );
+}
+
+function CatalogShowcaseSection({
+  products,
+  categories,
+}: {
+  products: ProductSummary[];
+  categories: Category[];
+}) {
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  const filteredProducts = useMemo(() => {
+    if (selectedCategory === 'all') return products;
+    return products.filter((p) => p.categorySlug === selectedCategory);
+  }, [products, selectedCategory]);
+
+  if (!products.length) return null;
+
+  return (
+    <section className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 py-12 sm:py-16 border-b border-line/40 bg-[#FAF7F2]/60">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">
+        <div>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-forest">
+              Direct from Himachal
+            </span>
+            <span className="h-px w-8 bg-line" aria-hidden />
+          </div>
+          <h2 className="mt-2 font-serif text-[1.75rem] sm:text-[2.2rem] lg:text-[2.5rem] font-medium text-forest">
+            Explore Our Listed Collection
+          </h2>
+          <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
+            Authentic mountain produce, handlooms, and traditional crafts &mdash; verified origin, fair pricing, and direct artisan dispatch.
+          </p>
+        </div>
+
+        <LinkButton to="/shop" variant="secondary" size="md" className="shrink-0">
+          View all 27+ products &rarr;
+        </LinkButton>
+      </div>
+
+      {/* Category Filter Tabs */}
+      <div className="no-scrollbar -mx-4 overflow-x-auto px-4 pb-2 mb-8 sm:mx-0 sm:px-0">
+        <div className="flex min-w-max items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('all')}
+            className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-4 text-xs font-semibold transition-all ${
+              selectedCategory === 'all'
+                ? 'border-forest bg-forest text-paper shadow-xs'
+                : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
+            }`}
+          >
+            <span>All Listed Goods</span>
+            <span
+              className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] ${
+                selectedCategory === 'all' ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'
+              }`}
+            >
+              {products.length}
+            </span>
+          </button>
+
+          {categories.map((cat) => {
+            const count = products.filter((p) => p.categorySlug === cat.slug).length;
+            if (count === 0) return null;
+            const isSelected = selectedCategory === cat.slug;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCategory(cat.slug)}
+                className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
+                  isSelected
+                    ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
+                    : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
+                }`}
+              >
+                <span>{cat.name}</span>
+                <span
+                  className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Products Grid */}
+      {filteredProducts.length ? (
+        <ProductGrid products={filteredProducts} showAddToCart />
+      ) : (
+        <div className="py-12 text-center text-muted text-sm">
+          No items found in this category preview.{' '}
+          <Link to={`/shop?category=${selectedCategory}`} className="text-forest underline font-semibold">
+            View full shelf in shop &rarr;
+          </Link>
+        </div>
+      )}
+
+      {/* Banner / Prompt leading to /shop */}
+      <div className="mt-12 rounded-xl border border-line bg-surface p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-5 text-center sm:text-left shadow-2xs">
+        <div>
+          <h3 className="font-serif text-xl sm:text-2xl text-forest font-medium">Looking for something specific?</h3>
+          <p className="mt-1 text-xs sm:text-sm text-ink/75 max-w-xl">
+            Browse our complete catalogue of handloom woolens, orthodox teas, cold-pressed oils, wild honey, and mountain woodcraft.
+          </p>
+        </div>
+        <LinkButton to="/shop" variant="terra" size="lg" className="shrink-0 shadow-sm">
+          Browse All Products &rarr;
+        </LinkButton>
+      </div>
+    </section>
+  );
+}
+
 export function HomePage() {
   const home = useQuery({
     queryKey: ['home'],
     queryFn: () => api<HomeResponse>('/home'),
     staleTime: 60_000,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
   });
 
   usePageMeta({
-    title: 'Dear Hills · From the Himalayas, with heart',
+    title: 'DEAR HILLS — Authentic Himalayan Handloom, Organic Harvest & Mountain Goods',
     description:
-      'Shop shawls, Kangra tea, mountain honey, dry fruit and pantry staples made and grown in Himachal Pradesh, sold by the people who make them.',
+      'Curated marketplace for authentic products made and grown in Himachal Pradesh — handloom shawls, Kangra tea, raw honey, orchard fruits and traditional mountain crafts.',
     canonicalPath: '/',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'Organization',
+          '@id': 'https://www.dearhills.in/#organization',
+          name: 'Dear Hills',
+          url: 'https://www.dearhills.in',
+          logo: 'https://www.dearhills.in/favicon.svg',
+          description:
+            'Curated marketplace for authentic products made and grown in Himachal Pradesh — handloom shawls, Kangra tea, raw honey, orchard fruits and traditional crafts.',
+          address: {
+            '@type': 'PostalAddress',
+            addressRegion: 'Himachal Pradesh',
+            addressCountry: 'IN',
+          },
+        },
+        {
+          '@type': 'WebSite',
+          '@id': 'https://www.dearhills.in/#website',
+          url: 'https://www.dearhills.in',
+          name: 'Dear Hills',
+          publisher: {
+            '@id': 'https://www.dearhills.in/#organization',
+          },
+          potentialAction: {
+            '@type': 'SearchAction',
+            target: {
+              '@type': 'EntryPoint',
+              urlTemplate: 'https://www.dearhills.in/shop?q={search_term_string}',
+            },
+            'query-input': 'required name=search_term_string',
+          },
+        },
+      ],
+    },
   });
+
+  const homeData = home.data;
+  const allHomeProducts = useMemo(() => {
+    if (!homeData) return [];
+    const map = new Map<string, ProductSummary>();
+    for (const p of homeData.catalogPreview ?? []) map.set(p.id, p);
+    for (const p of homeData.featured) map.set(p.id, p);
+    for (const p of homeData.newArrivals) map.set(p.id, p);
+    for (const p of homeData.gifting) map.set(p.id, p);
+    return Array.from(map.values());
+  }, [homeData]);
 
   if (home.isLoading) {
     return (
@@ -1354,6 +1537,8 @@ export function HomePage() {
           title="The storefront could not load"
           body="Please ensure the API server is active and reachable."
           onRetry={() => void home.refetch()}
+          isRetrying={home.isFetching}
+          showReload
         />
       </div>
     );
@@ -1399,7 +1584,13 @@ export function HomePage() {
       {/* 4. Featured products: handpicked from the Himalayas */}
       <FeaturedProductsSection products={data.featured} />
 
-      {/* 5. Real bestsellers from paid orders */}
+      {/* 5. Direct from Himachal: Explore Our Listed Collection */}
+      <CatalogShowcaseSection products={allHomeProducts} categories={data.categories} />
+
+      {/* 6. Fresh from the workshops: New Arrivals */}
+      <NewArrivalsSection products={data.newArrivals} />
+
+      {/* 7. Real bestsellers from paid orders */}
       <BestsellersSection bestsellers={data.bestsellers} />
 
       {/* 6. Meet the makers */}

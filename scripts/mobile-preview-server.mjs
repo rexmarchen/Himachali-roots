@@ -18,7 +18,7 @@ import zlib from 'node:zlib';
 import os from 'node:os';
 
 const PORT = parseInt(process.env.PORT || '4100', 10);
-const LOCAL_TARGET = process.env.LOCAL_TARGET || 'http://localhost:5173';
+const LOCAL_TARGET = process.env.LOCAL_TARGET || 'http://localhost:8787';
 const PROD_TARGET = process.env.PROD_TARGET || 'https://www.dearhills.in';
 const DEFAULT_TARGET = LOCAL_TARGET;
 
@@ -848,7 +848,7 @@ function renderSimulatorShell({ initialPath = '/', initialTarget = 'local' }) {
       <div class="control-group">
         <span class="control-label">Target:</span>
         <select id="target-select" onchange="switchTarget(this.value)">
-          <option value="local" ${initialTarget === 'local' ? 'selected' : ''}>💻 Local Dev (localhost:5173)</option>
+          <option value="local" ${initialTarget === 'local' ? 'selected' : ''}>💻 Local Server (localhost:8787)</option>
           <option value="production" ${initialTarget === 'production' ? 'selected' : ''}>🌐 Production (dearhills.in)</option>
         </select>
       </div>
@@ -1299,7 +1299,10 @@ function handleProxy(req, res, targetOrigin) {
     // Process response headers
     const resHeaders = { ...proxyRes.headers };
 
-    // Strip frame and security restrictions so iframe renders smoothly
+    // Strip frame and security restrictions so iframe renders smoothly, and remove hop-by-hop headers
+    delete resHeaders['connection'];
+    delete resHeaders['keep-alive'];
+    delete resHeaders['transfer-encoding'];
     for (const key of Object.keys(resHeaders)) {
       const lower = key.toLowerCase();
       if (lower === 'x-frame-options' || lower.startsWith('content-security-policy')) {

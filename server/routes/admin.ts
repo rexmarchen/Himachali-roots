@@ -848,7 +848,11 @@ export function adminRouter(db: Db): Router {
       req.body,
     );
 
-    if (input.compareAtPricePaise && input.compareAtPricePaise < input.pricePaise) {
+    if (
+      input.compareAtPricePaise !== null &&
+      input.compareAtPricePaise !== undefined &&
+      input.compareAtPricePaise < input.pricePaise
+    ) {
       throw badRequest('Compare-at price must be greater than or equal to the selling price.', {
         compareAtPricePaise: 'Must be at least the selling price.',
       });

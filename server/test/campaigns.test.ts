@@ -48,9 +48,9 @@ async function createCampaign(
   const response = await mutate(agent.post('/api/admin/campaigns')).send({
     name: 'Pahadi Festive Glow',
     slug: SLUG,
-    description: 'A Diwali collection from reviewed Himachali makers.',
+    description: 'A seasonal collection from reviewed Himachali makers.',
     posterUrl: POSTER,
-    posterAlt: 'Pahadi Festive Glow Diwali poster',
+    posterAlt: 'Pahadi Festive Glow seasonal poster',
     maxDiscountBp: 3000,
     ...overrides,
   });

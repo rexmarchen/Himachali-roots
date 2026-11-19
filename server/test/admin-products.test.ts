@@ -306,6 +306,24 @@ describe('Admin Product Management', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.fields).toHaveProperty('compareAtPricePaise');
     });
+
+    it('rejects compare-at price of 0 as falsy bypass attempt on creation and patch', async () => {
+      const patchRes = await mutate(adminAgent.patch(`/api/admin/products/${IDS.product}`)).send({
+        pricePaise: 100_000,
+        compareAtPricePaise: 0,
+      });
+      expect(patchRes.status).toBe(400);
+      expect(patchRes.body.error.fields).toHaveProperty('compareAtPricePaise');
+
+      const createRes = await mutate(adminAgent.post('/api/admin/products')).send({
+        name: 'Zero Compare At Test Product',
+        pricePaise: 50_000,
+        compareAtPricePaise: 0,
+        description: 'Test product for falsy zero compare-at price validation.',
+      });
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.fields).toHaveProperty('compareAtPricePaise');
+    });
   });
 
   describe('Category publication gates', () => {

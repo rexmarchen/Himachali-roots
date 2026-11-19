@@ -76,11 +76,13 @@ export class FinancialLedgerService {
        WHERE seller_id = ? AND status = 'settled'`,
       sellerId,
     );
+    const nowIso = new Date().toISOString();
     const eligibleRow = queryOne<{ total: number }>(
       db,
       `SELECT COALESCE(SUM(amount_paise), 0) as total FROM seller_ledger_entries
-       WHERE seller_id = ? AND status = 'eligible'`,
+       WHERE seller_id = ? AND status = 'eligible' AND (available_at IS NULL OR available_at <= ?)`,
       sellerId,
+      nowIso,
     );
     const pendingRow = queryOne<{ total: number }>(
       db,

@@ -384,7 +384,7 @@ export function OrderDetailPage() {
           <p className="mt-1 text-xs text-muted">Placed {formatDateTime(data.placedAt)} · {data.email}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={data.status} label={orderStatusLabel(data.status)} />
+          <StatusBadge status={data.status} label={orderStatusLabel(data.status, data.sellerOrders)} />
           {data.payment ? <Badge tone={data.payment.status === 'paid' ? 'forest' : 'sand'}>Payment: {data.payment.status}</Badge> : null}
           {data.status === 'pending_payment' ? (
             <LinkButton to={`/checkout?resume=${encodeURIComponent(data.orderNumber)}`} size="sm">Complete payment</LinkButton>

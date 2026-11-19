@@ -1,4 +1,4 @@
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { env } from '../env.js';
 import { execute, queryAll, queryOne, type Db } from '../db.js';
 import type { CartLine, CartView } from '../../shared/types.js';
@@ -101,11 +101,13 @@ function mergeCartInto(db: Db, guestCartId: string, userCartId: string): void {
   execute(db, "UPDATE carts SET status = 'converted', updated_at = ? WHERE id = ?", new Date().toISOString(), guestCartId);
 }
 
-export function setCartCookie(res: Response, token: string): void {
+export function setCartCookie(res: Response, token: string, req?: Request): void {
+  const sameSite = env.sessionSameSite;
+  const secure = sameSite === 'none' || env.appUrl.startsWith('https://') || Boolean(req?.secure);
   res.cookie(CART_COOKIE, token, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: env.appUrl.startsWith('https://'),
+    sameSite,
+    secure,
     path: '/',
     maxAge: 90 * 86400_000,
   });

@@ -217,19 +217,27 @@ describe('Dear Hills Enterprise Architecture Core', () => {
       
       // Attempt 1 -> Fails, schedules retry
       await worker.processBatch();
-      let record = rawDb.prepare('SELECT status, retry_count, last_error FROM outbox_events WHERE id = ?').get(event.id) as any;
-      expect(record.status).toBe('pending');
-      expect(record.retry_count).toBe(1);
-      expect(record.last_error).toContain('External webhook destination timeout');
+      let record = rawDb.prepare('SELECT status, retry_count, last_error FROM outbox_events WHERE id = ?').get(event.id) as {
+        status: string;
+        retry_count: number;
+        last_error: string | null;
+      } | undefined;
+      expect(record?.status).toBe('pending');
+      expect(record?.retry_count).toBe(1);
+      expect(record?.last_error).toContain('External webhook destination timeout');
 
       // Fast forward scheduled_at for test
       rawDb.prepare("UPDATE outbox_events SET scheduled_at = datetime('now', '-1 minute') WHERE id = ?").run(event.id);
 
       // Attempt 2 -> Reaches maxRetries (2) -> dead_letter
       await worker.processBatch();
-      record = rawDb.prepare('SELECT status, retry_count FROM outbox_events WHERE id = ?').get(event.id) as any;
-      expect(record.status).toBe('dead_letter');
-      expect(record.retry_count).toBe(2);
+      record = rawDb.prepare('SELECT status, retry_count FROM outbox_events WHERE id = ?').get(event.id) as {
+        status: string;
+        retry_count: number;
+        last_error: string | null;
+      } | undefined;
+      expect(record?.status).toBe('dead_letter');
+      expect(record?.retry_count).toBe(2);
     });
   });
 

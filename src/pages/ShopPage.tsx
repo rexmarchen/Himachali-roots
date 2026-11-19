@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Category, Paged, ProductSummary } from '@shared/types';
 import { formatINR } from '@shared/types';
@@ -41,18 +41,33 @@ const SORTS = [
 ];
 
 export function ShopPage() {
+  const navigate = useNavigate();
+  const { slug: routeCategorySlug } = useParams<{ slug?: string }>();
   const { config } = useAuth();
   const freeShippingThreshold = config?.shipping.freeThresholdPaise ?? 0;
   const [params, setParams] = useSearchParams();
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const queryString = params.toString();
+
+  const effectiveQueryString = useMemo(() => {
+    if (!routeCategorySlug) return params.toString();
+    const copy = new URLSearchParams(params);
+    if (!copy.has('category')) copy.set('category', routeCategorySlug);
+    return copy.toString();
+  }, [params, routeCategorySlug]);
+
   const products = useQuery({
-    queryKey: ['products', queryString],
-    queryFn: () => api<ProductListResponse>(`/products?${queryString}`),
+    queryKey: ['products', effectiveQueryString],
+    queryFn: () => api<ProductListResponse>(`/products?${effectiveQueryString}`),
     staleTime: 30_000,
   });
 
   const update = (key: string, value: string | null) => {
+    if (key === 'category' && (value === null || value === '')) {
+      if (routeCategorySlug) {
+        navigate('/shop');
+        return;
+      }
+    }
     const next = new URLSearchParams(params);
     if (value === null || value === '') next.delete(key);
     else next.set(key, value);
@@ -64,9 +79,15 @@ export function ShopPage() {
     return ['q', 'category', 'seller', 'region', 'minPrice', 'maxPrice', 'inStock'].filter((key) => params.get(key)).length;
   }, [params]);
 
-  const clearAll = () => setParams(new URLSearchParams(), { replace: true });
+  const clearAll = () => {
+    if (routeCategorySlug) {
+      navigate('/shop');
+    } else {
+      setParams(new URLSearchParams(), { replace: true });
+    }
+  };
   const filters = products.data?.filters;
-  const category = params.get('category');
+  const category = routeCategorySlug ?? params.get('category');
   const seller = params.get('seller');
   const region = params.get('region');
   const sort = params.get('sort') ?? 'relevance';
@@ -86,13 +107,30 @@ export function ShopPage() {
     title: q
       ? `Search results for “${q}” · Dear Hills`
       : activeCategory
-        ? `${activeCategory.name} · Dear Hills`
-        : 'Shop all products · Dear Hills',
+        ? `${activeCategory.name} — Handcrafted Himalayan Products · Dear Hills`
+        : 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Living · Dear Hills',
     description:
       activeCategory?.description ??
       'Browse authentic Himachali shawls, tea, honey, dry fruit, oils and pantry staples from reviewed local makers.',
-    canonicalPath: '/shop',
+    canonicalPath: activeCategory ? `/categories/${activeCategory.slug}` : '/shop',
     image: activeCategory?.imageUrl ?? null,
+    jsonLd: {
+      '@context': 'https://schema.org/',
+      '@type': 'CollectionPage',
+      name: activeCategory ? `${activeCategory.name} — Authentic Himachal Products` : 'Shop Handcrafted Himalayan Products',
+      url: activeCategory ? `https://www.dearhills.in/categories/${activeCategory.slug}` : 'https://www.dearhills.in/shop',
+      description:
+        activeCategory?.description ??
+        'Browse authentic Himachali shawls, tea, honey, dry fruit, oils and pantry staples from reviewed local makers.',
+      breadcrumb: {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+          { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://www.dearhills.in/shop' },
+          ...(activeCategory ? [{ '@type': 'ListItem', position: 3, name: activeCategory.name, item: `https://www.dearhills.in/categories/${activeCategory.slug}` }] : []),
+        ],
+      },
+    },
   });
 
   return (

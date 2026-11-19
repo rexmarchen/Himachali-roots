@@ -70,6 +70,13 @@ export function Step4VerificationDocs({ documents, onDocumentsUpdated, onNext, o
       example: 'GSTIN Registration Certificate Form GST REG-06',
     },
     {
+      type: 'resale_authorisation',
+      title: 'Resale Authorisation Certificate',
+      description: 'Letter of authorisation or agreement from the Himachali artisans or brands you stock.',
+      required: false,
+      example: 'Brand authorisation letter, direct artisan MOU or procurement invoice',
+    },
+    {
       type: 'other',
       title: 'Other Supporting Evidence',
       description: 'Optional evidence demonstrating authentic craftsmanship or traditional lineage.',
@@ -80,7 +87,7 @@ export function Step4VerificationDocs({ documents, onDocumentsUpdated, onNext, o
 
   const getDocForType = (type: string) => {
     return documents.find(
-      (d) => (d.docType === type || d.doc_type === type) && d.status !== 'rejected',
+      (d) => d.docType === type || d.doc_type === type,
     );
   };
 
@@ -168,9 +175,14 @@ export function Step4VerificationDocs({ documents, onDocumentsUpdated, onNext, o
 
   const handleContinue = () => {
     setValidationError(null);
-    const hasId = Boolean(getDocForType('id_proof'));
-    if (!hasId) {
-      setValidationError('Government photo identity is required before submitting your maker application.');
+    const idDoc = getDocForType('id_proof');
+    const hasValidId = Boolean(idDoc && idDoc.status !== 'rejected');
+    if (!hasValidId) {
+      setValidationError(
+        idDoc && idDoc.status === 'rejected'
+          ? 'Your photo identity document requires revision. Please replace it with a valid document before continuing.'
+          : 'Government photo identity is required before submitting your maker application.',
+      );
       return;
     }
     onNext();
@@ -259,7 +271,11 @@ export function Step4VerificationDocs({ documents, onDocumentsUpdated, onNext, o
 
                 {/* Upload Status Badge / Action */}
                 <div className="shrink-0 flex items-center gap-2">
-                  {doc ? (
+                  {doc && doc.status === 'rejected' ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 text-red-800 px-3 py-1 text-xs font-semibold">
+                      <span>⚠</span> Changes Requested
+                    </span>
+                  ) : doc ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-forest/10 px-3 py-1 text-xs font-semibold text-forest">
                       <span>✓</span> Uploaded
                     </span>
@@ -268,6 +284,14 @@ export function Step4VerificationDocs({ documents, onDocumentsUpdated, onNext, o
                   )}
                 </div>
               </div>
+
+              {/* Rejection / Reviewer Note */}
+              {doc?.review_note || doc?.reviewNote ? (
+                <div className="mt-2 text-xs bg-red-50 text-red-800 p-2.5 rounded-sm border border-red-200">
+                  <span className="font-semibold">Reviewer feedback:</span> {doc.review_note || doc.reviewNote}
+                  <span className="block mt-0.5 text-muted">Please click Replace below to upload a revised document.</span>
+                </div>
+              ) : null}
 
               {/* Slot Error */}
               {slotError ? (
@@ -364,7 +388,7 @@ export function Step4VerificationDocs({ documents, onDocumentsUpdated, onNext, o
       </div>
 
       {/* Navigation Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-line">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-3 pt-4 border-t border-line">
         <Button type="button" variant="secondary" onClick={onBack}>
           &larr; Back to Products
         </Button>

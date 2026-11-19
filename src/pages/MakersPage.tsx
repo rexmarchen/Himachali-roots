@@ -157,17 +157,17 @@ export function MakersPage() {
           <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Makers & Artisans' }]} />
         </div>
 
-        {/* Diwali Maker Cohort Invitation Banner */}
+        {/* Himalayan Maker Cohort Invitation Banner */}
         <div className="mx-auto max-w-7xl px-4 pt-3 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-md border border-[#D4A373]/50 bg-gradient-to-r from-[#2B1B17] via-[#382017] to-[#2B1B17] px-4 py-3 text-paper shadow-xs">
             <div className="flex items-center gap-2.5">
-              <span className="text-base">🪔</span>
+              <span className="text-base">🏔️</span>
               <p className="text-xs text-[#F7EBE1]">
-                <strong className="text-[#F4D06F]">Diwali Maker Initiative:</strong> Are you crafting or growing in Himachal? Sell this Diwali with <strong>0% Platform Fee</strong> &amp; free storytelling.
+                <strong className="text-[#F4D06F]">Himalayan Maker Initiative:</strong> Are you crafting or growing in Himachal? Join with <strong>0% Platform Fee</strong> &amp; free storytelling.
               </p>
             </div>
             <Link
-              to="/become-a-maker?offer=diwali"
+              to="/become-a-maker"
               className="shrink-0 text-xs font-semibold text-[#F4D06F] hover:text-white underline underline-offset-2 transition-colors"
             >
               Join as a Maker &rarr;
@@ -532,8 +532,8 @@ export function MakersPage() {
                   Clear all filters
                 </Button>
               ) : (
-                <LinkButton to="/become-a-maker?offer=diwali" variant="terra" size="sm">
-                  Join as a Maker (0% Platform Fee Diwali Offer) &rarr;
+                <LinkButton to="/become-a-maker" variant="terra" size="sm">
+                  Join as a Maker (0% Platform Fee Initiative) &rarr;
                 </LinkButton>
               )}
             </div>

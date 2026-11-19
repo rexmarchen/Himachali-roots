@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { execute, queryOne, type Db } from '../db.js';
@@ -36,7 +37,7 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
 
   router.get('/cart', (req, res) => {
     const { cart, token } = ensureCart(db, req.user?.id ?? null, cartTokenFrom(req));
-    setCartCookie(res, token);
+    setCartCookie(res, token, req);
     res.json({ cart: getCartView(db, cart.id) });
   });
 
@@ -46,7 +47,7 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
       req.body,
     );
     const { cart, token } = ensureCart(db, req.user?.id ?? null, cartTokenFrom(req));
-    setCartCookie(res, token);
+    setCartCookie(res, token, req);
     addToCart(db, cart.id, input.productId, input.quantity);
     res.status(201).json({ cart: getCartView(db, cart.id) });
   });
@@ -54,19 +55,27 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
   router.patch('/cart/items/:productId', (req, res) => {
     const input = parse(z.object({ quantity: z.number().int().min(0).max(99) }), req.body);
     const { cart, token } = ensureCart(db, req.user?.id ?? null, cartTokenFrom(req));
-    setCartCookie(res, token);
+    setCartCookie(res, token, req);
     updateCartItem(db, cart.id, req.params.productId, input.quantity);
     res.json({ cart: getCartView(db, cart.id) });
   });
 
   router.delete('/cart/items/:productId', (req, res) => {
     const { cart, token } = ensureCart(db, req.user?.id ?? null, cartTokenFrom(req));
-    setCartCookie(res, token);
+    setCartCookie(res, token, req);
     removeCartItem(db, cart.id, req.params.productId);
     res.json({ cart: getCartView(db, cart.id) });
   });
 
-  router.post('/coupons/validate', requireAuth, (req, res) => {
+  const couponLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: env.isTest ? 1000 : 15,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: { code: 'rate_limited', message: 'Too many coupon attempts. Please wait a minute.' } },
+  });
+
+  router.post('/coupons/validate', couponLimiter, requireAuth, (req, res) => {
     const input = parse(z.object({ code: z.string().trim().min(2).max(40) }), req.body);
     const { cart } = ensureCart(db, req.user!.id, cartTokenFrom(req));
     const view = getCartView(db, cart.id);

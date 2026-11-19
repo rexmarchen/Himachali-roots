@@ -185,7 +185,7 @@ export function EcommerceSearchBar({
       <form
         onSubmit={handleSubmit}
         role="search"
-        className={`group flex h-9.5 sm:h-10 lg:h-10.5 w-full items-center rounded-full border transition-all duration-200 ${
+        className={`group flex h-9.5 sm:h-10 w-full items-center rounded-full border transition-all duration-200 ${
           isOpen
             ? 'border-terra bg-white shadow-lg ring-2 ring-terra/25 text-ink'
             : light
@@ -204,7 +204,7 @@ export function EcommerceSearchBar({
               setSelectedCategory(event.target.value);
               setActiveIndex(-1);
             }}
-            className={`max-w-[78px] sm:max-w-[92px] lg:max-w-[105px] xl:max-w-[115px] cursor-pointer appearance-none truncate bg-transparent pr-3 text-[11px] sm:text-[11.5px] lg:text-xs font-medium ${
+            className={`max-w-[78px] sm:max-w-[92px] lg:max-w-[105px] xl:max-w-[115px] cursor-pointer appearance-none truncate bg-transparent pr-3 text-[11px] sm:text-[11px] lg:text-[11.5px] font-medium ${
               light ? 'text-white' : 'text-forest'
             } outline-none`}
             aria-label="Filter search by category"
@@ -247,7 +247,7 @@ export function EcommerceSearchBar({
             aria-autocomplete="list"
             aria-activedescendant={activeIndex >= 0 ? `${inputId}-option-${activeIndex}` : undefined}
             aria-label="Search products, makers and categories"
-            className={`w-full min-w-0 bg-transparent text-[12px] sm:text-[12.5px] lg:text-[13px] ${
+            className={`w-full min-w-0 bg-transparent text-[12px] sm:text-[12px] lg:text-[12.5px] ${
               isOpen
                 ? 'text-ink placeholder:text-muted'
                 : light
@@ -285,7 +285,7 @@ export function EcommerceSearchBar({
             <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="2" />
             <path d="M12.5 12.5 17 17" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          <span className="ml-1 hidden text-[11px] sm:text-[11.5px] lg:text-xs font-semibold tracking-wide sm:inline">Search</span>
+          <span className="ml-1 hidden text-[11px] sm:text-[11px] lg:text-[11.5px] font-semibold tracking-wide sm:inline">Search</span>
         </button>
       </form>
 

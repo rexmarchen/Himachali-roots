@@ -649,6 +649,9 @@ CREATE TABLE IF NOT EXISTS seller_ledger_entries (
   note TEXT,
   available_at TEXT,
   settlement_id TEXT,
+  hold_reason TEXT,
+  held_at TEXT,
+  held_by TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_ledger_seller ON seller_ledger_entries(seller_id, status);

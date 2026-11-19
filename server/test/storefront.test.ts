@@ -83,14 +83,37 @@ describe('public storefront', () => {
     expect(response.body.error.code).toBe('not_found');
   });
 
-  it('publishes a sitemap and robots file', async () => {
+  it('publishes an enhanced sitemap with categories, images and robots file', async () => {
     const sitemap = await request(app).get('/sitemap.xml');
     expect(sitemap.status).toBe(200);
+    expect(sitemap.headers['content-type']).toContain('xml');
     expect(sitemap.text).toContain('/shop/test-shawl');
     expect(sitemap.text).toContain('/makers/test-loom');
+    expect(sitemap.text).toContain('xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"');
+    expect(sitemap.text).toContain('/categories/');
 
     const robots = await request(app).get('/robots.txt');
     expect(robots.status).toBe(200);
+    expect(robots.headers['content-type']).toContain('text/plain');
+    expect(robots.text).toContain('User-agent: *');
+    expect(robots.text).toContain('Disallow: /admin');
+    expect(robots.text).toContain('Disallow: /checkout');
     expect(robots.text).toContain('Sitemap:');
+  });
+
+  it('serves SEO pre-rendered HTML with metadata and schema on SPA routes', async () => {
+    const homeResponse = await request(app).get('/');
+    expect(homeResponse.status).toBe(200);
+    expect(homeResponse.headers['content-type']).toContain('text/html');
+    expect(homeResponse.text).toContain('<title>DEAR HILLS — Authentic Himalayan Handloom');
+    expect(homeResponse.text).toContain('rel="canonical"');
+    expect(homeResponse.text).toContain('id="seo-structured-data"');
+    expect(homeResponse.text).toContain('"@type":"Organization"');
+
+    const productResponse = await request(app).get('/shop/test-shawl');
+    expect(productResponse.status).toBe(200);
+    expect(productResponse.text).toContain('<title>Test Shawl');
+    expect(productResponse.text).toContain('"@type":"Product"');
+    expect(productResponse.text).toContain('/shop/test-shawl');
   });
 });

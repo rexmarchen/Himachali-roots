@@ -602,21 +602,21 @@ export function onboardingChecklist(
       label: 'Shop and personal profile',
       status: data.businessName && data.story && data.sellerCategory ? 'complete' : 'pending',
       detail: data.businessName ? 'Profile details saved.' : 'Add your name, story and shop details.',
-      href: '/sell?edit=1&step=3',
+      href: '/sell?edit=1&step=2',
     },
     {
       id: 'location',
       label: 'Himachal location and dispatch address',
       status: data.region && data.address?.line1 ? 'complete' : 'pending',
       detail: data.region ? `${data.region}${data.village ? ` · ${data.village}` : ''}` : 'Location not added yet.',
-      href: '/sell?edit=1&step=4',
+      href: '/sell?edit=1&step=2',
     },
     {
       id: 'origin',
       label: 'Product origin and authenticity',
       status: data.originNarrative && data.authenticityDeclaration ? 'complete' : 'pending',
       detail: data.originNarrative ? 'Origin narrative saved.' : 'Describe where your products come from.',
-      href: '/sell?edit=1&step=5',
+      href: '/sell?edit=1&step=3',
     },
     {
       id: 'verification',
@@ -625,21 +625,21 @@ export function onboardingChecklist(
       detail: requirements.required.every(hasDoc)
         ? 'Required documents uploaded.'
         : `Upload: ${requirements.required.filter((type) => !hasDoc(type)).map((type) => DOCUMENT_LABELS[type]).join(', ')}`,
-      href: '/sell?edit=1&step=6',
+      href: '/sell?edit=1&step=4',
     },
     {
       id: 'shipping',
       label: 'Packaging and dispatch',
       status: data.shipping?.dispatchDays ? 'complete' : 'pending',
       detail: data.shipping?.dispatchDays ? `Dispatch within ${data.shipping.dispatchDays} days.` : 'Set dispatch expectations.',
-      href: '/sell?edit=1&step=7',
+      href: '/sell?edit=1&step=3',
     },
     {
       id: 'agreements',
       label: 'Seller agreement and commission',
       status: data.agreements?.sellerAgreement && data.agreements?.commissionDisclosure ? 'complete' : 'pending',
       detail: data.agreements?.sellerAgreement ? 'Agreements accepted.' : 'Read and accept the seller terms.',
-      href: '/sell?edit=1&step=9',
+      href: '/sell?edit=1&step=5',
     },
     {
       id: 'submit',
@@ -650,7 +650,7 @@ export function onboardingChecklist(
         : submitted
           ? 'Submitted. The marketplace team is reviewing your file.'
           : 'Submit when the sections above are complete.',
-      href: submitted ? undefined : '/sell?edit=1&step=10',
+      href: submitted ? undefined : '/sell?edit=1&step=5',
     },
   ];
 }

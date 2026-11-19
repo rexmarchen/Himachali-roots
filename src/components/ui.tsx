@@ -238,22 +238,51 @@ export function ErrorState({
   title = 'That did not load',
   body,
   onRetry,
+  isRetrying = false,
+  showReload = false,
 }: {
   title?: string;
   body?: string;
   onRetry?: () => void;
+  isRetrying?: boolean;
+  showReload?: boolean;
 }) {
   return (
     <div className="border border-terra/25 bg-[#fff8f4] px-6 py-10 text-center">
-      <h3 className="text-xl text-[#7d3d28]">{title}</h3>
-      <p className="mx-auto mt-2 max-w-md text-sm text-[#7d3d28]/80">
+      <h3 className="text-xl text-[#7d3d28] font-serif">{title}</h3>
+      <p className="mx-auto mt-2 max-w-md text-sm text-[#7d3d28]/80 leading-relaxed">
         {body ?? 'The server did not return the information. This is not a payment or order confirmation.'}
       </p>
-      {onRetry ? (
-        <div className="mt-5">
-          <Button variant="secondary" size="sm" onClick={onRetry}>
-            Try again
-          </Button>
+      {onRetry || showReload ? (
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+          {onRetry ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onRetry}
+              disabled={isRetrying}
+              className="inline-flex items-center gap-2"
+            >
+              {isRetrying ? (
+                <>
+                  <Spinner className="h-3.5 w-3.5 text-terra" />
+                  <span>Connecting…</span>
+                </>
+              ) : (
+                'Try again'
+              )}
+            </Button>
+          ) : null}
+          {showReload ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => window.location.reload()}
+              className="text-xs text-[#7d3d28] hover:bg-terra/10"
+            >
+              Reload page
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -7,8 +7,8 @@ import type { SiteContent } from '../../shared/content.js';
  */
 export const DEFAULT_CONTENT: SiteContent = {
   announcement: {
-    active: true,
-    text: 'Complimentary shipping on orders over ₹699 · Dispatched from Himachal within 2 working days',
+    active: false,
+    text: '',
     href: '/policies/shipping',
   },
   homepage: {

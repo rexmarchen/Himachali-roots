@@ -315,8 +315,8 @@ export const DEFAULT_COMMISSION_BP = 1200;
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending_payment: 'Awaiting payment',
   paid: 'Paid',
-  partially_fulfilled: 'Partially dispatched',
-  fulfilled: 'Fulfilled',
+  partially_fulfilled: 'Dispatched',
+  fulfilled: 'Delivered',
   cancelled: 'Cancelled',
   partially_refunded: 'Partially refunded',
   refunded: 'Refunded',

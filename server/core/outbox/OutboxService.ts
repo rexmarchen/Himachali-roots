@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { execute, queryAll } from '../../db.js';
+import { execute, queryAll, type Db } from '../../db.js';
 import type { EnqueueEventInput, OutboxEvent } from './types.js';
 
 export class OutboxService {
@@ -7,7 +7,7 @@ export class OutboxService {
    * Enqueue an event atomically into the outbox within the current database transaction.
    * If the enclosing transaction rolls back, this event is never written.
    */
-  static enqueue<T extends Record<string, unknown>>(db: any, input: EnqueueEventInput<T>): OutboxEvent<T> {
+  static enqueue<T extends Record<string, unknown>>(db: Db, input: EnqueueEventInput<T>): OutboxEvent<T> {
     const id = input.id ?? `evt_${crypto.randomUUID()}`;
     const now = new Date();
     const scheduledAt = input.delayMs
@@ -54,7 +54,7 @@ export class OutboxService {
   /**
    * Fetch pending events scheduled to run up to `now`
    */
-  static fetchPending(db: any, limit = 50): OutboxEvent[] {
+  static fetchPending(db: Db, limit = 50): OutboxEvent[] {
     const now = new Date().toISOString();
     const rows = queryAll<{
       id: string;
@@ -98,7 +98,7 @@ export class OutboxService {
   /**
    * Attempt to lock an event for processing using optimistic concurrency
    */
-  static claim(db: any, eventId: string): boolean {
+  static claim(db: Db, eventId: string): boolean {
     const result = execute(
       db,
       `UPDATE outbox_events
@@ -112,7 +112,7 @@ export class OutboxService {
   /**
    * Mark event successfully published
    */
-  static markPublished(db: any, eventId: string): void {
+  static markPublished(db: Db, eventId: string): void {
     const now = new Date().toISOString();
     execute(
       db,
@@ -127,7 +127,7 @@ export class OutboxService {
   /**
    * Record failure and schedule retry with exponential backoff or send to dead-letter queue
    */
-  static markFailed(db: any, eventId: string, error: Error | string, retryCount: number, maxRetries: number): void {
+  static markFailed(db: Db, eventId: string, error: Error | string, retryCount: number, maxRetries: number): void {
     const nextRetry = retryCount + 1;
     const errorMessage = typeof error === 'string' ? error : error.message || String(error);
 

@@ -47,6 +47,13 @@ export function StepReviewSubmit({
     e.preventDefault();
     setError(null);
 
+    const cleanPhone = form.phone.trim().replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setError('Please provide a valid 10-digit Indian contact mobile number before submitting.');
+      onJumpToStep(2);
+      return;
+    }
+
     if (!hasIdDoc) {
       setError('Government photo identity is required. Please upload it in Step 4 before submitting.');
       return;
@@ -96,7 +103,18 @@ export function StepReviewSubmit({
           </div>
           <div>
             <dt className="text-muted">Contact Mobile</dt>
-            <dd className="mt-0.5 font-semibold text-forest">+91 {form.phone || '—'}</dd>
+            <dd className="mt-0.5 font-semibold text-forest flex items-center gap-2">
+              <span>{form.phone ? `+91 ${form.phone}` : 'Missing mobile number'}</span>
+              {!/^[6-9]\d{9}$/.test(form.phone.trim().replace(/\D/g, '')) ? (
+                <button
+                  type="button"
+                  onClick={() => onJumpToStep(2)}
+                  className="rounded bg-terra/10 px-2 py-0.5 text-[11px] font-semibold text-terra hover:bg-terra/20"
+                >
+                  Enter Mobile
+                </button>
+              ) : null}
+            </dd>
           </div>
         </dl>
       </div>
@@ -309,7 +327,7 @@ export function StepReviewSubmit({
       </div>
 
       {/* Submission CTA */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-line">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-3 pt-4 border-t border-line">
         <Button type="button" variant="secondary" onClick={onBack}>
           &larr; Back to Documents
         </Button>

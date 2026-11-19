@@ -12,6 +12,13 @@ import process from 'node:process';
 
 process.env.NODE_ENV = 'production';
 
+// Pre-generate fresh sitemap and robots.txt in public/ so Vite bundles them
+try {
+  await import('./generate-sitemap.mjs');
+} catch (e) {
+  console.warn('Sitemap pre-generation warning:', e instanceof Error ? e.message : e);
+}
+
 const { build } = await import('vite');
 
 try {

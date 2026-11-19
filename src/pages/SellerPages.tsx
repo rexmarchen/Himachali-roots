@@ -868,14 +868,14 @@ export function SellerApplicationPage() {
       {status === 'draft' ? (
         <Alert tone="info" title="Draft not submitted">
           Your application is saved but has not reached the review team.{' '}
-          <Link to="/sell?edit=1&step=10" className="underline underline-offset-2">Review and submit it</Link> when it is ready.
+          <Link to="/sell?edit=1&step=5" className="underline underline-offset-2">Review and submit it</Link> when it is ready.
         </Alert>
       ) : null}
       {status === 'changes_requested' ? (
         <Alert tone="warning" title="Changes requested">
           <p>{app?.rejectionReason ?? 'The review team has asked for changes. Open the application form to see the affected sections.'}</p>
           <div className="mt-3">
-            <LinkButton to="/sell?edit=1&step=1" size="sm">Revise application</LinkButton>
+            <LinkButton to="/sell?edit=1&step=2" size="sm">Revise application</LinkButton>
           </div>
         </Alert>
       ) : null}
@@ -883,7 +883,7 @@ export function SellerApplicationPage() {
         <Alert tone="error" title="Application not approved">
           <p>{app?.rejectionReason ?? 'The review team could not approve this application.'}</p>
           <div className="mt-3">
-            <LinkButton to="/sell?edit=1&step=1" size="sm" variant="secondary">Revise and resubmit</LinkButton>
+            <LinkButton to="/sell?edit=1&step=2" size="sm" variant="secondary">Revise and resubmit</LinkButton>
           </div>
         </Alert>
       ) : null}
@@ -919,7 +919,7 @@ export function SellerApplicationPage() {
             ))}
           </ul>
           <div className="mt-3">
-            <LinkButton to="/sell?edit=1&step=6" size="sm">Open documents</LinkButton>
+            <LinkButton to="/sell?edit=1&step=4" size="sm">Open documents</LinkButton>
           </div>
         </Alert>
       ) : null}
@@ -5064,10 +5064,11 @@ export function SellerOrderDetailPage() {
 interface EarningsResponse {
   entries: { id: string; type: string; amountPaise: number; status: string; reference: string; note: string | null; availableAt: string | null; createdAt: string; orderNumber: string | null }[];
   totals: { pending: number; eligible: number; settled: number; reversed: number };
-  commissions: { sellerOrderId: string; basisPaise: number; rateBp: number; amountPaise: number; createdAt: string }[];
+  feeDeductionsTotalPaise?: number;
+  commissions?: { sellerOrderId: string; basisPaise: number; rateBp: number; amountPaise: number; createdAt: string }[];
   settlements: { id: string; reference: string; periodStart: string; periodEnd: string; netPaise: number; status: string; paidAt: string | null; providerReference: string | null }[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
-  commissionNote: string;
+  commissionNote?: string;
 }
 
 interface PayoutDetailsResponse {
@@ -5381,17 +5382,23 @@ export function SellerEarningsPage() {
       </section>
       <section className="border border-line bg-surface p-5">
         <h2 className="text-xl">Platform fee entries</h2>
-        <p className="mt-1 text-[11px] text-muted">{data.commissionNote}</p>
-        {data.commissions.length ? (
+        {data.commissionNote ? <p className="mt-1 text-[11px] text-muted">{data.commissionNote}</p> : null}
+        {(data.commissions?.length ?? 0) > 0 ? (
           <ul className="mt-4 divide-y divide-line text-[12.5px]">
-            {data.commissions.map((commission) => (
+            {data.commissions!.map((commission) => (
               <li key={`${commission.sellerOrderId}-${commission.createdAt}`} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
                 <span className="text-muted">{formatDate(commission.createdAt)} · basis {formatINR(commission.basisPaise)} · {percentFromBp(commission.rateBp)}</span>
                 <span>{formatINR(commission.amountPaise)}</span>
               </li>
             ))}
           </ul>
-        ) : <p className="mt-4 text-sm text-muted">No commission entries yet.</p>}
+        ) : (
+          <p className="mt-4 text-sm text-muted">
+            {data.feeDeductionsTotalPaise
+              ? `Total deductions to date: ${formatINR(data.feeDeductionsTotalPaise)}`
+              : 'No commission entries yet.'}
+          </p>
+        )}
       </section>
     </div>
   );

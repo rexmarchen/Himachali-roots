@@ -223,7 +223,7 @@ const SELLERS: DemoSeller[] = [
     story:
       'Demonstration seller profile. This storefront would list the collective’s member farms, harvest calendar and grading standards. Heirloom Chamba red rajma, organic Kala Bhat black soybeans, and Dorukha reversible double-sided needle embroidery.',
     coverUrl: '/images/editorial-terrace.jpg',
-    logoUrl: '/images/hands.jpg',
+    logoUrl: '/images/makers-hands.jpg',
     verified: true,
     yearsOperating: 16,
     specialities: ['Chamba Red Rajma', 'Spiti Heirloom Kala Bhat', 'Chamba Rumal Dorukha Needlework', '100% Rainfed Mountain Crops'],
@@ -320,7 +320,7 @@ const PRODUCTS: DemoProduct[] = [
     short: 'Featherweight high-altitude Pashmina and combed Angora cloud wrap with hand-twisted fringed edges.',
     description:
       'Sourced from nomadic pastoralist flocks grazing at 4,000 metres on the trans-Himalayan plateau. Spun to an ultra-fine micron count and hand-finished with natural walnut-rind and oak-bark tan hues. Weighing just 260 grams, it provides transcendent warmth and gossamer elegance.',
-    image: '/images/shawl.jpg',
+    image: '/images/product-shawl.jpg',
     imageAlt: 'Folded fine wool pashmina shawl with hand-finished trim',
     credit: 'Illustrative photograph: Rajani Gairshail, CC BY-SA 4.0, via Wikimedia Commons.',
     featured: true,
@@ -1196,7 +1196,7 @@ export async function seed(db: Db, options: { reset?: boolean } = {}): Promise<v
       campaignId,
       'Pahadi Festive Glow',
       'pahadi-festive-glow',
-      'A Diwali collection from Himachali makers: handwoven wool, Kangra tea, orchard walnuts, wildflower honey and Chamba embroidery. Only the products listed in this offer carry a promotional price.',
+      'A curated seasonal collection from Himachali makers: handwoven wool, Kangra tea, orchard walnuts, wildflower honey and Chamba embroidery. Only the products listed in this offer carry a promotional price.',
       '/images/campaigns/dearhills-christmas-campaign-1672.webp',
       'Dear Hills Christmas Campaign — This Christmas, Let Your Craft Shine. Become a Seller.',
       now,

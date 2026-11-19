@@ -1,14 +1,15 @@
 import { OutboxService } from './OutboxService.js';
 import { EventBus } from './EventBus.js';
+import type { Db } from '../../db.js';
 
 export class OutboxWorker {
   private timer: NodeJS.Timeout | null = null;
   private isProcessing = false;
-  private readonly db: any;
+  private readonly db: Db;
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
 
-  constructor(db: any, pollIntervalMs = 2500, batchSize = 25) {
+  constructor(db: Db, pollIntervalMs = 2500, batchSize = 25) {
     this.db = db;
     this.pollIntervalMs = pollIntervalMs;
     this.batchSize = batchSize;

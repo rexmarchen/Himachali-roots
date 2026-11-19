@@ -35,7 +35,11 @@ export function relativeDate(value: string | null | undefined): string {
   return formatDate(value);
 }
 
-export function orderStatusLabel(status: string): string {
+export function orderStatusLabel(status: string, sellerOrders?: { status: string }[]): string {
+  if (status === 'partially_fulfilled' && sellerOrders && sellerOrders.length > 0) {
+    const allShipped = sellerOrders.every((so) => ['shipped', 'delivered', 'returned', 'cancelled'].includes(so.status));
+    return allShipped ? 'Dispatched' : 'Partially dispatched';
+  }
   return ORDER_STATUS_LABELS[status] ?? status.replaceAll('_', ' ');
 }
 
@@ -76,7 +80,7 @@ export function statusTone(status: string): string {
   if (['rejected', 'cancelled', 'failed', 'suspended', 'refunded', 'reversed', 'expired', 'blocked'].includes(status)) {
     return 'bg-terra/10 text-[#8e4630] border-terra/25';
   }
-  if (['shipped', 'out_for_delivery', 'in_transit'].includes(status)) {
+  if (['shipped', 'out_for_delivery', 'in_transit', 'partially_fulfilled'].includes(status)) {
     return 'bg-sage/20 text-forest border-sage/40';
   }
   return 'bg-sand/30 text-ink border-sand';

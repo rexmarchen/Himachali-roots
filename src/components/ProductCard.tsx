@@ -73,7 +73,7 @@ export function ProductCard({
   });
 
   return (
-    <article className="group relative flex flex-col justify-between transition-all duration-200 bg-white rounded-lg border border-[#E4DACE]/80 shadow-[0_1px_4px_rgba(23,35,33,0.03)] p-1.5 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none h-full">
+    <article className="group relative flex flex-col justify-between transition-all duration-200 bg-white rounded-lg border border-[#E4DACE]/80 shadow-[0_1px_4px_rgba(23,35,33,0.03)] p-1.5 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none h-full w-full min-w-0">
       <div>
         <div className="relative aspect-square sm:aspect-[4/5] w-full overflow-hidden rounded-md sm:rounded-none bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] border border-[#E4DACE]/40 sm:border-line/60">
           <Link to={`/shop/${product.slug}`} className="block h-full w-full" aria-label={`View ${product.name}`}>
@@ -87,7 +87,7 @@ export function ProductCard({
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center p-2.5 text-center text-xs text-muted bg-sand/20">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5 text-sand mb-1" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5 text-muted/70 mb-1" aria-hidden>
                   <rect width="18" height="18" x="3" y="3" rx="2" strokeWidth="1.5" />
                   <circle cx="8.5" cy="8.5" r="1.5" strokeWidth="1.5" />
                   <path d="M21 15l-5-5L5 21" strokeWidth="1.5" />
@@ -125,13 +125,13 @@ export function ProductCard({
               toggleWishlist.mutate(isSaved);
             }}
             aria-label={isSaved ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`}
-            className={`absolute right-1 top-1 sm:right-2 sm:top-2 flex h-6 w-6 sm:h-11 sm:w-11 min-h-[24px] min-w-[24px] sm:min-h-[44px] sm:min-w-[44px] items-center justify-center rounded-full border transition-all duration-200 active:scale-90 ${
+            className={`absolute right-1 top-1 sm:right-2 sm:top-2 flex h-8 w-8 sm:h-11 sm:w-11 min-h-[32px] min-w-[32px] sm:min-h-[44px] sm:min-w-[44px] items-center justify-center rounded-full border transition-all duration-200 active:scale-90 ${
               isSaved
                 ? 'border-terra bg-terra text-white shadow-sm'
                 : 'border-[#E4DACE]/80 bg-white/95 backdrop-blur-sm sm:bg-paper/90 text-ink/70 hover:bg-paper hover:text-terra shadow-2xs'
             }`}
           >
-            <svg viewBox="0 0 20 20" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" className="h-2.5 w-2.5 sm:h-4 sm:w-4">
+            <svg viewBox="0 0 20 20" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" className="h-3.5 w-3.5 sm:h-4 sm:w-4">
               <path
                 d="M10 16.5l-6-6a4.2 4.2 0 0 1 0-6 4.2 4.2 0 0 1 6 0l0 0 0 0a4.2 4.2 0 0 1 6 0 4.2 4.2 0 0 1 0 6l-6 6Z"
                 strokeWidth="1.6"
@@ -202,7 +202,7 @@ export function ProductCard({
               }
             }}
             disabled={soldOut || addToCart.isPending}
-            className={`sm:hidden h-6 px-2 rounded-md font-black text-[9px] uppercase tracking-wider transition-all duration-150 active:scale-90 flex items-center justify-center gap-0.5 shrink-0 shadow-2xs ${
+            className={`sm:hidden h-8 min-h-[32px] min-w-[36px] px-2.5 rounded-md font-black text-[9.5px] uppercase tracking-wider transition-all duration-150 active:scale-90 flex items-center justify-center gap-0.5 shrink-0 shadow-2xs ${
               soldOut
                 ? 'bg-sand/30 text-muted border border-line cursor-not-allowed'
                 : 'border border-[#D98263] bg-[#FAF3EF] text-[#D98263] hover:bg-[#D98263] hover:text-white'

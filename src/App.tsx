@@ -22,9 +22,13 @@ const VerifyEmailPage = lazy(() =>
   import('@/pages/AuthPages').then((module) => ({ default: module.VerifyEmailPage })),
 );
 
-const MakersPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ default: module.MakersPage })));
+const MakersPage = lazy(() => import('@/pages/MakersPage').then((module) => ({ default: module.MakersPage })));
 const MakerDetailPage = lazy(() =>
   import('@/pages/PublicPages').then((module) => ({ default: module.MakerDetailPage })),
+);
+const BlogIndexPage = lazy(() => import('@/pages/BlogPage').then((module) => ({ default: module.BlogIndexPage })));
+const BlogPostDetailPage = lazy(() =>
+  import('@/pages/BlogPage').then((module) => ({ default: module.BlogPostDetailPage })),
 );
 const AboutPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ default: module.AboutPage })));
 const SourcingPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ default: module.SourcingPage })));
@@ -32,7 +36,7 @@ const FaqPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ def
 const ContactPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ default: module.ContactPage })));
 const CreditsPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ default: module.CreditsPage })));
 const PolicyPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ default: module.PolicyPage })));
-const SellPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ default: module.SellPage })));
+const SellPage = lazy(() => import('@/pages/BecomeAMakerPage').then((module) => ({ default: module.BecomeAMakerPage })));
 const NotFoundPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ default: module.NotFoundPage })));
 
 const AccountLayout = lazy(() =>
@@ -178,15 +182,19 @@ export function App() {
         <Route element={<PublicLayout />}>
         <Route index element={<HomePage />} />
         <Route path="shop" element={<ShopPage />} />
+        <Route path="category/:slug" element={<ShopPage />} />
+        <Route path="categories/:slug" element={<ShopPage />} />
         <Route path="shop/:slug" element={<ProductPage />} />
         <Route path="offers" element={<Navigate to="/offers/pahadi-festive-glow" replace />} />
-        <Route path="diwali" element={<Navigate to="/offers/pahadi-festive-glow" replace />} />
         <Route path="offers/:slug" element={<OfferPage />} />
         <Route path="products/:slug" element={<ProductPage />} />
         <Route path="cart" element={<CartPage />} />
         <Route path="makers" element={<MakersPage />} />
         <Route path="makers/:slug" element={<MakerDetailPage />} />
         <Route path="sellers/:slug" element={<MakerDetailPage />} />
+        <Route path="blog" element={<BlogIndexPage />} />
+        <Route path="blog/:slug" element={<BlogPostDetailPage />} />
+        <Route path="journal" element={<Navigate to="/blog" replace />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="sourcing" element={<SourcingPage />} />
         <Route path="faq" element={<FaqPage />} />

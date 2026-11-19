@@ -185,7 +185,7 @@ function touchGoogleIdentity(db: Db, userId: string, profile: GoogleProfile): vo
 
 function attachCart(db: Db, req: Request, res: Response, userId: string): void {
   const cart = ensureCart(db, userId, (req.cookies as Record<string, string> | undefined)?.[CART_COOKIE] ?? null);
-  setCartCookie(res, cart.token);
+  setCartCookie(res, cart.token, req);
 }
 
 function signInResponse(db: Db, req: Request, res: Response, userId: string) {
@@ -303,7 +303,7 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
     const token = createSession(db, userId);
     setSessionCookie(req, res, token);
     const cart = ensureCart(db, userId, (req.cookies as Record<string, string> | undefined)?.[CART_COOKIE] ?? null);
-    setCartCookie(res, cart.token);
+    setCartCookie(res, cart.token, req);
     const devVerifyUrl = await issueVerification(db, { id: userId, email, fullName: input.fullName });
     audit(db, { id: userId, email }, 'auth.register', 'user', userId);
     res.status(201).json({

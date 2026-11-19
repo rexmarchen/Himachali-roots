@@ -142,7 +142,7 @@ export const env = {
     email: process.env.SHIPROCKET_EMAIL ?? '',
     password: process.env.SHIPROCKET_PASSWORD ?? '',
     pickupLocation: process.env.SHIPROCKET_PICKUP_LOCATION ?? '',
-    webhookSecret: (process.env.SHIPPING_WEBHOOK_SECRET ?? '').trim(),
+    webhookSecret: nodeEnv === 'test' ? (process.env.TEST_SHIPPING_WEBHOOK_SECRET ?? '') : (process.env.SHIPPING_WEBHOOK_SECRET ?? '').trim(),
     get configured() {
       return Boolean(this.email && this.password);
     },

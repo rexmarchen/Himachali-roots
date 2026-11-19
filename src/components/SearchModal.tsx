@@ -39,7 +39,7 @@ export function SearchModal({
   // Load product catalog for instant autocomplete
   const { data: productsData } = useQuery({
     queryKey: ['products-all'],
-    queryFn: () => api<Paged<ProductSummary>>('/products'),
+    queryFn: () => api<Paged<ProductSummary>>('/products?pageSize=100'),
     staleTime: 5 * 60 * 1000,
     enabled: open,
   });

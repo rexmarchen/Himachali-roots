@@ -50,6 +50,17 @@ describe('Himachali Marketplace: Seller Product, Order Fulfilment & Profit Engin
     const fruitCat = catRes.body.categories.find((c: { slug: string }) => c.slug === 'fruits-and-fresh-produce') ?? catRes.body.categories[0];
     expect(fruitCat).toBeDefined();
 
+    // Verify compareAtPricePaise: 0 is rejected with 400 Bad Request
+    const zeroCompareRes = await mutate(seller.post('/api/seller/products')).send({
+      name: 'Kinnaur Apples Zero Compare',
+      categoryId: fruitCat.id,
+      pricePaise: 45000,
+      compareAtPricePaise: 0,
+      description: 'Validation test product.',
+    });
+    expect(zeroCompareRes.status).toBe(400);
+    expect(zeroCompareRes.body.error.fields).toHaveProperty('compareAtPricePaise');
+
     // 2. Seller creates a genuine Himachali fruit product with provenance and private cost inputs
     const createRes = await mutate(seller.post('/api/seller/products')).send({
       name: 'Kinnaur Royal Delicious Apples (Grade A)',

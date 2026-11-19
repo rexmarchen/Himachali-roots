@@ -42,8 +42,8 @@ export function Step1Account({ user, onSuccess, onSwitchAccount, fullName, phone
       return;
     }
     const cleanPhone = regPhone.trim().replace(/\D/g, '');
-    if (cleanPhone.length !== 10) {
-      setError('Please enter a valid 10-digit Indian mobile number.');
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setError('Please enter a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).');
       return;
     }
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
@@ -180,8 +180,9 @@ export function Step1Account({ user, onSuccess, onSwitchAccount, fullName, phone
             type="button"
             size="lg"
             onClick={() => {
-              if (phone.trim().length !== 10) {
-                setError('Please provide a valid 10-digit contact mobile number.');
+              const clean = phone.trim().replace(/\D/g, '');
+              if (!/^[6-9]\d{9}$/.test(clean)) {
+                setError('Please provide a valid 10-digit Indian contact mobile number.');
                 return;
               }
               onSuccess(user);

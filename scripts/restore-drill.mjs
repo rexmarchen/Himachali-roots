@@ -29,7 +29,21 @@ import { DatabaseSync } from 'node:sqlite';
 
 const args = process.argv.slice(2);
 const serve = args.includes('--serve');
-const backupArg = args.find((arg) => !arg.startsWith('-'));
+let backupArg = args.find((arg) => !arg.startsWith('-'));
+
+if (!backupArg) {
+  const defaultDir = path.resolve(process.cwd(), 'backups');
+  if (fs.existsSync(defaultDir)) {
+    const files = fs
+      .readdirSync(defaultDir)
+      .filter((f) => f.endsWith('.db'))
+      .map((f) => path.join(defaultDir, f))
+      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+    if (files[0]) {
+      backupArg = files[0];
+    }
+  }
+}
 
 const findings = [];
 const record = (level, check, detail) => {

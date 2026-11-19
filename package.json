@@ -28,6 +28,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:mobile": "node scripts/verify-mobile.mjs",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
     "admin:create": "tsx server/scripts/create-admin.ts",
     "mfa:reset": "tsx server/scripts/reset-mfa.ts",

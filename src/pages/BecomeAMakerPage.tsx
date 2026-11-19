@@ -102,6 +102,7 @@ export function BecomeAMakerPage() {
 
   // Business type choice for dynamic adaptation
   const [businessType, setBusinessType] = useState<CoreBusinessType>('maker_artisan');
+  const [isRevising, setIsRevising] = useState<boolean>(() => searchParams.get('edit') === '1');
 
   // Step wizard: 0 = Welcome Landing, 1 = Account, 2 = Profile, 3 = Products & Origin, 4 = Verification, 5 = Review
   const [step, setStep] = useState<number>(() => {
@@ -145,6 +146,7 @@ export function BecomeAMakerPage() {
 
   useEffect(() => {
     if (appData?.data && typeof appData.data === 'object') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const serverData = appData.data as Record<string, any>;
       setForm((prev) => ({
         ...prev,
@@ -227,13 +229,20 @@ export function BecomeAMakerPage() {
       setStep(newStep);
       setSearchParams((params) => {
         const next = new URLSearchParams(params);
-        if (newStep === 0) next.delete('step');
-        else next.set('step', String(newStep));
+        if (newStep === 0) {
+          next.delete('step');
+          next.delete('edit');
+        } else {
+          next.set('step', String(newStep));
+          if (isRevising || params.get('edit') === '1') {
+            next.set('edit', '1');
+          }
+        }
         return next;
       });
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
-    [setSearchParams],
+    [isRevising, setSearchParams],
   );
 
   // Auto-save draft on step change if authenticated
@@ -350,15 +359,18 @@ export function BecomeAMakerPage() {
     appData &&
     applicationStatus &&
     ['submitted', 'under_review', 'changes_requested', 'approved', 'rejected'].includes(applicationStatus) &&
-    step !== 5 // not explicitly in edit-revision mode
+    !isRevising &&
+    searchParams.get('edit') !== '1'
   ) {
     return (
       <SellerStatusDashboard
         data={appData}
         onRevise={() => {
+          setIsRevising(true);
           goToStep(2);
         }}
         onStartNew={() => {
+          setIsRevising(true);
           goToStep(2);
         }}
       />
@@ -400,6 +412,7 @@ export function BecomeAMakerPage() {
         totalSteps={4}
         saving={savingDraft}
         lastSavedAt={lastSavedTime}
+        isReviewMode={step === 5}
         onJumpToStep={(target) => {
           goToStep(target);
         }}
