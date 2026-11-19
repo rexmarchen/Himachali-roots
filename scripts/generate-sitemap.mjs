@@ -1,14 +1,19 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 
 const root = process.cwd();
 const dbPath = path.resolve(root, 'data', 'pahadi-roots.db');
+const isDirectRun = Boolean(process.argv[1]) && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (!fs.existsSync(dbPath)) {
   console.log('Database not found at data/pahadi-roots.db, skipping static sitemap generation.');
-  process.exit(0);
+  // `build-web.mjs` imports this module. Exiting here would terminate the
+  // whole build process before Vite runs, so only exit when executed directly.
+  if (isDirectRun) process.exit(0);
+  throw new Error('Sitemap generation skipped: database not found');
 }
 
 const db = new DatabaseSync(dbPath);
