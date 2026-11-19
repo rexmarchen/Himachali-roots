@@ -2,6 +2,9 @@ node_modules/
 dist/
 dist-server/
 data/
+# The rule above is for the SQLite data directory; SPA source data must ship.
+!src/data/
+!src/data/**
 backups/
 storage/
 .env
