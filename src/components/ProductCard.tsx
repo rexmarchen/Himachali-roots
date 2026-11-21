@@ -6,6 +6,7 @@ import { formatINR } from '@shared/types';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
+import { useInView } from '@/lib/useInView';
 
 export function ProductCard({
   product,
@@ -237,17 +238,35 @@ export function ProductCard({
   );
 }
 
+function ProductGridItem({
+  product,
+  index,
+  showAddToCart,
+}: {
+  product: ProductSummary;
+  index: number;
+  showAddToCart: boolean;
+}) {
+  const { ref, isInView } = useInView({ threshold: 0.05, rootMargin: '0px 0px -30px 0px' });
+
+  return (
+    <div
+      ref={ref}
+      className={`flex flex-col h-full transition-all duration-500 ease-out transform ${
+        isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+      }`}
+      style={{ transitionDelay: isInView ? `${(index % 4) * 75}ms` : '0ms' }}
+    >
+      <ProductCard product={product} priority={index < 4} showAddToCart={showAddToCart} />
+    </div>
+  );
+}
+
 export function ProductGrid({ products, showAddToCart = false }: { products: ProductSummary[]; showAddToCart?: boolean }) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:gap-x-6 sm:gap-y-11 md:grid-cols-3 xl:grid-cols-4">
       {products.map((product, index) => (
-        <div
-          key={product.id}
-          className="animate-fade-in-up flex flex-col h-full"
-          style={{ animationDelay: `${(index % 8) * 60}ms` }}
-        >
-          <ProductCard product={product} priority={index < 4} showAddToCart={showAddToCart} />
-        </div>
+        <ProductGridItem key={product.id} product={product} index={index} showAddToCart={showAddToCart} />
       ))}
     </div>
   );

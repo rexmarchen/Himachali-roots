@@ -7,6 +7,7 @@ import { formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
 import { api } from '@/lib/api';
 import { usePageMeta } from '@/lib/usePageMeta';
+import { useInView } from '@/lib/useInView';
 import { ProductCard, ProductGrid } from '@/components/ProductCard';
 import { CampaignBanner } from '@/components/CampaignBanner';
 import {
@@ -497,12 +498,15 @@ const CATEGORY_VISUALS: Record<string, { image: string; tag: string }> = {
 };
 
 function CategoryCollectionSection({ categories }: { categories: Category[] }) {
+  const { ref: sectionRef, isInView } = useInView<HTMLElement>({ threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
   const liveCategories = categories.filter((category) => (category.productCount ?? 0) > 0);
   const listingCount = liveCategories.reduce((total, category) => total + (category.productCount ?? 0), 0);
 
   return (
-    <section className="border-b border-line bg-paper py-14 sm:py-18 lg:py-22">
-      <div className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10">
+    <section ref={sectionRef} className="border-b border-line bg-paper py-14 sm:py-18 lg:py-22 overflow-hidden">
+      <div className={`mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 transition-all duration-700 ease-out transform ${
+        isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+      }`}>
         <div className="mb-7 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-terra">
@@ -524,7 +528,7 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
 
         {liveCategories.length ? (
           <div className="grid grid-cols-2 gap-3.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
-            {liveCategories.map((category) => {
+            {liveCategories.map((category, index) => {
               const visual = CATEGORY_VISUALS[category.slug] ?? {
                 image: '/images/editorial-terrace.jpg',
                 tag: 'Himachal',
@@ -533,7 +537,10 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
                 <Link
                   key={category.id}
                   to={`/shop?category=${encodeURIComponent(category.slug)}`}
-                  className="group relative flex flex-col justify-end overflow-hidden rounded-xl border border-line bg-surface aspect-[4/3] sm:aspect-[4/3.2] transition-all duration-300 hover:-translate-y-1 hover:border-terra/50 hover:shadow-md"
+                  className={`group relative flex flex-col justify-end overflow-hidden rounded-xl border border-line bg-surface aspect-[4/3] sm:aspect-[4/3.2] transition-all duration-500 ease-out transform hover:-translate-y-1 hover:border-terra/50 hover:shadow-md ${
+                    isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+                  }`}
+                  style={{ transitionDelay: isInView ? `${(index % 4) * 80}ms` : '0ms' }}
                 >
                   <img
                     src={visual.image}
@@ -1131,6 +1138,7 @@ const FEATURED_PROVENANCE_ITEMS = [
 
 function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { ref: sectionRef, isInView } = useInView<HTMLElement>({ threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
 
   const scroll = (direction: 'left' | 'right') => {
     if (!scrollRef.current) return;
@@ -1139,14 +1147,18 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
   };
 
   return (
-    <section className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 py-10 sm:py-14 border-b border-line/40">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">
+    <section ref={sectionRef} className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 py-10 sm:py-14 border-b border-line/40 overflow-hidden">
+      <div className={`flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8 transition-all duration-700 ease-out transform ${
+        isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+      }`}>
         <div>
           <div className="flex items-center gap-3">
             <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted">
               Featured Products
             </span>
-            <span className="h-px w-10 bg-gradient-to-r from-terra/70 to-line transition-all duration-500" aria-hidden />
+            <span className={`h-px bg-gradient-to-r from-terra/70 to-line transition-all duration-700 delay-300 ${
+              isInView ? 'w-10' : 'w-0'
+            }`} aria-hidden />
           </div>
           <h2 className="mt-2 font-serif text-[1.65rem] sm:text-[2rem] lg:text-[2.25rem] font-medium text-forest">
             Handpicked from the Himalayas
@@ -1159,7 +1171,12 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
         {/* 4 Value Badges & Carousel Controls matching reference screenshot */}
         <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0">
           <div className="hidden sm:flex items-center gap-3 xl:gap-4">
-            <div className="group/badge animate-fade-in-up flex items-center gap-2 cursor-default transition-all duration-300 hover:-translate-y-1" style={{ animationDelay: '100ms' }}>
+            <div
+              className={`group/badge flex items-center gap-2 cursor-default transition-all duration-500 ease-out transform hover:-translate-y-1 ${
+                isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+              }`}
+              style={{ transitionDelay: isInView ? '100ms' : '0ms' }}
+            >
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest transition-all duration-300 group-hover/badge:scale-110 group-hover/badge:bg-terra/10 group-hover/badge:border-terra/50 group-hover/badge:text-terra group-hover/badge:shadow-sm">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 transition-transform duration-300 group-hover/badge:scale-105" aria-hidden>
                   <path d="m8 3 4 8 5-5 5 15H2L8 3z" strokeWidth="1.6" strokeLinejoin="round" />
@@ -1171,7 +1188,12 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
               </div>
             </div>
 
-            <div className="group/badge animate-fade-in-up flex items-center gap-2 cursor-default transition-all duration-300 hover:-translate-y-1" style={{ animationDelay: '200ms' }}>
+            <div
+              className={`group/badge flex items-center gap-2 cursor-default transition-all duration-500 ease-out transform hover:-translate-y-1 ${
+                isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+              }`}
+              style={{ transitionDelay: isInView ? '180ms' : '0ms' }}
+            >
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest transition-all duration-300 group-hover/badge:scale-110 group-hover/badge:bg-terra/10 group-hover/badge:border-terra/50 group-hover/badge:text-terra group-hover/badge:shadow-sm">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 transition-transform duration-300 group-hover/badge:scale-105" aria-hidden>
                   <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12A10 10 0 0 1 12 2Z" strokeWidth="1.6" />
@@ -1184,7 +1206,12 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
               </div>
             </div>
 
-            <div className="group/badge animate-fade-in-up flex items-center gap-2 cursor-default transition-all duration-300 hover:-translate-y-1" style={{ animationDelay: '300ms' }}>
+            <div
+              className={`group/badge flex items-center gap-2 cursor-default transition-all duration-500 ease-out transform hover:-translate-y-1 ${
+                isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+              }`}
+              style={{ transitionDelay: isInView ? '260ms' : '0ms' }}
+            >
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest transition-all duration-300 group-hover/badge:scale-110 group-hover/badge:bg-terra/10 group-hover/badge:border-terra/50 group-hover/badge:text-terra group-hover/badge:shadow-sm">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 transition-transform duration-300 group-hover/badge:scale-105" aria-hidden>
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeWidth="1.6" />
@@ -1196,7 +1223,12 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
               </div>
             </div>
 
-            <div className="group/badge animate-fade-in-up flex items-center gap-2 cursor-default transition-all duration-300 hover:-translate-y-1" style={{ animationDelay: '400ms' }}>
+            <div
+              className={`group/badge flex items-center gap-2 cursor-default transition-all duration-500 ease-out transform hover:-translate-y-1 ${
+                isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+              }`}
+              style={{ transitionDelay: isInView ? '340ms' : '0ms' }}
+            >
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest transition-all duration-300 group-hover/badge:scale-110 group-hover/badge:bg-terra/10 group-hover/badge:border-terra/50 group-hover/badge:text-terra group-hover/badge:shadow-sm">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 transition-transform duration-300 group-hover/badge:scale-105" aria-hidden>
                   <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" strokeWidth="1.6" />
@@ -1236,7 +1268,9 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
       </div>
 
       {/* Himalayan Provenance Marquee Ribbon (R1 Scrolling Text Animation) */}
-      <div className="relative mb-6 overflow-hidden rounded-lg border border-line/60 bg-gradient-to-r from-sand/40 via-paper to-sand/40 py-2.5 shadow-2xs">
+      <div className={`relative mb-6 overflow-hidden rounded-lg border border-line/60 bg-gradient-to-r from-sand/40 via-paper to-sand/40 py-2.5 shadow-2xs transition-all duration-700 ease-out transform ${
+        isInView ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-6 scale-[0.98]'
+      }`} style={{ transitionDelay: isInView ? '250ms' : '0ms' }}>
         <div className="animate-marquee select-none flex items-center">
           <div className="flex items-center gap-8 sm:gap-12 shrink-0 pr-8 sm:pr-12 text-[10.5px] sm:text-xs font-semibold tracking-[0.16em] uppercase text-forest">
             {FEATURED_PROVENANCE_ITEMS.map((item, idx) => (
@@ -1266,8 +1300,10 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
           {products.map((product, index) => (
             <div
               key={product.id}
-              className="animate-fade-in-up w-full min-w-0 sm:w-[280px] lg:w-[300px] sm:shrink-0 flex"
-              style={{ animationDelay: `${(index % 6) * 70}ms` }}
+              className={`w-full min-w-0 sm:w-[280px] lg:w-[300px] sm:shrink-0 flex transition-all duration-500 ease-out transform ${
+                isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+              }`}
+              style={{ transitionDelay: isInView ? `${300 + (index % 6) * 80}ms` : '0ms' }}
             >
               <ProductCard product={product} priority={index < 4} />
             </div>
@@ -1284,11 +1320,14 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
 }
 
 function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestsellers'] }) {
+  const { ref: sectionRef, isInView } = useInView<HTMLElement>({ threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
   if (!bestsellers.length) return null;
 
   return (
-    <section className="border-b border-line bg-surface py-10 sm:py-14">
-      <div className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10">
+    <section ref={sectionRef} className="border-b border-line bg-surface py-10 sm:py-14 overflow-hidden">
+      <div className={`mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 transition-all duration-700 ease-out transform ${
+        isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+      }`}>
         <div className="mb-6 flex items-end justify-between gap-4">
           <div>
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-terra">Actually purchased</p>
@@ -1305,7 +1344,10 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
             <Link
               key={item.slug}
               to={`/shop/${item.slug}`}
-              className="group w-full min-w-0 flex flex-col justify-between bg-white rounded-lg border border-[#E4DACE]/75 shadow-[0_1px_4px_rgba(23,35,33,0.03)] p-1.5 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none transition-all"
+              className={`group w-full min-w-0 flex flex-col justify-between bg-white rounded-lg border border-[#E4DACE]/75 shadow-[0_1px_4px_rgba(23,35,33,0.03)] p-1.5 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none transition-all duration-500 ease-out transform hover:-translate-y-1 ${
+                isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+              }`}
+              style={{ transitionDelay: isInView ? `${(index % 4) * 80}ms` : '0ms' }}
             >
               <div>
                 <div className="relative aspect-square overflow-hidden rounded-md sm:rounded-none border border-[#E4DACE]/40 sm:border-line/60 bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE]">
