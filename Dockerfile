@@ -24,8 +24,10 @@ RUN apt-get update \
     && mkdir -p /data /storage/uploads /storage/private/seller-docs /backups \
     && chown -R pahadi:pahadi /app /data /storage /backups
 
-COPY --from=build --chown=pahadi:pahadi /app/package.json /app/package-lock.json ./
-COPY --from=build --chown=pahadi:pahadi /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund \
+    && chown -R pahadi:pahadi /app/node_modules /app/package.json /app/package-lock.json
+
 COPY --from=build --chown=pahadi:pahadi /app/dist ./dist
 COPY --from=build --chown=pahadi:pahadi /app/dist-server ./dist-server
 COPY --from=build --chown=pahadi:pahadi /app/scripts/backup-db.mjs /app/scripts/verify-backup.mjs ./scripts/
