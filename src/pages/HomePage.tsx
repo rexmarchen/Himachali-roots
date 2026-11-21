@@ -1118,6 +1118,17 @@ function SellerBannerSection({ counts }: { counts: { products: number; sellers: 
   );
 }
 
+const FEATURED_PROVENANCE_ITEMS = [
+  '100% Pure Himalayan Honey',
+  'Cold-Pressed Chulli Apricot Oil',
+  'Handwoven Kullu Valley Shawls',
+  'Pure Shilajit Sourced at 14,000 ft',
+  'GI-Tagged Kangra Orthodox Tea',
+  'Sun-Dried Kinnaur Walnuts',
+  'Artisanal Chamba Rumal Weaves',
+  'Direct from Registered Himachali Makers',
+];
+
 function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -1135,7 +1146,7 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
             <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted">
               Featured Products
             </span>
-            <span className="h-px w-8 bg-line" aria-hidden />
+            <span className="h-px w-10 bg-gradient-to-r from-terra/70 to-line transition-all duration-500" aria-hidden />
           </div>
           <h2 className="mt-2 font-serif text-[1.65rem] sm:text-[2rem] lg:text-[2.25rem] font-medium text-forest">
             Handpicked from the Himalayas
@@ -1148,9 +1159,9 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
         {/* 4 Value Badges & Carousel Controls matching reference screenshot */}
         <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0">
           <div className="hidden sm:flex items-center gap-3 xl:gap-4">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+            <div className="group/badge animate-fade-in-up flex items-center gap-2 cursor-default transition-all duration-300 hover:-translate-y-1" style={{ animationDelay: '100ms' }}>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest transition-all duration-300 group-hover/badge:scale-110 group-hover/badge:bg-terra/10 group-hover/badge:border-terra/50 group-hover/badge:text-terra group-hover/badge:shadow-sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 transition-transform duration-300 group-hover/badge:scale-105" aria-hidden>
                   <path d="m8 3 4 8 5-5 5 15H2L8 3z" strokeWidth="1.6" strokeLinejoin="round" />
                 </svg>
               </div>
@@ -1160,9 +1171,9 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+            <div className="group/badge animate-fade-in-up flex items-center gap-2 cursor-default transition-all duration-300 hover:-translate-y-1" style={{ animationDelay: '200ms' }}>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest transition-all duration-300 group-hover/badge:scale-110 group-hover/badge:bg-terra/10 group-hover/badge:border-terra/50 group-hover/badge:text-terra group-hover/badge:shadow-sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 transition-transform duration-300 group-hover/badge:scale-105" aria-hidden>
                   <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12A10 10 0 0 1 12 2Z" strokeWidth="1.6" />
                   <path d="M12 6c-3.314 0-6 2.686-6 6 0 2.21 1.79 4 4 4 1.5 0 2.5-1 3-2" strokeWidth="1.6" strokeLinecap="round" />
                 </svg>
@@ -1173,9 +1184,9 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+            <div className="group/badge animate-fade-in-up flex items-center gap-2 cursor-default transition-all duration-300 hover:-translate-y-1" style={{ animationDelay: '300ms' }}>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest transition-all duration-300 group-hover/badge:scale-110 group-hover/badge:bg-terra/10 group-hover/badge:border-terra/50 group-hover/badge:text-terra group-hover/badge:shadow-sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 transition-transform duration-300 group-hover/badge:scale-105" aria-hidden>
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeWidth="1.6" />
                 </svg>
               </div>
@@ -1185,9 +1196,9 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4" aria-hidden>
+            <div className="group/badge animate-fade-in-up flex items-center gap-2 cursor-default transition-all duration-300 hover:-translate-y-1" style={{ animationDelay: '400ms' }}>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sand/60 border border-[#D5CCC0] text-forest transition-all duration-300 group-hover/badge:scale-110 group-hover/badge:bg-terra/10 group-hover/badge:border-terra/50 group-hover/badge:text-terra group-hover/badge:shadow-sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 transition-transform duration-300 group-hover/badge:scale-105" aria-hidden>
                   <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" strokeWidth="1.6" />
                 </svg>
               </div>
@@ -1203,23 +1214,45 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
             <button
               type="button"
               onClick={() => scroll('left')}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 hover:bg-paper hover:text-forest transition-colors shadow-2xs"
+              className="group flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 hover:bg-paper hover:text-forest hover:-translate-y-0.5 hover:shadow-sm active:scale-95 transition-all duration-200 shadow-2xs"
               aria-label="Scroll featured products left"
             >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5" aria-hidden>
                 <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
               </svg>
             </button>
             <button
               type="button"
               onClick={() => scroll('right')}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 hover:bg-paper hover:text-forest transition-colors shadow-2xs"
+              className="group flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink/80 hover:bg-paper hover:text-forest hover:-translate-y-0.5 hover:shadow-sm active:scale-95 transition-all duration-200 shadow-2xs"
               aria-label="Scroll featured products right"
             >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden>
                 <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
               </svg>
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Himalayan Provenance Marquee Ribbon (R1 Scrolling Text Animation) */}
+      <div className="relative mb-6 overflow-hidden rounded-lg border border-line/60 bg-gradient-to-r from-sand/40 via-paper to-sand/40 py-2.5 shadow-2xs">
+        <div className="animate-marquee select-none flex items-center">
+          <div className="flex items-center gap-8 sm:gap-12 shrink-0 pr-8 sm:pr-12 text-[10.5px] sm:text-xs font-semibold tracking-[0.16em] uppercase text-forest">
+            {FEATURED_PROVENANCE_ITEMS.map((item, idx) => (
+              <span key={`s4-ribbon-a-${idx}`} className="flex items-center gap-2.5 whitespace-nowrap">
+                <span className="text-terra">✦</span>
+                <span>{item}</span>
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-8 sm:gap-12 shrink-0 pr-8 sm:pr-12 text-[10.5px] sm:text-xs font-semibold tracking-[0.16em] uppercase text-forest" aria-hidden="true">
+            {FEATURED_PROVENANCE_ITEMS.map((item, idx) => (
+              <span key={`s4-ribbon-b-${idx}`} className="flex items-center gap-2.5 whitespace-nowrap">
+                <span className="text-terra">✦</span>
+                <span>{item}</span>
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -1231,7 +1264,11 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {products.map((product, index) => (
-            <div key={product.id} className="w-full min-w-0 sm:w-[280px] lg:w-[300px] sm:shrink-0 flex">
+            <div
+              key={product.id}
+              className="animate-fade-in-up w-full min-w-0 sm:w-[280px] lg:w-[300px] sm:shrink-0 flex"
+              style={{ animationDelay: `${(index % 6) * 70}ms` }}
+            >
               <ProductCard product={product} priority={index < 4} />
             </div>
           ))}

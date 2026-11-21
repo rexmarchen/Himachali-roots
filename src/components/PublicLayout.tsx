@@ -187,24 +187,43 @@ function HeritageAnnouncementBar({ customText, light = false }: { customText?: s
   const { config } = useAuth();
   const freeShippingThreshold = config?.shipping.freeThresholdPaise ?? 0;
 
-  if (!customText) return null;
+  const tickerItems = [
+    ...(customText ? [customText] : []),
+    ...(freeShippingThreshold > 0 ? [`Free shipping across India on orders over ${formatINR(freeShippingThreshold)}`] : []),
+    '100% Authentic Himachali Provenance Guaranteed',
+    'Direct from Registered Pahadi Artisans & Women Cooperatives',
+    'GI-Tagged Kangra Orthodox Tea & Handwoven Kullu Shawls',
+    'Pure Himalayan Wild Flora Honey & Cold-Pressed Chulli Oil',
+    'Ethical Mountain Sourcing · Lab-Verified Purity',
+  ];
 
   return (
     <div
-      className={`border-b transition-colors duration-300 ${
+      className={`relative z-20 border-b overflow-hidden transition-colors duration-300 ${
         light ? 'bg-black/50 text-white/90 border-white/10' : 'border-[#0F1614] bg-forest-deep text-paper'
       }`}
+      role="region"
       aria-label="Dear Hills announcements"
     >
-      <div className="mx-auto flex min-h-8 sm:min-h-9 lg:min-h-10 max-w-[88rem] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 xl:px-10 py-1.5 sm:py-2 text-[11px] sm:text-xs lg:text-[13px] font-medium tracking-[0.02em]">
-        <div className="flex items-center gap-2 min-w-0">
-          <p className="line-clamp-1 truncate">
-            {customText}
-          </p>
+      <div className="mx-auto flex h-8 sm:h-9 max-w-[88rem] items-center overflow-hidden px-4 sm:px-6 lg:px-8">
+        <div className="animate-marquee py-1 select-none flex items-center">
+          <div className="flex items-center gap-6 sm:gap-10 shrink-0 pr-6 sm:pr-10 text-[11px] sm:text-xs font-medium tracking-[0.03em]">
+            {tickerItems.map((item, idx) => (
+              <span key={`ticker-a-${idx}`} className="flex items-center gap-2 whitespace-nowrap text-sand/90 hover:text-white transition-colors">
+                <span className="text-terra">✦</span>
+                <span>{item}</span>
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-6 sm:gap-10 shrink-0 pr-6 sm:pr-10 text-[11px] sm:text-xs font-medium tracking-[0.03em]" aria-hidden="true">
+            {tickerItems.map((item, idx) => (
+              <span key={`ticker-b-${idx}`} className="flex items-center gap-2 whitespace-nowrap text-sand/90 hover:text-white transition-colors">
+                <span className="text-terra">✦</span>
+                <span>{item}</span>
+              </span>
+            ))}
+          </div>
         </div>
-        {freeShippingThreshold > 0 ? (
-          <p className="hidden shrink-0 text-sand xl:block">Free shipping over {formatINR(freeShippingThreshold)}</p>
-        ) : null}
       </div>
     </div>
   );
@@ -414,9 +433,7 @@ function Header() {
         mobileOpen ? '' : 'backdrop-blur-md'
       }`}
     >
-      {announcement?.active && announcement.text ? (
-        <HeritageAnnouncementBar customText={announcement.text} />
-      ) : null}
+      <HeritageAnnouncementBar customText={announcement?.active && announcement.text ? announcement.text : undefined} />
 
       <div className="mx-auto flex h-13 sm:h-14 max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-4 px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="shrink-0">

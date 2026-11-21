@@ -73,7 +73,7 @@ export function ProductCard({
   });
 
   return (
-    <article className="group relative flex flex-col justify-between transition-all duration-200 bg-white rounded-lg border border-[#E4DACE]/80 shadow-[0_1px_4px_rgba(23,35,33,0.03)] p-1.5 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none sm:rounded-none h-full w-full min-w-0">
+    <article className="group relative flex flex-col justify-between transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-forest/5 hover:border-terra/40 bg-white rounded-lg border border-[#E4DACE]/80 shadow-[0_1px_4px_rgba(23,35,33,0.03)] p-1.5 sm:p-2 sm:border sm:border-[#E4DACE]/50 sm:bg-white/90 sm:rounded-lg h-full w-full min-w-0">
       <div>
         <div className="relative aspect-square sm:aspect-[4/5] w-full overflow-hidden rounded-md sm:rounded-none bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] border border-[#E4DACE]/40 sm:border-line/60">
           <Link to={`/shop/${product.slug}`} className="block h-full w-full" aria-label={`View ${product.name}`}>
@@ -100,7 +100,7 @@ export function ProductCard({
           {/* Badges */}
           <div className="absolute left-1 top-1 flex flex-col items-start gap-0.5 pointer-events-none">
             {discountPercent ? (
-              <span className="rounded sm:rounded-none bg-[#D98263] px-1 py-0.2 text-[8px] font-black uppercase tracking-wider text-white shadow-2xs">
+              <span className="animate-badge-pulse rounded sm:rounded-none bg-[#D98263] px-1 py-0.2 text-[8px] font-black uppercase tracking-wider text-white shadow-2xs">
                 {discountPercent}% off
               </span>
             ) : null}
@@ -125,13 +125,13 @@ export function ProductCard({
               toggleWishlist.mutate(isSaved);
             }}
             aria-label={isSaved ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`}
-            className={`absolute right-1 top-1 sm:right-2 sm:top-2 flex h-8 w-8 sm:h-11 sm:w-11 min-h-[32px] min-w-[32px] sm:min-h-[44px] sm:min-w-[44px] items-center justify-center rounded-full border transition-all duration-200 active:scale-90 ${
+            className={`absolute right-1 top-1 sm:right-2 sm:top-2 flex h-8 w-8 sm:h-11 sm:w-11 min-h-[32px] min-w-[32px] sm:min-h-[44px] sm:min-w-[44px] items-center justify-center rounded-full border transition-all duration-200 hover:scale-110 active:scale-90 ${
               isSaved
-                ? 'border-terra bg-terra text-white shadow-sm'
+                ? 'animate-heart-pop border-terra bg-terra text-white shadow-sm'
                 : 'border-[#E4DACE]/80 bg-white/95 backdrop-blur-sm sm:bg-paper/90 text-ink/70 hover:bg-paper hover:text-terra shadow-2xs'
             }`}
           >
-            <svg viewBox="0 0 20 20" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" className="h-3.5 w-3.5 sm:h-4 sm:w-4">
+            <svg viewBox="0 0 20 20" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform ${isSaved ? 'animate-heart-pop' : ''}`}>
               <path
                 d="M10 16.5l-6-6a4.2 4.2 0 0 1 0-6 4.2 4.2 0 0 1 6 0l0 0 0 0a4.2 4.2 0 0 1 6 0 4.2 4.2 0 0 1 0 6l-6 6Z"
                 strokeWidth="1.6"
@@ -241,7 +241,13 @@ export function ProductGrid({ products, showAddToCart = false }: { products: Pro
   return (
     <div className="grid grid-cols-2 gap-2 sm:gap-x-6 sm:gap-y-11 md:grid-cols-3 xl:grid-cols-4">
       {products.map((product, index) => (
-        <ProductCard key={product.id} product={product} priority={index < 4} showAddToCart={showAddToCart} />
+        <div
+          key={product.id}
+          className="animate-fade-in-up flex flex-col h-full"
+          style={{ animationDelay: `${(index % 8) * 60}ms` }}
+        >
+          <ProductCard product={product} priority={index < 4} showAddToCart={showAddToCart} />
+        </div>
       ))}
     </div>
   );
