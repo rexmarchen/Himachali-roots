@@ -6,11 +6,14 @@ FROM node:24-bookworm-slim AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund && npm cache clean --force && rm -rf /root/.npm
 
 COPY . .
 ENV NODE_OPTIONS="--max-old-space-size=450"
-RUN npm run build
+RUN npm run build \
+    && npm prune --omit=dev --no-audit --no-fund \
+    && npm cache clean --force \
+    && rm -rf /root/.npm
 
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production
@@ -24,10 +27,8 @@ RUN apt-get update \
     && mkdir -p /data /storage/uploads /storage/private/seller-docs /backups \
     && chown -R pahadi:pahadi /app /data /storage /backups
 
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund \
-    && chown -R pahadi:pahadi /app/node_modules /app/package.json /app/package-lock.json
-
+COPY --chown=pahadi:pahadi package.json package-lock.json ./
+COPY --from=build --chown=pahadi:pahadi /app/node_modules ./node_modules
 COPY --from=build --chown=pahadi:pahadi /app/dist ./dist
 COPY --from=build --chown=pahadi:pahadi /app/dist-server ./dist-server
 COPY --from=build --chown=pahadi:pahadi /app/scripts/backup-db.mjs /app/scripts/verify-backup.mjs ./scripts/
