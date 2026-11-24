@@ -5,7 +5,7 @@ import { env } from '../env.js';
 import { execute, queryOne, type Db } from '../db.js';
 import { requireAuth } from '../lib/auth.js';
 import { addToCart, CART_COOKIE, ensureCart, getCartView, removeCartItem, setCartCookie, updateCartItem } from '../lib/cart.js';
-import { badRequest, conflict, notFound, parse, unauthorized } from '../lib/http.js';
+import { AppError, badRequest, conflict, notFound, parse, unauthorized } from '../lib/http.js';
 import { createOrder, getOrderView, initializeOrderPayment, markOrderPaid, notifyOrderPaid } from '../lib/orders.js';
 import { evaluateCoupon } from '../lib/pricing.js';
 import { fetchRazorpayPayment, type RazorpayPayment, verifyCheckoutSignature, verifyShippingWebhook, verifyWebhookSignature } from '../lib/payments.js';
@@ -108,7 +108,7 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
       couponCode: input.couponCode || undefined,
       customerNote: input.customerNote,
       idempotencyKey: input.idempotencyKey,
-      isDemo: env.simulatedCheckoutEnabled || env.allowDevPayments,
+      isDemo: env.simulatedCheckoutEnabled || env.allowDevPayments ? true : undefined,
     });
 
     let payment;
@@ -501,6 +501,10 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
       const result = await processShippingWebhook(db, req.body as Record<string, unknown>);
       res.json(result);
     } catch (err: unknown) {
+      if (err instanceof AppError) {
+        res.status(err.status).json({ error: { code: err.code, message: err.message } });
+        return;
+      }
       console.error(
         JSON.stringify({
           level: 'error',

@@ -13,7 +13,7 @@ export class RefundService {
   static getTotalRefundedPaise(db: Db, orderId: string): number {
     const row = queryOne<{ total: number }>(
       db,
-      'SELECT COALESCE(SUM(amount_paise), 0) as total FROM refunds WHERE order_id = ? AND status = "processed"',
+      "SELECT COALESCE(SUM(amount_paise), 0) as total FROM refunds WHERE order_id = ? AND status = 'completed'",
       orderId,
     );
     return row?.total ?? 0;

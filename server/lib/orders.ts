@@ -225,9 +225,12 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
   const expires = new Date(now.getTime() + env.reservationMinutes * 60_000).toISOString();
   const provider = env.razorpay.configured ? 'razorpay' : 'unconfigured';
   const total = subtotal - discount + shipping;
-  const isDemoOrder = input.isDemo !== undefined
-    ? (input.isDemo ? 1 : 0)
-    : (lines.some((l) => l.is_demo === 1) || env.simulatedCheckoutEnabled || env.allowDevPayments ? 1 : 0);
+  const hasDemoLine = lines.some((l) => l.is_demo === 1);
+  const isDemoOrder =
+    hasDemoLine ||
+    (input.isDemo !== undefined ? input.isDemo : env.simulatedCheckoutEnabled || env.allowDevPayments)
+      ? 1
+      : 0;
 
   tx(db, () => {
     for (const item of built) {
@@ -1371,6 +1374,7 @@ export function finalizeRefund(
       id: string;
       order_id: string;
       seller_order_id: string | null;
+      return_request_id: string | null;
       amount_paise: number;
       status: string;
       requested_by: string;
@@ -1390,6 +1394,13 @@ export function finalizeRefund(
       new Date().toISOString(),
       refundId,
     );
+    if (refund.return_request_id) {
+      execute(
+        db,
+        "UPDATE return_requests SET status = 'refunded' WHERE id = ? AND status IN ('approved', 'received')",
+        refund.return_request_id,
+      );
+    }
     applyRefundToLedger(db, refund.id, refund.order_id, refund.seller_order_id, refund.amount_paise);
     if (refund.seller_order_id) {
       const remaining = queryAll<{ amount_paise: number }>(

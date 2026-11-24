@@ -507,6 +507,10 @@ CREATE TABLE IF NOT EXISTS shipments (
   carrier TEXT NOT NULL,
   tracking_number TEXT NOT NULL,
   tracking_url TEXT,
+  provider_shipment_id INTEGER,
+  label_url TEXT,
+  pickup_scheduled_at TEXT,
+  pickup_token TEXT,
   status TEXT NOT NULL DEFAULT 'shipped'
     CHECK (status IN ('shipped','in_transit','out_for_delivery','delivered','failed','rto')),
   shipped_at TEXT NOT NULL,

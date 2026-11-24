@@ -178,6 +178,18 @@ describe('Dear Hills Enterprise Architecture Core', () => {
       const record = rawDb.prepare('SELECT status, processed_at FROM outbox_events WHERE id = ?').get(event.id) as { status: string; processed_at: string };
       expect(record.status).toBe('published');
       expect(record.processed_at).toBeTruthy();
+
+      // Verify stale 'processing' events recover back to 'pending' on recovery
+      const stale = OutboxService.enqueue(rawDb, {
+        aggregateType: 'order',
+        aggregateId: 'ord_stale',
+        eventType: 'order.paid',
+        payload: { amountPaise: 50000 },
+      });
+      expect(OutboxService.claim(rawDb, stale.id)).toBe(true);
+      expect(OutboxService.recoverStaleProcessing(rawDb)).toBe(1);
+      const recovered = rawDb.prepare('SELECT status FROM outbox_events WHERE id = ?').get(stale.id) as { status: string };
+      expect(recovered.status).toBe('pending');
     });
 
     it('retries with exponential backoff on failure and routes to dead-letter after max retries', async () => {

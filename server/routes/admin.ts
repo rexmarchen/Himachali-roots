@@ -1540,20 +1540,32 @@ export function adminRouter(db: Db): Router {
     );
     if (sellerOrders.length === 0) throw badRequest('No seller sub-orders found for this order.');
 
-    for (const so of sellerOrders) {
-      if (input.action === 'cancel' && so.status === 'cancelled') continue;
-      sellerOrderAction(db, {
-        sellerOrderId: so.id,
-        actor: req.user!,
-        action: input.action,
-        carrier: input.carrier,
-        trackingNumber: input.trackingNumber,
-        note: input.note,
-      });
-    }
+    const targetStatusByAction: Record<typeof input.action, string> = {
+      confirm: 'confirmed',
+      pack: 'packed',
+      ship: 'shipped',
+      deliver: 'delivered',
+      cancel: 'cancelled',
+    };
 
-    const newStatus = refreshOrderStatus(db, order.id);
-    audit(db, req.user!, 'order.status_updated', 'order', order.id, { action: input.action, status: newStatus });
+    const newStatus = tx(db, () => {
+      for (const so of sellerOrders) {
+        if (input.action === 'cancel' && so.status === 'cancelled') continue;
+        if (sellerOrders.length > 1 && so.status === targetStatusByAction[input.action]) continue;
+        sellerOrderAction(db, {
+          sellerOrderId: so.id,
+          actor: req.user!,
+          action: input.action,
+          carrier: input.carrier,
+          trackingNumber: input.trackingNumber,
+          note: input.note,
+        });
+      }
+
+      const nextStatus = refreshOrderStatus(db, order.id);
+      audit(db, req.user!, 'order.status_updated', 'order', order.id, { action: input.action, status: nextStatus });
+      return nextStatus;
+    });
     res.json({ ok: true, status: newStatus });
   });
 
@@ -2105,7 +2117,7 @@ export function adminRouter(db: Db): Router {
         (SELECT COUNT(*) FROM seller_orders WHERE status IN ('pending', 'confirmed', 'packed', 'shipped')) AS ordersAwaitingDelivery,
         (SELECT COUNT(*) FROM seller_orders WHERE status = 'delivered' AND delivered_at > datetime('now', '-7 days')) AS ordersInReturnWindow,
         (SELECT COALESCE(SUM(amount_paise), 0) FROM seller_ledger_entries WHERE status = 'eligible' AND settlement_id IS NULL AND hold_reason IS NULL AND (available_at IS NULL OR available_at <= datetime('now'))) AS eligibleReviewPaise,
-        (SELECT COALESCE(SUM(net_paise), 0) FROM settlement_batches WHERE status = 'draft') AS approvedBatchesPaise,
+        (SELECT COALESCE(SUM(net_paise), 0) FROM settlement_batches WHERE status IN ('draft', 'pending', 'processing')) AS approvedBatchesPaise,
         (SELECT COALESCE(SUM(net_paise), 0) FROM settlement_batches WHERE status = 'paid') AS settledPaise,
         (SELECT COALESCE(SUM(ABS(amount_paise)), 0) FROM seller_ledger_entries WHERE type IN ('reversal', 'adjustment') OR status = 'reversed') AS reversedPaise,
         (SELECT COALESCE(SUM(amount_paise), 0) FROM commission_entries) AS totalPlatformCommissionPaise`,

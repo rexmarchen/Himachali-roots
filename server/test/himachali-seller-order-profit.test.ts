@@ -308,4 +308,29 @@ describe('Himachali Marketplace: Seller Product, Order Fulfilment & Profit Engin
     const selfApproveRes = await mutate(seller.post(`/api/admin/products/${IDS.product}/publish`)).send({});
     expect(selfApproveRes.status).toBe(403);
   });
+
+  it('preserves stored COGS and packaging cost when omitted in partial product PATCH', async () => {
+    const seller = await login(app, 'seller@test.local');
+    execute(
+      db,
+      'UPDATE products SET estimated_cost_paise = 22000, packaging_cost_paise = 4000 WHERE id = ?',
+      IDS.product,
+    );
+    const existing = await seller.get(`/api/seller/products/${IDS.product}`);
+    expect(existing.status).toBe(200);
+    const p = existing.body.product;
+
+    const patchRes = await mutate(seller.patch(`/api/seller/products/${IDS.product}`)).send({
+      categoryId: p.categoryId,
+      name: p.name,
+      description: p.description,
+      pricePaise: p.pricePaise,
+      unit: p.unit,
+    });
+    expect(patchRes.status).toBe(200);
+
+    const after = await seller.get(`/api/seller/products/${IDS.product}`);
+    expect(after.body.product.estimatedCostPaise).toBe(22000);
+    expect(after.body.product.packagingCostPaise).toBe(4000);
+  });
 });

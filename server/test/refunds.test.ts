@@ -1,6 +1,8 @@
 import type { Express } from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { closeDb, queryOne, type Db } from '../db.js';
+import { RefundService } from '../modules/18_refunds/index.js';
+import { AdminManagementService } from '../modules/20_admin/index.js';
 import {
   IDS,
   login,
@@ -178,6 +180,12 @@ describe('cancellations and refunds', () => {
     expect(queryOne<{ status: string }>(db, 'SELECT status FROM orders WHERE order_number = ?', paid.orderNumber)?.status).toBe(
       'refunded',
     );
+    expect(
+      queryOne<{ status: string }>(db, 'SELECT status FROM return_requests WHERE id = ?', request!.id)?.status,
+    ).toBe('refunded');
+    const orderRow = queryOne<{ id: string }>(db, 'SELECT id FROM orders WHERE order_number = ?', paid.orderNumber);
+    expect(RefundService.getTotalRefundedPaise(db, orderRow!.id)).toBe(100_000);
+    expect(AdminManagementService.getPlatformSummary(db).totalSellers).toBeGreaterThanOrEqual(2);
 
     const entries = queryOne<{ count: number; total: number }>(
       db,

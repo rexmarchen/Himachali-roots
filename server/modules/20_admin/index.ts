@@ -8,8 +8,8 @@ import { queryOne } from '../../db.js';
 export class AdminManagementService {
   static getPlatformSummary(db: Db) {
     const sellers = queryOne<{ total: number }>(db, 'SELECT COUNT(*) as total FROM seller_profiles');
-    const products = queryOne<{ total: number }>(db, 'SELECT COUNT(*) as total FROM products WHERE status = "approved"');
-    const orders = queryOne<{ total: number }>(db, 'SELECT COUNT(*) as total FROM orders WHERE status != "pending_payment"');
+    const products = queryOne<{ total: number }>(db, "SELECT COUNT(*) as total FROM products WHERE status = 'approved'");
+    const orders = queryOne<{ total: number }>(db, "SELECT COUNT(*) as total FROM orders WHERE status != 'pending_payment'");
 
     return {
       totalSellers: sellers?.total ?? 0,

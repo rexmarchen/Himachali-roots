@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { execute, queryAll, queryOne, type Db } from '../db.js';
+import { env } from '../env.js';
 import { ADDRESS, IDS, addToCart, checkout, login, mutate, resetDb, seedFixtures, setupTestApp } from './helpers.js';
 
 describe('Demo Checkout, Inventory & Admin Order Management', () => {
@@ -265,6 +266,29 @@ describe('Demo Checkout, Inventory & Admin Order Management', () => {
         action: 'deliver',
       });
       expect(res.status).toBe(403);
+    });
+
+    it('tags orders containing an is_demo product with is_demo=1 even when dev payments are disabled', async () => {
+      const origDevPayments = env.allowDevPayments;
+      const origSimCheckout = env.simulatedCheckoutEnabled;
+      (env as { allowDevPayments: boolean }).allowDevPayments = false;
+      (env as { simulatedCheckoutEnabled: boolean }).simulatedCheckoutEnabled = false;
+      try {
+        execute(db, 'UPDATE products SET is_demo = 1 WHERE id = ?', IDS.product);
+        await addToCart(app, customerAgent, IDS.product, 1);
+        const co = await checkout(app, customerAgent, { address: ADDRESS });
+        expect(co.status).toBe(201);
+        expect(co.body.order.isDemo).toBe(true);
+        const row = queryOne<{ is_demo: number }>(
+          db,
+          'SELECT is_demo FROM orders WHERE order_number = ?',
+          co.body.order.orderNumber,
+        );
+        expect(row?.is_demo).toBe(1);
+      } finally {
+        (env as { allowDevPayments: boolean }).allowDevPayments = origDevPayments;
+        (env as { simulatedCheckoutEnabled: boolean }).simulatedCheckoutEnabled = origSimCheckout;
+      }
     });
   });
 });

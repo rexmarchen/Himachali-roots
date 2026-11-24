@@ -1,5 +1,6 @@
 import { OutboxService } from './OutboxService.js';
 import { EventBus } from './EventBus.js';
+import { MetricsRegistry } from '../telemetry/metrics.js';
 import type { Db } from '../../db.js';
 
 export class OutboxWorker {
@@ -35,15 +36,19 @@ export class OutboxWorker {
         try {
           await EventBus.getInstance().dispatch(event);
           OutboxService.markPublished(this.db, event.id);
+          MetricsRegistry.getInstance().recordOutboxSuccess();
           processedCount++;
         } catch (error) {
-          OutboxService.markFailed(
+          const outcome = OutboxService.markFailed(
             this.db,
             event.id,
             error instanceof Error ? error : String(error),
             event.retryCount,
             event.maxRetries,
           );
+          if (outcome === 'dead_letter') {
+            MetricsRegistry.getInstance().recordOutboxDeadLetter();
+          }
         }
       }
     } finally {
@@ -58,11 +63,23 @@ export class OutboxWorker {
    */
   start(): void {
     if (this.timer) return;
+    try {
+      OutboxService.recoverStaleProcessing(this.db);
+    } catch {
+      // Ignore recovery failures when operating against stripped test tables
+    }
     this.timer = setInterval(() => {
-      void this.processBatch().catch(() => {
-        // Swallow unhandled worker loop errors to prevent process exit
+      void this.processBatch().catch((err) => {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            msg: 'outbox_worker_batch_failed',
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
       });
     }, this.pollIntervalMs);
+    this.timer.unref();
   }
 
   /**

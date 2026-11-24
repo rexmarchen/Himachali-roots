@@ -4,6 +4,7 @@ import { AppError, badRequest, conflict } from './http.js';
 import { newId } from './ids.js';
 import { audit } from './audit.js';
 import { notify, escapeHtml } from './email.js';
+import { refreshOrderStatus } from './orders.js';
 
 export interface PincodeServiceabilityRequest {
   pickupPincode: string;
@@ -205,7 +206,15 @@ export async function checkCourierServiceability(
 
   const couriers: CourierOption[] = availableCouriers.map((c) => {
     const rateRupees = Number(c.rate ?? c.freight_charge ?? 0);
-    const days = Number(c.estimated_delivery_days ?? c.etd_hours ? Math.ceil(Number(c.etd_hours) / 24) : 4);
+    const rawDays =
+      c.estimated_delivery_days !== undefined &&
+      c.estimated_delivery_days !== null &&
+      String(c.estimated_delivery_days).trim() !== ''
+        ? Number(c.estimated_delivery_days)
+        : c.etd_hours !== undefined && c.etd_hours !== null
+          ? Math.ceil(Number(c.etd_hours) / 24)
+          : 4;
+    const days = Number.isFinite(rawDays) && rawDays > 0 ? Math.round(rawDays) : 4;
     return {
       courierId: Number(c.courier_company_id),
       courierName: String(c.courier_name ?? 'Standard Courier'),
@@ -436,13 +445,20 @@ export async function bookCourierShipment(
     tx(db, () => {
       execute(
         db,
-        `INSERT INTO shipments (id, seller_order_id, provider, carrier, tracking_number, tracking_url, status, shipped_at, created_at)
-         VALUES (?, ?, 'shiprocket', ?, ?, ?, 'shipped', ?, ?)`,
+        `INSERT INTO shipments
+           (id, seller_order_id, provider, carrier, tracking_number, tracking_url,
+            provider_shipment_id, label_url, pickup_scheduled_at, pickup_token,
+            status, shipped_at, created_at)
+         VALUES (?, ?, 'shiprocket', ?, ?, ?, ?, ?, ?, ?, 'shipped', ?, ?)`,
         shipmentRecordId,
         input.sellerOrderId,
         courierName,
         awbCode,
         trackingUrl,
+        Number.isFinite(shipmentIdNum) ? shipmentIdNum : null,
+        labelUrl,
+        pickupScheduledAt,
+        pickupToken,
         nowIso,
         nowIso,
       );
@@ -615,6 +631,7 @@ export async function processShippingWebhook(
         shipment.seller_order_id,
       );
       if (so) {
+        refreshOrderStatus(db, so.order_id);
         const order = queryOne<{ email: string; user_id: string; order_number: string }>(
           db,
           'SELECT email, user_id, order_number FROM orders WHERE id = ?',

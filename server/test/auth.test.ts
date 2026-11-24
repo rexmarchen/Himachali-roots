@@ -1,7 +1,7 @@
 import type { Express } from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { closeDb, execute, type Db } from '../db.js';
+import { closeDb, execute, queryAll, type Db } from '../db.js';
 import { IDS, TEST_PASSWORD, login, mutate, resetDb, seedFixtures, setupTestApp } from './helpers.js';
 
 let app: Express;
@@ -180,5 +180,28 @@ describe('role-based access control', () => {
     expect(application.status).toBe(200);
     expect(application.body.seller.id).toBe(IDS.seller);
     expect(application.body.seller.status).toBe('approved');
+  });
+
+  it('sends a fresh verification notification when explicitly resending on the same day', async () => {
+    const agent = request.agent(app);
+    const reg = await mutate(agent.post('/api/auth/register')).send({
+      fullName: 'Resend Tester',
+      email: 'resend@test.local',
+      password: 'Password123!',
+      acceptedTerms: true,
+    });
+    expect(reg.status).toBe(201);
+
+    const resend = await mutate(agent.post('/api/auth/resend-verification')).send({});
+    expect(resend.status).toBe(200);
+    expect(resend.body.ok).toBe(true);
+    expect(resend.body.devVerifyUrl).toBeTruthy();
+    expect(resend.body.devVerifyUrl).not.toBe(reg.body.devVerifyUrl);
+
+    const sentNotifications = queryAll<{ id: string }>(
+      db,
+      "SELECT id FROM notifications WHERE email = 'resend@test.local' AND type = 'verify_email'",
+    );
+    expect(sentNotifications).toHaveLength(2);
   });
 });

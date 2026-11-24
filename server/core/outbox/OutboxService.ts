@@ -125,9 +125,28 @@ export class OutboxService {
   }
 
   /**
+   * Recover events left in 'processing' state after an unexpected worker crash.
+   */
+  static recoverStaleProcessing(db: Db): number {
+    const result = execute(
+      db,
+      `UPDATE outbox_events
+       SET status = 'pending'
+       WHERE status = 'processing'`,
+    );
+    return Number(result.changes);
+  }
+
+  /**
    * Record failure and schedule retry with exponential backoff or send to dead-letter queue
    */
-  static markFailed(db: Db, eventId: string, error: Error | string, retryCount: number, maxRetries: number): void {
+  static markFailed(
+    db: Db,
+    eventId: string,
+    error: Error | string,
+    retryCount: number,
+    maxRetries: number,
+  ): 'pending' | 'dead_letter' {
     const nextRetry = retryCount + 1;
     const errorMessage = typeof error === 'string' ? error : error.message || String(error);
 
@@ -141,6 +160,7 @@ export class OutboxService {
         errorMessage.slice(0, 1000),
         eventId,
       );
+      return 'dead_letter';
     } else {
       // Exponential backoff: base 2s * 2^(retry) + random jitter (0-1s)
       const delayMs = Math.min(300_000, 2000 * Math.pow(2, nextRetry) + Math.floor(Math.random() * 1000));
@@ -156,6 +176,7 @@ export class OutboxService {
         nextSchedule,
         eventId,
       );
+      return 'pending';
     }
   }
 }

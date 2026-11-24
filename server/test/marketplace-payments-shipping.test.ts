@@ -454,4 +454,116 @@ describe('Admin Payout Controls & Holds', () => {
     expect(overviewRes.body.policy.returnWindowDays).toBe(7);
     expect(overviewRes.body.policy.standardCommissionBp).toBe(1200);
   });
+
+  it('includes pending settlement batches in approvedBatchesPaise on payouts overview', async () => {
+    const admin = await login(app, 'admin@test.local');
+    const past = new Date(Date.now() - 60_000).toISOString();
+    execute(db, "UPDATE seller_profiles SET payout_status = 'verified' WHERE id = ?", IDS.seller);
+    execute(
+      db,
+      `INSERT INTO seller_ledger_entries
+         (id, seller_id, type, amount_paise, status, reference, available_at, created_at)
+       VALUES ('led_overview_batch', ?, 'sale', 42000, 'eligible', 'overview-batch-sale', ?, ?)`,
+      IDS.seller,
+      past,
+      past,
+    );
+
+    const created = await mutate(admin.post('/api/admin/settlements')).send({
+      sellerId: IDS.seller,
+      periodStart: new Date(Date.now() - 3600_000).toISOString(),
+      periodEnd: new Date(Date.now() + 3600_000).toISOString(),
+    });
+    expect(created.status).toBe(201);
+
+    const overviewRes = await admin.get('/api/admin/payouts/overview');
+    expect(overviewRes.status).toBe(200);
+    expect(overviewRes.body.metrics.approvedBatchesPaise).toBe(42000);
+  });
+});
+
+describe('Shipping webhook & serviceability hardening', () => {
+  it('computes courier estimatedDeliveryDays cleanly without etd_hours and syncs parent order on delivery webhook', async () => {
+    const origEmail = env.shiprocket.email;
+    const origPass = env.shiprocket.password;
+    const origFetch = globalThis.fetch;
+    (env.shiprocket as { email: string }).email = 'test@shiprocket.local';
+    (env.shiprocket as { password: string }).password = 'secret';
+
+    globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url.includes('/auth/login')) {
+        return new Response(JSON.stringify({ token: 'tok_test' }), { status: 200 });
+      }
+      if (url.includes('/courier/serviceability')) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              available_courier_companies: [
+                { courier_company_id: 77, courier_name: 'Himachal Express', rate: 75, estimated_delivery_days: '3', etd: '3 days' },
+                { courier_company_id: 78, courier_name: 'Mountain Air', freight_charge: 95, etd_hours: '48' },
+              ],
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response('{}', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const serviceability = await checkCourierServiceability({
+        pickupPincode: '175125',
+        deliveryPincode: '110001',
+        weightG: 500,
+      });
+      expect(serviceability.serviceable).toBe(true);
+      expect(serviceability.fastestDays).toBe(2);
+      expect(serviceability.couriers.map((c) => c.estimatedDeliveryDays)).toEqual([3, 2]);
+    } finally {
+      globalThis.fetch = origFetch;
+      (env.shiprocket as { email: string }).email = origEmail;
+      (env.shiprocket as { password: string }).password = origPass;
+    }
+
+    const badWebhook = await request(app).post('/api/webhooks/shipping').send({ current_status: 'DELIVERED' });
+    expect(badWebhook.status).toBe(400);
+
+    const customer = await login(app, 'customer@test.local');
+    await addToCart(app, customer, IDS.product, 1);
+    const orderRes = await checkout(app, customer);
+    const orderId = orderRes.body.order.id as string;
+    const orderNumber = orderRes.body.order.orderNumber as string;
+    markOrderPaid(db, {
+      orderId,
+      provider: 'razorpay',
+      providerEventId: `evt_ship_${Date.now()}`,
+      providerPaymentId: `pay_ship_${Date.now()}`,
+      amountPaise: orderRes.body.order.totalPaise,
+    });
+    const so = queryOne<{ id: string }>(db, 'SELECT id FROM seller_orders WHERE order_id = ?', orderId);
+    const awb = `DH_SYNC_${Date.now()}`;
+    const nowIso = new Date().toISOString();
+    execute(
+      db,
+      `INSERT INTO shipments (id, seller_order_id, provider, carrier, tracking_number, tracking_url, status, shipped_at, created_at)
+       VALUES (?, ?, 'shiprocket', 'Himachal Express', ?, 'https://shiprocket.co/tracking', 'shipped', ?, ?)`,
+      `shp_${Date.now()}`,
+      so!.id,
+      awb,
+      nowIso,
+      nowIso,
+    );
+    execute(db, "UPDATE seller_orders SET status = 'shipped' WHERE id = ?", so!.id);
+
+    const deliveredRes = await request(app).post('/api/webhooks/shipping').send({
+      awb,
+      current_status: 'DELIVERED',
+      current_status_desc: 'Delivered by courier',
+    });
+    expect(deliveredRes.status).toBe(200);
+    expect(
+      queryOne<{ status: string }>(db, 'SELECT status FROM orders WHERE order_number = ?', orderNumber)?.status,
+    ).toBe('fulfilled');
+  });
 });

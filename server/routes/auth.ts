@@ -243,16 +243,24 @@ function authLimiter(max: number) {
   });
 }
 
-async function issueVerification(db: Db, user: { id: string; email: string; fullName: string }): Promise<string | null> {
+async function issueVerification(
+  db: Db,
+  user: { id: string; email: string; fullName: string },
+  options: { isResend?: boolean } = {},
+): Promise<string | null> {
   const token = randomToken(32);
+  const tokenHash = sha256(token);
   execute(
     db,
     `INSERT INTO email_verification_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)`,
-    sha256(token),
+    tokenHash,
     user.id,
     new Date(Date.now() + 24 * 3600_000).toISOString(),
   );
   const link = `${env.appUrl}/verify-email?token=${encodeURIComponent(token)}`;
+  const dedupeKey = options.isResend
+    ? `verify:${user.id}:resend:${tokenHash.slice(0, 12)}`
+    : `verify:${user.id}:${new Date().toISOString().slice(0, 10)}`;
   await notify(db, {
     userId: user.id,
     email: user.email,
@@ -261,7 +269,7 @@ async function issueVerification(db: Db, user: { id: string; email: string; full
     body: `<p>Hello ${user.fullName || 'there'},</p><p>Please confirm your email address to finish setting up your account.</p>
       <p><a href="${link}" style="display:inline-block;background:#243D32;color:#F7F3EB;padding:12px 20px;text-decoration:none">Confirm email</a></p>
       <p style="font-size:13px;color:#6B6F68">If you did not create this account, you can ignore this message.</p>`,
-    dedupeKey: `verify:${user.id}:${new Date().toISOString().slice(0, 10)}`,
+    dedupeKey,
   });
   return env.allowDevAuthHelpers && !env.email.configured ? link : null;
 }
@@ -739,11 +747,15 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
       res.json({ ok: true, message: 'Your email is already confirmed.' });
       return;
     }
-    const devVerifyUrl = await issueVerification(db, {
-      id: req.user!.id,
-      email: req.user!.email,
-      fullName: req.user!.fullName,
-    });
+    const devVerifyUrl = await issueVerification(
+      db,
+      {
+        id: req.user!.id,
+        email: req.user!.email,
+        fullName: req.user!.fullName,
+      },
+      { isResend: true },
+    );
     res.json({ ok: true, devVerifyUrl });
   });
 

@@ -18,7 +18,7 @@ import {
   resolvePrivateDocPath,
 } from '../lib/uploads.js';
 import { notify, escapeHtml } from '../lib/email.js';
-import { COMMISSION_BASIS_NOTE, resolveCommissionBp } from '../lib/pricing.js';
+import { COMMISSION_BASIS_NOTE } from '../lib/pricing.js';
 import { firstComplianceError, validateProductCompliance, COMPLIANCE_GUIDES } from '../lib/productCompliance.js';
 import { sellerOrderAction, type SellerAction } from '../lib/orders.js';
 import {
@@ -189,6 +189,11 @@ const productSchema = z.object({
     .optional(),
 });
 
+const productUpdateSchema = productSchema.extend({
+  estimatedCostPaise: z.number().int().min(0).max(10_000_000).optional(),
+  packagingCostPaise: z.number().int().min(0).max(10_000_000).optional(),
+});
+
 function emptyToNull(value: string | undefined): string | null {
   return value && value.trim() ? value.trim() : null;
 }
@@ -197,15 +202,7 @@ export function sellerRouter(db: Db): Router {
   const router = Router();
   router.use(requireAuth);
 
-  router.get('/config', (req, res) => {
-    const seller = sellerForUser(db, req.user!.id);
-    const categoryRows = queryAll<{ id: string }>(db, 'SELECT id FROM categories WHERE is_active = 1');
-    const categoryRates: Record<string, number> = {};
-    for (const category of categoryRows) {
-      categoryRates[category.id] = seller
-        ? resolveCommissionBp(db, seller.id, category.id)
-        : env.defaultCommissionBp;
-    }
+  router.get('/config', (_req, res) => {
     res.json({
       sellerCategories: SELLER_CATEGORY_IDS.map((id) => ({
         id,
@@ -1479,7 +1476,7 @@ export function sellerRouter(db: Db): Router {
     if (existing.status === 'pending' && !(existing as { changes_requested_at?: string | null }).changes_requested_at) {
       throw conflict('This listing is in review and cannot be edited until a reviewer responds.');
     }
-    const input = parse(productSchema, req.body);
+    const input = parse(productUpdateSchema, req.body);
     if (
       input.compareAtPricePaise !== null &&
       input.compareAtPricePaise !== undefined &&
@@ -1544,8 +1541,8 @@ export function sellerRouter(db: Db): Router {
         emptyToNull(input.varietyGrade),
         emptyToNull(input.harvestInfo),
         emptyToNull(input.dispatchConditions),
-        input.estimatedCostPaise ?? 0,
-        input.packagingCostPaise ?? 0,
+        input.estimatedCostPaise ?? null,
+        input.packagingCostPaise ?? null,
         input.attributes ? JSON.stringify(input.attributes) : null,
         nextStatus,
         nextStatus,
@@ -2290,9 +2287,18 @@ export function sellerRouter(db: Db): Router {
 
   router.get('/orders/:id/shipping/label', (req, res) => {
     const id = sellerId(req);
-    const shipment = queryOne<{ id: string; carrier: string; tracking_number: string; tracking_url: string }>(
+    const shipment = queryOne<{
+      id: string;
+      carrier: string;
+      tracking_number: string;
+      tracking_url: string;
+      label_url: string | null;
+      pickup_scheduled_at: string | null;
+      pickup_token: string | null;
+    }>(
       db,
-      `SELECT sh.id, sh.carrier, sh.tracking_number, sh.tracking_url
+      `SELECT sh.id, sh.carrier, sh.tracking_number, sh.tracking_url,
+              sh.label_url, sh.pickup_scheduled_at, sh.pickup_token
          FROM shipments sh
          JOIN seller_orders so ON so.id = sh.seller_order_id
         WHERE sh.seller_order_id = ? AND so.seller_id = ?`,
@@ -2305,6 +2311,9 @@ export function sellerRouter(db: Db): Router {
       carrier: shipment.carrier,
       trackingNumber: shipment.tracking_number,
       trackingUrl: shipment.tracking_url,
+      labelUrl: shipment.label_url,
+      pickupScheduledAt: shipment.pickup_scheduled_at,
+      pickupToken: shipment.pickup_token,
     });
   });
 

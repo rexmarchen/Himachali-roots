@@ -3,6 +3,7 @@ import { initDb, getDb, queryOne } from './db.js';
 import { createApp } from './app.js';
 import { releaseExpiredOrders } from './lib/orders.js';
 import { OutboxWorker } from './core/outbox/index.js';
+import { registerOutboxSubscribers } from './workers/subscribers.js';
 
 
 async function main(): Promise<void> {
@@ -58,6 +59,7 @@ async function main(): Promise<void> {
     );
   });
 
+  registerOutboxSubscribers(db);
   const outboxWorker = new OutboxWorker(db, 3000, 25);
   outboxWorker.start();
 
