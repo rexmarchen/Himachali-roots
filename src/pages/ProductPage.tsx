@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ProductDetail } from '@shared/types';
 import { formatINR } from '@shared/types';
 import { buildProductFallbackDescription, buildProductSeoTitle, cleanSeoText, isDemoProductInput } from '@shared/seo';
-import { api, errorMessage } from '@/lib/api';
+import { ApiError, api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { usePageMeta } from '@/lib/usePageMeta';
@@ -167,6 +167,7 @@ export function ProductPage() {
   });
 
   const metaProduct = productQuery.data?.product;
+  const isProductNotFound = productQuery.error instanceof ApiError && productQuery.error.status === 404;
   const metaHasReviews =
     Boolean(metaProduct) &&
     (metaProduct?.reviewSummary.count ?? 0) > 0 &&
@@ -191,7 +192,7 @@ export function ProductPage() {
         originPlace: metaProduct.originPlace,
         region: metaProduct.region || metaProduct.seller?.region,
       })
-    : productQuery.isError
+    : isProductNotFound
       ? 'This listing may be paused, awaiting review, or removed.'
       : 'Authentic Himachali goods from reviewed local makers and growers with verified provenance.';
   const metaTitle = metaProduct
@@ -200,7 +201,7 @@ export function ProductPage() {
         categorySlug: metaProduct.categorySlug,
         categoryName: metaProduct.categoryName,
       })
-    : productQuery.isError
+    : isProductNotFound
       ? 'Listing not available · Dear Hills'
       : 'Authentic Himalayan Product · Dear Hills';
 
@@ -337,8 +338,8 @@ export function ProductPage() {
     image: metaProduct?.images[0]?.url ?? null,
     ogType: 'product',
     jsonLd: productJsonLd,
-    noindex: isDemoListing || productQuery.isError,
-    enabled: !productQuery.isLoading,
+    noindex: isDemoListing || isProductNotFound,
+    enabled: !productQuery.isLoading && (!productQuery.isError || isProductNotFound),
   });
 
   if (productQuery.isLoading) {

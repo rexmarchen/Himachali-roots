@@ -88,6 +88,10 @@ export function createApp(db: Db, deps: AppDeps = {}): express.Express {
     }),
   );
 
+  app.use('/api', (_req, res, next) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    next();
+  });
   app.use('/api', corsMiddleware);
 
   app.use((_req, res, next) => {

@@ -10,16 +10,21 @@ async function runTests() {
   assert.strictEqual(health.status, 'ok', 'Health status should be ok');
   console.log('✓ Health ready check passed');
 
-  // 2. Robots.txt
+  // 2. Robots.txt & API X-Robots-Tag
   const robotsRes = await fetch(`${BASE}/robots.txt`);
   assert.strictEqual(robotsRes.status, 200, 'Robots.txt status 200');
   const robotsText = await robotsRes.text();
   assert.ok(robotsText.includes('User-agent: *'), 'Robots.txt has user-agent');
+  assert.ok(robotsText.includes('Allow: /api/products'), 'Robots.txt allows public /api/products for Googlebot WRS');
+  assert.ok(!/^Disallow:\s*\/api\/\s*$/m.test(robotsText), 'Robots.txt does not blanket-block /api/');
   assert.ok(robotsText.includes('Disallow: /admin'), 'Robots.txt disallows admin');
   assert.ok(robotsText.includes('Disallow: /checkout'), 'Robots.txt disallows checkout');
   assert.ok(!robotsText.includes('\nDisallow: /sell\n'), 'Robots.txt does not block /sell landing page');
   assert.ok(robotsText.includes('Sitemap:'), 'Robots.txt has Sitemap directive');
-  console.log('✓ /robots.txt verified');
+  const apiProductsRes = await fetch(`${BASE}/api/products`);
+  assert.strictEqual(apiProductsRes.status, 200, 'Public /api/products returns 200');
+  assert.strictEqual(apiProductsRes.headers.get('x-robots-tag'), 'noindex, nofollow', '/api/products returns X-Robots-Tag noindex');
+  console.log('✓ /robots.txt and API X-Robots-Tag verified');
 
   // 3. Sitemap.xml
   const sitemapRes = await fetch(`${BASE}/sitemap.xml`);

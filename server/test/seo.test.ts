@@ -101,16 +101,25 @@ describe('SEO, structured data, sitemap, merchant feed, and demo noindex guard',
     expect(res.text).not.toContain('/categories/empty-crafts');
   });
 
-  it('publishes /robots.txt allowing /sell and /sellers/ while blocking private routes', async () => {
+  it('publishes /robots.txt allowing public rendering APIs and /sellers/ while blocking private routes, and sets X-Robots-Tag on /api', async () => {
     const res = await request(app).get('/robots.txt');
     expect(res.status).toBe(200);
     expect(res.text).toContain('Allow: /');
     expect(res.text).toContain('Allow: /sellers/');
+    expect(res.text).toContain('Allow: /api/products');
+    expect(res.text).toContain('Allow: /api/home');
+    expect(res.text).not.toMatch(/^Disallow:\s*\/api\/\s*$/m);
+    expect(res.text).toContain('Disallow: /api/admin/');
+    expect(res.text).toContain('Disallow: /api/checkout');
     expect(res.text).toContain('Disallow: /admin');
     expect(res.text).toContain('Disallow: /seller');
     expect(res.text).toContain('Disallow: /cart');
     expect(res.text).not.toMatch(/^Disallow:\s*\/sell\s*$/m);
     expect(res.text).toContain('Sitemap:');
+
+    const apiRes = await request(app).get('/api/products');
+    expect(apiRes.status).toBe(200);
+    expect(apiRes.headers['x-robots-tag']).toBe('noindex, nofollow');
   });
 
   it('serves a compliant Google Merchant Center XML product feed excluding demo/test items', async () => {

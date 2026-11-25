@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ProductSummary } from '@shared/types';
 import type { PolicyDocument } from '@shared/content';
 import { cleanSeoText, isDemoSellerInput } from '@shared/seo';
-import { api, errorFields, errorMessage } from '@/lib/api';
+import { ApiError, api, errorFields, errorMessage } from '@/lib/api';
 import { useAuth, useSiteContent } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { usePageMeta } from '@/lib/usePageMeta';
@@ -64,6 +64,7 @@ export function MakerDetailPage() {
   });
 
   const metaSeller = detail.data?.seller;
+  const isMakerNotFound = detail.error instanceof ApiError && detail.error.status === 404;
   const isDemoMaker = isDemoSellerInput({ slug, name: metaSeller?.name });
   const makerImageRaw = metaSeller?.coverUrl ?? metaSeller?.imageUrl ?? metaSeller?.logoUrl ?? null;
   const makerImageAbs = makerImageRaw
@@ -73,21 +74,21 @@ export function MakerDetailPage() {
     : 'https://www.dearhills.in/images/home/kalpa-dawn-1100.jpg';
 
   usePageMeta({
-    enabled: !detail.isLoading,
+    enabled: !detail.isLoading && (!detail.isError || isMakerNotFound),
     title: metaSeller?.name
       ? `${metaSeller.name} — Mountain Artisan Story | Dear Hills`
-      : detail.isError
+      : isMakerNotFound
         ? 'Maker not available · Dear Hills'
         : 'Maker · Dear Hills',
     description:
       metaSeller?.tagline ??
-      (detail.isError
+      (isMakerNotFound
         ? 'This maker storefront is not currently visible.'
         : 'Meet a verified Himachali maker and shop their products directly on Dear Hills.'),
     canonicalPath: `/makers/${encodeURIComponent(slug)}`,
     image: makerImageRaw,
     ogType: 'profile',
-    noindex: isDemoMaker || detail.isError,
+    noindex: isDemoMaker || isMakerNotFound,
     jsonLd: metaSeller
       ? {
           '@context': 'https://schema.org',
@@ -864,18 +865,19 @@ export function PolicyPage() {
   const policyTitle = policy.data?.policy.title;
   const policySummary = cleanSeoText(policy.data?.policy.summary);
   const policyCanonical = `/policies/${encodeURIComponent(key)}`;
+  const isPolicyNotFound = policy.error instanceof ApiError && policy.error.status === 404;
 
   usePageMeta({
-    enabled: !policy.isLoading,
+    enabled: !policy.isLoading && (!policy.isError || isPolicyNotFound),
     title: policyTitle
       ? `${policyTitle} | Dear Hills`
-      : policy.isError
+      : isPolicyNotFound
         ? 'Policy not found · Dear Hills'
         : 'Policies · Dear Hills',
     description: policySummary || 'Shipping, returns, privacy and marketplace policy documents for Dear Hills.',
-    canonicalPath: policy.isError ? '/policies' : policyCanonical,
+    canonicalPath: isPolicyNotFound ? '/policies' : policyCanonical,
     ogType: 'article',
-    noindex: policy.isError,
+    noindex: isPolicyNotFound,
     jsonLd: policyTitle
       ? {
           '@context': 'https://schema.org',

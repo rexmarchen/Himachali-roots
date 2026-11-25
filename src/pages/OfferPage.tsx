@@ -121,13 +121,15 @@ export function OfferPage() {
   const page = Number(params.get('page') ?? 1) || 1;
   const hasOfferFilter = Boolean(category || seller || params.get('sort') || page > 1);
 
+  const isOfferNotFound = offer.error instanceof ApiError && offer.error.status === 404;
+
   usePageMeta({
-    enabled: !offer.isLoading,
+    enabled: !offer.isLoading && (!offer.isError || isOfferNotFound),
     title,
     description,
     canonicalPath: canonicalOfferPath,
     image: campaign?.posterUrl ?? null,
-    noindex: campaign?.status === 'expired' || hasOfferFilter || offer.isError || !data || !hasRealOfferProducts,
+    noindex: campaign?.status === 'expired' || hasOfferFilter || isOfferNotFound || !data || !hasRealOfferProducts,
     jsonLd: campaign
       ? {
           '@context': 'https://schema.org',

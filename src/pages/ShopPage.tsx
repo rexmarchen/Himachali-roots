@@ -12,7 +12,7 @@ import {
   SHOP_SEO_DESCRIPTION,
   SHOP_SEO_TITLE,
 } from '@shared/seo';
-import { api } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { usePageMeta } from '@/lib/usePageMeta';
 import { ProductGrid } from '@/components/ProductCard';
@@ -148,8 +148,10 @@ export function ShopPage() {
         buildCategoryFallbackDescription({ name: activeCategory.name, slug: activeCategory.slug })
       : SHOP_SEO_DESCRIPTION;
 
+  const isShopNotFound = products.error instanceof ApiError && products.error.status === 404;
+
   usePageMeta({
-    enabled: !products.isLoading,
+    enabled: !products.isLoading && (!products.isError || isShopNotFound),
     title: isUnknownCategory
       ? 'Category not found · Dear Hills'
       : q
@@ -164,7 +166,7 @@ export function ShopPage() {
         ? `/categories/${encodeURIComponent(canonicalCategorySlug)}`
         : '/shop',
     image: isUnknownCategory ? '/images/product-shawl.jpg' : activeCategory?.imageUrl ?? '/images/product-shawl.jpg',
-    noindex: hasFilteredQuery || categoryHasOnlyDemo || isUnknownCategory || products.isError,
+    noindex: hasFilteredQuery || categoryHasOnlyDemo || isUnknownCategory || isShopNotFound,
     jsonLd: isUnknownCategory
       ? undefined
       : {
