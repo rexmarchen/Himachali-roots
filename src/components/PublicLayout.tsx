@@ -5,6 +5,7 @@ import { formatINR } from '@shared/types';
 import { useAuth, useCartCount, useSiteContent } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { EcommerceSearchBar } from './EcommerceSearchBar';
+import { SearchModal } from './SearchModal';
 
 const NAV = [
   { label: 'Shop', to: '/shop' },
@@ -426,173 +427,173 @@ function Header() {
   }
 
   return (
-    <header
-      className={`sticky top-0 z-40 border-b border-line bg-paper/95 text-ink shadow-2xs ${
-        // backdrop-filter makes the header a containing block for the fixed
-        // mobile menu, which would clip it to the header height.
-        mobileOpen ? '' : 'backdrop-blur-md'
-      }`}
-    >
-      <HeritageAnnouncementBar customText={announcement?.active && announcement.text ? announcement.text : undefined} />
+    <>
+      <header
+        className="sticky top-0 z-40 border-b border-line bg-paper/95 text-ink shadow-2xs backdrop-blur-md"
+      >
+        <HeritageAnnouncementBar customText={announcement?.active && announcement.text ? announcement.text : undefined} />
 
-      <div className="mx-auto flex h-13 sm:h-14 max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-4 px-4 sm:px-6 lg:px-8 xl:px-10">
-        <div className="shrink-0">
-          <Wordmark />
-        </div>
-
-        <div className="mx-2 hidden flex-1 md:flex lg:mx-3 min-w-[200px] sm:min-w-[220px] lg:min-w-[260px] xl:min-w-[300px] max-w-lg lg:max-w-lg xl:max-w-xl">
-          <EcommerceSearchBar inputId="site-search-desktop" />
-        </div>
-
-        <nav className="hidden items-center gap-2.5 xl:gap-3.5 2xl:gap-4 lg:flex" aria-label="Primary">
-          {NAV.map((item) => {
-            const active = item.to === '/shop' ? location.pathname.startsWith('/shop') : location.pathname === item.to;
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={`border-b-2 py-1.5 text-[12px] lg:text-[12.5px] xl:text-[13px] font-medium transition-colors ${
-                  active
-                    ? 'border-terra text-forest font-semibold'
-                    : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5">
-          <Link
-            to="/account/wishlist"
-            className="hidden h-9.5 w-9.5 lg:h-10 lg:w-10 items-center justify-center text-ink transition-colors hover:text-terra sm:inline-flex"
-            aria-label="Saved items"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-[17px] w-[17px] lg:h-[18px] lg:w-[18px]" aria-hidden>
-              <path
-                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                strokeWidth="1.6"
-              />
-            </svg>
-          </Link>
-
-          {user?.roles.includes('admin') ? (
-            <Link
-              to="/admin"
-              className="hidden items-center gap-1.5 rounded border border-forest/25 bg-surface px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:bg-forest/5 xl:inline-flex"
-            >
-              Admin
-            </Link>
-          ) : user?.roles.includes('seller') ? (
-            <Link
-              to="/seller"
-              className="hidden items-center gap-1.5 rounded border border-terra/30 bg-terra/20 px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-terra transition-colors hover:bg-terra/30 xl:inline-flex"
-            >
-              Seller Studio
-            </Link>
-          ) : null}
-
-          <div className="hidden sm:block">
-            <AccountMenu />
+        <div className="mx-auto flex h-12 sm:h-14 max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-4 px-3.5 sm:px-6 lg:px-8 xl:px-10">
+          <div className="shrink-0">
+            <Wordmark />
           </div>
 
-          <CartLink count={cartCount} compact />
+          <div className="mx-2 hidden flex-1 md:flex lg:mx-3 min-w-[200px] sm:min-w-[220px] lg:min-w-[260px] xl:min-w-[300px] max-w-lg lg:max-w-lg xl:max-w-xl">
+            <EcommerceSearchBar inputId="site-search-desktop" />
+          </div>
 
-          <button
-            ref={menuButtonRef}
-            type="button"
-            className="inline-flex h-11 w-11 items-center justify-center text-ink transition-colors hover:text-terra lg:hidden"
-            onClick={() => setMobileOpen(true)}
-            aria-label="Open menu"
-            aria-expanded={mobileOpen}
-            aria-controls="mobile-menu"
-          >
-            <Icon name="menu" className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
+          <nav className="hidden items-center gap-2.5 xl:gap-3.5 2xl:gap-4 lg:flex" aria-label="Primary">
+            {NAV.map((item) => {
+              const active = item.to === '/shop' ? location.pathname.startsWith('/shop') : location.pathname === item.to;
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`border-b-2 py-1.5 text-[12px] lg:text-[12.5px] xl:text-[13px] font-medium transition-colors ${
+                    active
+                      ? 'border-terra text-forest font-semibold'
+                      : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
 
-      <div className="px-3 pb-2.5 md:hidden">
-        <EcommerceSearchBar inputId="site-search-mobile" />
-      </div>
-
-      <div className="hidden border-t border-line bg-[#EFE9DD]/90 text-ink md:block">
-        <div className="mx-auto flex max-w-[88rem] items-center px-4 sm:px-6 lg:px-8 xl:px-10 py-1.5 text-[11px] sm:text-[11.5px] lg:text-[12px] font-medium">
-          <div className="no-scrollbar flex w-full items-center gap-1 lg:gap-1.5 overflow-x-auto whitespace-nowrap">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5">
             <Link
-              to="/shop"
-              className="flex shrink-0 items-center gap-1.5 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-semibold text-forest hover:bg-forest/10 transition-colors"
+              to="/account/wishlist"
+              className="hidden h-9.5 w-9.5 lg:h-10 lg:w-10 items-center justify-center text-ink transition-colors hover:text-terra sm:inline-flex"
+              aria-label="Saved items"
             >
-              <Icon name="grid" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              All products
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-[17px] w-[17px] lg:h-[18px] lg:w-[18px]" aria-hidden>
+                <path
+                  d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                  strokeWidth="1.6"
+                />
+              </svg>
             </Link>
-            <span className="text-forest/25 mx-1" aria-hidden>
-              |
-            </span>
-            {[
-              { label: 'Shawls & handlooms', slug: 'shawls-and-weaves' },
-              { label: 'Kangra tea', slug: 'tea-and-infusions' },
-              { label: 'Dry fruit & nuts', slug: 'dry-fruit-and-nuts' },
-              { label: 'Honey & preserves', slug: 'pantry-and-preserves' },
-              { label: 'Cold-pressed oils', slug: 'cold-pressed-oils' },
-              { label: 'Knitwear', slug: 'knitwear' },
-              { label: 'Himachali caps', slug: 'caps-and-headwear' },
-            ].map((item) => (
+
+            {user?.roles.includes('admin') ? (
               <Link
-                key={item.slug}
-                to={`/categories/${item.slug}`}
-                className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 text-ink/80 hover:bg-forest/10 hover:text-forest transition-colors"
+                to="/admin"
+                className="hidden items-center gap-1.5 rounded border border-forest/25 bg-surface px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:bg-forest/5 xl:inline-flex"
               >
-                {item.label}
+                Admin
               </Link>
-            ))}
-            <Link
-              to="/categories/gifting"
-              className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-semibold text-terra hover:bg-forest/10 transition-colors"
-            >
-              Curated gifting
-            </Link>
-
-            <div className="relative inline-block shrink-0" ref={moreRef}>
-              <button
-                type="button"
-                onClick={() => setMoreOpen((value) => !value)}
-                className="flex items-center gap-1 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-medium text-ink/85 hover:bg-forest/10 hover:text-forest transition-colors"
-                aria-expanded={moreOpen}
-                aria-haspopup="menu"
-                aria-label="More categories and stories"
+            ) : user?.roles.includes('seller') ? (
+              <Link
+                to="/seller"
+                className="hidden items-center gap-1.5 rounded border border-terra/30 bg-terra/20 px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-terra transition-colors hover:bg-terra/30 xl:inline-flex"
               >
-                More
-                <svg viewBox="0 0 20 20" fill="currentColor" className={`h-3.5 w-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`} aria-hidden>
-                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                </svg>
-              </button>
-              {moreOpen ? (
-                <div role="menu" className="absolute left-0 top-full z-50 mt-1.5 w-60 border border-line bg-surface py-1.5 text-ink shadow-xl">
-                  {[
-                    { label: 'Mountain pulses & staples', to: '/categories/pulses-and-staples' },
-                    { label: 'Meet the makers', to: '/makers' },
-                    { label: 'The sourcing standard', to: '/sourcing' },
-                    { label: 'Our story & heritage', to: '/about' },
-                    { label: 'Authenticity & proof', to: '/policies/authenticity' },
-                  ].map((item) => (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      role="menuitem"
-                      onClick={() => setMoreOpen(false)}
-                      className="flex min-h-11 items-center px-4 py-2 text-[12px] text-ink transition-colors hover:bg-paper hover:text-forest"
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
+                Seller Studio
+              </Link>
+            ) : null}
+
+            <div className="hidden sm:block">
+              <AccountMenu />
+            </div>
+
+            <CartLink count={cartCount} compact />
+
+            <button
+              ref={menuButtonRef}
+              type="button"
+              className="inline-flex h-11 w-11 items-center justify-center text-ink transition-colors hover:text-terra lg:hidden"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open menu"
+              aria-expanded={mobileOpen}
+              aria-controls="mobile-menu"
+            >
+              <Icon name="menu" className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="px-3 pb-2 md:hidden">
+          <EcommerceSearchBar inputId="site-search-mobile" />
+        </div>
+
+        <div className="hidden border-t border-line bg-[#EFE9DD]/90 text-ink md:block">
+          <div className="mx-auto flex max-w-[88rem] items-center px-4 sm:px-6 lg:px-8 xl:px-10 py-1.5 text-[11px] sm:text-[11.5px] lg:text-[12px] font-medium">
+            <div className="no-scrollbar flex w-full items-center gap-1 lg:gap-1.5 overflow-x-auto whitespace-nowrap">
+              <Link
+                to="/shop"
+                className="flex shrink-0 items-center gap-1.5 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-semibold text-forest hover:bg-forest/10 transition-colors"
+              >
+                <Icon name="grid" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                All products
+              </Link>
+              <span className="text-forest/25 mx-1" aria-hidden>
+                |
+              </span>
+              {[
+                { label: 'Fruits & produce', slug: 'fruits-and-fresh-produce' },
+                { label: 'Shawls & handlooms', slug: 'shawls-and-weaves' },
+                { label: 'Kangra tea', slug: 'tea-and-infusions' },
+                { label: 'Dry fruit & nuts', slug: 'dry-fruit-and-nuts' },
+                { label: 'Honey & preserves', slug: 'pantry-and-preserves' },
+                { label: 'Cold-pressed oils', slug: 'cold-pressed-oils' },
+                { label: 'Knitwear', slug: 'knitwear' },
+                { label: 'Himachali caps', slug: 'caps-and-headwear' },
+              ].map((item) => (
+                <Link
+                  key={item.slug}
+                  to={`/categories/${item.slug}`}
+                  className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 text-ink/80 hover:bg-forest/10 hover:text-forest transition-colors"
+                >
+                  {item.label}
+                </Link>
+              ))}
+              <Link
+                to="/categories/gifting"
+                className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-semibold text-terra hover:bg-forest/10 transition-colors"
+              >
+                Curated gifting
+              </Link>
+
+              <div className="relative inline-block shrink-0" ref={moreRef}>
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen((value) => !value)}
+                  className="flex items-center gap-1 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-medium text-ink/85 hover:bg-forest/10 hover:text-forest transition-colors"
+                  aria-expanded={moreOpen}
+                  aria-haspopup="menu"
+                  aria-label="More categories and stories"
+                >
+                  More
+                  <svg viewBox="0 0 20 20" fill="currentColor" className={`h-3.5 w-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`} aria-hidden>
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                {moreOpen ? (
+                  <div role="menu" className="absolute left-0 top-full z-50 mt-1.5 w-60 border border-line bg-surface py-1.5 text-ink shadow-xl">
+                    {[
+                      { label: 'Handmade crafts', to: '/categories/crafts-and-handicrafts' },
+                      { label: 'Mountain pulses & staples', to: '/categories/pulses-and-staples' },
+                      { label: 'Meet the makers', to: '/makers' },
+                      { label: 'The sourcing standard', to: '/sourcing' },
+                      { label: 'Our story & heritage', to: '/about' },
+                      { label: 'Authenticity & proof', to: '/policies/authenticity' },
+                    ].map((item) => (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        role="menuitem"
+                        onClick={() => setMoreOpen(false)}
+                        className="flex min-h-11 items-center px-4 py-2 text-[12px] text-ink transition-colors hover:bg-paper hover:text-forest"
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {mobileOpen ? (
         <div
@@ -601,7 +602,7 @@ function Header() {
           role="dialog"
           aria-modal="true"
           aria-label="Menu"
-          className="fixed inset-0 z-50 flex flex-col bg-paper lg:hidden"
+          className="fixed inset-0 z-[70] flex flex-col bg-paper lg:hidden"
         >
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
             <Wordmark />
@@ -609,7 +610,7 @@ function Header() {
               type="button"
               data-menu-close
               onClick={() => setMobileOpen(false)}
-              className="inline-flex h-11 w-11 items-center justify-center text-ink transition-colors hover:text-terra"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-sand/40 hover:text-terra"
               aria-label="Close menu"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden>
@@ -618,7 +619,7 @@ function Header() {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 pb-10 pt-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-4">
             <nav aria-label="Mobile primary">
               {NAV.map((item) => (
                 <Link
@@ -644,6 +645,29 @@ function Header() {
                 </span>
               </Link>
             </nav>
+
+            <div className="mt-5">
+              <p className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted">Browse by shelf</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: 'Fruits & Produce', to: '/categories/fruits-and-fresh-produce' },
+                  { label: 'Shawls & Handlooms', to: '/categories/shawls-and-weaves' },
+                  { label: 'Kangra Tea', to: '/categories/tea-and-infusions' },
+                  { label: 'Honey & Preserves', to: '/categories/pantry-and-preserves' },
+                  { label: 'Cold-Pressed Oils', to: '/categories/cold-pressed-oils' },
+                  { label: 'Curated Gifting', to: '/categories/gifting' },
+                ].map((cat) => (
+                  <Link
+                    key={cat.to}
+                    to={cat.to}
+                    onClick={() => setMobileOpen(false)}
+                    className="inline-flex min-h-9 items-center rounded-full border border-line bg-surface px-3 text-xs font-medium text-ink transition-colors hover:border-forest hover:text-forest"
+                  >
+                    {cat.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
 
             <div className="mt-6 space-y-1">
               <Link to="/account" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between py-2 text-sm font-medium text-ink">
@@ -703,7 +727,7 @@ function Header() {
           </div>
         </div>
       ) : null}
-    </header>
+    </>
   );
 }
 
@@ -720,7 +744,7 @@ function shouldShowTabBar(pathname: string): boolean {
   );
 }
 
-function MobileTabBar() {
+function MobileTabBar({ onOpenSearch }: { onOpenSearch: () => void }) {
   const { pathname } = useLocation();
   const { user } = useAuth();
   const cartCount = useCartCount();
@@ -728,7 +752,7 @@ function MobileTabBar() {
 
   const tabs = [
     { label: 'Home', to: '/', icon: 'home' as const, active: pathname === '/' },
-    { label: 'Shop', to: '/shop', icon: 'grid' as const, active: pathname === '/shop' },
+    { label: 'Shop', to: '/shop', icon: 'grid' as const, active: pathname === '/shop' || pathname.startsWith('/categories/') },
     { label: 'Search', to: '/shop', icon: 'search' as const, active: false },
     { label: 'Account', to: user ? '/account' : '/login', icon: 'user' as const, active: pathname.startsWith('/account') },
     { label: 'Bag', to: '/cart', icon: 'bag' as const, active: pathname === '/cart', count: cartCount },
@@ -737,25 +761,31 @@ function MobileTabBar() {
   return (
     <nav
       aria-label="Mobile shopping navigation"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/98 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/98 pb-[env(safe-area-inset-bottom)] backdrop-blur-md shadow-[0_-4px_16px_rgba(16,25,24,0.06)] md:hidden"
     >
       <ul className="mx-auto grid max-w-lg grid-cols-5">
         {tabs.map((tab) => {
           const content = (
             <>
-              <span className="relative">
+              <span
+                className={`relative flex h-7 w-11 items-center justify-center rounded-full transition-colors ${
+                  tab.active ? 'bg-terra/12' : ''
+                }`}
+              >
                 <Icon name={tab.icon} className="h-5 w-5" />
-                {'count' in tab && tab.count ? (
-                  <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-terra px-1 text-[9px] font-bold text-white">
+                {'count' in tab && typeof tab.count === 'number' && tab.count > 0 ? (
+                  <span className="absolute right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-terra px-1 text-[10px] font-bold leading-none text-white shadow-2xs tabular-nums">
                     {tab.count}
                   </span>
                 ) : null}
               </span>
-              <span className="text-[10px] font-medium leading-none">{tab.label}</span>
+              <span className={`text-[10.5px] leading-none ${tab.active ? 'font-semibold' : 'font-medium'}`}>
+                {tab.label}
+              </span>
             </>
           );
           const classes = `flex h-14 flex-col items-center justify-center gap-1 transition-colors ${
-            tab.active ? 'text-terra' : 'text-ink/70 hover:text-forest'
+            tab.active ? 'text-terra' : 'text-ink/75 hover:text-forest'
           }`;
           return (
             <li key={tab.label}>
@@ -763,19 +793,7 @@ function MobileTabBar() {
                 <button
                   type="button"
                   className={`w-full ${classes}`}
-                  onClick={() => {
-                    // Two search inputs exist (compact mobile header, desktop bar);
-                    // focus whichever one is actually rendered at this breakpoint.
-                    const inputs = Array.from(
-                      document.querySelectorAll<HTMLInputElement>('input[id^="site-search"]'),
-                    );
-                    const input = inputs.find((candidate) => candidate.offsetParent !== null);
-                    if (input) {
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                      input.focus({ preventScroll: true });
-                      input.select();
-                    }
-                  }}
+                  onClick={onOpenSearch}
                   aria-label="Search products"
                 >
                   {content}
@@ -833,28 +851,32 @@ function Newsletter() {
         <form onSubmit={submit} className="mt-4 space-y-3">
           <div className="flex gap-2">
             <input
+              id="footer-newsletter-email"
+              name="email"
               type="email"
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="Your email address"
               aria-label="Email address for newsletter"
-              className="h-10 w-full border border-paper/30 bg-white/5 px-3.5 text-sm text-paper placeholder:text-paper/40 focus:border-sand focus:outline-none focus:ring-1 focus:ring-sand transition-all"
+              className="h-11 sm:h-10 w-full border border-paper/30 bg-white/5 px-3.5 text-sm text-paper placeholder:text-paper/40 focus:border-sand focus:outline-none focus:ring-1 focus:ring-sand transition-all"
             />
             <button
               type="submit"
               disabled={status === 'saving'}
-              className="h-10 shrink-0 border border-sand bg-sand/15 px-4 text-[12px] font-semibold uppercase tracking-wider text-paper hover:bg-sand/30 transition-colors disabled:opacity-50"
+              className="h-11 sm:h-10 shrink-0 border border-sand bg-sand/15 px-4 text-[12px] font-semibold uppercase tracking-wider text-paper hover:bg-sand/30 transition-colors disabled:opacity-50"
             >
               {status === 'saving' ? 'Joining…' : 'Join'}
             </button>
           </div>
-          <label className="flex items-start gap-2 text-[11px] leading-relaxed text-paper/60 cursor-pointer">
+          <label htmlFor="footer-newsletter-consent" className="flex items-start gap-2.5 text-[11px] leading-relaxed text-paper/65 cursor-pointer">
             <input
+              id="footer-newsletter-consent"
+              name="consent"
               type="checkbox"
               checked={consent}
               onChange={(event) => setConsent(event.target.checked)}
-              className="mt-0.5 accent-terra"
+              className="mt-0.5 h-4 w-4 accent-terra"
             />
             I agree to receive occasional dispatches from DEAR HILLS.
           </label>
@@ -864,10 +886,14 @@ function Newsletter() {
   );
 }
 
-function Footer() {
+function Footer({ flushTop = false, extraBottomPad = false }: { flushTop?: boolean; extraBottomPad?: boolean }) {
   const { config } = useAuth();
   return (
-    <footer className="mt-20 border-t border-forest-deep bg-forest text-paper">
+    <footer
+      className={`${flushTop ? 'mt-0' : 'mt-16'} border-t border-forest-deep bg-forest text-paper ${
+        extraBottomPad ? 'pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0' : ''
+      }`}
+    >
       <div className="mx-auto max-w-[88rem] px-4 py-14 sm:px-6 lg:px-8 xl:px-10">
         <div className="grid gap-10 border-b border-paper/15 pb-14 md:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -970,17 +996,20 @@ function ScrollToTop() {
 
 export function PublicLayout() {
   const { pathname } = useLocation();
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const isCheckout = pathname.startsWith('/checkout');
   const showTabBar = shouldShowTabBar(pathname);
+  const hasFlushFooter = pathname === '/' || pathname === '/makers';
   return (
     <div className="flex min-h-screen flex-col">
       <ScrollToTop />
       <Header />
-      <main className={`flex-1 ${showTabBar ? 'pb-safe-tabbar' : ''}`}>
+      <main className="flex-1">
         <Outlet />
       </main>
-      {isCheckout ? <CheckoutFooter /> : <Footer />}
-      <MobileTabBar />
+      {isCheckout ? <CheckoutFooter /> : <Footer flushTop={hasFlushFooter} extraBottomPad={showTabBar} />}
+      <MobileTabBar onOpenSearch={() => setSearchModalOpen(true)} />
+      <SearchModal open={searchModalOpen} onClose={() => setSearchModalOpen(false)} />
     </div>
   );
 }

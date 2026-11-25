@@ -11,11 +11,11 @@ import { usePageMeta } from '@/lib/usePageMeta';
 import { ProductGrid } from '@/components/ProductCard';
 import {
   Alert,
-  Badge,
   Breadcrumbs,
   Button,
   ErrorState,
   LinkButton,
+  Modal,
   Spinner,
 } from '@/components/ui';
 
@@ -94,6 +94,7 @@ export function ProductPage() {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<DetailTab>('story');
   const [showStickyBar, setShowStickyBar] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const buyBoxRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
 
@@ -414,8 +415,14 @@ export function ProductPage() {
     product.dispatchConditions ? { label: 'Dispatch', value: product.dispatchConditions } : null,
   ].filter((fact): fact is { label: string; value: string } => Boolean(fact));
 
+  const hasMeaningfulWeight = Boolean(
+    product.weightG &&
+      product.weightG >= 5 &&
+      !/\d+\s*(kg|g|gm|ml|l)\b/i.test(product.unit),
+  );
+
   return (
-    <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12 ${showStickyBar ? 'pb-28 md:pb-24' : ''}`}>
+    <div className={`mx-auto max-w-7xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8 lg:py-12 ${showStickyBar ? 'pb-28 md:pb-24' : ''}`}>
       <Breadcrumbs
         items={[
           { label: 'Home', to: '/' },
@@ -425,11 +432,11 @@ export function ProductPage() {
         ]}
       />
 
-      <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
+      <div className="grid gap-8 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
         {/* Left column: gallery and real listing facts */}
         <div>
           <div
-            className="relative aspect-square overflow-hidden rounded-2xl sm:rounded-sm border border-line bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] shadow-xs sm:aspect-[4/5]"
+            className="group relative aspect-[4/3] sm:aspect-square lg:aspect-[4/5] lg:max-h-[540px] w-full overflow-hidden rounded-2xl sm:rounded-sm border border-line bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] shadow-xs"
             onTouchStart={(event) => {
               touchStartX.current = event.touches[0]?.clientX ?? null;
             }}
@@ -444,37 +451,56 @@ export function ProductPage() {
             }}
           >
             {image ? (
-              <img
-                src={image.url}
-                alt={image.alt}
-                loading="eager"
-                fetchPriority="high"
-                className="h-full w-full object-contain transition-transform duration-500 sm:object-cover sm:hover:scale-[1.02]"
-              />
+              <button
+                type="button"
+                onClick={() => setLightboxOpen(true)}
+                aria-label={`Inspect ${product.name} photograph in fullscreen`}
+                className="block h-full w-full cursor-zoom-in focus-visible:outline-none"
+              >
+                <img
+                  src={image.url}
+                  alt={image.alt}
+                  loading="eager"
+                  fetchPriority="high"
+                  className="h-full w-full object-cover transition-transform duration-500 sm:group-hover:scale-[1.02]"
+                />
+              </button>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted">No photograph</div>
             )}
-            <div className="absolute left-3.5 top-3.5 flex flex-col gap-2">
-              {product.originVerified ? <Badge tone="forest">Origin verified</Badge> : null}
+
+            <div className="pointer-events-none absolute left-3.5 top-3.5 flex flex-wrap gap-2">
+              {product.originVerified ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-forest/25 bg-paper/95 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-forest shadow-sm backdrop-blur-sm">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" aria-hidden />
+                  Origin verified
+                </span>
+              ) : null}
             </div>
-            {product.harvestInfo ? (
-              <div className="absolute bottom-4 left-3.5 right-3.5 rounded-xl sm:rounded-sm border border-sand/70 bg-white/92 px-3.5 py-2.5 text-xs text-forest shadow-xs backdrop-blur-md">
-                <p className="flex items-center gap-2 font-semibold">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
-                  {product.harvestInfo}
-                </p>
-                {product.originPlace ? <p className="mt-0.5 text-[11px] text-muted">{product.originPlace}</p> : null}
-              </div>
+
+            {image ? (
+              <button
+                type="button"
+                onClick={() => setLightboxOpen(true)}
+                aria-label="Zoom photograph"
+                className="absolute bottom-3 right-3 z-10 inline-flex h-9 items-center gap-1.5 rounded-full border border-white/25 bg-black/55 px-3 text-[11px] font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/75"
+              >
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5" aria-hidden>
+                  <circle cx="9" cy="9" r="5" />
+                  <path d="m13 13 4 4M9 7v4M7 9h4" strokeLinecap="round" />
+                </svg>
+                <span>Zoom</span>
+              </button>
             ) : null}
 
             {/* Mobile swipe dot indicator */}
             {product.images.length > 1 && (
-              <div className="sm:hidden absolute bottom-2 left-0 right-0 z-10 flex justify-center gap-1.5 pointer-events-none">
+              <div className="sm:hidden absolute bottom-3.5 left-0 right-0 z-10 flex justify-center gap-1.5 pointer-events-none">
                 {product.images.map((_, idx) => (
                   <span
                     key={idx}
-                    className={`h-1.5 rounded-full transition-all ${
-                      idx === selectedImage ? 'w-5 bg-[#172321]' : 'w-1.5 bg-[#172321]/30'
+                    className={`h-1.5 rounded-full transition-all shadow-2xs ${
+                      idx === selectedImage ? 'w-5 bg-white' : 'w-1.5 bg-white/55'
                     }`}
                   />
                 ))}
@@ -492,7 +518,7 @@ export function ProductPage() {
                   aria-label={`View image ${index + 1} of ${product.images.length}`}
                   aria-pressed={index === selectedImage}
                   className={`h-16 w-16 shrink-0 overflow-hidden rounded-sm border transition-opacity ${
-                    index === selectedImage ? 'border-forest ring-1 ring-forest' : 'border-line opacity-70 hover:opacity-100'
+                    index === selectedImage ? 'border-forest ring-2 ring-forest/70' : 'border-line opacity-75 hover:opacity-100'
                   }`}
                 >
                   <img src={item.url} alt="" loading="lazy" className="h-full w-full object-cover" />
@@ -508,11 +534,11 @@ export function ProductPage() {
           ) : null}
 
           {quickFacts.length ? (
-            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
               {quickFacts.map((fact) => (
                 <div key={fact.label} className="rounded-sm border border-sand bg-surface p-3">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{fact.label}</p>
-                  <p className="mt-1 text-[11px] font-semibold leading-snug text-forest">{fact.value}</p>
+                  <p className="mt-1 text-[11.5px] font-semibold leading-snug text-forest">{fact.value}</p>
                 </div>
               ))}
             </div>
@@ -530,7 +556,7 @@ export function ProductPage() {
             {hasReviews ? (
               <>
                 <span className="h-3 w-px bg-sand" aria-hidden />
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
+                <span className="whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
                   <Stars rating={product.reviewSummary.average ?? 0} className="text-terra" /> {product.reviewSummary.average} · {product.reviewSummary.count} review{product.reviewSummary.count === 1 ? '' : 's'}
                 </span>
               </>
@@ -542,35 +568,35 @@ export function ProductPage() {
 
           <div className="mt-3.5 flex flex-wrap items-center gap-2">
             {product.originVerified ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#66745A]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#66745A]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#66745A]" />
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#66745A]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#556349]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#556349]" />
                 Origin verified
               </span>
             ) : null}
             {product.varietyGrade ? (
-              <span className="inline-flex items-center rounded-full border border-[#D98263]/30 bg-[#FAF3EF] px-2.5 py-0.5 text-[11px] font-medium text-[#D98263]">
+              <span className="inline-flex items-center rounded-full border border-[#D98263]/30 bg-[#FAF3EF] px-2.5 py-0.5 text-[11px] font-medium text-[#B85738]">
                 {product.varietyGrade}
               </span>
             ) : null}
             {product.originPlace ? (
-              <span className="inline-flex items-center rounded-full border border-[#E4DACE] bg-[#FAF7F2] px-2.5 py-0.5 text-[11px] font-medium text-[#172321]/75">
+              <span className="inline-flex items-center rounded-full border border-[#E4DACE] bg-[#FAF7F2] px-2.5 py-0.5 text-[11px] font-medium text-[#172321]/80">
                 📍 {product.originPlace}
               </span>
             ) : null}
             {product.harvestInfo ? (
-              <span className="inline-flex items-center rounded-full border border-[#E4DACE] bg-[#FAF7F2] px-2.5 py-0.5 text-[11px] font-medium text-[#172321]/75">
+              <span className="inline-flex items-center rounded-full border border-[#E4DACE] bg-[#FAF7F2] px-2.5 py-0.5 text-[11px] font-medium text-[#172321]/80">
                 🗓 {product.harvestInfo}
               </span>
             ) : null}
           </div>
 
           <div className="mt-5 rounded-sm border border-line bg-surface p-5 shadow-xs">
-            <div className="flex items-baseline justify-between gap-3">
-              <div>
-                <div className="flex items-baseline gap-3">
-                  <span className="font-serif text-3xl font-medium text-forest">{formatINR(currentItemPrice)}</span>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-baseline gap-2.5">
+                  <span className="font-serif text-3xl font-medium text-forest tabular-nums">{formatINR(currentItemPrice)}</span>
                   {strikeOriginalPrice ? (
-                    <span className="text-sm text-muted line-through">{formatINR(strikeOriginalPrice)}</span>
+                    <span className="text-sm text-muted line-through tabular-nums">{formatINR(strikeOriginalPrice)}</span>
                   ) : null}
                   {campaignOriginal && product.discountPercent ? (
                     <span className="bg-terra px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
@@ -578,9 +604,9 @@ export function ProductPage() {
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-0.5 text-[11px] text-muted">
+                <p className="mt-1 text-[11.5px] text-muted">
                   {product.unit}
-                  {product.weightG ? ` · ${product.weightG} g` : ''} · Inclusive of applicable taxes
+                  {hasMeaningfulWeight ? ` · ${product.weightG} g` : ''} · Inclusive of applicable taxes
                 </p>
                 {product.campaignSlug && product.campaignName ? (
                   <p className="mt-1.5 text-[11px] text-terra">
@@ -592,9 +618,9 @@ export function ProductPage() {
                 ) : null}
               </div>
 
-              <div className="text-right">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100/70 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
-                  <span className={`h-2 w-2 rounded-full ${soldOut ? 'bg-muted' : 'bg-emerald-600'}`} />
+              <div className="shrink-0">
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-100/75 px-3 py-1 text-[11px] font-semibold text-emerald-800">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${soldOut ? 'bg-muted' : 'bg-emerald-600'}`} />
                   {soldOut ? 'Out of stock' : product.stock <= 3 ? `Only ${product.stock} left` : `${product.stock} in stock`}
                 </span>
               </div>
@@ -604,14 +630,14 @@ export function ProductPage() {
               <div className="mt-5 rounded-sm border border-sand/70 bg-sand/25 p-3.5">
                 <div className="flex items-center justify-between text-xs font-medium text-forest">
                   <span className="flex items-center gap-2">
-                    <TruckIcon className="h-4 w-4 text-forest/70" />
+                    <TruckIcon className="h-4 w-4 shrink-0 text-forest/70" />
                     {amountToFreeShipping === 0 ? (
                       <span className="font-semibold text-emerald-800">Qualified for free shipping</span>
                     ) : (
                       <span>Add {formatINR(amountToFreeShipping)} more to unlock <strong>free shipping</strong></span>
                     )}
                   </span>
-                  <span className="text-[11px] text-muted">{shippingProgress}%</span>
+                  <span className="text-[11px] text-muted tabular-nums">{shippingProgress}%</span>
                 </div>
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-sand/60">
                   <div
@@ -655,7 +681,7 @@ export function ProductPage() {
 
                   <div className="flex-1 pl-2 text-right sm:text-left">
                     <p className="text-[10.5px] uppercase tracking-wider text-muted">Total amount</p>
-                    <p className="font-serif text-lg font-bold text-forest">{formatINR(calculatedTotal)}</p>
+                    <p className="font-serif text-lg font-bold text-forest tabular-nums">{formatINR(calculatedTotal)}</p>
                   </div>
                 </div>
 
@@ -697,7 +723,7 @@ export function ProductPage() {
                   }
                   toggleWishlist.mutate(isSaved);
                 }}
-                className="flex items-center gap-1.5 underline underline-offset-4 transition-colors hover:text-forest"
+                className="flex min-h-9 items-center gap-1.5 underline underline-offset-4 transition-colors hover:text-forest"
               >
                 <span>{isSaved ? '♥' : '♡'}</span> {isSaved ? 'In saved items' : 'Save for later'}
               </button>
@@ -707,7 +733,7 @@ export function ProductPage() {
                   href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`${product.name} (${formatINR(currentItemPrice)}) from ${product.seller.name} on Dear Hills — https://www.dearhills.in/shop/${product.slug}`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-medium text-[#128C7E] underline underline-offset-4 hover:text-[#0b6b60]"
+                  className="inline-flex min-h-9 items-center gap-1 font-medium text-[#128C7E] underline underline-offset-4 hover:text-[#0b6b60]"
                 >
                   Share on WhatsApp
                 </a>
@@ -722,7 +748,7 @@ export function ProductPage() {
                       toast.push(url);
                     }
                   }}
-                  className="underline underline-offset-4 transition-colors hover:text-forest"
+                  className="min-h-9 underline underline-offset-4 transition-colors hover:text-forest"
                 >
                   Copy link
                 </button>
@@ -731,11 +757,11 @@ export function ProductPage() {
           </div>
 
           {/* Real listing, maker and payment facts only */}
-          <div className="mt-5 grid grid-cols-2 gap-3 rounded-sm border border-line bg-surface/60 p-4 text-xs text-ink/80">
+          <div className="mt-5 grid grid-cols-1 gap-3.5 rounded-sm border border-line bg-surface/70 p-4 text-xs text-ink/80 sm:grid-cols-2 [&>*:last-child:nth-child(odd)]:sm:col-span-2">
             <div className="flex items-start gap-2.5">
               <MountainIcon className="mt-0.5 h-4 w-4 shrink-0 text-terra" />
               <div>
-                <p className="font-semibold text-forest"> Sold by {product.seller.name}</p>
+                <p className="font-semibold text-forest">Sold by {product.seller.name}</p>
                 <p className="text-[11px] text-muted">{product.seller.region ?? product.region ?? 'Himachal Pradesh'}</p>
               </div>
             </div>
@@ -761,9 +787,9 @@ export function ProductPage() {
                 <p className="font-semibold text-forest">
                   {config?.payments.configured ? 'Secure online payment' : 'Online payment not configured'}
                 </p>
-                <p className="text-[11px] text-muted">
+                <p className="text-[11px] leading-relaxed text-muted">
                   {config?.payments.configured
-                    ? 'Cards, UPI and netbanking are processed by the configured payment provider. Cash on delivery is not offered.'
+                    ? 'Cards, UPI and netbanking are processed securely by Razorpay. Cash on delivery is not offered.'
                     : 'This deployment cannot collect online payments yet. Cash on delivery is not offered.'}
                 </p>
               </div>
@@ -784,7 +810,7 @@ export function ProductPage() {
                   <p className="mt-0.5 text-xs text-muted">{product.seller.region ?? 'Himachal Pradesh'}</p>
                 </div>
               </div>
-              <Link to={`/makers/${product.sellerSlug}`} className="rounded-sm bg-sand/40 px-2.5 py-1 text-xs font-semibold text-forest hover:bg-sand" aria-label="View maker">
+              <Link to={`/makers/${product.sellerSlug}`} className="shrink-0 rounded-sm bg-sand/40 px-2.5 py-1.5 text-xs font-semibold text-forest hover:bg-sand" aria-label="View maker">
                 View maker profile ↗
               </Link>
             </div>
@@ -801,14 +827,14 @@ export function ProductPage() {
           <p className="mt-3 text-sm leading-relaxed text-muted">{product.shortDescription}</p>
         </div>
 
-        <div className="mt-8 flex justify-center overflow-x-auto border-b border-line">
-          <div className="flex gap-2 sm:gap-6">
+        <div className="no-scrollbar mt-8 flex justify-start sm:justify-center overflow-x-auto border-b border-line">
+          <div className="flex min-w-max gap-1 sm:gap-6 px-1">
             {detailTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`whitespace-nowrap border-b-2 px-3 py-3 text-xs font-semibold tracking-wide transition-colors sm:text-sm ${
+                className={`min-h-11 whitespace-nowrap border-b-2 px-3 py-3 text-xs font-semibold tracking-wide transition-colors sm:text-sm ${
                   activeTab === tab.id
                     ? 'border-terra text-forest'
                     : 'border-transparent text-muted hover:text-forest'
@@ -1136,6 +1162,65 @@ export function ProductPage() {
           </div>
         </div>
       )}
+
+      {image ? (
+        <Modal
+          open={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+          title={`${product.name} (${selectedImage + 1}/${product.images.length})`}
+          wide
+        >
+          <div className="space-y-4">
+            <div className="relative flex max-h-[68vh] items-center justify-center overflow-hidden rounded-lg border border-line bg-[#FAF7F2]">
+              <img
+                src={image.url}
+                alt={image.alt}
+                className="max-h-[66vh] w-auto max-w-full object-contain"
+              />
+              {product.images.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedImage((index) => (index - 1 + product.images.length) % product.images.length)
+                    }
+                    aria-label="Previous image"
+                    className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-white/90 text-forest shadow-md hover:bg-white"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedImage((index) => (index + 1) % product.images.length)}
+                    aria-label="Next image"
+                    className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-white/90 text-forest shadow-md hover:bg-white"
+                  >
+                    ›
+                  </button>
+                </>
+              ) : null}
+            </div>
+            {product.images.length > 1 ? (
+              <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+                {product.images.map((item, index) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedImage(index)}
+                    aria-label={`Select photograph ${index + 1}`}
+                    aria-pressed={index === selectedImage}
+                    className={`h-14 w-14 shrink-0 overflow-hidden rounded border ${
+                      index === selectedImage ? 'border-forest ring-2 ring-forest/70' : 'border-line opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={item.url} alt="" className="h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }

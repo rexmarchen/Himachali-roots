@@ -105,12 +105,26 @@ export const Textarea = forwardRef<
   );
 });
 
+const SELECT_CHEVRON_BG =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23172321' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E\")";
+
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function Select(
-  { className = '', children, ...props },
+  { className = '', style, children, ...props },
   ref,
 ) {
   return (
-    <select ref={ref} className={`${fieldBase} appearance-none bg-[right_0.75rem_center] pr-9 ${className}`} {...props}>
+    <select
+      ref={ref}
+      style={{
+        backgroundImage: SELECT_CHEVRON_BG,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right 0.65rem center',
+        backgroundSize: '0.95rem 0.95rem',
+        ...style,
+      }}
+      className={`${fieldBase} min-h-10 appearance-none pr-9 leading-normal ${className}`}
+      {...props}
+    >
       {children}
     </select>
   );
@@ -366,16 +380,16 @@ export function SectionHeading({
 
 export function Breadcrumbs({ items }: { items: { label: string; to?: string }[] }) {
   return (
-    <nav aria-label="Breadcrumb" className="mb-6 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+    <nav aria-label="Breadcrumb" className="mb-4 sm:mb-6 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
       {items.map((item, index) => (
-        <span key={`${item.label}-${index}`} className="flex items-center gap-1.5">
+        <span key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-1.5">
           {index > 0 ? <span aria-hidden>/</span> : null}
           {item.to ? (
-            <Link to={item.to} className="hover:text-forest hover:underline underline-offset-2">
+            <Link to={item.to} className="truncate max-w-[140px] sm:max-w-none hover:text-forest hover:underline underline-offset-2">
               {item.label}
             </Link>
           ) : (
-            <span className="text-ink">{item.label}</span>
+            <span className="truncate max-w-[180px] sm:max-w-none text-ink">{item.label}</span>
           )}
         </span>
       ))}
@@ -496,10 +510,12 @@ export function Modal({
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const focusTimer = window.setTimeout(() => {
-      const target = dialogRef.current?.querySelector<HTMLElement>(
-        '[data-autofocus], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])',
-      );
-      target?.focus();
+      const explicitTarget = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]');
+      if (explicitTarget) {
+        explicitTarget.focus();
+      } else {
+        dialogRef.current?.focus({ preventScroll: true });
+      }
     }, 0);
     return () => {
       document.removeEventListener('keydown', onKey);
@@ -511,20 +527,26 @@ export function Modal({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-forest/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-forest/45 p-0 backdrop-blur-[2px] sm:items-center sm:p-6">
       <button type="button" aria-label="Close" className="absolute inset-0 cursor-default" onClick={onClose} tabIndex={-1} />
       <div
         ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative max-h-[92vh] w-full overflow-y-auto border border-line bg-paper p-6 shadow-2xl sm:rounded-sm ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'}`}
+        className={`relative max-h-[88dvh] w-full overflow-y-auto overscroll-contain rounded-t-2xl border border-line bg-paper p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl outline-none sm:max-h-[92vh] sm:rounded-sm sm:p-6 ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'}`}
       >
-        <div className="mb-5 flex items-start justify-between gap-4 border-b border-line pb-4">
+        <div className="mb-5 flex items-center justify-between gap-4 border-b border-line pb-3.5">
           <h2 id={titleId} className="text-xl">
             {title}
           </h2>
-          <button type="button" onClick={onClose} className="text-sm text-muted hover:text-ink" aria-label="Close dialog">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-11 w-11 -mr-2 items-center justify-center rounded-full text-sm text-muted transition-colors hover:bg-sand/40 hover:text-ink"
+            aria-label="Close dialog"
+          >
             ✕
           </button>
         </div>

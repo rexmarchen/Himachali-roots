@@ -9,7 +9,7 @@ export interface UseInViewOptions {
 export function useInView<T extends HTMLElement = HTMLDivElement>(
   options: UseInViewOptions = {}
 ) {
-  const { threshold = 0.1, rootMargin = '0px 0px -40px 0px', triggerOnce = true } = options;
+  const { threshold = 0.02, rootMargin = '80px 0px 80px 0px', triggerOnce = true } = options;
   const ref = useRef<T>(null);
   const [isInView, setIsInView] = useState(false);
 

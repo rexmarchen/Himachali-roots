@@ -140,7 +140,7 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
         </div>
 
         {/* Documentary Main Headline */}
-        <h1 className="mt-4 sm:mt-5 font-serif text-[26px] leading-[1.16] sm:text-5xl md:text-6xl lg:text-[70px] font-normal sm:leading-[1.08] tracking-[-0.015em] text-[#FAF7F2] drop-shadow-[0_4px_20px_rgba(0,0,0,0.85)] animate-hero-fade-up [animation-delay:160ms]">
+        <h1 className="mt-4 sm:mt-5 font-serif text-[26px] leading-[1.16] sm:text-5xl md:text-6xl lg:text-[70px] font-normal sm:leading-[1.08] tracking-[-0.015em] !text-[#FAF7F2] drop-shadow-[0_4px_20px_rgba(0,0,0,0.85)] animate-hero-fade-up [animation-delay:160ms]">
           Bring the spirit of the <br className="sm:hidden" />
           mountains <br className="hidden sm:inline" />
           to the world.
@@ -156,7 +156,7 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
         <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 animate-hero-fade-up [animation-delay:320ms]">
           <Link
             to="/become-a-maker"
-            className="group w-full sm:w-auto inline-flex items-center justify-center gap-2.5 rounded-sm bg-[#D4A373] px-6 sm:px-7 py-3 sm:py-3.5 text-xs sm:text-sm font-semibold tracking-wide text-[#1B2824] shadow-lg transition-all duration-300 hover:bg-[#E5BC91] hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+            className="group w-full sm:w-auto inline-flex min-h-11 items-center justify-center gap-2.5 rounded-sm bg-[#D4A373] px-6 sm:px-7 py-3 sm:py-3.5 text-xs sm:text-sm font-semibold tracking-wide text-[#1B2824] shadow-lg transition-all duration-300 hover:bg-[#E5BC91] hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
           >
             <span>Become a Maker</span>
             <span className="transition-transform duration-300 group-hover:translate-x-1" aria-hidden>
@@ -167,7 +167,7 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
           <button
             type="button"
             onClick={onExploreClick}
-            className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-sm border border-[#F4E8CE]/40 bg-[#172321]/65 px-6 sm:px-7 py-3 sm:py-3.5 text-xs sm:text-sm font-medium tracking-wide text-[#FAF7F2] backdrop-blur-md transition-all duration-300 hover:border-[#F4E8CE]/80 hover:bg-[#172321]/85 hover:-translate-y-0.5"
+            className="group w-full sm:w-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-[#F4E8CE]/40 bg-[#172321]/65 px-6 sm:px-7 py-3 sm:py-3.5 text-xs sm:text-sm font-medium tracking-wide text-[#FAF7F2] backdrop-blur-md transition-all duration-300 hover:border-[#F4E8CE]/80 hover:bg-[#172321]/85 hover:-translate-y-0.5"
           >
             <span>Explore Our Makers</span>
             <svg
@@ -183,28 +183,28 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
         </div>
 
         {/* Trust Badges Bar */}
-        <div className="mt-7 sm:mt-10 pt-4 sm:pt-6 border-t border-white/15 grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 max-w-3xl mx-auto text-left animate-hero-fade-up [animation-delay:400ms]">
-          <div className="flex items-center gap-2.5 sm:gap-3 rounded-sm bg-black/25 px-3 py-2 backdrop-blur-xs border border-white/5">
+        <div className="mt-7 sm:mt-10 pt-4 sm:pt-6 border-t border-white/15 grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 max-w-4xl mx-auto text-left animate-hero-fade-up [animation-delay:400ms]">
+          <div className="flex items-start gap-2.5 sm:gap-3 rounded-sm bg-black/30 px-3.5 py-2.5 backdrop-blur-xs border border-white/10">
             <span className="text-lg sm:text-xl shrink-0" aria-hidden>🏔️</span>
             <div className="min-w-0">
               <p className="text-xs font-semibold text-[#FAF7F2]">6 Heritage Valleys</p>
-              <p className="text-[10.5px] sm:text-[11px] text-[#E4DACE]/75 truncate">Kinnaur, Kullu, Kangra, Chamba &amp; Spiti</p>
+              <p className="text-[11px] leading-snug text-[#E4DACE]/80">Kinnaur, Kullu, Kangra, Chamba &amp; Spiti</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3 rounded-sm bg-black/25 px-3 py-2 backdrop-blur-xs border border-white/5">
+          <div className="flex items-start gap-2.5 sm:gap-3 rounded-sm bg-black/30 px-3.5 py-2.5 backdrop-blur-xs border border-white/10">
             <span className="text-lg sm:text-xl shrink-0" aria-hidden>🤝</span>
             <div className="min-w-0">
               <p className="text-xs font-semibold text-[#FAF7F2]">100% Direct to Artisan</p>
-              <p className="text-[10.5px] sm:text-[11px] text-[#E4DACE]/75 truncate">Zero middleman, authentic workshops</p>
+              <p className="text-[11px] leading-snug text-[#E4DACE]/80">Zero middleman, authentic workshops</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3 rounded-sm bg-black/25 px-3 py-2 backdrop-blur-xs border border-white/5">
+          <div className="flex items-start gap-2.5 sm:gap-3 rounded-sm bg-black/30 px-3.5 py-2.5 backdrop-blur-xs border border-white/10">
             <span className="text-lg sm:text-xl shrink-0" aria-hidden>🌿</span>
             <div className="min-w-0">
               <p className="text-xs font-semibold text-[#FAF7F2]">Living Craft Traditions</p>
-              <p className="text-[10.5px] sm:text-[11px] text-[#E4DACE]/75 truncate">Pit looms, wood carving &amp; wild orchards</p>
+              <p className="text-[11px] leading-snug text-[#E4DACE]/80">Pit looms, wood carving &amp; wild orchards</p>
             </div>
           </div>
         </div>
@@ -213,7 +213,7 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
       {/* =========================================================================
           4. BOTTOM SUBTLE SCROLL PROMPT
          ========================================================================= */}
-      <div className="relative z-10 pb-4 text-center">
+      <div className="relative z-10 pb-6 sm:pb-5 text-center">
         <button
           type="button"
           onClick={onExploreClick}

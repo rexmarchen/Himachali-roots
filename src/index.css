@@ -90,6 +90,11 @@
     letter-spacing: -0.02em;
     color: var(--color-forest);
     font-variation-settings: 'SOFT' 40, 'WONK' 1;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  .font-serif {
+    font-variant-numeric: lining-nums tabular-nums;
   }
 
   ::selection {

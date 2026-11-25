@@ -218,6 +218,7 @@ export function MakersPage() {
 
               {/* Integrated Search Box */}
               <form onSubmit={handleSearchSubmit} className="w-full md:max-w-md">
+                <label htmlFor="makers-search" className="sr-only">Find a maker, craft, village or speciality</label>
                 <div className="relative flex items-center shadow-xs">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-forest/50">
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -225,11 +226,13 @@ export function MakersPage() {
                     </svg>
                   </div>
                   <input
+                    id="makers-search"
+                    name="q"
                     type="search"
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                     placeholder="Find a maker, craft, village or speciality..."
-                    className="w-full rounded-sm border border-sand bg-surface py-2.5 pl-10 pr-24 text-xs text-ink placeholder:text-muted/70 transition-all focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/10"
+                    className="w-full rounded-sm border border-sand bg-surface py-2.5 pl-10 pr-28 text-sm sm:text-xs text-ink placeholder:text-muted/70 transition-all focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/10"
                   />
                   <div className="absolute right-1.5 flex items-center gap-1">
                     {searchInput && (
@@ -239,15 +242,16 @@ export function MakersPage() {
                           setSearchInput('');
                           updateParams({ q: null });
                         }}
-                        className="rounded px-1.5 py-0.5 text-xs text-muted hover:text-forest"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded text-xs text-muted hover:text-forest"
                         title="Clear search"
+                        aria-label="Clear maker search"
                       >
                         ✕
                       </button>
                     )}
                     <button
                       type="submit"
-                      className="rounded-sm bg-forest px-3.5 py-1.5 text-xs font-semibold tracking-wide text-paper hover:bg-forest-deep transition-colors"
+                      className="min-h-8 rounded-sm bg-forest px-3.5 py-1.5 text-xs font-semibold tracking-wide text-paper hover:bg-forest-deep transition-colors"
                     >
                       Search
                     </button>
@@ -266,7 +270,7 @@ export function MakersPage() {
                     key={pill.region}
                     type="button"
                     onClick={() => updateParams({ region: isSelected ? null : pill.region })}
-                    className={`inline-flex items-center rounded-sm px-2.5 py-1 text-xs transition-colors ${
+                    className={`inline-flex min-h-9 items-center rounded-sm px-2.5 py-1 text-xs transition-colors ${
                       isSelected
                         ? 'bg-forest text-paper font-semibold shadow-xs'
                         : 'border border-sand bg-surface/80 text-ink/75 hover:border-forest/40 hover:text-forest'
@@ -285,39 +289,44 @@ export function MakersPage() {
       {/* =========================================================================
           SECTION B: MAKER DISCOVERY CONTROLS & FILTERING
          ========================================================================= */}
-      <section className="sticky top-0 z-20 border-b border-sand bg-paper/95 backdrop-blur-md">
+      <section className="sticky top-[88px] md:top-[128px] z-20 border-b border-sand bg-paper/98">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            {/* Horizontal Category Chips */}
-            <div className="no-scrollbar -mx-4 flex items-center gap-1.5 overflow-x-auto px-4 lg:mx-0 lg:px-0">
-              {CATEGORY_CHIPS.map((cat) => {
-                const isActive = (selectedCategory === cat.slug) || (cat.slug === 'all' && !searchParams.get('category'));
-                return (
-                  <button
-                    key={cat.slug}
-                    type="button"
-                    onClick={() => updateParams({ category: cat.slug === 'all' ? null : cat.slug })}
-                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium tracking-wide transition-colors ${
-                      isActive
-                        ? 'bg-forest text-paper shadow-sm'
-                        : 'border border-sand bg-surface/70 text-ink/80 hover:border-forest/40 hover:bg-surface'
-                    }`}
-                  >
-                    {cat.label}
-                  </button>
-                );
-              })}
+            {/* Horizontal Category Chips with subtle scroll fade */}
+            <div className="relative min-w-0">
+              <div className="no-scrollbar -mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pr-8 lg:mx-0 lg:px-0 lg:pr-6">
+                {CATEGORY_CHIPS.map((cat) => {
+                  const isActive = (selectedCategory === cat.slug) || (cat.slug === 'all' && !searchParams.get('category'));
+                  return (
+                    <button
+                      key={cat.slug}
+                      type="button"
+                      onClick={() => updateParams({ category: cat.slug === 'all' ? null : cat.slug })}
+                      className={`min-h-9 shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium tracking-wide transition-colors ${
+                        isActive
+                          ? 'bg-forest text-paper shadow-sm'
+                          : 'border border-sand bg-surface/70 text-ink/80 hover:border-forest/40 hover:bg-surface'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="pointer-events-none absolute inset-y-0 -right-4 w-8 bg-gradient-to-l from-paper to-transparent lg:right-0" aria-hidden />
             </div>
 
             {/* Right Controls: Region, Verified Toggle, Sort, Reset */}
-            <div className="hidden sm:flex flex-wrap items-center justify-between gap-2.5 sm:justify-end">
+            <div className="hidden sm:flex shrink-0 flex-wrap items-center justify-between gap-2 sm:justify-end">
               {/* Region Selector */}
               <div className="relative inline-block">
                 <select
+                  id="makers-region-filter"
+                  name="region"
                   value={selectedRegion}
                   onChange={(e) => updateParams({ region: e.target.value === 'All Valleys' ? null : e.target.value })}
                   aria-label="Filter by region"
-                  className="rounded-sm border border-sand bg-surface py-1.5 pl-3 pr-8 text-xs font-medium text-ink transition-colors hover:border-forest/40 focus:border-forest focus:outline-none"
+                  className="h-9 rounded-sm border border-sand bg-surface pl-3 pr-7 text-xs font-medium text-ink transition-colors hover:border-forest/40 focus:border-forest focus:outline-none"
                 >
                   {REGIONS.map((r) => (
                     <option key={r} value={r}>
@@ -331,7 +340,7 @@ export function MakersPage() {
               <button
                 type="button"
                 onClick={() => updateParams({ verified: verifiedOnly ? null : 'true' })}
-                className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm px-3 text-xs font-medium transition-colors ${
                   verifiedOnly
                     ? 'border border-sage bg-sage/15 text-forest font-semibold'
                     : 'border border-sand bg-surface text-muted hover:border-forest/40 hover:text-ink'
@@ -347,10 +356,12 @@ export function MakersPage() {
               {/* Sort Dropdown */}
               <div className="relative inline-block">
                 <select
+                  id="makers-sort-filter"
+                  name="sort"
                   value={sortBy}
                   onChange={(e) => updateParams({ sort: e.target.value === 'products' ? null : e.target.value })}
                   aria-label="Sort makers"
-                  className="rounded-sm border border-sand bg-surface py-1.5 pl-3 pr-8 text-xs font-medium text-ink transition-colors hover:border-forest/40 focus:border-forest focus:outline-none"
+                  className="h-9 rounded-sm border border-sand bg-surface pl-3 pr-7 text-xs font-medium text-ink transition-colors hover:border-forest/40 focus:border-forest focus:outline-none"
                 >
                   <option value="products">Most creations</option>
                   <option value="newest">Newest approved</option>
@@ -364,7 +375,7 @@ export function MakersPage() {
                 <button
                   type="button"
                   onClick={handleClearFilters}
-                  className="text-xs font-semibold text-terra hover:underline"
+                  className="whitespace-nowrap text-xs font-semibold text-terra hover:underline"
                 >
                   Reset all
                 </button>
@@ -376,103 +387,24 @@ export function MakersPage() {
               <button
                 type="button"
                 onClick={() => setMobileFiltersOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-sm border border-sand bg-surface px-3 py-1.5 text-xs font-medium text-forest shadow-xs"
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-sand bg-surface px-3.5 py-2 text-xs font-semibold text-forest shadow-2xs active:scale-95"
               >
                 <svg className="h-4 w-4 text-terra" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                 </svg>
-                Filter & Sort {isFiltered ? '(Active)' : ''}
+                <span>Filter &amp; Sort {isFiltered ? '(Active)' : ''}</span>
               </button>
               {isFiltered && (
                 <button
                   type="button"
                   onClick={handleClearFilters}
-                  className="text-xs font-semibold text-terra"
+                  className="min-h-10 px-2 text-xs font-semibold text-terra"
                 >
                   Reset all
                 </button>
               )}
             </div>
           </div>
-
-          {/* Mobile Filter Drawer / Modal */}
-          {mobileFiltersOpen && (
-            <div className="fixed inset-0 z-50 flex sm:hidden" role="dialog" aria-modal="true">
-              <div className="fixed inset-0 bg-forest/40 backdrop-blur-xs" onClick={() => setMobileFiltersOpen(false)} />
-              <div className="relative ml-auto flex h-full w-full max-w-xs flex-col overflow-y-auto bg-paper p-6 shadow-xl">
-                <div className="flex items-center justify-between border-b border-sand pb-4">
-                  <h3 className="font-serif text-lg text-forest">Filter Makers</h3>
-                  <button
-                    type="button"
-                    onClick={() => setMobileFiltersOpen(false)}
-                    className="p-1 text-muted hover:text-forest"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="mt-6 space-y-6">
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-forest/70">Heritage Region</label>
-                    <select
-                      value={selectedRegion}
-                      onChange={(e) => updateParams({ region: e.target.value === 'All Valleys' ? null : e.target.value })}
-                      className="mt-2 w-full rounded-sm border border-sand bg-surface p-2 text-xs text-ink"
-                    >
-                      {REGIONS.map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-forest/70">Sort By</label>
-                    <select
-                      value={sortBy}
-                      onChange={(e) => updateParams({ sort: e.target.value === 'products' ? null : e.target.value })}
-                      className="mt-2 w-full rounded-sm border border-sand bg-surface p-2 text-xs text-ink"
-                    >
-                      <option value="products">Most creations</option>
-                      <option value="newest">Newest approved</option>
-                      <option value="name_asc">Name (A–Z)</option>
-                      <option value="name_desc">Name (Z–A)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-2 text-xs font-medium text-forest">
-                      <input
-                        type="checkbox"
-                        checked={verifiedOnly}
-                        onChange={(e) => updateParams({ verified: e.target.checked ? 'true' : null })}
-                        className="rounded border-sand text-forest"
-                      />
-                      Verified Artisans Only
-                    </label>
-                  </div>
-                </div>
-                <div className="mt-auto border-t border-sand pt-4 flex gap-2">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => setMobileFiltersOpen(false)}
-                  >
-                    Done
-                  </Button>
-                  {isFiltered && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        handleClearFilters();
-                        setMobileFiltersOpen(false);
-                      }}
-                    >
-                      Reset
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Active Filter Chips / Status summary */}
           <div className="mt-2.5 flex flex-wrap items-center justify-between border-t border-sand/60 pt-2 text-[11px] text-muted">
@@ -488,16 +420,105 @@ export function MakersPage() {
               )}
             </div>
             <div className="hidden sm:block text-[11px] tracking-wide text-forest/70">
-              Direct from artisan looms, mountain apiaries & orchard groves
+              Direct from artisan looms, mountain apiaries &amp; orchard groves
             </div>
           </div>
         </div>
       </section>
 
+      {/* Mobile Filter Drawer / Bottom Sheet rendered outside sticky section so fixed positioning spans full viewport cleanly */}
+      {mobileFiltersOpen && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center sm:hidden" role="dialog" aria-modal="true" aria-label="Filter makers">
+          <div className="fixed inset-0 bg-forest/45 backdrop-blur-xs" onClick={() => setMobileFiltersOpen(false)} />
+          <div className="relative z-10 flex max-h-[85dvh] w-full flex-col overflow-y-auto overscroll-contain rounded-t-2xl border-t border-line bg-paper p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-sand pb-3.5">
+              <h3 className="font-serif text-xl text-forest">Filter Makers</h3>
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen(false)}
+                aria-label="Close filter drawer"
+                className="inline-flex h-11 w-11 -mr-2 items-center justify-center rounded-full text-muted hover:bg-sand/40 hover:text-forest"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="mt-5 space-y-5">
+              <div>
+                <label htmlFor="makers-mobile-region" className="block text-[11px] font-bold uppercase tracking-wider text-forest/75">
+                  Heritage Region
+                </label>
+                <select
+                  id="makers-mobile-region"
+                  name="region"
+                  value={selectedRegion}
+                  onChange={(e) => updateParams({ region: e.target.value === 'All Valleys' ? null : e.target.value })}
+                  className="mt-2 h-11 w-full rounded-md border border-sand bg-surface px-3 text-base text-ink"
+                >
+                  {REGIONS.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="makers-mobile-sort" className="block text-[11px] font-bold uppercase tracking-wider text-forest/75">
+                  Sort By
+                </label>
+                <select
+                  id="makers-mobile-sort"
+                  name="sort"
+                  value={sortBy}
+                  onChange={(e) => updateParams({ sort: e.target.value === 'products' ? null : e.target.value })}
+                  className="mt-2 h-11 w-full rounded-md border border-sand bg-surface px-3 text-base text-ink"
+                >
+                  <option value="products">Most creations</option>
+                  <option value="newest">Newest approved</option>
+                  <option value="name_asc">Name (A–Z)</option>
+                  <option value="name_desc">Name (Z–A)</option>
+                </select>
+              </div>
+              <label htmlFor="makers-mobile-verified" className="flex min-h-11 items-center gap-3 text-sm font-medium text-forest cursor-pointer">
+                <input
+                  id="makers-mobile-verified"
+                  name="verified"
+                  type="checkbox"
+                  checked={verifiedOnly}
+                  onChange={(e) => updateParams({ verified: e.target.checked ? 'true' : null })}
+                  className="h-4 w-4 rounded border-sand accent-forest"
+                />
+                Verified Artisans Only
+              </label>
+            </div>
+            <div className="mt-6 border-t border-sand pt-4 flex gap-3">
+              {isFiltered && (
+                <Button
+                  variant="secondary"
+                  size="md"
+                  className="flex-1 whitespace-nowrap"
+                  onClick={() => {
+                    handleClearFilters();
+                    setMobileFiltersOpen(false);
+                  }}
+                >
+                  Reset
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                size="md"
+                className="flex-1 whitespace-nowrap"
+                onClick={() => setMobileFiltersOpen(false)}
+              >
+                Show makers
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* =========================================================================
           SECTION C: MAKER CARDS & ROBUST STATE MANAGEMENT
          ========================================================================= */}
-      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
         {/* State: Inline Error with working retry */}
         {query.isError && (
           <div className="mb-8 rounded-sm border border-terra/30 bg-[#fff9f6] p-6 text-center">
@@ -624,9 +645,9 @@ export function MakersPage() {
                     </Link>
                   </article>
 
-                  {/* DESKTOP MAKER CARD (hidden sm:flex) — UNCHANGED */}
+                  {/* DESKTOP MAKER CARD (hidden sm:flex) */}
                   <article
-                    className="hidden sm:flex flex-col justify-between overflow-hidden rounded-sm border border-sand bg-surface transition-all duration-300 hover:border-forest/30 hover:shadow-md"
+                    className="group hidden sm:flex flex-col justify-between overflow-hidden rounded-sm border border-sand bg-surface transition-all duration-300 hover:border-forest/30 hover:shadow-md"
                   >
                     <Link to={`/makers/${maker.slug}`} className="block">
                       {/* Maker Image with Badges */}
@@ -637,12 +658,12 @@ export function MakersPage() {
                           loading="lazy"
                           className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-forest/75 via-transparent to-transparent opacity-80" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent opacity-90" />
 
                         {/* Top Badges */}
                         <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
                           {maker.region ? (
-                            <span className="inline-flex items-center gap-1 rounded-sm bg-forest/85 px-2.5 py-1 text-[11px] font-medium text-paper backdrop-blur-xs">
+                            <span className="inline-flex items-center gap-1 rounded-sm bg-forest/90 px-2.5 py-1 text-[11px] font-medium text-paper backdrop-blur-xs">
                               <svg className="h-3 w-3 text-terra" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                               </svg>
@@ -661,8 +682,8 @@ export function MakersPage() {
                         </div>
 
                         {/* Bottom Image Overlay: Product Count */}
-                        <div className="absolute bottom-3 left-3 text-paper">
-                          <span className="text-[11px] tracking-wide text-sand/90">
+                        <div className="absolute bottom-3 left-3 text-white drop-shadow-xs">
+                          <span className="text-[11px] font-medium tracking-wide text-white/95">
                             {maker.productCount} authentic creation{maker.productCount === 1 ? '' : 's'}
                           </span>
                         </div>
@@ -722,7 +743,7 @@ export function MakersPage() {
             })}
           </div>
         )}
-      </main>
+      </div>
 
       {/* =========================================================================
           SECTION D: AUTHENTIC HIMALAYAN MAKER STORIES (EDITORIAL)

@@ -199,6 +199,8 @@ export function EcommerceSearchBar({
           } pl-3 pr-2 sm:flex`}
         >
           <select
+            id={`${inputId}-category`}
+            name="category"
             value={selectedCategory}
             onChange={(event) => {
               setSelectedCategory(event.target.value);
@@ -229,6 +231,7 @@ export function EcommerceSearchBar({
           <input
             ref={inputRef}
             id={inputId}
+            name="q"
             type="search"
             value={query}
             onFocus={() => setIsOpen(true)}

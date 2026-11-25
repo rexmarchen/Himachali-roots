@@ -126,7 +126,7 @@ export function SearchModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input Bar */}
-        <form onSubmit={handleSubmit} className="relative flex items-center border-b border-[#E7DFD3] px-4 py-3.5 sm:px-6">
+        <form onSubmit={handleSubmit} className="relative flex items-center border-b border-[#E7DFD3] px-4 py-3 sm:px-6">
           <svg
             viewBox="0 0 20 20"
             fill="none"
@@ -140,11 +140,14 @@ export function SearchModal({
 
           <input
             ref={inputRef}
-            type="text"
+            id="modal-catalog-search"
+            name="q"
+            type="search"
+            enterKeyHint="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search shawls, Kangra tea, raw honey, walnuts, artisans…"
-            className="w-full bg-transparent font-sans text-base sm:text-lg text-ink placeholder-[#998F80] outline-none"
+            placeholder="Search shawls, Kangra tea, raw honey…"
+            className="w-full min-w-0 bg-transparent font-sans text-base sm:text-lg text-ink placeholder-[#998F80] outline-none [&::-webkit-search-cancel-button]:hidden"
             aria-label="Search term"
           />
 
@@ -152,7 +155,7 @@ export function SearchModal({
             <button
               type="button"
               onClick={() => setQuery('')}
-              className="mr-2 text-muted hover:text-ink text-sm p-1 rounded-full hover:bg-sand/60 transition-colors"
+              className="mr-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm text-muted hover:bg-sand/60 hover:text-ink transition-colors"
               aria-label="Clear query"
             >
               ✕
@@ -162,9 +165,11 @@ export function SearchModal({
           <button
             type="button"
             onClick={onClose}
-            className="hidden sm:inline-flex items-center gap-1 rounded-md border border-line bg-white/80 px-2 py-1 text-[11px] font-medium text-muted hover:text-ink transition-colors"
+            aria-label="Close search"
+            className="ml-1 inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-lg border border-line bg-white/80 px-2.5 text-xs font-medium text-muted hover:text-ink transition-colors"
           >
-            ESC
+            <span className="hidden sm:inline">ESC</span>
+            <span className="sm:hidden">✕</span>
           </button>
         </form>
 

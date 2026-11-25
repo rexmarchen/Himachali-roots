@@ -58,6 +58,7 @@ export function createApp(db: Db, deps: AppDeps = {}): express.Express {
                 "'self'",
                 'https://accounts.google.com',
                 'https://checkout.razorpay.com',
+                'https://cdn.razorpay.com',
               ],
               'style-src': ["'self'", "'unsafe-inline'"],
               'img-src': ["'self'", 'data:', 'https:'],
@@ -68,6 +69,7 @@ export function createApp(db: Db, deps: AppDeps = {}): express.Express {
                 'https://api.razorpay.com',
                 'https://lumberjack.razorpay.com',
                 'https://checkout.razorpay.com',
+                'https://cdn.razorpay.com',
               ],
               'frame-src': [
                 'https://accounts.google.com',

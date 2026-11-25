@@ -1281,6 +1281,18 @@ export function injectSeoIntoHtml(html: string, seo: SeoMetadata): string {
       : '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />',
   ];
 
+  if (seo.canonicalUrl) {
+    try {
+      if (new URL(seo.canonicalUrl).pathname === '/') {
+        extraHeadTags.push(
+          '<link rel="preload" as="image" href="/images/home/himalayan-cottage-sunrise-closing.jpg" imagesrcset="/images/home/himalayan-cottage-sunrise-closing-640.webp 640w, /images/home/himalayan-cottage-sunrise-closing-1024.webp 1024w, /images/home/himalayan-cottage-sunrise-closing-1600.webp 1600w, /images/home/himalayan-cottage-sunrise-closing.webp 2048w" imagesizes="100vw" fetchpriority="high" />',
+        );
+      }
+    } catch {
+      // Ignore malformed canonicalUrl in tests.
+    }
+  }
+
   if (env.seo.googleSiteVerification) {
     extraHeadTags.push(
       `<meta name="google-site-verification" content="${escapeHtml(env.seo.googleSiteVerification)}" />`,

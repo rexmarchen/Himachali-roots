@@ -19,7 +19,7 @@ export function CartPage() {
   const cartQuery = useCartQuery();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { user } = useAuth();
+  const { user, config } = useAuth();
 
   const updateQuantity = useMutation({
     mutationFn: ({ productId, quantity }: { productId: string; quantity: number }) =>
@@ -53,7 +53,7 @@ export function CartPage() {
   });
 
   return (
-    <div className={`mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14 ${hasLines ? 'pb-32 lg:pb-14' : ''}`}>
+    <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12 ${hasLines ? 'pb-24 lg:pb-12' : ''}`}>
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Bag' }]} />
       <PageHeader eyebrow="Your selection" title="The bag" lede="Stock is not reserved until you place the order. You can review delivery and payment on the next step." />
 
@@ -201,7 +201,11 @@ export function CartPage() {
                 </>
               )}
               <div className="mt-5 border-t border-line pt-4 text-[10.5px] leading-relaxed text-muted">
-                <p>Secure payment · Razorpay when configured</p>
+                <p>
+                  {config?.payments.configured
+                    ? 'Secure online payment · UPI, cards & netbanking via Razorpay'
+                    : 'Secure online payment enabled when gateway is configured'}
+                </p>
                 <p className="mt-1">Need help? <Link to="/contact" className="underline underline-offset-2">Contact support</Link></p>
               </div>
             </div>

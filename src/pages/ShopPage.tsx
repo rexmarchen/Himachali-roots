@@ -212,50 +212,53 @@ export function ShopPage() {
         }
       />
 
-      {/* Category quick filters: only shelves with live listings are shown. */}
+      {/* Category quick filters: mobile & tablet only (desktop already shows sidebar + nav) */}
       {liveCategories.length ? (
-        <div className="no-scrollbar -mx-3.5 mt-6 overflow-x-auto px-3.5 pb-1 sm:mx-0 sm:px-0">
-          <div className="flex min-w-max items-center gap-2 py-1">
-            <button
-              type="button"
-              onClick={() => update('category', null)}
-              className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
-                !category
-                  ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
-                  : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
-              }`}
-            >
-              <span>All shelves</span>
-              <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10.5px] ${!category ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
-                {liveCategories.reduce((total, item) => total + (item.productCount ?? 0), 0)}
-              </span>
-            </button>
+        <div className="relative lg:hidden">
+          <div className="no-scrollbar -mx-3.5 mt-5 overflow-x-auto px-3.5 pr-8 pb-1 sm:mx-0 sm:px-0">
+            <div className="flex min-w-max items-center gap-2 py-1">
+              <button
+                type="button"
+                onClick={() => update('category', null)}
+                className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
+                  !category
+                    ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
+                    : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
+                }`}
+              >
+                <span>All shelves</span>
+                <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10.5px] ${!category ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
+                  {liveCategories.reduce((total, item) => total + (item.productCount ?? 0), 0)}
+                </span>
+              </button>
 
-            {liveCategories.map((item) => {
-              const isSelected = category === item.slug;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => update('category', isSelected ? null : item.slug)}
-                  className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
-                    isSelected
-                      ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
-                      : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
-                  }`}
-                >
-                  <span>{item.name}</span>
-                  <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10.5px] ${isSelected ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
-                    {item.productCount ?? 0}
-                  </span>
-                </button>
-              );
-            })}
+              {liveCategories.map((item) => {
+                const isSelected = category === item.slug;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => update('category', isSelected ? null : item.slug)}
+                    className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
+                      isSelected
+                        ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
+                        : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
+                    }`}
+                  >
+                    <span>{item.name}</span>
+                    <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10.5px] ${isSelected ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
+                      {item.productCount ?? 0}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
+          <div className="pointer-events-none absolute inset-y-0 -right-3.5 w-8 bg-gradient-to-l from-paper to-transparent sm:right-0" aria-hidden />
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[230px_1fr]">
+      <div className="mt-5 lg:mt-8 grid gap-10 lg:grid-cols-[230px_1fr]">
         <aside className="hidden lg:block">
           <div className="sticky top-32 space-y-7">
             <div>
@@ -323,8 +326,10 @@ export function ShopPage() {
 
             {filters?.sellers.length ? (
               <div className="border-t border-line pt-5">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Maker</p>
-                <Select value={seller ?? ''} onChange={(event) => update('seller', event.target.value || null)} aria-label="Filter by maker">
+                <label htmlFor="desktop-maker-filter" className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  Maker
+                </label>
+                <Select id="desktop-maker-filter" name="seller" value={seller ?? ''} onChange={(event) => update('seller', event.target.value || null)} aria-label="Filter by maker">
                   <option value="">All makers</option>
                   {filters.sellers.map((item) => (
                     <option key={item.slug} value={item.slug}>
@@ -339,6 +344,8 @@ export function ShopPage() {
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Price (₹)</p>
               <div className="flex items-center gap-2">
                 <Input
+                  id="desktop-min-price"
+                  name="minPrice"
                   type="number"
                   min={0}
                   placeholder={filters?.priceRangePaise.min ? String(Math.floor(filters.priceRangePaise.min / 100)) : 'Min'}
@@ -352,6 +359,8 @@ export function ShopPage() {
                 />
                 <span className="text-muted">–</span>
                 <Input
+                  id="desktop-max-price"
+                  name="maxPrice"
                   type="number"
                   min={0}
                   placeholder={filters?.priceRangePaise.max ? String(Math.ceil(filters.priceRangePaise.max / 100)) : 'Max'}
@@ -364,8 +373,10 @@ export function ShopPage() {
                   className="h-9 px-2 text-xs"
                 />
               </div>
-              <label className="mt-4 flex items-center gap-2 text-[12.5px] text-ink/80">
+              <label htmlFor="desktop-in-stock" className="mt-4 flex items-center gap-2 text-[12.5px] text-ink/80 cursor-pointer">
                 <input
+                  id="desktop-in-stock"
+                  name="inStock"
                   type="checkbox"
                   checked={params.get('inStock') === 'true'}
                   onChange={(event) => update('inStock', event.target.checked ? 'true' : null)}
@@ -443,11 +454,11 @@ export function ShopPage() {
               {products.data ? `${products.data.total} listing${products.data.total === 1 ? '' : 's'}` : 'Loading…'}
               {region ? ` in ${region}` : ''}
             </p>
-            <div className="flex items-center gap-2">
-              <label htmlFor="sort" className="text-[11px] text-muted">
+            <div className="flex items-center gap-2.5">
+              <label htmlFor="sort" className="text-[11px] font-medium uppercase tracking-wider text-muted">
                 Sort
               </label>
-              <Select id="sort" value={sort} onChange={(event) => update('sort', event.target.value)} className="h-9 w-auto py-1.5 text-xs">
+              <Select id="sort" name="sort" value={sort} onChange={(event) => update('sort', event.target.value)} className="h-9 min-h-9 w-auto py-1 text-xs">
                 {SORTS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -457,12 +468,12 @@ export function ShopPage() {
             </div>
           </div>
 
-          {/* Mobile high-converting Flipkart/Instamart action & filter bar */}
-          <div className="mb-3.5 flex items-center justify-between gap-2 border-y border-line/60 bg-white/80 backdrop-blur-xs py-1.5 px-1 rounded-xl shadow-2xs lg:hidden">
+          {/* Mobile high-converting action & filter bar (44px ergonomic touch height, zero clipped select text) */}
+          <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-line/70 bg-white/90 px-2 py-1.5 shadow-2xs backdrop-blur-xs lg:hidden">
             <button
               type="button"
               onClick={() => setFiltersOpen(true)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-forest/25 bg-paper px-3 text-[11.5px] font-semibold text-forest shadow-2xs active:scale-95 shrink-0"
+              className="inline-flex h-10 min-h-[40px] items-center gap-1.5 rounded-lg border border-forest/25 bg-paper px-3 text-xs font-semibold text-forest shadow-2xs active:scale-95 shrink-0"
               aria-haspopup="dialog"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5" aria-hidden>
@@ -470,21 +481,23 @@ export function ShopPage() {
               </svg>
               <span>Filters</span>
               {activeCount > 0 ? (
-                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-terra px-1 text-[9px] font-bold text-white">
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-terra px-1 text-[10px] font-bold text-white">
                   {activeCount}
                 </span>
               ) : null}
             </button>
 
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold text-muted shrink-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="text-[11px] font-semibold text-muted shrink-0 tabular-nums">
                 {products.data ? `${products.data.total} items` : '…'}
               </span>
               <Select
                 id="sort-mobile"
+                name="sortMobile"
+                aria-label="Sort products"
                 value={sort}
                 onChange={(event) => update('sort', event.target.value)}
-                className="h-8 w-auto min-w-[130px] py-0.5 px-2 text-[11.5px] rounded-lg border-line bg-paper font-medium shadow-2xs"
+                className="!h-10 !min-h-[40px] !w-auto min-w-[138px] max-w-[175px] !py-1.5 !pl-2.5 !pr-8 !text-[13px] rounded-lg border-line bg-paper font-medium shadow-2xs"
               >
                 {SORTS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -511,7 +524,7 @@ export function ShopPage() {
             <ErrorState onRetry={() => void products.refetch()} />
           ) : products.data && products.data.items.length ? (
             <>
-              <ProductGrid products={products.data.items} />
+              <ProductGrid products={products.data.items} showAddToCart />
               <Pagination page={page} totalPages={products.data.totalPages} onChange={(next) => update('page', String(next))} />
             </>
           ) : (
@@ -541,10 +554,10 @@ export function ShopPage() {
         onClose={() => setFiltersOpen(false)}
         title="Filter & sort"
         footer={
-          <div className="flex items-center gap-3">
+          <div className="flex w-full items-center gap-3">
             <Button
               variant="secondary"
-              className="flex-1"
+              className="flex-1 whitespace-nowrap"
               onClick={() => {
                 clearAll();
                 setFiltersOpen(false);
@@ -552,7 +565,7 @@ export function ShopPage() {
             >
               Reset
             </Button>
-            <Button className="flex-1" onClick={() => setFiltersOpen(false)}>
+            <Button className="flex-1 whitespace-nowrap" onClick={() => setFiltersOpen(false)}>
               Show results
             </Button>
           </div>
@@ -561,7 +574,7 @@ export function ShopPage() {
         <div className="space-y-6">
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Category</p>
-            <div className="grid gap-1">
+            <div className="grid gap-1.5">
               <button
                 type="button"
                 onClick={() => update('category', null)}
@@ -597,7 +610,7 @@ export function ShopPage() {
                     key={item.region}
                     type="button"
                     onClick={() => update('region', region === item.region ? null : item.region)}
-                    className={`min-h-10 border px-3 text-[12px] ${
+                    className={`min-h-10 rounded-md border px-3 text-[12px] ${
                       region === item.region ? 'border-forest bg-forest text-paper' : 'border-line bg-surface text-ink'
                     }`}
                   >
@@ -613,7 +626,7 @@ export function ShopPage() {
               <label htmlFor="mobile-maker" className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
                 Maker
               </label>
-              <Select id="mobile-maker" value={seller ?? ''} onChange={(event) => update('seller', event.target.value || null)}>
+              <Select id="mobile-maker" name="mobileMaker" value={seller ?? ''} onChange={(event) => update('seller', event.target.value || null)}>
                 <option value="">All makers</option>
                 {filters.sellers.map((item) => (
                   <option key={item.slug} value={item.slug}>
@@ -628,6 +641,8 @@ export function ShopPage() {
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Price (₹)</p>
             <div className="flex items-center gap-2">
               <Input
+                id="mobile-min-price"
+                name="mobileMinPrice"
                 type="number"
                 min={0}
                 inputMode="numeric"
@@ -641,6 +656,8 @@ export function ShopPage() {
               />
               <span className="text-muted">–</span>
               <Input
+                id="mobile-max-price"
+                name="mobileMaxPrice"
                 type="number"
                 min={0}
                 inputMode="numeric"
@@ -655,8 +672,10 @@ export function ShopPage() {
             </div>
           </div>
 
-          <label className="flex min-h-11 items-center gap-3 text-[13px] text-ink">
+          <label htmlFor="mobile-in-stock" className="flex min-h-11 items-center gap-3 text-[13px] text-ink cursor-pointer">
             <input
+              id="mobile-in-stock"
+              name="mobileInStock"
               type="checkbox"
               checked={params.get('inStock') === 'true'}
               onChange={(event) => update('inStock', event.target.checked ? 'true' : null)}
@@ -669,7 +688,7 @@ export function ShopPage() {
             <label htmlFor="mobile-sort" className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
               Sort by
             </label>
-            <Select id="mobile-sort" value={sort} onChange={(event) => update('sort', event.target.value)}>
+            <Select id="mobile-sort" name="mobileSort" value={sort} onChange={(event) => update('sort', event.target.value)}>
               {SORTS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
