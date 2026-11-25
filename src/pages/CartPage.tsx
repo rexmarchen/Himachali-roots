@@ -49,6 +49,7 @@ export function CartPage() {
     title: 'Your bag · Dear Hills',
     description: 'Review the authentic Himachali products in your Dear Hills bag before checkout.',
     canonicalPath: '/cart',
+    noindex: true,
   });
 
   return (

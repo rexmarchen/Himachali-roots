@@ -541,14 +541,14 @@ function Header() {
             ].map((item) => (
               <Link
                 key={item.slug}
-                to={`/shop?category=${item.slug}`}
+                to={`/categories/${item.slug}`}
                 className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 text-ink/80 hover:bg-forest/10 hover:text-forest transition-colors"
               >
                 {item.label}
               </Link>
             ))}
             <Link
-              to="/shop?category=gifting"
+              to="/categories/gifting"
               className="shrink-0 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-semibold text-terra hover:bg-forest/10 transition-colors"
             >
               Curated gifting
@@ -571,7 +571,7 @@ function Header() {
               {moreOpen ? (
                 <div role="menu" className="absolute left-0 top-full z-50 mt-1.5 w-60 border border-line bg-surface py-1.5 text-ink shadow-xl">
                   {[
-                    { label: 'Mountain pulses & staples', to: '/shop?category=pulses-and-staples' },
+                    { label: 'Mountain pulses & staples', to: '/categories/pulses-and-staples' },
                     { label: 'Meet the makers', to: '/makers' },
                     { label: 'The sourcing standard', to: '/sourcing' },
                     { label: 'Our story & heritage', to: '/about' },
@@ -885,9 +885,9 @@ function Footer() {
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">Explore the shelves</h3>
             <ul className="mt-4 space-y-2.5 text-sm text-paper/75">
               <li><Link to="/shop" className="hover:text-sand transition-colors">All products</Link></li>
-              <li><Link to="/shop?category=shawls-and-weaves" className="hover:text-sand transition-colors">Shawls & Handlooms</Link></li>
-              <li><Link to="/shop?category=pantry-and-preserves" className="hover:text-sand transition-colors">Mountain Pantry & Honey</Link></li>
-              <li><Link to="/shop?category=gifting" className="hover:text-sand transition-colors">Curated Himalayan Gifting</Link></li>
+              <li><Link to="/categories/shawls-and-weaves" className="hover:text-sand transition-colors">Shawls & Handlooms</Link></li>
+              <li><Link to="/categories/pantry-and-preserves" className="hover:text-sand transition-colors">Mountain Pantry & Honey</Link></li>
+              <li><Link to="/categories/gifting" className="hover:text-sand transition-colors">Curated Himalayan Gifting</Link></li>
               <li><Link to="/makers" className="hover:text-sand transition-colors">Meet the makers</Link></li>
               <li><Link to="/sourcing" className="hover:text-sand transition-colors">The Sourcing Standard</Link></li>
             </ul>
@@ -928,7 +928,7 @@ function Footer() {
             <Link to="/faq" className="hover:text-paper transition-colors">FAQ</Link>
             <Link to="/policies/privacy" className="hover:text-paper transition-colors">Privacy Policy</Link>
             <Link to="/policies/terms" className="hover:text-paper transition-colors">Terms of Service</Link>
-            <Link to="/sell" className="hover:text-paper transition-colors">Seller Registration</Link>
+            <Link to="/become-a-maker" className="hover:text-paper transition-colors">Seller Registration</Link>
           </div>
         </div>
       </div>

@@ -55,6 +55,7 @@ export function CheckoutPage() {
     title: 'Checkout · Dear Hills',
     description: 'A secure checkout for authentic Himachali goods, shipped across India by the makers themselves.',
     canonicalPath: '/checkout',
+    noindex: true,
   });
 
   const { config } = useAuth();

@@ -209,19 +209,24 @@ export function createApp(db: Db, deps: AppDeps = {}): express.Express {
         }
 
         const host = req.get('x-forwarded-host') || req.get('host') || undefined;
-        const seo = getSeoMetadata(db, req.path, host, req.query as Record<string, string | undefined>);
+        const seo = getSeoMetadata(db, req.path, host, req.query as Record<string, string | string[] | undefined>);
         const transformedHtml = injectSeoIntoHtml(cachedRawIndexHtml, seo);
 
         if (seo.noindex) {
+          res.setHeader('X-Robots-Tag', 'noindex, nofollow');
           res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
           res.setHeader('Pragma', 'no-cache');
         } else {
           // Public pages: no-cache ensures browsers always check ETag and immediately load new fingerprinted bundles on deployment
+          res.setHeader(
+            'X-Robots-Tag',
+            'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
+          );
           res.setHeader('Cache-Control', 'no-cache, must-revalidate');
           res.setHeader('Pragma', 'no-cache');
         }
 
-        res.type('text/html; charset=utf-8').send(transformedHtml);
+        res.status(seo.statusCode ?? 200).type('text/html; charset=utf-8').send(transformedHtml);
       } catch {
         res.sendFile(indexPath);
       }

@@ -1,11 +1,17 @@
 User-agent: *
 Allow: /
+Allow: /sellers/
 Disallow: /account
 Disallow: /admin
 Disallow: /seller
-Disallow: /sell
 Disallow: /checkout
 Disallow: /api/
 Disallow: /onboarding
+Disallow: /cart
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
 
 Sitemap: https://www.dearhills.in/sitemap.xml

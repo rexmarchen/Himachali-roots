@@ -1,7 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ReactNode } from 'react';
 import { Link, useParams, Navigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import type { Paged, ProductSummary } from '@shared/types';
 import { BLOG_POSTS } from '@/data/blogPosts';
+import { api } from '@/lib/api';
+import { parseMarkdownBlocks } from '@/lib/blogMarkdown';
 import { usePageMeta } from '@/lib/usePageMeta';
+import { ProductGrid } from '@/components/ProductCard';
 import { Breadcrumbs, LinkButton } from '@/components/ui';
 
 /* ---------------- Share Icons ---------------- */
@@ -21,6 +26,49 @@ function TwitterIcon({ className = 'h-4 w-4' }: { className?: string }) {
   );
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  'shawls-and-weaves': 'Shawls & Handlooms',
+  'tea-and-infusions': 'Kangra Orthodox Tea',
+  'fruits-and-fresh-produce': 'Fruits & Fresh Produce',
+  'dry-fruit-and-nuts': 'Dry Fruit & Nuts',
+  'pantry-and-preserves': 'Wild Honey & Preserves',
+  'cold-pressed-oils': 'Cold-Pressed Oils',
+  'pulses-and-staples': 'Mountain Pulses & Staples',
+  knitwear: 'Warm Knitwear',
+  'caps-and-headwear': 'Himachali Caps',
+  'crafts-and-handicrafts': 'Handmade Crafts & Handicrafts',
+  'traditional-goods-and-essentials': 'Traditional Himachali Products',
+  gifting: 'Curated Gifting',
+};
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const tokens: ReactNode[] = [];
+  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let keyIdx = 0;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      tokens.push(text.slice(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith('**') && token.endsWith('**')) {
+      tokens.push(
+        <strong key={`b-${keyIdx++}`} className="font-semibold text-forest">
+          {token.slice(2, -2)}
+        </strong>,
+      );
+    } else if (token.startsWith('*') && token.endsWith('*')) {
+      tokens.push(<em key={`i-${keyIdx++}`}>{token.slice(1, -1)}</em>);
+    }
+    lastIndex = match.index + token.length;
+  }
+  if (lastIndex < text.length) {
+    tokens.push(text.slice(lastIndex));
+  }
+  return tokens;
+}
+
 /* ---------------- Blog Index Page ---------------- */
 export function BlogIndexPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -33,16 +81,27 @@ export function BlogIndexPage() {
     canonicalPath: '/blog',
     jsonLd: {
       '@context': 'https://schema.org',
-      '@type': 'Blog',
-      name: 'Dear Hills Mountain Journal',
-      url: 'https://www.dearhills.in/blog',
-      description:
-        'Stories, cultural guides, and sourcing notes from the high-altitude valleys of Himachal Pradesh.',
-      publisher: {
-        '@type': 'Organization',
-        name: 'Dear Hills',
-        logo: 'https://www.dearhills.in/favicon.svg',
-      },
+      '@graph': [
+        {
+          '@type': 'Blog',
+          name: 'Dear Hills Mountain Journal',
+          url: 'https://www.dearhills.in/blog',
+          description:
+            'Stories, cultural guides, and sourcing notes from the high-altitude valleys of Himachal Pradesh.',
+          publisher: {
+            '@type': 'Organization',
+            name: 'Dear Hills',
+            logo: 'https://www.dearhills.in/favicon.svg',
+          },
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+            { '@type': 'ListItem', position: 2, name: 'Mountain Journal', item: 'https://www.dearhills.in/blog' },
+          ],
+        },
+      ],
     },
   });
 
@@ -184,49 +243,120 @@ export function BlogPostDetailPage() {
     return BLOG_POSTS.find((p) => p.slug === slug);
   }, [slug]);
 
+  const productsQuery = useQuery({
+    queryKey: ['blog-related-products', slug],
+    queryFn: async () => {
+      const firstPage = await api<Paged<ProductSummary>>('/products?pageSize=48');
+      if (!post || firstPage.total <= firstPage.items.length) return firstPage.items;
+      const found = new Set(firstPage.items.map((item) => item.slug));
+      const missing = post.relatedProductSlugs.filter((s) => !found.has(s));
+      if (missing.length === 0) return firstPage.items;
+      const extras = await Promise.allSettled(
+        missing.map((s) => api<{ product: ProductSummary }>(`/products/${encodeURIComponent(s)}`)),
+      );
+      const extraItems = extras
+        .filter((res): res is PromiseFulfilledResult<{ product: ProductSummary }> => res.status === 'fulfilled')
+        .map((res) => res.value.product);
+      return [...firstPage.items, ...extraItems];
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: Boolean(post && post.relatedProductSlugs.length > 0),
+  });
+
+  const relatedProducts = useMemo(() => {
+    if (!post || !productsQuery.data) return [];
+    const bySlug = new Map(productsQuery.data.map((item) => [item.slug, item]));
+    return post.relatedProductSlugs
+      .map((s) => bySlug.get(s))
+      .filter((item): item is ProductSummary => Boolean(item));
+  }, [post, productsQuery.data]);
+
+  const markdownBlocks = useMemo(() => (post ? parseMarkdownBlocks(post.content) : []), [post]);
+
   const currentUrl = `https://www.dearhills.in/blog/${slug ?? ''}`;
+
+  const jsonLd = useMemo(() => {
+    if (!post) return undefined;
+    const coverUrl = post.coverImage.startsWith('http')
+      ? post.coverImage
+      : `https://www.dearhills.in${post.coverImage}`;
+    const graph: Array<Record<string, unknown>> = [
+      {
+        '@type': 'BlogPosting',
+        headline: post.title,
+        description: post.metaDescription,
+        image: [coverUrl],
+        datePublished: post.publishedAt,
+        dateModified: post.publishedAt,
+        keywords: post.tags.join(', '),
+        author: {
+          '@type': 'Person',
+          name: post.author.name,
+          jobTitle: post.author.role,
+        },
+        publisher: {
+          '@type': 'Organization',
+          name: 'Dear Hills',
+          logo: {
+            '@type': 'ImageObject',
+            url: 'https://www.dearhills.in/favicon.svg',
+          },
+        },
+        mainEntityOfPage: {
+          '@type': 'WebPage',
+          '@id': currentUrl,
+        },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+          { '@type': 'ListItem', position: 2, name: 'Mountain Journal', item: 'https://www.dearhills.in/blog' },
+          { '@type': 'ListItem', position: 3, name: post.title, item: currentUrl },
+        ],
+      },
+    ];
+
+    if (post.faqs && post.faqs.length > 0) {
+      graph.push({
+        '@type': 'FAQPage',
+        mainEntity: post.faqs.map((faq) => ({
+          '@type': 'Question',
+          name: faq.question,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: faq.answer,
+          },
+        })),
+      });
+    }
+
+    return {
+      '@context': 'https://schema.org',
+      '@graph': graph,
+    };
+  }, [post, currentUrl]);
 
   usePageMeta({
     title: post ? post.metaTitle : 'Story Not Found — Dear Hills Blog',
     description: post ? post.metaDescription : 'The requested Himalayan heritage story could not be found.',
     canonicalPath: `/blog/${slug ?? ''}`,
     image: post?.coverImage,
-    jsonLd: post
-      ? {
-          '@context': 'https://schema.org',
-          '@type': 'BlogPosting',
-          headline: post.title,
-          description: post.metaDescription,
-          image: [post.coverImage.startsWith('http') ? post.coverImage : `https://www.dearhills.in${post.coverImage}`],
-          datePublished: post.publishedAt,
-          dateModified: post.publishedAt,
-          author: {
-            '@type': 'Person',
-            name: post.author.name,
-            jobTitle: post.author.role,
-          },
-          publisher: {
-            '@type': 'Organization',
-            name: 'Dear Hills',
-            logo: {
-              '@type': 'ImageObject',
-              url: 'https://www.dearhills.in/favicon.svg',
-            },
-          },
-          mainEntityOfPage: {
-            '@type': 'WebPage',
-            '@id': currentUrl,
-          },
-        }
-      : undefined,
+    ogType: 'article',
+    jsonLd,
+    noindex: !post,
   });
 
   if (!post) {
     return <Navigate to="/blog" replace />;
   }
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(currentUrl);
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(currentUrl);
+    } catch {
+      // Clipboard may be unavailable; still provide visual feedback
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
@@ -283,76 +413,102 @@ export function BlogPostDetailPage() {
 
       {/* Content Body */}
       <div className="mt-10 max-w-3xl mx-auto prose prose-emerald font-sans leading-relaxed text-ink/80 text-[15px] sm:text-base">
-        {post.content.split('\n\n').map((para, i) => {
-          const trimmed = para.trim();
-          if (trimmed.startsWith('## ')) {
+        {markdownBlocks.map((block, i) => {
+          if (block.type === 'heading') {
+            if (block.level === 2) {
+              return (
+                <h2
+                  key={i}
+                  className="mt-10 mb-4 font-serif text-2xl sm:text-3xl font-medium text-forest border-b border-line pb-2"
+                >
+                  {renderInlineMarkdown(block.text)}
+                </h2>
+              );
+            }
+            if (block.level === 3) {
+              return (
+                <h3 key={i} className="mt-6 mb-2 font-serif text-xl sm:text-2xl font-medium text-forest">
+                  {renderInlineMarkdown(block.text)}
+                </h3>
+              );
+            }
             return (
-              <h2
-                key={i}
-                className="mt-10 mb-4 font-serif text-2xl sm:text-3xl font-medium text-forest border-b border-line pb-2"
-              >
-                {trimmed.replace('## ', '')}
-              </h2>
+              <h4 key={i} className="mt-5 mb-2 font-serif text-lg font-medium text-forest">
+                {renderInlineMarkdown(block.text)}
+              </h4>
             );
           }
-          if (trimmed.startsWith('### ')) {
-            return (
-              <h3 key={i} className="mt-6 mb-2 font-serif text-xl sm:text-2xl font-medium text-forest">
-                {trimmed.replace('### ', '')}
-              </h3>
-            );
-          }
-          if (trimmed.startsWith('---')) {
+
+          if (block.type === 'hr') {
             return <hr key={i} className="my-8 border-line" />;
           }
-          if (trimmed.startsWith('- ')) {
-            const items = trimmed.split('\n- ').map((s) => s.replace(/^- /, ''));
+
+          if (block.type === 'ul') {
             return (
               <ul key={i} className="my-4 list-disc pl-5 space-y-1.5 text-ink/85">
-                {items.map((it, j) => (
-                  <li key={j}>{it}</li>
+                {block.items.map((item, j) => (
+                  <li key={j}>{renderInlineMarkdown(item)}</li>
                 ))}
               </ul>
             );
           }
-          if (trimmed.startsWith('| ')) {
-            // Render markdown table
-            const rows = trimmed.split('\n').filter((r) => !r.includes(':---'));
-            const [header, ...data] = rows;
-            const headerCells = header ? header.split('|').filter(Boolean).map((s) => s.trim()) : [];
+
+          if (block.type === 'ol') {
+            return (
+              <ol key={i} className="my-4 list-decimal pl-5 space-y-3 text-ink/85">
+                {block.items.map((item, j) => (
+                  <li key={j}>
+                    <div>{renderInlineMarkdown(item.text)}</div>
+                    {item.extraParagraphs.map((extra, k) => (
+                      <p key={k} className="mt-1.5 text-ink/80">
+                        {renderInlineMarkdown(extra)}
+                      </p>
+                    ))}
+                    {item.subItems.length > 0 ? (
+                      <ul className="mt-2 list-disc pl-5 space-y-1 text-ink/80">
+                        {item.subItems.map((sub, sIdx) => (
+                          <li key={sIdx}>{renderInlineMarkdown(sub)}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            );
+          }
+
+          if (block.type === 'table') {
             return (
               <div key={i} className="my-6 overflow-x-auto rounded-lg border border-line bg-surface p-2">
                 <table className="w-full text-left text-xs sm:text-sm">
                   <thead>
                     <tr className="border-b border-line bg-paper">
-                      {headerCells.map((h, k) => (
+                      {block.headers.map((h, k) => (
                         <th key={k} className="p-3 font-semibold text-forest">
-                          {h}
+                          {renderInlineMarkdown(h)}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {data.map((row, rIdx) => {
-                      const cells = row.split('|').filter(Boolean).map((s) => s.trim());
-                      return (
-                        <tr key={rIdx} className="border-b border-line/60 last:border-none">
-                          {cells.map((c, cIdx) => (
-                            <td key={cIdx} className="p-3 text-ink/80">
-                              {c}
-                            </td>
-                          ))}
-                        </tr>
-                      );
-                    })}
+                    {block.rows.map((cells, rIdx) => (
+                      <tr key={rIdx} className="border-b border-line/60 last:border-none">
+                        {cells.map((c, cIdx) => (
+                          <td key={cIdx} className="p-3 text-ink/80">
+                            {renderInlineMarkdown(c)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             );
           }
+
           return (
             <p key={i} className="my-4">
-              {trimmed}
+              {renderInlineMarkdown(block.text)}
             </p>
           );
         })}
@@ -376,6 +532,42 @@ export function BlogPostDetailPage() {
               </div>
             ))}
           </div>
+        </div>
+      ) : null}
+
+      {/* Aligned Related Products Mentioned in This Guide */}
+      {relatedProducts.length > 0 ? (
+        <section className="mt-12 max-w-3xl mx-auto border-t border-line pt-10" aria-labelledby="blog-related-products">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-terra">
+                Featured in This Guide
+              </p>
+              <h2 id="blog-related-products" className="mt-1 font-serif text-2xl text-forest">
+                Shop Authentic Goods Mentioned Above
+              </h2>
+            </div>
+            <Link to="/shop" className="text-xs font-semibold text-terra hover:underline">
+              Explore full catalogue →
+            </Link>
+          </div>
+          <ProductGrid products={relatedProducts} showAddToCart />
+        </section>
+      ) : null}
+
+      {/* Explore Related Categories */}
+      {post.relatedCategorySlugs && post.relatedCategorySlugs.length > 0 ? (
+        <div className="mt-8 max-w-3xl mx-auto flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-semibold uppercase tracking-wider text-muted">Explore shelves:</span>
+          {post.relatedCategorySlugs.map((catSlug) => (
+            <Link
+              key={catSlug}
+              to={`/categories/${catSlug}`}
+              className="rounded-full border border-line bg-surface px-3 py-1 font-medium text-forest transition-colors hover:border-terra hover:text-terra"
+            >
+              {CATEGORY_LABELS[catSlug] ?? catSlug}
+            </Link>
+          ))}
         </div>
       ) : null}
 

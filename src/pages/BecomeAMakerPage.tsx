@@ -98,6 +98,26 @@ export function BecomeAMakerPage() {
     title: 'Sell with Dear Hills · Himalayan Artisan & Producer Onboarding',
     description:
       'Join Dear Hills and bring authentic Himalayan handloom, orthodox tea, raw forest honey, orchard harvest and village craft to conscious customers across India.',
+    canonicalPath: '/become-a-maker',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'WebPage',
+          name: 'Become a Maker on Dear Hills',
+          url: 'https://www.dearhills.in/become-a-maker',
+          description:
+            'Join Dear Hills and bring authentic Himalayan handloom, orthodox tea, raw forest honey, orchard harvest and village craft to conscious customers across India.',
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+            { '@type': 'ListItem', position: 2, name: 'Become a Maker', item: 'https://www.dearhills.in/become-a-maker' },
+          ],
+        },
+      ],
+    },
   });
 
   // Business type choice for dynamic adaptation

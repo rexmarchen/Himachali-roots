@@ -238,7 +238,7 @@ function GoogleAuthSection({
 }
 
 export function LoginPage() {
-  usePageMeta({ title: 'Sign in · Dear Hills' });
+  usePageMeta({ title: 'Sign in · Dear Hills', noindex: true });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -401,7 +401,7 @@ export function LoginPage() {
 }
 
 export function RegisterPage() {
-  usePageMeta({ title: 'Create your account · Dear Hills' });
+  usePageMeta({ title: 'Create your account · Dear Hills', noindex: true });
   const [form, setForm] = useState({ fullName: '', email: '', password: '' });
   const [consent, setConsent] = useState(false);
   const [terms, setTerms] = useState(false);
@@ -632,7 +632,7 @@ function OtpBoxes({
 }
 
 export function ForgotPasswordPage() {
-  usePageMeta({ title: 'Reset your password · Dear Hills' });
+  usePageMeta({ title: 'Reset your password · Dear Hills', noindex: true });
   const [step, setStep] = useState<'request' | 'verify' | 'reset' | 'success'>('request');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -950,7 +950,7 @@ export function ForgotPasswordPage() {
 }
 
 export function ResetPasswordPage() {
-  usePageMeta({ title: 'Choose a new password · Dear Hills' });
+  usePageMeta({ title: 'Choose a new password · Dear Hills', noindex: true });
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
   const [password, setPassword] = useState('');
@@ -1047,7 +1047,7 @@ export function ResetPasswordPage() {
 }
 
 export function VerifyEmailPage() {
-  usePageMeta({ title: 'Confirm your email · Dear Hills' });
+  usePageMeta({ title: 'Confirm your email · Dear Hills', noindex: true });
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const token = params.get('token') ?? '';

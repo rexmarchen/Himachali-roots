@@ -109,11 +109,47 @@ export function OfferPage() {
         : `${campaign.name}: a seasonal selection of authentic Himachali products from reviewed local makers.`
     : 'A seasonal collection of authentic Himachali products from reviewed local makers.';
 
+  const canonicalOfferPath = `/offers/${campaign?.slug ?? slug}`;
+  const offerUrl = `https://www.dearhills.in${canonicalOfferPath}`;
+  const category = params.get('category');
+  const seller = params.get('seller');
+  const sort = params.get('sort') ?? 'newest';
+  const page = Number(params.get('page') ?? 1) || 1;
+  const hasOfferFilter = Boolean(category || seller || params.get('sort') || page > 1);
+
   usePageMeta({
     title,
     description,
-    canonicalPath: `/offers/${slug}`,
+    canonicalPath: canonicalOfferPath,
     image: campaign?.posterUrl ?? null,
+    noindex: campaign?.status === 'expired' || hasOfferFilter || (offer.isError && !data),
+    jsonLd: campaign
+      ? {
+          '@context': 'https://schema.org',
+          '@graph': [
+            {
+              '@type': 'CollectionPage',
+              name: campaign.name,
+              url: offerUrl,
+              description,
+              ...(campaign.posterUrl
+                ? {
+                    image: campaign.posterUrl.startsWith('http')
+                      ? campaign.posterUrl
+                      : `https://www.dearhills.in${campaign.posterUrl}`,
+                  }
+                : {}),
+            },
+            {
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+                { '@type': 'ListItem', position: 2, name: campaign.name, item: offerUrl },
+              ],
+            },
+          ],
+        }
+      : undefined,
   });
 
   const update = (key: string, value: string | null) => {
@@ -124,10 +160,6 @@ export function OfferPage() {
     setParams(next, { replace: true });
   };
 
-  const category = params.get('category');
-  const seller = params.get('seller');
-  const sort = params.get('sort') ?? 'newest';
-  const page = Number(params.get('page') ?? 1) || 1;
   const filters = data?.filters;
   const activeCount = useMemo(() => ['category', 'seller'].filter((key) => params.get(key)).length, [params]);
 
@@ -255,7 +287,7 @@ export function OfferPage() {
             </div>
           </div>
 
-          <div className="mt-6">
+          <div className="mt-6 space-y-2.5">
             {purchasable ? (
               <a href="#offer-products" className={buttonClass('terra', 'md', 'w-full')}>
                 Shop eligible products →
@@ -265,6 +297,14 @@ export function OfferPage() {
                 Browse the catalogue →
               </LinkButton>
             )}
+            <a
+              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`${campaign.name} on Dear Hills — ${offerUrl}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-10 w-full items-center justify-center rounded-sm border border-[#128C7E]/35 bg-[#25D366]/10 px-3 text-xs font-semibold text-[#128C7E] transition-colors hover:bg-[#25D366]/20"
+            >
+              Share offer on WhatsApp
+            </a>
           </div>
         </aside>
       </div>

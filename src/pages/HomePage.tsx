@@ -536,7 +536,7 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
               return (
                 <Link
                   key={category.id}
-                  to={`/shop?category=${encodeURIComponent(category.slug)}`}
+                  to={`/categories/${encodeURIComponent(category.slug)}`}
                   className={`group relative flex flex-col justify-end overflow-hidden rounded-xl border border-line bg-surface aspect-[4/3] sm:aspect-[4/3.2] transition-all duration-500 ease-out transform hover:-translate-y-1 hover:border-terra/50 hover:shadow-md ${
                     isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
                   }`}
@@ -583,7 +583,7 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
 }
 
 /* Section C: Meet the Makers */
-function MakersCelebrationSection({ makers }: { makers: MakerSummary[] }) {
+function MakersCelebrationSection({ makers, totalCount }: { makers: MakerSummary[]; totalCount?: number }) {
   return (
     <section className="border-b border-line bg-surface py-10 sm:py-20 lg:py-28">
       <div className="mx-auto max-w-[88rem] px-4 sm:px-8 lg:px-10 xl:px-12">
@@ -593,7 +593,7 @@ function MakersCelebrationSection({ makers }: { makers: MakerSummary[] }) {
           lede="Every storefront is reviewed before publication. We work directly with independent artisans, farmer cooperatives, and village self-help groups."
           action={
             <LinkButton to="/makers" variant="secondary" size="md">
-              Meet All Makers ({makers.length})
+              Meet All Makers ({totalCount ?? makers.length})
             </LinkButton>
           }
         />
@@ -725,7 +725,7 @@ function GiftingSection({ gifting, content }: { gifting: ProductSummary[]; conte
             <p className="mt-3 text-[14px] sm:text-[15px] leading-relaxed text-ink/75">{content.gifting.body}</p>
             <div className="mt-6 flex flex-wrap items-center gap-4">
               <LinkButton
-                to={`/shop?category=${encodeURIComponent(content.gifting.categorySlug)}`}
+                to={`/categories/${encodeURIComponent(content.gifting.categorySlug)}`}
                 variant="secondary"
                 size="md"
               >
@@ -1420,9 +1420,11 @@ function NewArrivalsSection({ products }: { products: ProductSummary[] }) {
 function CatalogShowcaseSection({
   products,
   categories,
+  totalCount,
 }: {
   products: ProductSummary[];
   categories: Category[];
+  totalCount?: number;
 }) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
@@ -1452,7 +1454,7 @@ function CatalogShowcaseSection({
         </div>
 
         <LinkButton to="/shop" variant="secondary" size="md" className="shrink-0">
-          View all 27+ products &rarr;
+          {totalCount ? `View all ${totalCount} products` : 'View all products'} &rarr;
         </LinkButton>
       </div>
 
@@ -1513,7 +1515,7 @@ function CatalogShowcaseSection({
       ) : (
         <div className="py-12 text-center text-muted text-sm">
           No items found in this category preview.{' '}
-          <Link to={`/shop?category=${selectedCategory}`} className="text-forest underline font-semibold">
+          <Link to={`/categories/${encodeURIComponent(selectedCategory)}`} className="text-forest underline font-semibold">
             View full shelf in shop &rarr;
           </Link>
         </div>
@@ -1664,7 +1666,7 @@ export function HomePage() {
       <FeaturedProductsSection products={data.featured} />
 
       {/* 5. Direct from Himachal: Explore Our Listed Collection */}
-      <CatalogShowcaseSection products={allHomeProducts} categories={data.categories} />
+      <CatalogShowcaseSection products={allHomeProducts} categories={data.categories} totalCount={data.counts.products} />
 
       {/* 6. Fresh from the workshops: New Arrivals */}
       <NewArrivalsSection products={data.newArrivals} />
@@ -1673,7 +1675,7 @@ export function HomePage() {
       <BestsellersSection bestsellers={data.bestsellers} />
 
       {/* 6. Meet the makers */}
-      <MakersCelebrationSection makers={data.makers} />
+      <MakersCelebrationSection makers={data.makers} totalCount={data.counts.sellers} />
 
       {/* 7. Discover the mountains */}
       <MountainStorySection />

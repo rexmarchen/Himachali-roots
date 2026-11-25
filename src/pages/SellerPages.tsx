@@ -309,7 +309,7 @@ export function SellerLayout() {
   const navigate = useNavigate();
   const { signOut } = useAuth();
 
-  usePageMeta({ title: `${sellerPageTitle(location.pathname)} · Seller Studio · Dear Hills` });
+  usePageMeta({ title: `${sellerPageTitle(location.pathname)} · Seller Studio · Dear Hills`, noindex: true });
 
   useEffect(() => {
     if (!mobileDrawerOpen) return;

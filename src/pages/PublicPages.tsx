@@ -62,13 +62,62 @@ export function MakerDetailPage() {
     enabled: Boolean(slug),
   });
 
+  const metaSeller = detail.data?.seller;
+  const isDemoMaker =
+    slug.toLowerCase() === 'demo' ||
+    slug.toLowerCase().endsWith('-demo') ||
+    Boolean(metaSeller?.name.toLowerCase().includes('(demo)'));
+  const makerImageRaw = metaSeller?.coverUrl ?? metaSeller?.imageUrl ?? metaSeller?.logoUrl ?? null;
+  const makerImageAbs = makerImageRaw
+    ? makerImageRaw.startsWith('http')
+      ? makerImageRaw
+      : `https://www.dearhills.in${makerImageRaw.startsWith('/') ? '' : '/'}${makerImageRaw}`
+    : 'https://www.dearhills.in/images/home/kalpa-dawn-1100.jpg';
+
   usePageMeta({
-    title: detail.data?.seller.name ? `${detail.data.seller.name} · Dear Hills` : 'Maker · Dear Hills',
+    title: metaSeller?.name ? `${metaSeller.name} — Mountain Artisan Story | Dear Hills` : 'Maker · Dear Hills',
     description:
-      detail.data?.seller.tagline ??
+      metaSeller?.tagline ??
       'Meet a verified Himachali maker and shop their products directly on Dear Hills.',
-    canonicalPath: `/makers/${slug}`,
-    image: detail.data?.seller.imageUrl ?? null,
+    canonicalPath: `/makers/${encodeURIComponent(slug)}`,
+    image: makerImageRaw,
+    ogType: 'profile',
+    noindex: isDemoMaker || detail.isError,
+    jsonLd: metaSeller
+      ? {
+          '@context': 'https://schema.org',
+          '@graph': [
+            {
+              '@type': 'Organization',
+              name: metaSeller.name,
+              url: `https://www.dearhills.in/makers/${metaSeller.slug}`,
+              image: makerImageAbs,
+              description:
+                metaSeller.tagline ??
+                `Meet ${metaSeller.name} from ${metaSeller.region ?? 'Himachal Pradesh'} on Dear Hills.`,
+              address: {
+                '@type': 'PostalAddress',
+                addressLocality: metaSeller.village || metaSeller.region || 'Himachal Pradesh',
+                addressRegion: 'Himachal Pradesh',
+                addressCountry: 'IN',
+              },
+            },
+            {
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+                { '@type': 'ListItem', position: 2, name: 'Makers', item: 'https://www.dearhills.in/makers' },
+                {
+                  '@type': 'ListItem',
+                  position: 3,
+                  name: metaSeller.name,
+                  item: `https://www.dearhills.in/makers/${metaSeller.slug}`,
+                },
+              ],
+            },
+          ],
+        }
+      : undefined,
   });
 
   if (detail.isLoading) {
@@ -373,9 +422,29 @@ export function AboutPage() {
   const content = useSiteContent();
   const about = content.data?.content.about;
   usePageMeta({
-    title: 'Our story · Dear Hills',
+    title: 'Our Story & Philosophy — Preserving Himalayan Living Heritage | Dear Hills',
     description: about?.intro ?? 'Why Dear Hills exists: a marketplace built around Himachali makers, not anonymous listings.',
     canonicalPath: '/about',
+    ogType: 'article',
+    image: '/images/editorial-terrace.jpg',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'AboutPage',
+          name: 'About Dear Hills',
+          url: 'https://www.dearhills.in/about',
+          description: about?.intro ?? 'Why Dear Hills exists: a marketplace built around Himachali makers, not anonymous listings.',
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+            { '@type': 'ListItem', position: 2, name: 'About', item: 'https://www.dearhills.in/about' },
+          ],
+        },
+      ],
+    },
   });
   return (
     <div>
@@ -432,9 +501,29 @@ export function SourcingPage() {
   const content = useSiteContent();
   const sourcing = content.data?.content.sourcing;
   usePageMeta({
-    title: 'How we source · Dear Hills',
+    title: 'How We Source — Pure Alpine Origin & Ethical Provenance | Dear Hills',
     description: sourcing?.intro ?? 'The verification standard every Dear Hills listing and maker must meet before publication.',
     canonicalPath: '/sourcing',
+    ogType: 'article',
+    image: '/images/weaving.jpg',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'WebPage',
+          name: 'How We Source',
+          url: 'https://www.dearhills.in/sourcing',
+          description: sourcing?.intro ?? 'The verification standard every Dear Hills listing and maker must meet before publication.',
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+            { '@type': 'ListItem', position: 2, name: 'How we source', item: 'https://www.dearhills.in/sourcing' },
+          ],
+        },
+      ],
+    },
   });
   return (
     <div>
@@ -493,9 +582,34 @@ export function FaqPage() {
   const faq = content.data?.content.faq;
   const [open, setOpen] = useState<number | null>(0);
   usePageMeta({
-    title: 'FAQ · Dear Hills',
+    title: 'Frequently Asked Questions — Shipping, Returns & Sourcing | Dear Hills',
     description: 'Answers about shipping, returns, maker verification and paying on Dear Hills.',
     canonicalPath: '/faq',
+    jsonLd: faq?.items.length
+      ? {
+          '@context': 'https://schema.org',
+          '@graph': [
+            {
+              '@type': 'FAQPage',
+              mainEntity: faq.items.map((item) => ({
+                '@type': 'Question',
+                name: item.question,
+                acceptedAnswer: {
+                  '@type': 'Answer',
+                  text: item.answer,
+                },
+              })),
+            },
+            {
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+                { '@type': 'ListItem', position: 2, name: 'FAQ', item: 'https://www.dearhills.in/faq' },
+              ],
+            },
+          ],
+        }
+      : undefined,
   });
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:py-16">
@@ -543,9 +657,27 @@ export function ContactPage() {
   const [reference, setReference] = useState<string | null>(null);
   const { config } = useAuth();
   usePageMeta({
-    title: 'Contact & help · Dear Hills',
+    title: 'Contact & Customer Support | Dear Hills',
     description: 'Reach the Dear Hills support desk about an order, a return or a maker application.',
     canonicalPath: '/contact',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'ContactPage',
+          name: 'Contact Dear Hills',
+          url: 'https://www.dearhills.in/contact',
+          description: 'Reach the Dear Hills support desk about an order, a return or a maker application.',
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+            { '@type': 'ListItem', position: 2, name: 'Contact', item: 'https://www.dearhills.in/contact' },
+          ],
+        },
+      ],
+    },
   });
 
   const submit = async (event: FormEvent) => {
@@ -652,9 +784,27 @@ export function CreditsPage() {
   const content = useSiteContent();
   const credits = content.data?.content.credits;
   usePageMeta({
-    title: 'Image credits · Dear Hills',
+    title: 'Image Credits & Attribution | Dear Hills',
     description: 'Photography attribution and licences for images used on Dear Hills.',
     canonicalPath: '/credits',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'WebPage',
+          name: 'Image Credits & Attribution',
+          url: 'https://www.dearhills.in/credits',
+          description: 'Photography attribution and licences for images used on Dear Hills.',
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+            { '@type': 'ListItem', position: 2, name: 'Image credits', item: 'https://www.dearhills.in/credits' },
+          ],
+        },
+      ],
+    },
   });
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:py-16">
@@ -695,12 +845,39 @@ export function PolicyPage() {
     queryKey: ['policy', key],
     queryFn: () => api<{ policy: PolicyDocument }>(`/policies/${encodeURIComponent(key)}`),
     enabled: Boolean(key),
+    retry: false,
   });
 
+  const policyTitle = policy.data?.policy.title;
+  const policySummary = policy.data?.policy.summary;
+  const policyCanonical = `/policies/${encodeURIComponent(key)}`;
+
   usePageMeta({
-    title: policy.data?.policy.title ? `${policy.data.policy.title} · Dear Hills` : 'Policies · Dear Hills',
-    description: 'Shipping, returns, privacy and marketplace policy documents for Dear Hills.',
-    canonicalPath: `/policies/${key}`,
+    title: policyTitle ? `${policyTitle} | Dear Hills` : 'Policies · Dear Hills',
+    description: policySummary ?? 'Shipping, returns, privacy and marketplace policy documents for Dear Hills.',
+    canonicalPath: policyCanonical,
+    ogType: 'article',
+    noindex: policy.isError,
+    jsonLd: policyTitle
+      ? {
+          '@context': 'https://schema.org',
+          '@graph': [
+            {
+              '@type': 'WebPage',
+              name: policyTitle,
+              url: `https://www.dearhills.in${policyCanonical}`,
+              description: policySummary ?? 'Shipping, returns, privacy and marketplace policy documents for Dear Hills.',
+            },
+            {
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+                { '@type': 'ListItem', position: 2, name: policyTitle, item: `https://www.dearhills.in${policyCanonical}` },
+              ],
+            },
+          ],
+        }
+      : undefined,
   });
 
   if (policy.isLoading) return <div className="mx-auto max-w-4xl px-4 py-20"><LoadingBlock rows={4} /></div>;
@@ -757,7 +934,7 @@ export function PolicyPage() {
 export { BecomeAMakerPage as SellPage } from './BecomeAMakerPage';
 
 export function NotFoundPage() {
-  usePageMeta({ title: 'Page not found · Dear Hills' });
+  usePageMeta({ title: 'Page not found · Dear Hills', noindex: true });
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-4 py-20 text-center">
       <p className="eyebrow">404</p>

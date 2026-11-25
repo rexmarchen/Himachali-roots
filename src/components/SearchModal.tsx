@@ -99,7 +99,7 @@ export function SearchModal({
   };
 
   const handleSelectProduct = (slug: string) => {
-    navigate(`/products/${slug}`);
+    navigate(`/shop/${slug}`);
     onClose();
   };
 
@@ -109,7 +109,7 @@ export function SearchModal({
   };
 
   const handleSelectCategory = (categorySlug: string) => {
-    navigate(`/shop?category=${encodeURIComponent(categorySlug)}`);
+    navigate(`/categories/${encodeURIComponent(categorySlug)}`);
     onClose();
   };
 

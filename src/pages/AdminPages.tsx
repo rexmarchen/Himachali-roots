@@ -407,7 +407,7 @@ export function AdminLayout() {
     return match ?? ADMIN_NAV_ITEMS[0];
   }, [pathname]);
 
-  usePageMeta({ title: `${currentNav.label} · Admin · Dear Hills` });
+  usePageMeta({ title: `${currentNav.label} · Admin · Dear Hills`, noindex: true });
 
   const queues = useMemo(
     () => [

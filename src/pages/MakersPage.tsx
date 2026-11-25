@@ -58,19 +58,48 @@ export function MakersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [, startTransition] = useTransition();
 
-  usePageMeta({
-    title: 'Meet the makers · Dear Hills',
-    description:
-      'The growers, weavers and workshop owners of Himachal Pradesh who sell directly on Dear Hills.',
-    canonicalPath: '/makers',
-  });
-
   // Read state from URL search params
   const searchQuery = searchParams.get('q') || '';
   const selectedCategory = searchParams.get('category') || 'all';
   const selectedRegion = searchParams.get('region') || 'All Valleys';
   const verifiedOnly = searchParams.get('verified') === 'true';
   const sortBy = searchParams.get('sort') || 'products';
+  const pageNum = Number(searchParams.get('page')) || 1;
+  const hasMakerFilter = Boolean(
+    searchQuery.trim() ||
+      (selectedCategory && selectedCategory !== 'all') ||
+      (selectedRegion && selectedRegion !== 'All Valleys') ||
+      verifiedOnly ||
+      Boolean(searchParams.get('sort')) ||
+      pageNum > 1,
+  );
+
+  usePageMeta({
+    title: 'Meet the Mountain Makers & Artisans of Himachal Pradesh | Dear Hills',
+    description:
+      'Discover the growers, weavers and workshop owners of Himachal Pradesh who sell directly on Dear Hills.',
+    canonicalPath: '/makers',
+    noindex: hasMakerFilter,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'CollectionPage',
+          name: 'Meet the Mountain Makers & Artisans of Himachal Pradesh',
+          url: 'https://www.dearhills.in/makers',
+          description:
+            'Discover the growers, weavers and workshop owners of Himachal Pradesh who sell directly on Dear Hills.',
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+            { '@type': 'ListItem', position: 2, name: 'Makers', item: 'https://www.dearhills.in/makers' },
+          ],
+        },
+      ],
+    },
+  });
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(searchQuery);

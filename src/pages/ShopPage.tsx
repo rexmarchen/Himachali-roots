@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query';
 import type { Category, Paged, ProductSummary } from '@shared/types';
 import { formatINR } from '@shared/types';
+import { buildCategoryFallbackDescription, buildCategorySeoTitle, cleanSeoText } from '@shared/seo';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { usePageMeta } from '@/lib/usePageMeta';
@@ -62,11 +63,20 @@ export function ShopPage() {
   });
 
   const update = (key: string, value: string | null) => {
-    if (key === 'category' && (value === null || value === '')) {
-      if (routeCategorySlug) {
-        navigate('/shop');
-        return;
+    if (key === 'category') {
+      const next = new URLSearchParams(params);
+      next.delete('category');
+      next.delete('page');
+      const qs = next.toString();
+      if (value === null || value === '') {
+        navigate(qs ? `/shop?${qs}` : '/shop', { replace: true });
+      } else {
+        navigate(
+          qs ? `/categories/${encodeURIComponent(value)}?${qs}` : `/categories/${encodeURIComponent(value)}`,
+          { replace: true },
+        );
       }
+      return;
     }
     const next = new URLSearchParams(params);
     if (value === null || value === '') next.delete(key);
@@ -103,33 +113,69 @@ export function ShopPage() {
     [filters],
   );
 
+  const hasFilteredQuery = Boolean(
+    q ||
+      seller ||
+      region ||
+      params.get('sort') ||
+      params.get('minPrice') ||
+      params.get('maxPrice') ||
+      params.get('inStock') ||
+      page > 1,
+  );
+  const categoryHasOnlyDemo =
+    Boolean(category) &&
+    !products.isLoading &&
+    Boolean(products.data) &&
+    !products.data!.items.some(
+      (item) =>
+        !item.isDemo &&
+        item.pricePaise > 100 &&
+        !item.sellerSlug.toLowerCase().endsWith('-demo') &&
+        !item.sellerName.toLowerCase().includes('(demo)'),
+    );
+
+  const canonicalCategorySlug = activeCategory?.slug ?? category;
+
+  const shopPageDescription = activeCategory
+    ? cleanSeoText(activeCategory.description) ||
+      buildCategoryFallbackDescription({ name: activeCategory.name, slug: activeCategory.slug })
+    : 'Browse authentic Himachali shawls, tea, honey, dry fruit, oils and pantry staples from reviewed local makers and growers.';
+
   usePageMeta({
     title: q
-      ? `Search results for “${q}” · Dear Hills`
+      ? `Search results for “${q}” | Dear Hills`
       : activeCategory
-        ? `${activeCategory.name} — Handcrafted Himalayan Products · Dear Hills`
-        : 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Living · Dear Hills',
-    description:
-      activeCategory?.description ??
-      'Browse authentic Himachali shawls, tea, honey, dry fruit, oils and pantry staples from reviewed local makers.',
-    canonicalPath: activeCategory ? `/categories/${activeCategory.slug}` : '/shop',
+        ? buildCategorySeoTitle({ name: activeCategory.name, slug: activeCategory.slug })
+        : 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Crafts | Dear Hills',
+    description: shopPageDescription,
+    canonicalPath: canonicalCategorySlug ? `/categories/${encodeURIComponent(canonicalCategorySlug)}` : '/shop',
     image: activeCategory?.imageUrl ?? null,
+    noindex: hasFilteredQuery || categoryHasOnlyDemo,
     jsonLd: {
-      '@context': 'https://schema.org/',
-      '@type': 'CollectionPage',
-      name: activeCategory ? `${activeCategory.name} — Authentic Himachal Products` : 'Shop Handcrafted Himalayan Products',
-      url: activeCategory ? `https://www.dearhills.in/categories/${activeCategory.slug}` : 'https://www.dearhills.in/shop',
-      description:
-        activeCategory?.description ??
-        'Browse authentic Himachali shawls, tea, honey, dry fruit, oils and pantry staples from reviewed local makers.',
-      breadcrumb: {
-        '@type': 'BreadcrumbList',
-        itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
-          { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://www.dearhills.in/shop' },
-          ...(activeCategory ? [{ '@type': 'ListItem', position: 3, name: activeCategory.name, item: `https://www.dearhills.in/categories/${activeCategory.slug}` }] : []),
-        ],
-      },
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'CollectionPage',
+          name: activeCategory
+            ? `${activeCategory.name} — Authentic Himachal Collection`
+            : 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Goods',
+          url: canonicalCategorySlug
+            ? `https://www.dearhills.in/categories/${encodeURIComponent(canonicalCategorySlug)}`
+            : 'https://www.dearhills.in/shop',
+          description: shopPageDescription,
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+            { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://www.dearhills.in/shop' },
+            ...(activeCategory
+              ? [{ '@type': 'ListItem', position: 3, name: activeCategory.name, item: `https://www.dearhills.in/categories/${activeCategory.slug}` }]
+              : []),
+          ],
+        },
+      ],
     },
   });
 
@@ -151,7 +197,7 @@ export function ShopPage() {
 
       {/* Category quick filters: only shelves with live listings are shown. */}
       {liveCategories.length ? (
-        <div className="no-scrollbar -mx-4 mt-6 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+        <div className="no-scrollbar -mx-3.5 mt-6 overflow-x-auto px-3.5 pb-1 sm:mx-0 sm:px-0">
           <div className="flex min-w-max items-center gap-2 py-1">
             <button
               type="button"

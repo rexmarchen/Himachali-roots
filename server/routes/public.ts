@@ -18,7 +18,9 @@ import { clientIp, notFound, parse } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { getPolicy, getSiteContent } from '../lib/site.js';
 import { paymentProviderStatus } from '../lib/payments.js';
+import { shippingFor } from '../lib/pricing.js';
 import { notify } from '../lib/email.js';
+import { cleanSeoText, DEMO_PRODUCT_SQL, DEMO_SELLER_SQL } from '../lib/seo.js';
 import { BLOG_POSTS } from '../../shared/blog.js';
 
 function optInt(value: unknown): number | undefined {
@@ -546,6 +548,21 @@ function auditSupport(db: Db, id: string, email: string, ip: string): void {
   }
 }
 
+const GOOGLE_PRODUCT_CATEGORIES: Record<string, string> = {
+  'shawls-and-weaves': 'Apparel & Accessories > Clothing Accessories > Scarves & Shawls',
+  knitwear: 'Apparel & Accessories > Clothing',
+  'caps-and-headwear': 'Apparel & Accessories > Clothing Accessories > Hats',
+  'tea-and-infusions': 'Food, Beverages & Tobacco > Beverages > Tea & Infusions',
+  'fruits-and-fresh-produce': 'Food, Beverages & Tobacco > Food Items > Fruits & Vegetables',
+  'dry-fruit-and-nuts': 'Food, Beverages & Tobacco > Food Items > Nuts & Seeds',
+  'pantry-and-preserves': 'Food, Beverages & Tobacco > Food Items > Condiments & Sauces',
+  'cold-pressed-oils': 'Food, Beverages & Tobacco > Food Items > Cooking & Baking Ingredients > Cooking Oils',
+  'pulses-and-staples': 'Food, Beverages & Tobacco > Food Items > Grains, Rice & Cereal',
+  'crafts-and-handicrafts': 'Home & Garden > Decor',
+  'traditional-goods-and-essentials': 'Home & Garden > Decor',
+  gifting: 'Arts & Entertainment > Party & Celebration > Gift Giving > Gift Baskets',
+};
+
 export function sitemapRouter(db: Db): Router {
   const router = Router();
 
@@ -560,6 +577,30 @@ export function sitemapRouter(db: Db): Router {
     return env.appUrl.startsWith('http') ? env.appUrl : 'https://www.dearhills.in';
   }
 
+  const stripXmlControlChars = (value: string): string => {
+    let out = '';
+    for (let i = 0; i < value.length; i += 1) {
+      const code = value.charCodeAt(i);
+      if (code === 0x09 || code === 0x0a || code === 0x0d || (code >= 0x20 && code !== 0x7f)) {
+        out += value[i];
+      }
+    }
+    return out;
+  };
+
+  const escapeXml = (value: string) =>
+    stripXmlControlChars(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;');
+
+  const formatIsoNoMs = (iso: string) => iso.replace(/\.\d{3}Z$/, 'Z');
+
+  const toAbsolute = (base: string, url: string) =>
+    url.startsWith('http') ? url : `${base}${url.startsWith('/') ? '' : '/'}${url}`;
+
   router.get('/sitemap.xml', (req, res) => {
     const base = resolveSitemapBase(req);
     const staticEntries = [
@@ -567,6 +608,7 @@ export function sitemapRouter(db: Db): Router {
       { path: '/shop', priority: '0.9', changefreq: 'daily' },
       { path: '/blog', priority: '0.8', changefreq: 'daily' },
       { path: '/makers', priority: '0.8', changefreq: 'weekly' },
+      { path: '/become-a-maker', priority: '0.8', changefreq: 'weekly' },
       { path: '/about', priority: '0.7', changefreq: 'monthly' },
       { path: '/sourcing', priority: '0.7', changefreq: 'monthly' },
       { path: '/contact', priority: '0.6', changefreq: 'monthly' },
@@ -577,23 +619,79 @@ export function sitemapRouter(db: Db): Router {
       (key) => `/policies/${key}`,
     );
 
-    const categories = queryAll<{ slug: string }>(
+    const categories = queryAll<{ slug: string; last_updated: string | null }>(
       db,
-      "SELECT slug FROM categories WHERE is_active = 1 ORDER BY sort_order ASC",
+      `SELECT c.slug,
+              (SELECT MAX(p.updated_at)
+                 FROM products p
+                 JOIN seller_profiles s ON s.id = p.seller_id
+                 LEFT JOIN users u ON u.id = s.user_id
+                WHERE (p.category_id = c.id OR p.category_id IN (SELECT ch.id FROM categories ch WHERE ch.parent_id = c.id AND ch.is_active = 1))
+                  AND p.status = 'approved'
+                  AND s.status = 'approved'
+                  AND s.store_status = 'active'
+                  AND NOT ${DEMO_PRODUCT_SQL}) AS last_updated
+         FROM categories c
+        WHERE c.is_active = 1
+          AND EXISTS (
+            SELECT 1
+              FROM products p
+              JOIN seller_profiles s ON s.id = p.seller_id
+              LEFT JOIN users u ON u.id = s.user_id
+             WHERE (p.category_id = c.id OR p.category_id IN (SELECT ch.id FROM categories ch WHERE ch.parent_id = c.id AND ch.is_active = 1))
+               AND p.status = 'approved'
+               AND s.status = 'approved'
+               AND s.store_status = 'active'
+               AND NOT ${DEMO_PRODUCT_SQL}
+          )
+        ORDER BY c.sort_order ASC`,
     );
 
-    const products = queryAll<{ slug: string; name: string; updated_at: string; image_url: string | null }>(
+    const products = queryAll<{ id: string; slug: string; name: string; updated_at: string }>(
       db,
-      `SELECT p.slug, p.name, p.updated_at,
-              (SELECT url FROM product_images WHERE product_id = p.id ORDER BY sort_order ASC LIMIT 1) as image_url
-       FROM products p
-       JOIN seller_profiles s ON s.id = p.seller_id
-       WHERE p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'`,
+      `SELECT p.id, p.slug, p.name, p.updated_at
+         FROM products p
+         JOIN seller_profiles s ON s.id = p.seller_id
+         LEFT JOIN users u ON u.id = s.user_id
+        WHERE p.status = 'approved'
+          AND s.status = 'approved'
+          AND s.store_status = 'active'
+          AND NOT ${DEMO_PRODUCT_SQL}
+        ORDER BY p.is_featured DESC, p.updated_at DESC`,
     );
 
-    const sellers = queryAll<{ slug: string }>(
+    const productImagesById = new Map<string, { url: string; alt: string }[]>();
+    if (products.length > 0) {
+      const imageRows = queryAll<{ product_id: string; url: string; alt: string }>(
+        db,
+        `SELECT product_id, url, alt
+           FROM product_images
+          WHERE product_id IN (${products.map(() => '?').join(',')})
+          ORDER BY sort_order ASC`,
+        ...products.map((p) => p.id),
+      );
+      for (const row of imageRows) {
+        const list = productImagesById.get(row.product_id) ?? [];
+        list.push({ url: row.url, alt: row.alt });
+        productImagesById.set(row.product_id, list);
+      }
+    }
+
+    const sellers = queryAll<{
+      slug: string;
+      business_name: string;
+      cover_url: string | null;
+      logo_url: string | null;
+      updated_at: string | null;
+    }>(
       db,
-      "SELECT slug FROM seller_profiles WHERE status = 'approved' AND store_status = 'active'",
+      `SELECT s.slug, s.business_name, s.cover_url, s.logo_url,
+              COALESCE(s.updated_at, s.created_at) AS updated_at
+         FROM seller_profiles s
+         LEFT JOIN users u ON u.id = s.user_id
+        WHERE s.status = 'approved'
+          AND s.store_status = 'active'
+          AND NOT ${DEMO_SELLER_SQL}`,
     );
 
     const campaigns = queryAll<Pick<CampaignRow, 'id' | 'slug' | 'status' | 'starts_at' | 'ends_at'>>(
@@ -604,50 +702,203 @@ export function sitemapRouter(db: Db): Router {
         effectiveCampaignStatus(campaign) === 'active' && campaignStats(db, campaign.id).productCount > 0,
     );
 
-    const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-
     const urls = [
       ...staticEntries.map(
         (entry) =>
-          `<url><loc>${escape(base + entry.path)}</loc><changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`,
+          `<url><loc>${escapeXml(base + entry.path)}</loc><changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`,
       ),
-      ...categories.map(
-        (category) =>
-          `<url><loc>${escape(`${base}/categories/${category.slug}`)}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`,
-      ),
+      ...categories.map((category) => {
+        const lastmod = category.last_updated ? `<lastmod>${escapeXml(category.last_updated.slice(0, 10))}</lastmod>` : '';
+        return `<url><loc>${escapeXml(`${base}/categories/${category.slug}`)}</loc>${lastmod}<changefreq>weekly</changefreq><priority>0.8</priority></url>`;
+      }),
       ...campaigns.map(
         (campaign) =>
-          `<url><loc>${escape(`${base}/offers/${campaign.slug}`)}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`,
+          `<url><loc>${escapeXml(`${base}/offers/${campaign.slug}`)}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`,
       ),
-      ...sellers.map(
-        (seller) =>
-          `<url><loc>${escape(`${base}/makers/${seller.slug}`)}</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>`,
-      ),
-      ...products.map((product) => {
-        const fullImg = product.image_url
-          ? product.image_url.startsWith('http')
-            ? product.image_url
-            : `${base}${product.image_url}`
-          : null;
-        const imgTag = fullImg
-          ? `<image:image><image:loc>${escape(fullImg)}</image:loc><image:title>${escape(product.name)}</image:title></image:image>`
+      ...sellers.map((seller) => {
+        const lastmod = seller.updated_at ? `<lastmod>${escapeXml(seller.updated_at.slice(0, 10))}</lastmod>` : '';
+        const imgUrl = seller.cover_url ?? seller.logo_url;
+        const imgTag = imgUrl
+          ? `<image:image><image:loc>${escapeXml(toAbsolute(base, imgUrl))}</image:loc><image:title>${escapeXml(seller.business_name)}</image:title></image:image>`
           : '';
-        return `<url><loc>${escape(`${base}/shop/${product.slug}`)}</loc><lastmod>${escape(product.updated_at.slice(0, 10))}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority>${imgTag}</url>`;
+        return `<url><loc>${escapeXml(`${base}/makers/${seller.slug}`)}</loc>${lastmod}<changefreq>weekly</changefreq><priority>0.7</priority>${imgTag}</url>`;
+      }),
+      ...products.map((product) => {
+        const imgs = productImagesById.get(product.id) ?? [];
+        const imgTags = imgs
+          .map(
+            (img) =>
+              `<image:image><image:loc>${escapeXml(toAbsolute(base, img.url))}</image:loc><image:title>${escapeXml(product.name)}</image:title></image:image>`,
+          )
+          .join('');
+        return `<url><loc>${escapeXml(`${base}/shop/${product.slug}`)}</loc><lastmod>${escapeXml(product.updated_at.slice(0, 10))}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority>${imgTags}</url>`;
       }),
       ...BLOG_POSTS.map((post) => {
-        const fullImg = post.coverImage.startsWith('http') ? post.coverImage : `${base}${post.coverImage}`;
-        return `<url><loc>${escape(`${base}/blog/${post.slug}`)}</loc><lastmod>${escape(post.publishedAt)}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority><image:image><image:loc>${escape(fullImg)}</image:loc><image:title>${escape(post.title)}</image:title></image:image></url>`;
+        const fullImg = toAbsolute(base, post.coverImage);
+        return `<url><loc>${escapeXml(`${base}/blog/${post.slug}`)}</loc><lastmod>${escapeXml(post.publishedAt)}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority><image:image><image:loc>${escapeXml(fullImg)}</image:loc><image:title>${escapeXml(post.title)}</image:title></image:image></url>`;
       }),
       ...policyPaths.map(
         (path) =>
-          `<url><loc>${escape(base + path)}</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>`,
+          `<url><loc>${escapeXml(base + path)}</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>`,
       ),
     ].join('');
 
     res
       .type('application/xml')
-      .set('Cache-Control', 'public, max-age=3600, s-maxage=86400')
+      .set('Cache-Control', 'public, max-age=300, s-maxage=3600')
       .send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">${urls}</urlset>`);
+  });
+
+  router.get('/feeds/google-merchant.xml', (req, res) => {
+    const base = resolveSitemapBase(req);
+
+    const rows = queryAll<{
+      id: string;
+      slug: string;
+      name: string;
+      short_description: string;
+      description: string;
+      price_paise: number;
+      promo_price_paise: number | null;
+      sku: string;
+      weight_g: number | null;
+      region: string | null;
+      stock: number;
+      seller_name: string;
+      category_name: string;
+      category_slug: string;
+    }>(
+      db,
+      `SELECT p.id, p.slug, p.name, p.short_description, p.description, p.price_paise,
+              p.sku, p.weight_g, p.region,
+              acp.promo_price_paise,
+              i.quantity - i.reserved_quantity AS stock,
+              s.business_name AS seller_name,
+              c.name AS category_name, c.slug AS category_slug
+         FROM products p
+         JOIN seller_profiles s ON s.id = p.seller_id
+         LEFT JOIN users u ON u.id = s.user_id
+         JOIN categories c ON c.id = p.category_id
+         JOIN inventory i ON i.product_id = p.id
+         LEFT JOIN active_campaign_prices acp ON acp.product_id = p.id
+        WHERE p.status = 'approved'
+          AND s.status = 'approved'
+          AND s.store_status = 'active'
+          AND p.price_paise > 0
+          AND NOT ${DEMO_PRODUCT_SQL}
+        ORDER BY p.is_featured DESC, p.updated_at DESC`,
+    );
+
+    const imagesByProduct = new Map<string, string[]>();
+    if (rows.length > 0) {
+      const imgRows = queryAll<{ product_id: string; url: string }>(
+        db,
+        `SELECT product_id, url
+           FROM product_images
+          WHERE product_id IN (${rows.map(() => '?').join(',')})
+          ORDER BY sort_order ASC`,
+        ...rows.map((r) => r.id),
+      );
+      for (const img of imgRows) {
+        const list = imagesByProduct.get(img.product_id) ?? [];
+        list.push(toAbsolute(base, img.url));
+        imagesByProduct.set(img.product_id, list);
+      }
+    }
+
+    const campaignMetaByProduct = new Map<string, { name: string; startsAt: string | null; endsAt: string | null }>();
+    const promoIds = rows.filter((r) => r.promo_price_paise !== null && r.promo_price_paise < r.price_paise).map((r) => r.id);
+    if (promoIds.length > 0) {
+      const campRows = queryAll<{
+        product_id: string;
+        name: string;
+        starts_at: string | null;
+        ends_at: string | null;
+      }>(
+        db,
+        `SELECT cp.product_id, c.name, c.starts_at, c.ends_at
+           FROM campaign_products cp
+           JOIN campaigns c ON c.id = cp.campaign_id
+          WHERE cp.product_id IN (${promoIds.map(() => '?').join(',')})
+            AND c.status = 'active'
+            AND (c.starts_at IS NULL OR c.starts_at <= strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            AND (c.ends_at IS NULL OR c.ends_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+          ORDER BY cp.promo_price_paise ASC`,
+        ...promoIds,
+      );
+      for (const c of campRows) {
+        if (!campaignMetaByProduct.has(c.product_id)) {
+          campaignMetaByProduct.set(c.product_id, { name: c.name, startsAt: c.starts_at, endsAt: c.ends_at });
+        }
+      }
+    }
+
+    const skuCounts = new Map<string, number>();
+    for (const row of rows) {
+      const normalizedSku = (row.sku || '').trim().toLowerCase();
+      if (normalizedSku) skuCounts.set(normalizedSku, (skuCounts.get(normalizedSku) ?? 0) + 1);
+    }
+
+    const itemsXml = rows
+      .map((row) => {
+        const imgs = imagesByProduct.get(row.id) ?? [];
+        const primaryImage = imgs[0] ?? `${base}/images/home/kalpa-dawn-1100.jpg`;
+        const additionalImages = imgs.slice(1, 11);
+        const hasPromo = row.promo_price_paise !== null && row.promo_price_paise < row.price_paise;
+        const effectivePricePaise = hasPromo ? row.promo_price_paise! : row.price_paise;
+        const shippingPaise = shippingFor(effectivePricePaise);
+        const description = cleanSeoText(row.description || row.short_description, 5000) || row.name;
+        const googleCat = GOOGLE_PRODUCT_CATEGORIES[row.category_slug];
+        const campaignMeta = campaignMetaByProduct.get(row.id);
+
+        const rawSku = (row.sku || '').trim();
+        const isDuplicateSku = rawSku ? (skuCounts.get(rawSku.toLowerCase()) ?? 0) > 1 : false;
+        const merchantId =
+          rawSku && !isDuplicateSku
+            ? rawSku.slice(0, 50)
+            : rawSku
+              ? `${rawSku.slice(0, 30)}-${row.id.replace(/[^A-Za-z0-9]/g, '').slice(-12)}`.slice(0, 50)
+              : row.id.slice(0, 50);
+
+        const parts = [
+          `<g:id>${escapeXml(merchantId)}</g:id>`,
+          `<g:title>${escapeXml(row.name.slice(0, 150))}</g:title>`,
+          `<g:description>${escapeXml(description)}</g:description>`,
+          `<g:link>${escapeXml(`${base}/shop/${row.slug}`)}</g:link>`,
+          `<g:image_link>${escapeXml(primaryImage)}</g:image_link>`,
+          ...additionalImages.map((img) => `<g:additional_image_link>${escapeXml(img)}</g:additional_image_link>`),
+          `<g:condition>new</g:condition>`,
+          `<g:availability>${row.stock > 0 ? 'in_stock' : 'out_of_stock'}</g:availability>`,
+          `<g:price>${(row.price_paise / 100).toFixed(2)} INR</g:price>`,
+          ...(hasPromo ? [`<g:sale_price>${(row.promo_price_paise! / 100).toFixed(2)} INR</g:sale_price>`] : []),
+          ...(hasPromo && campaignMeta?.startsAt && campaignMeta?.endsAt
+            ? [
+                `<g:sale_price_effective_date>${escapeXml(
+                  `${formatIsoNoMs(campaignMeta.startsAt)}/${formatIsoNoMs(campaignMeta.endsAt)}`,
+                )}</g:sale_price_effective_date>`,
+              ]
+            : []),
+          `<g:brand>Dear Hills</g:brand>`,
+          `<g:identifier_exists>false</g:identifier_exists>`,
+          `<g:product_type>${escapeXml(row.category_name)}</g:product_type>`,
+          ...(googleCat ? [`<g:google_product_category>${escapeXml(googleCat)}</g:google_product_category>`] : []),
+          `<g:shipping><g:country>IN</g:country><g:service>Standard Shipping</g:service><g:price>${(shippingPaise / 100).toFixed(2)} INR</g:price></g:shipping>`,
+          ...(row.weight_g && row.weight_g > 0 ? [`<g:shipping_weight>${row.weight_g} g</g:shipping_weight>`] : []),
+          ...(row.region ? [`<g:custom_label_0>${escapeXml(row.region)}</g:custom_label_0>`] : []),
+          `<g:custom_label_1>${escapeXml(row.seller_name)}</g:custom_label_1>`,
+          ...(campaignMeta?.name ? [`<g:custom_label_2>${escapeXml(campaignMeta.name)}</g:custom_label_2>`] : []),
+        ];
+
+        return `<item>${parts.join('')}</item>`;
+      })
+      .join('');
+
+    const feedXml = `<?xml version="1.0" encoding="UTF-8"?><rss xmlns:g="http://base.google.com/ns/1.0" version="2.0"><channel><title>DEAR HILLS — Authentic Himachali Marketplace Product Feed</title><link>${escapeXml(base)}</link><description>Curated marketplace for authentic products made and grown in Himachal Pradesh.</description>${itemsXml}</channel></rss>`;
+
+    res
+      .type('application/xml')
+      .set('Cache-Control', 'public, max-age=900, s-maxage=3600')
+      .send(feedXml);
   });
 
   router.get('/robots.txt', (req, res) => {
@@ -657,13 +908,19 @@ export function sitemapRouter(db: Db): Router {
       .set('Cache-Control', 'public, max-age=86400')
       .send(`User-agent: *
 Allow: /
+Allow: /sellers/
 Disallow: /account
 Disallow: /admin
 Disallow: /seller
-Disallow: /sell
 Disallow: /checkout
 Disallow: /api/
 Disallow: /onboarding
+Disallow: /cart
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
 
 Sitemap: ${base}/sitemap.xml
 `);

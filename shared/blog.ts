@@ -17,6 +17,7 @@ export interface BlogPost {
   summary: string;
   content: string;
   relatedProductSlugs: string[];
+  relatedCategorySlugs?: string[];
   tags: string[];
   faqs?: Array<{ question: string; answer: string }>;
 }
@@ -44,10 +45,11 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['Himachal Products', 'Kullu Shawl', 'Kangra Tea', 'Pahadi Honey', 'Handloom'],
     relatedProductSlugs: [
       'kullu-handwoven-wool-shawl',
-      'kangra-first-flush-orthodox-black-tea',
-      'wild-forest-raw-honey',
-      'pure-cold-pressed-wild-apricot-oil',
+      'kangra-first-flush-black-tea',
+      'lahaul-wildflower-honey',
+      'wild-apricot-kernel-oil-chuli',
     ],
+    relatedCategorySlugs: ['shawls-and-weaves', 'tea-and-infusions', 'pantry-and-preserves', 'cold-pressed-oils'],
     faqs: [
       {
         question: 'What are the most famous products of Himachal Pradesh?',
@@ -135,7 +137,8 @@ When you purchase genuine Himachali goods through platforms like Dear Hills, ove
     summary:
       'While both are celebrated Himalayan GI-tagged treasures, Kullu and Kinnauri shawls have distinct structural, cultural, and technical differences. Here is how to distinguish them like an expert.',
     tags: ['Kullu Shawl', 'Kinnauri Shawl', 'Handloom', 'Textile Heritage', 'Weaving'],
-    relatedProductSlugs: ['kullu-handwoven-wool-shawl', 'handwoven-merino-stole'],
+    relatedProductSlugs: ['kullu-handwoven-wool-shawl', 'chamba-rumal-embroidered-stole', 'pashmina-angora-cloud-wrap'],
+    relatedCategorySlugs: ['shawls-and-weaves', 'knitwear'],
     faqs: [
       {
         question: 'Which is more expensive: a Kullu shawl or a Kinnauri shawl?',
@@ -226,8 +229,22 @@ Both Kullu and Kinnauri shawls represent irreplaceable cultural heritages of Him
     tags: ['Gifts', 'Souvenirs', 'Himachal Travel', 'Handmade Gifts', 'Ethical Shopping'],
     relatedProductSlugs: [
       'kullu-handwoven-wool-shawl',
-      'wild-forest-raw-honey',
-      'hand-carved-wooden-tea-box',
+      'lahaul-wildflower-honey',
+      'bushahri-kinnauri-wool-cap',
+      'mountain-pantry-gift-box',
+    ],
+    relatedCategorySlugs: ['gifting', 'shawls-and-weaves', 'caps-and-headwear'],
+    faqs: [
+      {
+        question: 'What are the best authentic gifts to buy from Himachal Pradesh?',
+        answer:
+          'Top authentic gifts include handwoven Kullu wool shawls, Bushahri velvet-banded Himachali caps, raw Lahaul wildflower honey, thin-shelled Kinnaur walnuts, cold-pressed wild apricot kernel oil, and curated mountain pantry gift boxes.',
+      },
+      {
+        question: 'Does Dear Hills offer gift hampers from verified local artisans?',
+        answer:
+          'Yes. Dear Hills curates gift crates and boxes directly from reviewed village cooperatives and family makers across Kullu, Kangra, Kinnaur, Lahaul, and Chamba.',
+      },
     ],
     content: `
 ## Why Thoughtful Mountain Gifting Matters
@@ -285,7 +302,8 @@ Every gift you select from Dear Hills comes directly from reviewed village coope
     summary:
       'Is your honey pure or just colored sugar syrup? Learn the biological truth about raw Himalayan forest honey and simple home tests to verify authenticity.',
     tags: ['Pahadi Honey', 'Pure Honey', 'Raw Honey', 'Food Purity', 'Himalayan Harvest'],
-    relatedProductSlugs: ['wild-forest-raw-honey'],
+    relatedProductSlugs: ['lahaul-wildflower-honey', 'mountain-pantry-gift-box'],
+    relatedCategorySlugs: ['pantry-and-preserves', 'gifting'],
     faqs: [
       {
         question: 'Does pure raw honey freeze or crystallize in winter?',
@@ -362,7 +380,24 @@ At Dear Hills, our Wild Forest Honey is gathered sustainably from high-altitude 
     summary:
       'Tucked under the snow-laden Dhauladhar mountains, Kangra produces delicate orthodox black and green teas that rival the finest Darjeelings. Here is the ultimate buyer’s guide.',
     tags: ['Kangra Tea', 'Orthodox Tea', 'First Flush', 'Green Tea', 'Himachal Tea'],
-    relatedProductSlugs: ['kangra-first-flush-orthodox-black-tea'],
+    relatedProductSlugs: [
+      'kangra-first-flush-black-tea',
+      'kangra-valley-green-tea',
+      'chamomile-wild-rhododendron-infusion',
+    ],
+    relatedCategorySlugs: ['tea-and-infusions'],
+    faqs: [
+      {
+        question: 'What makes Kangra tea different from regular Assam CTC chai?',
+        answer:
+          'Kangra cultivates fine-leaf Camellia sinensis sinensis processed strictly using orthodox whole-leaf rolling rather than CTC crushing. It yields a fragrant golden liquor with floral muscatel notes meant to be brewed gently without boiling.',
+      },
+      {
+        question: 'How hot should water be when brewing Kangra first flush tea?',
+        answer:
+          'Steep 1 level teaspoon (around 2.5g) per 200ml cup in water cooled to 85°C–90°C for 3 to 4 minutes. Boiling the leaves directly makes delicate whole-leaf tea bitter.',
+      },
+    ],
     content: `
 ## The Valley of Golden Tea
 

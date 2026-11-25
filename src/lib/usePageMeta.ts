@@ -5,6 +5,7 @@ export interface PageMeta {
   description?: string;
   canonicalPath?: string;
   image?: string | null;
+  ogType?: 'website' | 'product' | 'article' | 'profile';
   jsonLd?: Record<string, unknown> | Array<Record<string, unknown>>;
   noindex?: boolean;
 }
@@ -52,22 +53,48 @@ function setCanonical(href: string | null): () => void {
   };
 }
 
-function setJsonLd(json: Record<string, unknown> | Array<Record<string, unknown>> | undefined): () => void {
+function setJsonLd(
+  json: Record<string, unknown> | Array<Record<string, unknown>> | undefined,
+  noindex?: boolean,
+): () => void {
+  document.head.querySelector<HTMLScriptElement>('#route-json-ld')?.remove();
+
+  if (noindex && !json) {
+    const existing = document.head.querySelector<HTMLScriptElement>('#seo-structured-data');
+    const previous = existing?.textContent ?? null;
+    existing?.remove();
+    return () => {
+      if (previous !== null && !document.head.querySelector('#seo-structured-data')) {
+        const restored = document.createElement('script');
+        restored.id = 'seo-structured-data';
+        restored.type = 'application/ld+json';
+        restored.textContent = previous;
+        document.head.appendChild(restored);
+      }
+    };
+  }
+
   if (!json) return () => {};
-  let script = document.head.querySelector<HTMLScriptElement>('#route-json-ld');
+
+  let script = document.head.querySelector<HTMLScriptElement>('#seo-structured-data');
   const previous = script?.textContent ?? null;
+  const created = !script;
   if (!script) {
     script = document.createElement('script');
-    script.id = 'route-json-ld';
+    script.id = 'seo-structured-data';
     script.type = 'application/ld+json';
     document.head.appendChild(script);
   }
-  script.textContent = JSON.stringify(json);
+  const serialized = JSON.stringify(json);
+  if (script.textContent !== serialized) {
+    script.textContent = serialized;
+  }
+
   return () => {
-    const current = document.head.querySelector<HTMLScriptElement>('#route-json-ld');
+    const current = document.head.querySelector<HTMLScriptElement>('#seo-structured-data');
     if (!current) return;
-    if (previous === null) current.remove();
-    else current.textContent = previous;
+    if (created || previous === null) current.remove();
+    else if (current.textContent !== previous) current.textContent = previous;
   };
 }
 
@@ -75,7 +102,9 @@ function setJsonLd(json: Record<string, unknown> | Array<Record<string, unknown>
  * Sets the document title and social/search metadata for a route and restores
  * the previous values when the route unmounts.
  */
-export function usePageMeta({ title, description, canonicalPath, image, jsonLd, noindex }: PageMeta): void {
+export function usePageMeta({ title, description, canonicalPath, image, ogType, jsonLd, noindex }: PageMeta): void {
+  const serializedJsonLd = jsonLd ? JSON.stringify(jsonLd) : '';
+
   useEffect(() => {
     const previousTitle = document.title;
     document.title = title;
@@ -85,7 +114,12 @@ export function usePageMeta({ title, description, canonicalPath, image, jsonLd, 
       : window.location.origin;
 
     const canonical = canonicalPath ? `${origin}${canonicalPath}` : null;
-    const imageUrl = image ? (image.startsWith('http') ? image : `${origin}${image}`) : null;
+    const fallbackImage = `${origin}/images/home/kalpa-dawn-1100.jpg`;
+    const imageUrl = image
+      ? image.startsWith('http')
+        ? image
+        : `${origin}${image.startsWith('/') ? '' : '/'}${image}`
+      : fallbackImage;
 
     const restores = [
       setMeta('name', 'description', description ?? null),
@@ -93,6 +127,7 @@ export function usePageMeta({ title, description, canonicalPath, image, jsonLd, 
       setMeta('property', 'og:description', description ?? null),
       setMeta('property', 'og:image', imageUrl),
       setMeta('property', 'og:url', canonical ?? origin),
+      setMeta('property', 'og:type', ogType ?? 'website'),
       setMeta('name', 'twitter:card', 'summary_large_image'),
       setMeta('name', 'twitter:title', title),
       setMeta('name', 'twitter:description', description ?? null),
@@ -105,12 +140,13 @@ export function usePageMeta({ title, description, canonicalPath, image, jsonLd, 
           : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
       ),
       setCanonical(canonical),
-      setJsonLd(jsonLd),
+      setJsonLd(jsonLd, noindex),
     ];
 
     return () => {
       document.title = previousTitle;
       for (const restore of restores) restore();
     };
-  }, [title, description, canonicalPath, image, jsonLd, noindex]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, description, canonicalPath, image, ogType, serializedJsonLd, noindex]);
 }

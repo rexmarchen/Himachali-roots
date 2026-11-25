@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ProductDetail } from '@shared/types';
 import { formatINR } from '@shared/types';
+import { buildProductFallbackDescription, buildProductSeoTitle, cleanSeoText } from '@shared/seo';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
@@ -166,68 +167,181 @@ export function ProductPage() {
   });
 
   const metaProduct = productQuery.data?.product;
+  const metaHasReviews =
+    Boolean(metaProduct) &&
+    (metaProduct?.reviewSummary.count ?? 0) > 0 &&
+    metaProduct?.reviewSummary.average !== null;
+  const isDemoListing = metaProduct
+    ? Boolean(
+        metaProduct.isDemo ||
+          metaProduct.pricePaise <= 100 ||
+          metaProduct.sku.toUpperCase().startsWith('DEMO-') ||
+          metaProduct.sellerSlug.toLowerCase().endsWith('-demo') ||
+          metaProduct.sellerName.toLowerCase().includes('(demo)') ||
+          metaProduct.shortDescription.toLowerCase().includes('test transaction'),
+      )
+    : false;
+
+  const freeThreshold = config?.shipping.freeThresholdPaise ?? 69900;
+  const flatShipping = config?.shipping.flatRatePaise ?? 2900;
+  const fallbackProductImage = 'https://www.dearhills.in/images/home/kalpa-dawn-1100.jpg';
+  const metaImages = metaProduct?.images.length
+    ? metaProduct.images.map((img) =>
+        img.url.startsWith('http') ? img.url : `https://www.dearhills.in${img.url}`,
+      )
+    : [fallbackProductImage];
+  const metaDescription = metaProduct
+    ? cleanSeoText(metaProduct.shortDescription) ||
+      cleanSeoText(metaProduct.description) ||
+      buildProductFallbackDescription({
+        name: metaProduct.name,
+        categorySlug: metaProduct.categorySlug,
+        categoryName: metaProduct.categoryName,
+        originPlace: metaProduct.originPlace,
+        region: metaProduct.region || metaProduct.seller?.region,
+      })
+    : 'Authentic Himachali goods from reviewed local makers and growers with verified provenance.';
+  const metaTitle = metaProduct
+    ? buildProductSeoTitle({
+        name: metaProduct.name,
+        categorySlug: metaProduct.categorySlug,
+        categoryName: metaProduct.categoryName,
+      })
+    : 'Authentic Himalayan Product · Dear Hills';
+
   const productJsonLd = metaProduct
     ? {
-        '@context': 'https://schema.org/',
-        '@type': 'Product',
-        name: metaProduct.name,
-        image: metaProduct.images.map((img) =>
-          img.url.startsWith('http') ? img.url : `https://www.dearhills.in${img.url}`,
-        ),
-        description: metaProduct.shortDescription || metaProduct.description,
-        sku: metaProduct.sku || metaProduct.id,
-        brand: {
-          '@type': 'Brand',
-          name: 'Dear Hills',
-        },
-        countryOfOrigin: {
-          '@type': 'Country',
-          name: 'India',
-        },
-        offers: {
-          '@type': 'Offer',
-          url: `https://www.dearhills.in/shop/${metaProduct.slug}`,
-          priceCurrency: 'INR',
-          price: (metaProduct.pricePaise / 100).toFixed(2),
-          priceValidUntil: '2027-12-31',
-          availability:
-            metaProduct.stock <= 0
-              ? 'https://schema.org/OutOfStock'
-              : 'https://schema.org/InStock',
-          itemCondition: 'https://schema.org/NewCondition',
-          seller: {
-            '@type': 'Organization',
-            name: metaProduct.seller?.name || 'Dear Hills Artisan',
-          },
-        },
-        breadcrumb: {
-          '@context': 'https://schema.org/',
-          '@type': 'BreadcrumbList',
-          itemListElement: [
-            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
-            { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://www.dearhills.in/shop' },
-            {
-              '@type': 'ListItem',
-              position: 3,
-              name: metaProduct.name,
-              item: `https://www.dearhills.in/shop/${metaProduct.slug}`,
+        '@context': 'https://schema.org',
+        '@graph': [
+          {
+            '@type': 'Product',
+            '@id': `https://www.dearhills.in/shop/${metaProduct.slug}#product`,
+            name: metaProduct.name,
+            url: `https://www.dearhills.in/shop/${metaProduct.slug}`,
+            image: metaImages,
+            description: metaDescription,
+            sku: metaProduct.sku || metaProduct.id,
+            category: metaProduct.categoryName,
+            ...(metaProduct.materials ? { material: metaProduct.materials } : {}),
+            brand: {
+              '@type': 'Brand',
+              name: 'Dear Hills',
             },
-          ],
-        },
+            countryOfOrigin: {
+              '@type': 'Country',
+              name: 'India',
+            },
+            offers: {
+              '@type': 'Offer',
+              url: `https://www.dearhills.in/shop/${metaProduct.slug}`,
+              priceCurrency: 'INR',
+              price: (metaProduct.pricePaise / 100).toFixed(2),
+              priceValidUntil: '2027-12-31',
+              availability:
+                metaProduct.stock <= 0
+                  ? 'https://schema.org/OutOfStock'
+                  : 'https://schema.org/InStock',
+              itemCondition: 'https://schema.org/NewCondition',
+              seller: {
+                '@type': 'Organization',
+                name: metaProduct.seller?.name || 'Dear Hills Artisan',
+                url: `https://www.dearhills.in/makers/${metaProduct.sellerSlug}`,
+              },
+              shippingDetails: {
+                '@type': 'OfferShippingDetails',
+                shippingRate: {
+                  '@type': 'MonetaryAmount',
+                  value:
+                    metaProduct.pricePaise <= 0 || (freeThreshold > 0 && metaProduct.pricePaise >= freeThreshold)
+                      ? '0.00'
+                      : (flatShipping / 100).toFixed(2),
+                  currency: 'INR',
+                },
+                shippingDestination: {
+                  '@type': 'DefinedRegion',
+                  addressCountry: 'IN',
+                },
+                deliveryTime: {
+                  '@type': 'ShippingDeliveryTime',
+                  handlingTime: {
+                    '@type': 'QuantitativeValue',
+                    minValue: 1,
+                    maxValue: 2,
+                    unitCode: 'DAY',
+                  },
+                  transitTime: {
+                    '@type': 'QuantitativeValue',
+                    minValue: 3,
+                    maxValue: 7,
+                    unitCode: 'DAY',
+                  },
+                },
+              },
+              hasMerchantReturnPolicy: {
+                '@type': 'MerchantReturnPolicy',
+                applicableCountry: 'IN',
+                returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+                merchantReturnDays: 7,
+                returnMethod: 'https://schema.org/ReturnByMail',
+                returnFees: 'https://schema.org/ReturnFeesCustomerResponsibility',
+              },
+            },
+            ...(metaHasReviews
+              ? {
+                  aggregateRating: {
+                    '@type': 'AggregateRating',
+                    ratingValue: metaProduct.reviewSummary.average,
+                    reviewCount: metaProduct.reviewSummary.count,
+                    bestRating: 5,
+                    worstRating: 1,
+                  },
+                  review: metaProduct.reviews.slice(0, 3).map((rev) => ({
+                    '@type': 'Review',
+                    author: { '@type': 'Person', name: rev.authorName },
+                    datePublished: rev.createdAt.slice(0, 10),
+                    reviewRating: {
+                      '@type': 'Rating',
+                      ratingValue: rev.rating,
+                      bestRating: 5,
+                      worstRating: 1,
+                    },
+                    ...(rev.title ? { name: rev.title } : {}),
+                    reviewBody: rev.body,
+                  })),
+                }
+              : {}),
+          },
+          {
+            '@type': 'BreadcrumbList',
+            itemListElement: [
+              { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+              { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://www.dearhills.in/shop' },
+              {
+                '@type': 'ListItem',
+                position: 3,
+                name: metaProduct.categoryName,
+                item: `https://www.dearhills.in/categories/${metaProduct.categorySlug}`,
+              },
+              {
+                '@type': 'ListItem',
+                position: 4,
+                name: metaProduct.name,
+                item: `https://www.dearhills.in/shop/${metaProduct.slug}`,
+              },
+            ],
+          },
+        ],
       }
     : undefined;
 
   usePageMeta({
-    title: metaProduct
-      ? `${metaProduct.name} — Authentic Handcrafted Himachal | Dear Hills`
-      : 'Authentic Himalayan Product · Dear Hills',
-    description:
-      metaProduct?.shortDescription ||
-      (metaProduct?.description ? metaProduct.description.slice(0, 155) : undefined) ||
-      'An authentic Himachali handcrafted product from a reviewed local maker with verified provenance.',
-    canonicalPath: metaProduct ? `/shop/${metaProduct.slug}` : '/shop',
+    title: metaTitle,
+    description: metaDescription,
+    canonicalPath: metaProduct ? `/shop/${metaProduct.slug}` : slug ? `/shop/${encodeURIComponent(slug)}` : '/shop',
     image: metaProduct?.images[0]?.url ?? null,
+    ogType: 'product',
     jsonLd: productJsonLd,
+    noindex: isDemoListing || productQuery.isError,
   });
 
   if (productQuery.isLoading) {
@@ -308,7 +422,7 @@ export function ProductPage() {
         items={[
           { label: 'Home', to: '/' },
           { label: 'Shop', to: '/shop' },
-          { label: product.categoryName, to: `/shop?category=${product.categorySlug}` },
+          { label: product.categoryName, to: `/categories/${product.categorySlug}` },
           { label: product.name },
         ]}
       />
@@ -572,24 +686,50 @@ export function ProductPage() {
                     )}
                   </button>
                 </div>
-
-                <div className="flex items-center justify-center pt-2 text-xs text-muted">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!user) {
-                        navigate(`/login?next=${encodeURIComponent(`/shop/${product.slug}`)}`);
-                        return;
-                      }
-                      toggleWishlist.mutate(isSaved);
-                    }}
-                    className="flex items-center gap-1.5 underline underline-offset-4 transition-colors hover:text-forest"
-                  >
-                    <span>{isSaved ? '♥' : '♡'}</span> {isSaved ? 'In saved items' : 'Save for later'}
-                  </button>
-                </div>
               </div>
             )}
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/60 pt-3 text-xs text-muted">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!user) {
+                    navigate(`/login?next=${encodeURIComponent(`/shop/${product.slug}`)}`);
+                    return;
+                  }
+                  toggleWishlist.mutate(isSaved);
+                }}
+                className="flex items-center gap-1.5 underline underline-offset-4 transition-colors hover:text-forest"
+              >
+                <span>{isSaved ? '♥' : '♡'}</span> {isSaved ? 'In saved items' : 'Save for later'}
+              </button>
+
+              <div className="flex items-center gap-3">
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`${product.name} (${formatINR(currentItemPrice)}) from ${product.seller.name} on Dear Hills — https://www.dearhills.in/shop/${product.slug}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-medium text-[#128C7E] underline underline-offset-4 hover:text-[#0b6b60]"
+                >
+                  Share on WhatsApp
+                </a>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const url = `https://www.dearhills.in/shop/${product.slug}`;
+                    try {
+                      await navigator.clipboard.writeText(url);
+                      toast.push('Product link copied.');
+                    } catch {
+                      toast.push(url);
+                    }
+                  }}
+                  className="underline underline-offset-4 transition-colors hover:text-forest"
+                >
+                  Copy link
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Real listing, maker and payment facts only */}
