@@ -100,7 +100,8 @@ function reconcileLegacySchema(db: Db): void {
         name: 'Fruits & Fresh Produce',
         slug: 'fruits-and-fresh-produce',
         description: 'Orchard-fresh Himachali apples, Kinnaur golden pears, high-altitude plums, wild apricots, and mountain cherries.',
-        imageUrl: '/images/product-apple.jpg',
+        imageUrl: '/images/home/apple-orchard-1100.jpg',
+        brokenImageUrl: '/images/product-apple.jpg',
         sortOrder: 5,
       },
       {
@@ -108,7 +109,8 @@ function reconcileLegacySchema(db: Db): void {
         name: 'Handmade Crafts & Handicrafts',
         slug: 'crafts-and-handicrafts',
         description: 'Hand-carved cedar woodcraft, pine needle basketry, traditional metalwork, and Kangra miniature art.',
-        imageUrl: '/images/product-woodcraft.jpg',
+        imageUrl: '/images/home/himalayan-artisan-workshop.jpg',
+        brokenImageUrl: '/images/product-woodcraft.jpg',
         sortOrder: 25,
       },
       {
@@ -117,6 +119,7 @@ function reconcileLegacySchema(db: Db): void {
         slug: 'traditional-goods-and-essentials',
         description: 'Natural Himalayan dhoop, hawan samagri, stone-carved utensils, and authentic mountain souvenirs.',
         imageUrl: '/images/editorial-terrace.jpg',
+        brokenImageUrl: null,
         sortOrder: 45,
       },
     ];
@@ -127,6 +130,13 @@ function reconcileLegacySchema(db: Db): void {
           `INSERT INTO categories (id, name, slug, parent_id, description, image_url, sort_order, is_active, created_at)
            VALUES (?, ?, ?, NULL, ?, ?, ?, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
         ).run(c.id, c.name, c.slug, c.description, c.imageUrl, c.sortOrder);
+      } else if (c.brokenImageUrl) {
+        // Repair seeded placeholder paths whose files do not exist in public/images.
+        db.prepare('UPDATE categories SET image_url = ? WHERE slug = ? AND image_url = ?').run(
+          c.imageUrl,
+          c.slug,
+          c.brokenImageUrl
+        );
       }
     }
   }
