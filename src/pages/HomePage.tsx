@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { Category, CampaignSummary, ProductSummary } from '@shared/types';
 import { formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
-import { MARKETPLACE_HOME_DESCRIPTION, MARKETPLACE_HOME_TITLE } from '@shared/seo';
+import { BRAND_ALTERNATE_NAMES, BRAND_NAME, MARKETPLACE_HOME_DESCRIPTION, MARKETPLACE_HOME_TITLE } from '@shared/seo';
 import { api } from '@/lib/api';
 import { usePageMeta } from '@/lib/usePageMeta';
 import { useInView } from '@/lib/useInView';
@@ -1557,9 +1557,15 @@ export function HomePage() {
         {
           '@type': 'Organization',
           '@id': 'https://www.dearhills.in/#organization',
-          name: 'Dear Hills',
+          name: BRAND_NAME,
+          alternateName: [...BRAND_ALTERNATE_NAMES],
           url: 'https://www.dearhills.in',
-          logo: 'https://www.dearhills.in/favicon.svg',
+          logo: {
+            '@type': 'ImageObject',
+            url: 'https://www.dearhills.in/favicon-192x192.png',
+            width: 192,
+            height: 192,
+          },
           description: MARKETPLACE_HOME_DESCRIPTION,
           address: {
             '@type': 'PostalAddress',
@@ -1571,7 +1577,8 @@ export function HomePage() {
           '@type': 'WebSite',
           '@id': 'https://www.dearhills.in/#website',
           url: 'https://www.dearhills.in',
-          name: 'Dear Hills',
+          name: BRAND_NAME,
+          alternateName: [...BRAND_ALTERNATE_NAMES],
           publisher: {
             '@id': 'https://www.dearhills.in/#organization',
           },

@@ -91,7 +91,12 @@ export function BlogIndexPage() {
           publisher: {
             '@type': 'Organization',
             name: 'Dear Hills',
-            logo: 'https://www.dearhills.in/favicon.svg',
+            logo: {
+              '@type': 'ImageObject',
+              url: 'https://www.dearhills.in/favicon-192x192.png',
+              width: 192,
+              height: 192,
+            },
           },
         },
         {
@@ -299,7 +304,9 @@ export function BlogPostDetailPage() {
           name: 'Dear Hills',
           logo: {
             '@type': 'ImageObject',
-            url: 'https://www.dearhills.in/favicon.svg',
+            url: 'https://www.dearhills.in/favicon-192x192.png',
+            width: 192,
+            height: 192,
           },
         },
         mainEntityOfPage: {

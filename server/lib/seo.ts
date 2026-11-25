@@ -5,6 +5,8 @@ import { POLICY_KEYS } from '../../shared/content.js';
 import {
   BECOME_MAKER_SEO_DESCRIPTION,
   BECOME_MAKER_SEO_TITLE,
+  BRAND_ALTERNATE_NAMES,
+  BRAND_NAME,
   buildCategoryFallbackDescription,
   buildCategorySeoTitle,
   buildProductFallbackDescription,
@@ -379,7 +381,8 @@ export function getSeoMetadata(
       ...(product.materials ? { material: product.materials } : {}),
       brand: {
         '@type': 'Brand',
-        name: 'Dear Hills',
+        name: BRAND_NAME,
+        alternateName: 'DearHills',
       },
       countryOfOrigin: {
         '@type': 'Country',
@@ -733,10 +736,12 @@ export function getSeoMetadata(
         },
         publisher: {
           '@type': 'Organization',
-          name: 'Dear Hills',
+          name: BRAND_NAME,
           logo: {
             '@type': 'ImageObject',
-            url: `${origin}/favicon.svg`,
+            url: `${origin}/favicon-192x192.png`,
+            width: 192,
+            height: 192,
           },
         },
         mainEntityOfPage: {
@@ -799,8 +804,13 @@ export function getSeoMetadata(
               'Stories, cultural guides, and sourcing notes from the high-altitude valleys of Himachal Pradesh.',
             publisher: {
               '@type': 'Organization',
-              name: 'Dear Hills',
-              logo: `${origin}/favicon.svg`,
+              name: BRAND_NAME,
+              logo: {
+                '@type': 'ImageObject',
+                url: `${origin}/favicon-192x192.png`,
+                width: 192,
+                height: 192,
+              },
             },
           },
           breadcrumbList(origin, [
@@ -1156,15 +1166,22 @@ export function getSeoMetadata(
     const organization: Record<string, unknown> = {
       '@type': 'Organization',
       '@id': `${origin}/#organization`,
-      name: 'Dear Hills',
+      name: BRAND_NAME,
+      alternateName: [...BRAND_ALTERNATE_NAMES],
       url: origin,
-      logo: `${origin}/favicon.svg`,
+      logo: {
+        '@type': 'ImageObject',
+        url: `${origin}/favicon-192x192.png`,
+        width: 192,
+        height: 192,
+      },
       description: DEFAULT_DESCRIPTION,
       address: {
         '@type': 'PostalAddress',
         addressRegion: 'Himachal Pradesh',
         addressCountry: 'IN',
       },
+      ...(env.seo.sameAs.length > 0 ? { sameAs: env.seo.sameAs } : {}),
     };
     if (env.smtp.supportEmail && !env.smtp.supportEmail.endsWith('.example')) {
       organization.contactPoint = {
@@ -1190,7 +1207,8 @@ export function getSeoMetadata(
             '@type': 'WebSite',
             '@id': `${origin}/#website`,
             url: origin,
-            name: 'Dear Hills',
+            name: BRAND_NAME,
+            alternateName: [...BRAND_ALTERNATE_NAMES],
             publisher: {
               '@id': `${origin}/#organization`,
             },
@@ -1248,9 +1266,10 @@ export function injectSeoIntoHtml(html: string, seo: SeoMetadata): string {
     result = replaceMetaContent(result, 'property', 'og:type', seo.ogType);
   }
 
-  // Strip all existing canonical, robots, og:url, and structured data tags to avoid duplicates
+  // Strip all existing canonical, robots, og:url, verification, and structured data tags to avoid duplicates
   result = result.replace(/<link\s+[^>]*rel=["']canonical["'][^>]*>\s*/gi, '');
   result = result.replace(/<meta\s+[^>]*name=["']robots["'][^>]*>\s*/gi, '');
+  result = result.replace(/<meta\s+[^>]*name=["']google-site-verification["'][^>]*>\s*/gi, '');
   result = result.replace(/<meta\s+[^>]*property=["']og:url["'][^>]*>\s*/gi, '');
   result = result.replace(/<script\s+[^>]*id=["']seo-structured-data["'][^>]*>[\s\S]*?<\/script>\s*/gi, '');
 
@@ -1262,6 +1281,12 @@ export function injectSeoIntoHtml(html: string, seo: SeoMetadata): string {
       : '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />',
   ];
 
+  if (env.seo.googleSiteVerification) {
+    extraHeadTags.push(
+      `<meta name="google-site-verification" content="${escapeHtml(env.seo.googleSiteVerification)}" />`,
+    );
+  }
+
   if (seo.jsonLd) {
     const safeJson = JSON.stringify(seo.jsonLd).replace(/</g, '\\u003c');
     extraHeadTags.push(
@@ -1271,6 +1296,11 @@ export function injectSeoIntoHtml(html: string, seo: SeoMetadata): string {
 
   const tagsBlock = '    ' + extraHeadTags.join('\n    ') + '\n  ';
   result = result.replace('</head>', () => `${tagsBlock}</head>`);
+
+  if (!seo.noindex && result.includes('<div id="root"></div>')) {
+    const ssrFallback = `<div id="root"><main style="max-width:72rem;margin:0 auto;padding:2rem 1.25rem;font-family:system-ui,sans-serif;color:#172321"><h1>${escapeHtml(seo.title)}</h1><p>${escapeHtml(seo.description)}</p><nav aria-label="Dear Hills primary navigation" style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-top:1rem"><a href="/">Home</a><a href="/shop">Shop</a><a href="/categories/fruits-and-fresh-produce">Orchard Produce</a><a href="/categories/shawls-and-weaves">Handloom Shawls</a><a href="/categories/tea-and-infusions">Kangra Tea</a><a href="/categories/pantry-and-preserves">Pahadi Honey &amp; Pantry</a><a href="/makers">Makers</a><a href="/blog">Mountain Journal</a><a href="/become-a-maker">Become a Maker</a><a href="/about">About DearHills</a><a href="/sourcing">How We Source</a><a href="/faq">FAQ</a></nav></main></div>`;
+    result = result.replace('<div id="root"></div>', () => ssrFallback);
+  }
 
   return result;
 }

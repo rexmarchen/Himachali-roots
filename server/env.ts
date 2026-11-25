@@ -148,6 +148,10 @@ export const env = {
     },
   },
   sentryDsn: process.env.SENTRY_DSN ?? '',
+  seo: {
+    googleSiteVerification: (process.env.GOOGLE_SITE_VERIFICATION ?? '').trim(),
+    sameAs: list(process.env.ORGANIZATION_SAME_AS),
+  },
   logLevel: process.env.LOG_LEVEL ?? 'info',
 } as const;
 

@@ -50,11 +50,22 @@ async function runTests() {
   assert.strictEqual(homeRes.status, 200, 'Homepage status 200');
   const homeHtml = await homeRes.text();
   assert.ok(homeHtml.includes('DEAR HILLS — Authentic Himalayan Handloom'), 'Home has title');
+  assert.ok(homeHtml.includes('DearHills.in'), 'Home includes DearHills.in brand token');
+  assert.ok(homeHtml.includes('favicon-192x192.png'), 'Home references raster PNG icon/logo');
+  assert.ok(homeHtml.includes('"alternateName":["DEAR HILLS","DearHills","dearhills","dearhills.in"]'), 'Home includes dearhills alternateName');
   assert.ok(homeHtml.includes('<link rel="canonical" href="https://www.dearhills.in/" />'), 'Home has canonical');
   assert.ok(homeHtml.includes('id="seo-structured-data"'), 'Home has JSON-LD');
   assert.ok(homeHtml.includes('"@type":"Organization"'), 'Home has Organization schema');
   assert.ok(homeHtml.includes('"@type":"WebSite"'), 'Home has WebSite schema');
+  assert.ok(homeHtml.includes('<h1>DEAR HILLS'), 'Home has first-byte semantic H1');
   console.log('✓ Homepage SEO Pre-rendering & Organization Schema verified');
+
+  // 5b. PNG Favicon & Web App Manifest
+  const iconRes = await fetch(`${BASE}/favicon-192x192.png`);
+  assert.strictEqual(iconRes.status, 200, 'favicon-192x192.png reachable');
+  const manifestRes = await fetch(`${BASE}/site.webmanifest`);
+  assert.strictEqual(manifestRes.status, 200, 'site.webmanifest reachable');
+  console.log('✓ Raster favicons & manifest verified');
 
   // 6. Demo Product Noindex Guard & Category-Aware Title Check
   const demoProductRes = await fetch(`${BASE}/shop/kullu-handwoven-wool-shawl`, {

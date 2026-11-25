@@ -746,4 +746,35 @@ describe('SEO, structured data, sitemap, merchant feed, and demo noindex guard',
       }),
     ).toBe(false);
   });
+
+  it('emits dearhills alternateName, 192x192 PNG ImageObject logo, first-byte SSR shell, and manifest/icons', () => {
+    const baseHtml = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf8');
+    expect(baseHtml).toContain('href="/favicon-48x48.png"');
+    expect(baseHtml).toContain('href="/favicon-192x192.png"');
+    expect(baseHtml).toContain('href="/site.webmanifest"');
+
+    const homeSeo = getSeoMetadata(db, '/', 'www.dearhills.in');
+    expect(homeSeo.title).toContain('DearHills.in');
+    expect(homeSeo.description.toLowerCase()).toContain('dearhills');
+    const htmlHome = injectSeoIntoHtml(baseHtml, homeSeo);
+    const ldHome = extractJsonLd(htmlHome) as {
+      '@graph': Array<{ '@type': string; alternateName?: string[]; logo?: { '@type': string; url: string; width: number; height: number } }>;
+    };
+    const org = ldHome['@graph'].find((n) => n['@type'] === 'Organization');
+    const site = ldHome['@graph'].find((n) => n['@type'] === 'WebSite');
+    expect(org?.alternateName).toEqual(expect.arrayContaining(['DEAR HILLS', 'DearHills', 'dearhills', 'dearhills.in']));
+    expect(site?.alternateName).toEqual(expect.arrayContaining(['DearHills', 'dearhills']));
+    expect(org?.logo).toMatchObject({
+      '@type': 'ImageObject',
+      url: 'https://www.dearhills.in/favicon-192x192.png',
+      width: 192,
+      height: 192,
+    });
+    expect(htmlHome).toContain('<h1>DEAR HILLS');
+    expect(htmlHome).toContain('<nav aria-label="Dear Hills primary navigation"');
+
+    const noindexSeo = getSeoMetadata(db, '/cart', 'www.dearhills.in');
+    const htmlCart = injectSeoIntoHtml(baseHtml, noindexSeo);
+    expect(htmlCart).not.toContain('Dear Hills primary navigation');
+  });
 });

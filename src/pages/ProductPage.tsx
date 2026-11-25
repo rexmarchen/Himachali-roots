@@ -221,6 +221,7 @@ export function ProductPage() {
             brand: {
               '@type': 'Brand',
               name: 'Dear Hills',
+              alternateName: 'DearHills',
             },
             countryOfOrigin: {
               '@type': 'Country',

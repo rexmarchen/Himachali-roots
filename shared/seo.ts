@@ -1,9 +1,13 @@
 import { complianceGroupFor } from './productCompliance.js';
 
 export const MARKETPLACE_DEFAULT_ORIGIN = 'https://www.dearhills.in';
-export const MARKETPLACE_HOME_TITLE = 'DEAR HILLS — Authentic Himalayan Handloom, Organic Harvest & Mountain Goods';
+export const BRAND_NAME = 'Dear Hills';
+export const BRAND_ALTERNATE_NAMES = ['DEAR HILLS', 'DearHills', 'dearhills', 'dearhills.in'] as const;
+export const BRAND_LOGO_URL = `${MARKETPLACE_DEFAULT_ORIGIN}/favicon-192x192.png`;
+export const MARKETPLACE_HOME_TITLE =
+  'DEAR HILLS — Authentic Himalayan Handloom, Organic Harvest & Mountain Goods | DearHills.in';
 export const MARKETPLACE_HOME_DESCRIPTION =
-  'Curated marketplace for authentic products made and grown in Himachal Pradesh — handloom shawls, Kangra tea, raw honey, orchard fruits and traditional mountain crafts.';
+  'Official DearHills (dearhills.in) marketplace for authentic Himachal Pradesh handloom shawls, Kangra tea, raw honey, orchard fruits & mountain crafts.';
 export const SHOP_SEO_TITLE = 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Crafts | Dear Hills';
 export const SHOP_SEO_COLLECTION_NAME = 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Crafts';
 export const SHOP_SEO_DESCRIPTION =
