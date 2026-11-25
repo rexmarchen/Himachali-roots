@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Category, ProductStatus, SellerProduct } from '@shared/types';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
 import { COMPLIANCE_GUIDES, complianceGroupFor } from '@shared/productCompliance';
+import { buildProductFallbackDescription, buildProductShortFallback } from '@shared/seo';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { usePageMeta } from '@/lib/usePageMeta';
@@ -3194,8 +3195,24 @@ export function SellerProductEditorPage() {
     const payload = {
       name: form.name.trim(),
       categoryId: form.categoryId,
-      shortDescription: form.shortDescription.trim() || `${form.name.trim()} — Authentic Himalayan handpicked creation.`,
-      description: form.description.trim() || `${form.name.trim()}. Handcrafted with traditional Himachali artisan techniques and authentic regional materials.`,
+      shortDescription:
+        form.shortDescription.trim() ||
+        buildProductShortFallback({
+          name: form.name.trim(),
+          categorySlug: selectedCategoryObj?.slug,
+          categoryName: selectedCategoryObj?.name,
+          originPlace: form.originPlace.trim(),
+          region: form.region.trim(),
+        }),
+      description:
+        form.description.trim() ||
+        buildProductFallbackDescription({
+          name: form.name.trim(),
+          categorySlug: selectedCategoryObj?.slug,
+          categoryName: selectedCategoryObj?.name,
+          originPlace: form.originPlace.trim(),
+          region: form.region.trim(),
+        }),
       pricePaise: toPaise(form.priceRupees),
       compareAtPricePaise: form.compareAtRupees ? toPaise(form.compareAtRupees) : null,
       estimatedCostPaise: form.estimatedCostRupees ? toPaise(form.estimatedCostRupees) : 0,

@@ -9,9 +9,11 @@ import {
   buildCategorySeoTitle,
   buildProductFallbackDescription,
   buildProductSeoTitle,
+  buildProductShortFallback,
+  isDemoProductInput,
 } from '../../shared/seo.js';
 import { closeDb, execute, type Db } from '../db.js';
-import { getSeoMetadata, injectSeoIntoHtml } from '../lib/seo.js';
+import { countRealCampaignProducts, getSeoMetadata, injectSeoIntoHtml } from '../lib/seo.js';
 import { IDS, resetDb, seedFixtures, setupTestApp } from './helpers.js';
 
 let app: Express;
@@ -571,5 +573,177 @@ describe('SEO, structured data, sitemap, merchant feed, and demo noindex guard',
     expect(produceCatSeo.title).toBe(
       buildCategorySeoTitle({ name: 'Fruits & Fresh Produce', slug: 'fruits-and-fresh-produce' }),
     );
+
+    const knitwearCatTitle = buildCategorySeoTitle({ name: 'Knitwear', slug: 'knitwear' });
+    expect(knitwearCatTitle).toBe('Knitwear — Authentic Himachali Woollens & Apparel | Dear Hills');
+  });
+
+  it('excludes demo-only active campaigns from sitemap and marks them noindex, while indexing campaigns with real products', async () => {
+    const now = new Date().toISOString();
+    execute(
+      db,
+      "INSERT INTO users (id, email, password_hash, email_verified) VALUES ('usr_demo_cmp', 'democmp@demo.pahadiroots.test', 'x', 1)",
+    );
+    execute(
+      db,
+      `INSERT INTO seller_profiles (id, user_id, business_name, slug, seller_type, region, status, store_status, created_at, updated_at)
+       VALUES ('slr_demo_cmp', 'usr_demo_cmp', 'Kullu Loom (Demo)', 'kullu-loom-demo', 'cooperative', 'Kullu', 'approved', 'active', ?, ?)`,
+      now,
+      now,
+    );
+    execute(
+      db,
+      `INSERT INTO products (id, seller_id, category_id, name, slug, short_description, description, price_paise, sku, is_demo, status, created_at, updated_at)
+       VALUES ('prd_demo_cmp', 'slr_demo_cmp', ?, 'Demo Shawl Offer', 'demo-shawl-offer', 'Demo item', 'Demo listing description long enough to pass checks cleanly.', 150000, 'DEMO-CMP-1', 1, 'approved', ?, ?)`,
+      IDS.category,
+      now,
+      now,
+    );
+    execute(
+      db,
+      `INSERT INTO inventory (product_id, quantity, reserved_quantity) VALUES ('prd_demo_cmp', 5, 0)`,
+    );
+
+    execute(
+      db,
+      `INSERT INTO campaigns (id, name, slug, description, max_discount_bp, status, created_at, updated_at)
+       VALUES ('cmp_demo_only', 'Demo Only Festival', 'demo-only-festival', 'Demo campaign summary', 2000, 'active', ?, ?)`,
+      now,
+      now,
+    );
+    execute(
+      db,
+      `INSERT INTO campaign_products (campaign_id, product_id, promo_price_paise, created_at)
+       VALUES ('cmp_demo_only', 'prd_demo_cmp', 120000, ?)`,
+      now,
+    );
+
+    execute(
+      db,
+      `INSERT INTO campaigns (id, name, slug, description, max_discount_bp, status, created_at, updated_at)
+       VALUES ('cmp_real_offer', 'Real Harvest Edit', 'real-harvest-edit', 'Curated harvest collection from approved makers.', 2000, 'active', ?, ?)`,
+      now,
+      now,
+    );
+    execute(
+      db,
+      `INSERT INTO campaign_products (campaign_id, product_id, promo_price_paise, created_at)
+       VALUES ('cmp_real_offer', ?, 85000, ?)`,
+      IDS.product,
+      now,
+    );
+
+    expect(countRealCampaignProducts(db, 'cmp_demo_only')).toBe(0);
+    expect(countRealCampaignProducts(db, 'cmp_real_offer')).toBe(1);
+
+    const sitemap = await request(app).get('/sitemap.xml').set('Host', 'www.dearhills.in');
+    expect(sitemap.status).toBe(200);
+    expect(sitemap.text).not.toContain('https://www.dearhills.in/offers/demo-only-festival');
+    expect(sitemap.text).toContain('https://www.dearhills.in/offers/real-harvest-edit');
+
+    const demoOfferSeo = getSeoMetadata(db, '/offers/demo-only-festival', 'www.dearhills.in');
+    expect(demoOfferSeo.noindex).toBe(true);
+
+    const realOfferSeo = getSeoMetadata(db, '/offers/real-harvest-edit', 'www.dearhills.in');
+    expect(realOfferSeo.noindex).toBe(false);
+  });
+
+  it('marks ?featured=true category routes as noindex and uses seller region/fallback description in Merchant feed', async () => {
+    const featuredCat = getSeoMetadata(db, '/categories/shawls?featured=true', 'www.dearhills.in');
+    expect(featuredCat.noindex).toBe(true);
+
+    const now = new Date().toISOString();
+    execute(
+      db,
+      "INSERT INTO users (id, email, password_hash, email_verified) VALUES ('usr_kangra_orchard', 'kangra@orchard.example.in', 'x', 1)",
+    );
+    execute(
+      db,
+      `INSERT INTO seller_profiles (id, user_id, business_name, slug, seller_type, region, status, store_status, created_at, updated_at)
+       VALUES ('slr_kangra_orchard', 'usr_kangra_orchard', 'Kangra Orchards', 'kangra-orchards', 'orchard', 'Kangra', 'approved', 'active', ?, ?)`,
+      now,
+      now,
+    );
+    execute(
+      db,
+      `INSERT INTO categories (id, name, slug, description, sort_order, is_active) VALUES ('cat_orchard', 'Fruits & Fresh Produce', 'fruits-and-fresh-produce', 'Orchard fruit', 15, 1)`,
+    );
+    execute(
+      db,
+      `INSERT INTO products (id, seller_id, category_id, name, slug, short_description, description, price_paise, sku, region, is_demo, status, created_at, updated_at)
+       VALUES ('prd_kangra_apples', 'slr_kangra_orchard', 'cat_orchard', 'Organic Apples', 'organic-apples', '<p> </p>', '   ', 45000, 'KNG-APL-1', NULL, 0, 'approved', ?, ?)`,
+      now,
+      now,
+    );
+    execute(
+      db,
+      `INSERT INTO inventory (product_id, quantity, reserved_quantity) VALUES ('prd_kangra_apples', 12, 0)`,
+    );
+
+    const feed = await request(app).get('/feeds/google-merchant.xml').set('Host', 'www.dearhills.in');
+    expect(feed.status).toBe(200);
+    expect(feed.text).toContain('<g:custom_label_0>Kangra</g:custom_label_0>');
+    expect(feed.text).toContain('Buy fresh Organic Apples harvested in Kangra. Direct from verified Himalayan growers on Dear Hills.');
+  });
+
+  it('keeps fallback short/full descriptions non-handcrafted for produce/food and avoids duplicated Himachal labels', () => {
+    const groups = [
+      { slug: 'fruits-and-fresh-produce', name: 'Fruits & Fresh Produce', forbidHandcrafted: true },
+      { slug: 'tea-and-infusions', name: 'Tea & Infusions', forbidHandcrafted: true },
+      { slug: 'pantry-and-preserves', name: 'Wild Honey & Preserves', forbidHandcrafted: true },
+      { slug: 'cold-pressed-oils', name: 'Cold-Pressed Oils', forbidHandcrafted: true },
+      { slug: 'shawls-and-weaves', name: 'Shawls & Weaves', forbidHandcrafted: true },
+      { slug: 'knitwear', name: 'Knitwear', forbidHandcrafted: true },
+      { slug: 'crafts-and-handicrafts', name: 'Crafts & Handicrafts', forbidHandcrafted: false },
+    ];
+
+    for (const group of groups) {
+      const shortBlank = buildProductShortFallback({
+        name: 'Apples',
+        categorySlug: group.slug,
+        categoryName: group.name,
+        originPlace: null,
+        region: null,
+      });
+      const shortHp = buildProductShortFallback({
+        name: 'Apples',
+        categorySlug: group.slug,
+        categoryName: group.name,
+        originPlace: 'Himachal Pradesh',
+        region: 'Himachal Pradesh',
+      });
+      const fullShortest = buildProductFallbackDescription({
+        name: 'Hi',
+        categorySlug: group.slug,
+        categoryName: group.name,
+        originPlace: null,
+        region: null,
+      });
+
+      expect(shortBlank).not.toContain('Himachal Pradesh, Himachal Pradesh');
+      expect(shortHp).not.toContain('Himachal Pradesh, Himachal Pradesh');
+      expect(fullShortest.length).toBeGreaterThanOrEqual(80);
+      if (group.forbidHandcrafted) {
+        expect(shortBlank.toLowerCase()).not.toContain('handcrafted');
+        expect(fullShortest.toLowerCase()).not.toContain('handcrafted');
+      }
+    }
+
+    expect(isDemoProductInput({ sku: 'DEMO-100', pricePaise: 50000 })).toBe(true);
+    expect(isDemoProductInput({ pricePaise: 100, sku: 'REAL-1' })).toBe(true);
+    expect(isDemoProductInput({ sellerSlug: 'demo', pricePaise: 50000 })).toBe(true);
+    expect(isDemoProductInput({ sellerSlug: 'kullu-demo', pricePaise: 50000 })).toBe(true);
+    expect(isDemoProductInput({ sellerName: 'Orchard (Demo)', pricePaise: 50000 })).toBe(true);
+    expect(isDemoProductInput({ shortDescription: 'Created for Test Transaction checks', pricePaise: 50000 })).toBe(true);
+    expect(
+      isDemoProductInput({
+        isDemo: false,
+        sku: 'KNG-01',
+        pricePaise: 45000,
+        shortDescription: 'Fresh orchard harvest',
+        sellerSlug: 'kangra-orchards',
+        sellerName: 'Kangra Orchards',
+      }),
+    ).toBe(false);
   });
 });

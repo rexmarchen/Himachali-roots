@@ -3,14 +3,26 @@ import { env } from '../env.js';
 import { BLOG_POSTS } from '../../shared/blog.js';
 import { POLICY_KEYS } from '../../shared/content.js';
 import {
+  BECOME_MAKER_SEO_DESCRIPTION,
+  BECOME_MAKER_SEO_TITLE,
   buildCategoryFallbackDescription,
   buildCategorySeoTitle,
   buildProductFallbackDescription,
   buildProductSeoTitle,
   cleanSeoText,
+  isDemoProductInput,
+  isDemoSellerInput,
+  MAKERS_SEO_DESCRIPTION,
+  MAKERS_SEO_TITLE,
+  MARKETPLACE_DEFAULT_ORIGIN,
+  MARKETPLACE_HOME_DESCRIPTION,
+  MARKETPLACE_HOME_TITLE,
+  SHOP_SEO_COLLECTION_NAME,
+  SHOP_SEO_DESCRIPTION,
+  SHOP_SEO_TITLE,
 } from '../../shared/seo.js';
 
-export { cleanSeoText };
+export { cleanSeoText, isDemoProductInput, isDemoSellerInput };
 import {
   effectiveCampaignStatus,
   getCampaignBySlug,
@@ -32,10 +44,9 @@ export interface SeoMetadata {
   statusCode?: number;
 }
 
-const DEFAULT_ORIGIN = 'https://www.dearhills.in';
-const DEFAULT_TITLE = 'DEAR HILLS — Authentic Himalayan Handloom, Organic Harvest & Mountain Goods';
-const DEFAULT_DESCRIPTION =
-  'Curated marketplace for authentic products made and grown in Himachal Pradesh — handloom shawls, Kangra tea, raw honey, orchard fruits and traditional crafts.';
+const DEFAULT_ORIGIN = MARKETPLACE_DEFAULT_ORIGIN;
+const DEFAULT_TITLE = MARKETPLACE_HOME_TITLE;
+const DEFAULT_DESCRIPTION = MARKETPLACE_HOME_DESCRIPTION;
 
 /**
  * Authoritative SQL predicates for excluding seeded demo stores, demo SKUs,
@@ -61,44 +72,25 @@ export const DEMO_PRODUCT_SQL = `(
   OR ${DEMO_SELLER_SQL}
 )`;
 
-export function isDemoSellerInput(seller: {
-  slug?: string | null;
-  name?: string | null;
-  email?: string | null;
-}): boolean {
-  const slug = (seller.slug ?? '').trim().toLowerCase();
-  const name = (seller.name ?? '').trim().toLowerCase();
-  const email = (seller.email ?? '').trim().toLowerCase();
-  return (
-    slug === 'demo' ||
-    slug.endsWith('-demo') ||
-    name.includes('(demo)') ||
-    email.endsWith('.test')
+export function countRealCampaignProducts(db: Db, campaignId: string): number {
+  const row = queryOne<{ count: number }>(
+    db,
+    `SELECT COUNT(*) AS count
+       FROM campaign_products cp
+       JOIN campaigns c ON c.id = cp.campaign_id
+       JOIN products p ON p.id = cp.product_id
+       JOIN seller_profiles s ON s.id = p.seller_id
+       LEFT JOIN users u ON u.id = s.user_id
+      WHERE cp.campaign_id = ?
+        AND p.status = 'approved'
+        AND s.status = 'approved'
+        AND s.store_status = 'active'
+        AND cp.promo_price_paise < p.price_paise
+        AND (p.price_paise - cp.promo_price_paise) * 10000 <= c.max_discount_bp * p.price_paise
+        AND NOT ${DEMO_PRODUCT_SQL}`,
+    campaignId,
   );
-}
-
-export function isDemoProductInput(product: {
-  isDemo?: boolean | number | null;
-  sku?: string | null;
-  pricePaise?: number | null;
-  shortDescription?: string | null;
-  sellerSlug?: string | null;
-  sellerName?: string | null;
-  sellerEmail?: string | null;
-}): boolean {
-  const sku = (product.sku ?? '').trim().toUpperCase();
-  const short = (product.shortDescription ?? '').trim().toLowerCase();
-  return (
-    Boolean(product.isDemo) ||
-    sku.startsWith('DEMO-') ||
-    (typeof product.pricePaise === 'number' && product.pricePaise <= 100) ||
-    short.includes('test transaction') ||
-    isDemoSellerInput({
-      slug: product.sellerSlug,
-      name: product.sellerName,
-      email: product.sellerEmail,
-    })
-  );
+  return row?.count ?? 0;
 }
 
 function escapeHtml(str: string): string {
@@ -313,6 +305,7 @@ export function getSeoMetadata(
            AND (c.starts_at IS NULL OR c.starts_at <= strftime('%Y-%m-%dT%H:%M:%fZ','now'))
            AND (c.ends_at IS NULL OR c.ends_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now'))
            AND cp.promo_price_paise = ?
+         ORDER BY cp.created_at, c.created_at
          LIMIT 1`,
         product.id,
         product.promo_price_paise,
@@ -484,7 +477,7 @@ export function getSeoMetadata(
     if (!category) {
       return {
         title: 'Category not found · Dear Hills',
-        description: DEFAULT_DESCRIPTION,
+        description: SHOP_SEO_DESCRIPTION,
         canonicalUrl: `${origin}/shop`,
         imageUrl: fallbackImage,
         noindex: true,
@@ -524,6 +517,7 @@ export function getSeoMetadata(
         queryStr(queryParams, 'minPrice') ||
         queryStr(queryParams, 'maxPrice') ||
         queryStr(queryParams, 'inStock') ||
+        queryStr(queryParams, 'featured') ||
         pageNum > 1,
     );
 
@@ -579,11 +573,8 @@ export function getSeoMetadata(
     );
 
     return {
-      title: q
-        ? `Search results for “${q}” | Dear Hills`
-        : 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Crafts | Dear Hills',
-      description:
-        'Explore authentic handwoven Kullu shawls, orthodox Kangra tea, raw wildflower honey, Kinnaur walnuts, and mountain crafts directly from Himachal Pradesh artisans.',
+      title: q ? `Search results for “${q}” | Dear Hills` : SHOP_SEO_TITLE,
+      description: SHOP_SEO_DESCRIPTION,
       canonicalUrl,
       imageUrl: `${origin}/images/product-shawl.jpg`,
       ogType: 'website',
@@ -593,10 +584,9 @@ export function getSeoMetadata(
         '@graph': [
           {
             '@type': 'CollectionPage',
-            name: 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Crafts',
+            name: SHOP_SEO_COLLECTION_NAME,
             url: canonicalUrl,
-            description:
-              'Explore authentic handwoven Kullu shawls, orthodox Kangra tea, raw wildflower honey, Kinnaur walnuts, and mountain crafts directly from Himachal Pradesh artisans.',
+            description: SHOP_SEO_DESCRIPTION,
           },
           breadcrumbList(origin, [
             { name: 'Home', path: '' },
@@ -641,7 +631,7 @@ export function getSeoMetadata(
         canonicalUrl,
         imageUrl: posterUrl,
         ogType: 'website',
-        noindex: hasOfferFilter,
+        noindex: true,
         jsonLd: {
           '@context': 'https://schema.org',
           '@graph': [
@@ -688,7 +678,7 @@ export function getSeoMetadata(
       canonicalUrl,
       imageUrl,
       ogType: 'website',
-      noindex: status === 'expired' || hasOfferFilter,
+      noindex: status === 'expired' || hasOfferFilter || countRealCampaignProducts(db, campaign.id) === 0,
       jsonLd: {
         '@context': 'https://schema.org',
         '@graph': [
@@ -917,9 +907,8 @@ export function getSeoMetadata(
         makerPageNum > 1,
     );
     return {
-      title: 'Meet the Mountain Makers & Artisans of Himachal Pradesh | Dear Hills',
-      description:
-        'Discover the generational weavers, tea planters, beekeepers, and woodworkers crafting heritage goods across the valleys of Himachal Pradesh.',
+      title: MAKERS_SEO_TITLE,
+      description: MAKERS_SEO_DESCRIPTION,
       canonicalUrl,
       imageUrl: fallbackImage,
       ogType: 'website',
@@ -931,8 +920,7 @@ export function getSeoMetadata(
             '@type': 'CollectionPage',
             name: 'Meet the Mountain Makers & Artisans of Himachal Pradesh',
             url: canonicalUrl,
-            description:
-              'Discover the generational weavers, tea planters, beekeepers, and woodworkers crafting heritage goods across the valleys of Himachal Pradesh.',
+            description: MAKERS_SEO_DESCRIPTION,
           },
           breadcrumbList(origin, [
             { name: 'Home', path: '' },
@@ -947,6 +935,7 @@ export function getSeoMetadata(
   if (normalizedPath === '/about' || normalizedPath === '/our-story') {
     const canonicalUrl = `${origin}/about`;
     const description =
+      cleanSeoText(getSiteContent(db).about.intro) ||
       'Dear Hills connects conscious global buyers with authentic Himalayan artisans, weavers, and organic farmers in Himachal Pradesh with verified provenance and fair pay.';
     return {
       title: 'Our Story & Philosophy — Preserving Himalayan Living Heritage | Dear Hills',
@@ -976,6 +965,7 @@ export function getSeoMetadata(
   if (normalizedPath === '/sourcing') {
     const canonicalUrl = `${origin}/sourcing`;
     const description =
+      cleanSeoText(getSiteContent(db).sourcing.intro) ||
       'Every shawl, tea harvest, honey jar, and handloom piece is verified at source in the mountain valleys of Himachal Pradesh.';
     return {
       title: 'How We Source — Pure Alpine Origin & Ethical Provenance | Dear Hills',
@@ -1068,11 +1058,9 @@ export function getSeoMetadata(
   // 14. Become a Maker / Sell landing page
   if (normalizedPath === '/become-a-maker' || normalizedPath === '/sell') {
     const canonicalUrl = `${origin}/become-a-maker`;
-    const description =
-      'Join Dear Hills and bring authentic Himalayan handloom, orthodox tea, raw forest honey, orchard harvest and village craft to conscious customers across India.';
     return {
-      title: 'Sell with Dear Hills — Himalayan Artisan & Producer Onboarding',
-      description,
+      title: BECOME_MAKER_SEO_TITLE,
+      description: BECOME_MAKER_SEO_DESCRIPTION,
       canonicalUrl,
       imageUrl: fallbackImage,
       ogType: 'website',
@@ -1083,7 +1071,7 @@ export function getSeoMetadata(
             '@type': 'WebPage',
             name: 'Become a Maker on Dear Hills',
             url: canonicalUrl,
-            description,
+            description: BECOME_MAKER_SEO_DESCRIPTION,
           },
           breadcrumbList(origin, [
             { name: 'Home', path: '' },
@@ -1101,8 +1089,8 @@ export function getSeoMetadata(
     if (!(POLICY_KEYS as readonly string[]).includes(key)) {
       return {
         title: 'Policy not found · Dear Hills',
-        description: DEFAULT_DESCRIPTION,
-        canonicalUrl: `${origin}/policies/${encodeURIComponent(key)}`,
+        description: 'Shipping, returns, privacy and marketplace policy documents for Dear Hills.',
+        canonicalUrl: `${origin}/policies`,
         imageUrl: fallbackImage,
         noindex: true,
         statusCode: 404,
@@ -1112,7 +1100,7 @@ export function getSeoMetadata(
     const canonicalUrl = `${origin}/policies/${key}`;
     return {
       title: `${policy.title} | Dear Hills`,
-      description: cleanSeoText(policy.summary) || DEFAULT_DESCRIPTION,
+      description: cleanSeoText(policy.summary) || 'Shipping, returns, privacy and marketplace policy documents for Dear Hills.',
       canonicalUrl,
       imageUrl: fallbackImage,
       ogType: 'article',

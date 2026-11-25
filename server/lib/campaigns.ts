@@ -170,18 +170,19 @@ export function getFeaturedCampaign(db: Db): CampaignRow | undefined {
 export function attachCampaignMeta<T extends { id: string; pricePaise: number; originalPricePaise?: number | null }>(
   db: Db,
   items: T[],
-): (T & { campaignSlug: string | null; campaignName: string | null })[] {
+): (T & { campaignSlug: string | null; campaignName: string | null; campaignEndsAt: string | null })[] {
   if (items.length === 0) return [];
   const placeholders = items.map(() => '?').join(',');
   const rows = queryAll<{
     product_id: string;
     slug: string;
     name: string;
+    ends_at: string | null;
     promo_price_paise: number;
     price_paise: number;
   }>(
     db,
-    `SELECT cp.product_id, c.slug, c.name, cp.promo_price_paise, p.price_paise
+    `SELECT cp.product_id, c.slug, c.name, c.ends_at, cp.promo_price_paise, p.price_paise
        FROM campaign_products cp
        JOIN campaigns c ON c.id = cp.campaign_id
        JOIN products p ON p.id = cp.product_id
@@ -194,13 +195,20 @@ export function attachCampaignMeta<T extends { id: string; pricePaise: number; o
       ORDER BY cp.created_at, c.created_at`,
     ...items.map((item) => item.id),
   );
-  const byProduct = new Map<string, { slug: string; name: string }>();
+  const byProduct = new Map<string, { slug: string; name: string; endsAt: string | null }>();
   for (const row of rows) {
-    if (!byProduct.has(row.product_id)) byProduct.set(row.product_id, { slug: row.slug, name: row.name });
+    if (!byProduct.has(row.product_id)) {
+      byProduct.set(row.product_id, { slug: row.slug, name: row.name, endsAt: row.ends_at ?? null });
+    }
   }
   return items.map((item) => {
     const meta = byProduct.get(item.id);
-    return { ...item, campaignSlug: meta?.slug ?? null, campaignName: meta?.name ?? null };
+    return {
+      ...item,
+      campaignSlug: meta?.slug ?? null,
+      campaignName: meta?.name ?? null,
+      campaignEndsAt: meta?.endsAt ?? null,
+    };
   });
 }
 

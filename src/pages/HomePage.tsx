@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { Category, CampaignSummary, ProductSummary } from '@shared/types';
 import { formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
+import { MARKETPLACE_HOME_DESCRIPTION, MARKETPLACE_HOME_TITLE } from '@shared/seo';
 import { api } from '@/lib/api';
 import { usePageMeta } from '@/lib/usePageMeta';
 import { useInView } from '@/lib/useInView';
@@ -1547,9 +1548,8 @@ export function HomePage() {
   });
 
   usePageMeta({
-    title: 'DEAR HILLS — Authentic Himalayan Handloom, Organic Harvest & Mountain Goods',
-    description:
-      'Curated marketplace for authentic products made and grown in Himachal Pradesh — handloom shawls, Kangra tea, raw honey, orchard fruits and traditional mountain crafts.',
+    title: MARKETPLACE_HOME_TITLE,
+    description: MARKETPLACE_HOME_DESCRIPTION,
     canonicalPath: '/',
     jsonLd: {
       '@context': 'https://schema.org',
@@ -1560,8 +1560,7 @@ export function HomePage() {
           name: 'Dear Hills',
           url: 'https://www.dearhills.in',
           logo: 'https://www.dearhills.in/favicon.svg',
-          description:
-            'Curated marketplace for authentic products made and grown in Himachal Pradesh — handloom shawls, Kangra tea, raw honey, orchard fruits and traditional crafts.',
+          description: MARKETPLACE_HOME_DESCRIPTION,
           address: {
             '@type': 'PostalAddress',
             addressRegion: 'Himachal Pradesh',

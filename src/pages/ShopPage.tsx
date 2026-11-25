@@ -3,7 +3,15 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query';
 import type { Category, Paged, ProductSummary } from '@shared/types';
 import { formatINR } from '@shared/types';
-import { buildCategoryFallbackDescription, buildCategorySeoTitle, cleanSeoText } from '@shared/seo';
+import {
+  buildCategoryFallbackDescription,
+  buildCategorySeoTitle,
+  cleanSeoText,
+  isDemoProductInput,
+  SHOP_SEO_COLLECTION_NAME,
+  SHOP_SEO_DESCRIPTION,
+  SHOP_SEO_TITLE,
+} from '@shared/seo';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { usePageMeta } from '@/lib/usePageMeta';
@@ -121,62 +129,69 @@ export function ShopPage() {
       params.get('minPrice') ||
       params.get('maxPrice') ||
       params.get('inStock') ||
+      params.get('featured') ||
       page > 1,
   );
   const categoryHasOnlyDemo =
     Boolean(category) &&
     !products.isLoading &&
     Boolean(products.data) &&
-    !products.data!.items.some(
-      (item) =>
-        !item.isDemo &&
-        item.pricePaise > 100 &&
-        !item.sellerSlug.toLowerCase().endsWith('-demo') &&
-        !item.sellerName.toLowerCase().includes('(demo)'),
-    );
+    !products.data!.items.some((item) => !isDemoProductInput(item));
 
+  const isUnknownCategory = Boolean(category && !products.isLoading && products.data && !activeCategory);
   const canonicalCategorySlug = activeCategory?.slug ?? category;
 
-  const shopPageDescription = activeCategory
-    ? cleanSeoText(activeCategory.description) ||
-      buildCategoryFallbackDescription({ name: activeCategory.name, slug: activeCategory.slug })
-    : 'Browse authentic Himachali shawls, tea, honey, dry fruit, oils and pantry staples from reviewed local makers and growers.';
+  const shopPageDescription = isUnknownCategory
+    ? SHOP_SEO_DESCRIPTION
+    : activeCategory
+      ? cleanSeoText(activeCategory.description) ||
+        buildCategoryFallbackDescription({ name: activeCategory.name, slug: activeCategory.slug })
+      : SHOP_SEO_DESCRIPTION;
 
   usePageMeta({
-    title: q
-      ? `Search results for “${q}” | Dear Hills`
-      : activeCategory
-        ? buildCategorySeoTitle({ name: activeCategory.name, slug: activeCategory.slug })
-        : 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Crafts | Dear Hills',
+    enabled: !products.isLoading,
+    title: isUnknownCategory
+      ? 'Category not found · Dear Hills'
+      : q
+        ? `Search results for “${q}” | Dear Hills`
+        : activeCategory
+          ? buildCategorySeoTitle({ name: activeCategory.name, slug: activeCategory.slug })
+          : SHOP_SEO_TITLE,
     description: shopPageDescription,
-    canonicalPath: canonicalCategorySlug ? `/categories/${encodeURIComponent(canonicalCategorySlug)}` : '/shop',
-    image: activeCategory?.imageUrl ?? null,
-    noindex: hasFilteredQuery || categoryHasOnlyDemo,
-    jsonLd: {
-      '@context': 'https://schema.org',
-      '@graph': [
-        {
-          '@type': 'CollectionPage',
-          name: activeCategory
-            ? `${activeCategory.name} — Authentic Himachal Collection`
-            : 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Goods',
-          url: canonicalCategorySlug
-            ? `https://www.dearhills.in/categories/${encodeURIComponent(canonicalCategorySlug)}`
-            : 'https://www.dearhills.in/shop',
-          description: shopPageDescription,
-        },
-        {
-          '@type': 'BreadcrumbList',
-          itemListElement: [
-            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
-            { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://www.dearhills.in/shop' },
-            ...(activeCategory
-              ? [{ '@type': 'ListItem', position: 3, name: activeCategory.name, item: `https://www.dearhills.in/categories/${activeCategory.slug}` }]
-              : []),
+    canonicalPath: isUnknownCategory
+      ? '/shop'
+      : canonicalCategorySlug
+        ? `/categories/${encodeURIComponent(canonicalCategorySlug)}`
+        : '/shop',
+    image: isUnknownCategory ? '/images/product-shawl.jpg' : activeCategory?.imageUrl ?? '/images/product-shawl.jpg',
+    noindex: hasFilteredQuery || categoryHasOnlyDemo || isUnknownCategory || products.isError,
+    jsonLd: isUnknownCategory
+      ? undefined
+      : {
+          '@context': 'https://schema.org',
+          '@graph': [
+            {
+              '@type': 'CollectionPage',
+              name: activeCategory
+                ? `${activeCategory.name} — Authentic Himachal Collection`
+                : SHOP_SEO_COLLECTION_NAME,
+              url: canonicalCategorySlug
+                ? `https://www.dearhills.in/categories/${encodeURIComponent(canonicalCategorySlug)}`
+                : 'https://www.dearhills.in/shop',
+              description: shopPageDescription,
+            },
+            {
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+                { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://www.dearhills.in/shop' },
+                ...(activeCategory
+                  ? [{ '@type': 'ListItem', position: 3, name: activeCategory.name, item: `https://www.dearhills.in/categories/${activeCategory.slug}` }]
+                  : []),
+              ],
+            },
           ],
         },
-      ],
-    },
   });
 
   return (

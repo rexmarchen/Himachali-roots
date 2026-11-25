@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { ProductSummary } from '@shared/types';
 import type { PolicyDocument } from '@shared/content';
+import { cleanSeoText, isDemoSellerInput } from '@shared/seo';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { useAuth, useSiteContent } from '@/lib/session';
 import { useToast } from '@/lib/toast';
@@ -63,10 +64,7 @@ export function MakerDetailPage() {
   });
 
   const metaSeller = detail.data?.seller;
-  const isDemoMaker =
-    slug.toLowerCase() === 'demo' ||
-    slug.toLowerCase().endsWith('-demo') ||
-    Boolean(metaSeller?.name.toLowerCase().includes('(demo)'));
+  const isDemoMaker = isDemoSellerInput({ slug, name: metaSeller?.name });
   const makerImageRaw = metaSeller?.coverUrl ?? metaSeller?.imageUrl ?? metaSeller?.logoUrl ?? null;
   const makerImageAbs = makerImageRaw
     ? makerImageRaw.startsWith('http')
@@ -75,10 +73,17 @@ export function MakerDetailPage() {
     : 'https://www.dearhills.in/images/home/kalpa-dawn-1100.jpg';
 
   usePageMeta({
-    title: metaSeller?.name ? `${metaSeller.name} — Mountain Artisan Story | Dear Hills` : 'Maker · Dear Hills',
+    enabled: !detail.isLoading,
+    title: metaSeller?.name
+      ? `${metaSeller.name} — Mountain Artisan Story | Dear Hills`
+      : detail.isError
+        ? 'Maker not available · Dear Hills'
+        : 'Maker · Dear Hills',
     description:
       metaSeller?.tagline ??
-      'Meet a verified Himachali maker and shop their products directly on Dear Hills.',
+      (detail.isError
+        ? 'This maker storefront is not currently visible.'
+        : 'Meet a verified Himachali maker and shop their products directly on Dear Hills.'),
     canonicalPath: `/makers/${encodeURIComponent(slug)}`,
     image: makerImageRaw,
     ogType: 'profile',
@@ -421,9 +426,13 @@ export function MakerDetailPage() {
 export function AboutPage() {
   const content = useSiteContent();
   const about = content.data?.content.about;
+  const aboutDescription =
+    cleanSeoText(about?.intro) ||
+    'Dear Hills connects conscious global buyers with authentic Himalayan artisans, weavers, and organic farmers in Himachal Pradesh with verified provenance and fair pay.';
   usePageMeta({
+    enabled: !content.isLoading,
     title: 'Our Story & Philosophy — Preserving Himalayan Living Heritage | Dear Hills',
-    description: about?.intro ?? 'Why Dear Hills exists: a marketplace built around Himachali makers, not anonymous listings.',
+    description: aboutDescription,
     canonicalPath: '/about',
     ogType: 'article',
     image: '/images/editorial-terrace.jpg',
@@ -434,7 +443,7 @@ export function AboutPage() {
           '@type': 'AboutPage',
           name: 'About Dear Hills',
           url: 'https://www.dearhills.in/about',
-          description: about?.intro ?? 'Why Dear Hills exists: a marketplace built around Himachali makers, not anonymous listings.',
+          description: aboutDescription,
         },
         {
           '@type': 'BreadcrumbList',
@@ -500,9 +509,13 @@ export function AboutPage() {
 export function SourcingPage() {
   const content = useSiteContent();
   const sourcing = content.data?.content.sourcing;
+  const sourcingDescription =
+    cleanSeoText(sourcing?.intro) ||
+    'Every shawl, tea harvest, honey jar, and handloom piece is verified at source in the mountain valleys of Himachal Pradesh.';
   usePageMeta({
+    enabled: !content.isLoading,
     title: 'How We Source — Pure Alpine Origin & Ethical Provenance | Dear Hills',
-    description: sourcing?.intro ?? 'The verification standard every Dear Hills listing and maker must meet before publication.',
+    description: sourcingDescription,
     canonicalPath: '/sourcing',
     ogType: 'article',
     image: '/images/weaving.jpg',
@@ -513,7 +526,7 @@ export function SourcingPage() {
           '@type': 'WebPage',
           name: 'How We Source',
           url: 'https://www.dearhills.in/sourcing',
-          description: sourcing?.intro ?? 'The verification standard every Dear Hills listing and maker must meet before publication.',
+          description: sourcingDescription,
         },
         {
           '@type': 'BreadcrumbList',
@@ -849,13 +862,18 @@ export function PolicyPage() {
   });
 
   const policyTitle = policy.data?.policy.title;
-  const policySummary = policy.data?.policy.summary;
+  const policySummary = cleanSeoText(policy.data?.policy.summary);
   const policyCanonical = `/policies/${encodeURIComponent(key)}`;
 
   usePageMeta({
-    title: policyTitle ? `${policyTitle} | Dear Hills` : 'Policies · Dear Hills',
-    description: policySummary ?? 'Shipping, returns, privacy and marketplace policy documents for Dear Hills.',
-    canonicalPath: policyCanonical,
+    enabled: !policy.isLoading,
+    title: policyTitle
+      ? `${policyTitle} | Dear Hills`
+      : policy.isError
+        ? 'Policy not found · Dear Hills'
+        : 'Policies · Dear Hills',
+    description: policySummary || 'Shipping, returns, privacy and marketplace policy documents for Dear Hills.',
+    canonicalPath: policy.isError ? '/policies' : policyCanonical,
     ogType: 'article',
     noindex: policy.isError,
     jsonLd: policyTitle
@@ -866,7 +884,7 @@ export function PolicyPage() {
               '@type': 'WebPage',
               name: policyTitle,
               url: `https://www.dearhills.in${policyCanonical}`,
-              description: policySummary ?? 'Shipping, returns, privacy and marketplace policy documents for Dear Hills.',
+              description: policySummary || 'Shipping, returns, privacy and marketplace policy documents for Dear Hills.',
             },
             {
               '@type': 'BreadcrumbList',

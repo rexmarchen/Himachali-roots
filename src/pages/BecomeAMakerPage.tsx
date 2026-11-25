@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { SessionUser } from '@shared/types';
+import { BECOME_MAKER_SEO_DESCRIPTION, BECOME_MAKER_SEO_TITLE } from '@shared/seo';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
@@ -95,9 +96,8 @@ export function BecomeAMakerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   usePageMeta({
-    title: 'Sell with Dear Hills · Himalayan Artisan & Producer Onboarding',
-    description:
-      'Join Dear Hills and bring authentic Himalayan handloom, orthodox tea, raw forest honey, orchard harvest and village craft to conscious customers across India.',
+    title: BECOME_MAKER_SEO_TITLE,
+    description: BECOME_MAKER_SEO_DESCRIPTION,
     canonicalPath: '/become-a-maker',
     jsonLd: {
       '@context': 'https://schema.org',
@@ -106,8 +106,7 @@ export function BecomeAMakerPage() {
           '@type': 'WebPage',
           name: 'Become a Maker on Dear Hills',
           url: 'https://www.dearhills.in/become-a-maker',
-          description:
-            'Join Dear Hills and bring authentic Himalayan handloom, orthodox tea, raw forest honey, orchard harvest and village craft to conscious customers across India.',
+          description: BECOME_MAKER_SEO_DESCRIPTION,
         },
         {
           '@type': 'BreadcrumbList',

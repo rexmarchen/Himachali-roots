@@ -88,6 +88,7 @@ export interface ProductSummary {
   discountPercent?: number | null;
   campaignSlug?: string | null;
   campaignName?: string | null;
+  campaignEndsAt?: string | null;
 }
 
 export interface ProductDetail extends ProductSummary {

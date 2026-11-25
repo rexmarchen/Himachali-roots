@@ -20,7 +20,13 @@ import { getPolicy, getSiteContent } from '../lib/site.js';
 import { paymentProviderStatus } from '../lib/payments.js';
 import { shippingFor } from '../lib/pricing.js';
 import { notify } from '../lib/email.js';
-import { cleanSeoText, DEMO_PRODUCT_SQL, DEMO_SELLER_SQL } from '../lib/seo.js';
+import {
+  cleanSeoText,
+  countRealCampaignProducts,
+  DEMO_PRODUCT_SQL,
+  DEMO_SELLER_SQL,
+} from '../lib/seo.js';
+import { buildProductFallbackDescription } from '../../shared/seo.js';
 import { BLOG_POSTS } from '../../shared/blog.js';
 
 function optInt(value: unknown): number | undefined {
@@ -699,7 +705,7 @@ export function sitemapRouter(db: Db): Router {
       "SELECT id, slug, status, starts_at, ends_at FROM campaigns WHERE status = 'active'",
     ).filter(
       (campaign) =>
-        effectiveCampaignStatus(campaign) === 'active' && campaignStats(db, campaign.id).productCount > 0,
+        effectiveCampaignStatus(campaign) === 'active' && countRealCampaignProducts(db, campaign.id) > 0,
     );
 
     const urls = [
@@ -763,6 +769,7 @@ export function sitemapRouter(db: Db): Router {
       sku: string;
       weight_g: number | null;
       region: string | null;
+      origin_place: string | null;
       stock: number;
       seller_name: string;
       category_name: string;
@@ -770,7 +777,7 @@ export function sitemapRouter(db: Db): Router {
     }>(
       db,
       `SELECT p.id, p.slug, p.name, p.short_description, p.description, p.price_paise,
-              p.sku, p.weight_g, p.region,
+              p.sku, p.weight_g, COALESCE(NULLIF(p.region, ''), s.region) AS region, p.origin_place,
               acp.promo_price_paise,
               i.quantity - i.reserved_quantity AS stock,
               s.business_name AS seller_name,
@@ -847,7 +854,16 @@ export function sitemapRouter(db: Db): Router {
         const hasPromo = row.promo_price_paise !== null && row.promo_price_paise < row.price_paise;
         const effectivePricePaise = hasPromo ? row.promo_price_paise! : row.price_paise;
         const shippingPaise = shippingFor(effectivePricePaise);
-        const description = cleanSeoText(row.description || row.short_description, 5000) || row.name;
+        const description =
+          cleanSeoText(row.description, 5000) ||
+          cleanSeoText(row.short_description, 5000) ||
+          buildProductFallbackDescription({
+            name: row.name,
+            categorySlug: row.category_slug,
+            categoryName: row.category_name,
+            originPlace: row.origin_place,
+            region: row.region,
+          });
         const googleCat = GOOGLE_PRODUCT_CATEGORIES[row.category_slug];
         const campaignMeta = campaignMetaByProduct.get(row.id);
 

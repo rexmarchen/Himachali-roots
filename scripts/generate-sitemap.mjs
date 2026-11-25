@@ -164,11 +164,14 @@ if (fs.existsSync(dbPath)) {
               FROM campaign_products cp
               JOIN products p ON p.id = cp.product_id
               JOIN seller_profiles s ON s.id = p.seller_id
+              LEFT JOIN users u ON u.id = s.user_id
              WHERE cp.campaign_id = c.id
                AND p.status = 'approved'
                AND s.status = 'approved'
+               AND s.store_status = 'active'
                AND cp.promo_price_paise < p.price_paise
                AND (p.price_paise - cp.promo_price_paise) * 10000 <= c.max_discount_bp * p.price_paise
+               AND NOT ${DEMO_PRODUCT_SQL}
           )`,
     )
     .all();

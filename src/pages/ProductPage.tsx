@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ProductDetail } from '@shared/types';
 import { formatINR } from '@shared/types';
-import { buildProductFallbackDescription, buildProductSeoTitle, cleanSeoText } from '@shared/seo';
+import { buildProductFallbackDescription, buildProductSeoTitle, cleanSeoText, isDemoProductInput } from '@shared/seo';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
@@ -171,16 +171,7 @@ export function ProductPage() {
     Boolean(metaProduct) &&
     (metaProduct?.reviewSummary.count ?? 0) > 0 &&
     metaProduct?.reviewSummary.average !== null;
-  const isDemoListing = metaProduct
-    ? Boolean(
-        metaProduct.isDemo ||
-          metaProduct.pricePaise <= 100 ||
-          metaProduct.sku.toUpperCase().startsWith('DEMO-') ||
-          metaProduct.sellerSlug.toLowerCase().endsWith('-demo') ||
-          metaProduct.sellerName.toLowerCase().includes('(demo)') ||
-          metaProduct.shortDescription.toLowerCase().includes('test transaction'),
-      )
-    : false;
+  const isDemoListing = metaProduct ? isDemoProductInput(metaProduct) : false;
 
   const freeThreshold = config?.shipping.freeThresholdPaise ?? 69900;
   const flatShipping = config?.shipping.flatRatePaise ?? 2900;
@@ -200,14 +191,18 @@ export function ProductPage() {
         originPlace: metaProduct.originPlace,
         region: metaProduct.region || metaProduct.seller?.region,
       })
-    : 'Authentic Himachali goods from reviewed local makers and growers with verified provenance.';
+    : productQuery.isError
+      ? 'This listing may be paused, awaiting review, or removed.'
+      : 'Authentic Himachali goods from reviewed local makers and growers with verified provenance.';
   const metaTitle = metaProduct
     ? buildProductSeoTitle({
         name: metaProduct.name,
         categorySlug: metaProduct.categorySlug,
         categoryName: metaProduct.categoryName,
       })
-    : 'Authentic Himalayan Product · Dear Hills';
+    : productQuery.isError
+      ? 'Listing not available · Dear Hills'
+      : 'Authentic Himalayan Product · Dear Hills';
 
   const productJsonLd = metaProduct
     ? {
@@ -236,7 +231,7 @@ export function ProductPage() {
               url: `https://www.dearhills.in/shop/${metaProduct.slug}`,
               priceCurrency: 'INR',
               price: (metaProduct.pricePaise / 100).toFixed(2),
-              priceValidUntil: '2027-12-31',
+              priceValidUntil: metaProduct.campaignEndsAt ? metaProduct.campaignEndsAt.slice(0, 10) : '2027-12-31',
               availability:
                 metaProduct.stock <= 0
                   ? 'https://schema.org/OutOfStock'
@@ -252,7 +247,7 @@ export function ProductPage() {
                 shippingRate: {
                   '@type': 'MonetaryAmount',
                   value:
-                    metaProduct.pricePaise <= 0 || (freeThreshold > 0 && metaProduct.pricePaise >= freeThreshold)
+                    metaProduct.pricePaise <= 0 || freeThreshold <= 0 || metaProduct.pricePaise >= freeThreshold
                       ? '0.00'
                       : (flatShipping / 100).toFixed(2),
                   currency: 'INR',
@@ -342,6 +337,7 @@ export function ProductPage() {
     ogType: 'product',
     jsonLd: productJsonLd,
     noindex: isDemoListing || productQuery.isError,
+    enabled: !productQuery.isLoading,
   });
 
   if (productQuery.isLoading) {

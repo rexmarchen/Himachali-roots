@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { CampaignSummary, Paged, ProductSummary } from '@shared/types';
+import { cleanSeoText, isDemoProductInput } from '@shared/seo';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { posterSrcSet } from '@/lib/poster';
 import { usePageMeta } from '@/lib/usePageMeta';
@@ -100,14 +101,17 @@ export function OfferPage() {
       : undefined);
   const campaign = data?.campaign;
 
-  const title = campaign ? `${campaign.name} — Seasonal Mountain Collection | DEAR HILLS` : 'Festive Offer — DEAR HILLS';
+  const hasRealOfferProducts =
+    !offer.isLoading && Boolean(data) ? data!.items.some((item) => !isDemoProductInput(item)) : false;
+  const title = campaign
+    ? `${campaign.name} — Seasonal Mountain Collection | Dear Hills`
+    : offer.isError
+      ? 'Offer not found · Dear Hills'
+      : 'Seasonal Mountain Collection · Dear Hills';
   const description = campaign
-    ? campaign.status === 'active' && campaign.maxDiscountPercent > 0
-      ? `${campaign.name}: up to ${campaign.maxDiscountPercent}% off selected authentic Himachali products from reviewed local makers. Only eligible products are discounted.`
-      : campaign.status === 'expired'
-        ? `${campaign.name} has ended. Browse the full catalogue of authentic Himachali products from reviewed local makers.`
-        : `${campaign.name}: a seasonal selection of authentic Himachali products from reviewed local makers.`
-    : 'A seasonal collection of authentic Himachali products from reviewed local makers.';
+    ? cleanSeoText(campaign.description) ||
+      `${campaign.name} — curated collection of authentic Himachali products from reviewed makers.`
+    : 'The requested seasonal campaign could not be found.';
 
   const canonicalOfferPath = `/offers/${campaign?.slug ?? slug}`;
   const offerUrl = `https://www.dearhills.in${canonicalOfferPath}`;
@@ -118,11 +122,12 @@ export function OfferPage() {
   const hasOfferFilter = Boolean(category || seller || params.get('sort') || page > 1);
 
   usePageMeta({
+    enabled: !offer.isLoading,
     title,
     description,
     canonicalPath: canonicalOfferPath,
     image: campaign?.posterUrl ?? null,
-    noindex: campaign?.status === 'expired' || hasOfferFilter || (offer.isError && !data),
+    noindex: campaign?.status === 'expired' || hasOfferFilter || offer.isError || !data || !hasRealOfferProducts,
     jsonLd: campaign
       ? {
           '@context': 'https://schema.org',

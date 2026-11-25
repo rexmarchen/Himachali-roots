@@ -2,6 +2,7 @@ import { useState, useTransition, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { PublicMaker, MakersQueryResponse } from '@shared/types';
+import { MAKERS_SEO_DESCRIPTION, MAKERS_SEO_TITLE } from '@shared/seo';
 import { api } from '@/lib/api';
 import { usePageMeta } from '@/lib/usePageMeta';
 import { Breadcrumbs, Button, LinkButton } from '@/components/ui';
@@ -75,9 +76,8 @@ export function MakersPage() {
   );
 
   usePageMeta({
-    title: 'Meet the Mountain Makers & Artisans of Himachal Pradesh | Dear Hills',
-    description:
-      'Discover the growers, weavers and workshop owners of Himachal Pradesh who sell directly on Dear Hills.',
+    title: MAKERS_SEO_TITLE,
+    description: MAKERS_SEO_DESCRIPTION,
     canonicalPath: '/makers',
     noindex: hasMakerFilter,
     jsonLd: {
@@ -87,8 +87,7 @@ export function MakersPage() {
           '@type': 'CollectionPage',
           name: 'Meet the Mountain Makers & Artisans of Himachal Pradesh',
           url: 'https://www.dearhills.in/makers',
-          description:
-            'Discover the growers, weavers and workshop owners of Himachal Pradesh who sell directly on Dear Hills.',
+          description: MAKERS_SEO_DESCRIPTION,
         },
         {
           '@type': 'BreadcrumbList',

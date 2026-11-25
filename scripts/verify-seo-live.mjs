@@ -132,6 +132,61 @@ async function runTests() {
   });
   assert.strictEqual(makersQRes.headers.get('x-robots-tag'), 'noindex, nofollow', 'Filtered makers has X-Robots-Tag noindex');
 
+  const featuredCatRes = await fetch(`${BASE}/categories/shawls-and-weaves?featured=true`, {
+    headers: { 'x-forwarded-host': 'www.dearhills.in' },
+  });
+  assert.strictEqual(
+    featuredCatRes.headers.get('x-robots-tag'),
+    'noindex, nofollow',
+    'Featured-filtered category has X-Robots-Tag noindex',
+  );
+
+  // 11. Demo-only active campaign must stay excluded from sitemap and marked noindex
+  const offerApiRes = await fetch(`${BASE}/api/campaigns/pahadi-festive-glow`);
+  if (offerApiRes.status === 200) {
+    const offerApi = await offerApiRes.json();
+    const offerItems = offerApi.items || [];
+    const hasRealOfferProduct = offerItems.some((item) => {
+      const sku = (item.sku || '').trim().toUpperCase();
+      const shortDesc = (item.shortDescription || '').trim().toLowerCase();
+      const sellerSlug = (item.sellerSlug || '').trim().toLowerCase();
+      const sellerName = (item.sellerName || '').trim().toLowerCase();
+      return (
+        !item.isDemo &&
+        !sku.startsWith('DEMO-') &&
+        typeof item.pricePaise === 'number' &&
+        item.pricePaise > 100 &&
+        !shortDesc.includes('test transaction') &&
+        sellerSlug !== 'demo' &&
+        !sellerSlug.endsWith('-demo') &&
+        !sellerName.includes('(demo)')
+      );
+    });
+    const campaignSlug = offerApi.campaign?.slug || 'pahadi-festive-glow';
+    const offerHtmlRes = await fetch(`${BASE}/offers/${campaignSlug}`, {
+      headers: { 'x-forwarded-host': 'www.dearhills.in' },
+    });
+    assert.strictEqual(offerHtmlRes.status, 200, 'Offer SSR status 200');
+    const offerHtml = await offerHtmlRes.text();
+    if (!hasRealOfferProduct) {
+      assert.ok(
+        !sitemapXml.includes(`/offers/${campaignSlug}`),
+        `Demo-only campaign /offers/${campaignSlug} must be excluded from sitemap.xml`,
+      );
+      assert.ok(
+        offerHtml.includes('<meta name="robots" content="noindex, nofollow" />'),
+        `Demo-only campaign /offers/${campaignSlug} must carry noindex, nofollow`,
+      );
+      console.log(`✓ Demo-only campaign /offers/${campaignSlug} excluded from sitemap & marked noindex`);
+    } else {
+      assert.ok(
+        sitemapXml.includes(`/offers/${campaignSlug}`),
+        `Active campaign with real products /offers/${campaignSlug} should be included in sitemap.xml`,
+      );
+      console.log(`✓ Active campaign /offers/${campaignSlug} with real products verified in sitemap`);
+    }
+  }
+
   const badPctRes = await fetch(`${BASE}/shop/%E0%A4%A`, {
     headers: { 'x-forwarded-host': 'www.dearhills.in' },
   });

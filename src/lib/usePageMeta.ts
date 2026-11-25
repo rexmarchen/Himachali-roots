@@ -8,6 +8,7 @@ export interface PageMeta {
   ogType?: 'website' | 'product' | 'article' | 'profile';
   jsonLd?: Record<string, unknown> | Array<Record<string, unknown>>;
   noindex?: boolean;
+  enabled?: boolean;
 }
 
 function setMeta(attr: 'name' | 'property', key: string, content: string | null): () => void {
@@ -57,9 +58,10 @@ function setJsonLd(
   json: Record<string, unknown> | Array<Record<string, unknown>> | undefined,
   noindex?: boolean,
 ): () => void {
+  void noindex;
   document.head.querySelector<HTMLScriptElement>('#route-json-ld')?.remove();
 
-  if (noindex && !json) {
+  if (!json) {
     const existing = document.head.querySelector<HTMLScriptElement>('#seo-structured-data');
     const previous = existing?.textContent ?? null;
     existing?.remove();
@@ -73,8 +75,6 @@ function setJsonLd(
       }
     };
   }
-
-  if (!json) return () => {};
 
   let script = document.head.querySelector<HTMLScriptElement>('#seo-structured-data');
   const previous = script?.textContent ?? null;
@@ -102,10 +102,20 @@ function setJsonLd(
  * Sets the document title and social/search metadata for a route and restores
  * the previous values when the route unmounts.
  */
-export function usePageMeta({ title, description, canonicalPath, image, ogType, jsonLd, noindex }: PageMeta): void {
+export function usePageMeta({
+  title,
+  description,
+  canonicalPath,
+  image,
+  ogType,
+  jsonLd,
+  noindex,
+  enabled = true,
+}: PageMeta): void {
   const serializedJsonLd = jsonLd ? JSON.stringify(jsonLd) : '';
 
   useEffect(() => {
+    if (!enabled) return;
     const previousTitle = document.title;
     document.title = title;
 
@@ -148,5 +158,5 @@ export function usePageMeta({ title, description, canonicalPath, image, ogType, 
       for (const restore of restores) restore();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, description, canonicalPath, image, ogType, serializedJsonLd, noindex]);
+  }, [title, description, canonicalPath, image, ogType, serializedJsonLd, noindex, enabled]);
 }
