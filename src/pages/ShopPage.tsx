@@ -220,7 +220,7 @@ export function ShopPage() {
               <button
                 type="button"
                 onClick={() => update('category', null)}
-                className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
+                className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
                   !category
                     ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
                     : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
@@ -239,7 +239,7 @@ export function ShopPage() {
                     key={item.id}
                     type="button"
                     onClick={() => update('category', isSelected ? null : item.slug)}
-                    className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
+                    className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
                       isSelected
                         ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
                         : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
@@ -473,7 +473,7 @@ export function ShopPage() {
             <button
               type="button"
               onClick={() => setFiltersOpen(true)}
-              className="inline-flex h-10 min-h-[40px] items-center gap-1.5 rounded-lg border border-forest/25 bg-paper px-3 text-xs font-semibold text-forest shadow-2xs active:scale-95 shrink-0"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-forest/25 bg-paper px-3 text-xs font-semibold text-forest shadow-2xs active:scale-95 shrink-0"
               aria-haspopup="dialog"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5" aria-hidden>
@@ -487,8 +487,8 @@ export function ShopPage() {
               ) : null}
             </button>
 
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="text-[11px] font-semibold text-muted shrink-0 tabular-nums">
+            <div className="flex min-w-0 items-center justify-end gap-2">
+              <span className="hidden min-[360px]:inline text-[11px] font-semibold text-muted shrink-0 tabular-nums">
                 {products.data ? `${products.data.total} items` : '…'}
               </span>
               <Select
@@ -497,7 +497,7 @@ export function ShopPage() {
                 aria-label="Sort products"
                 value={sort}
                 onChange={(event) => update('sort', event.target.value)}
-                className="!h-10 !min-h-[40px] !w-auto min-w-[138px] max-w-[175px] !py-1.5 !pl-2.5 !pr-8 !text-[13px] rounded-lg border-line bg-paper font-medium shadow-2xs"
+                className="!h-11 !min-h-11 !w-auto min-w-0 max-w-[148px] min-[360px]:min-w-[132px] min-[360px]:max-w-[175px] !py-1.5 !pl-2.5 !pr-8 !text-[13px] rounded-lg border-line bg-paper font-medium shadow-2xs"
               >
                 {SORTS.map((option) => (
                   <option key={option.value} value={option.value}>

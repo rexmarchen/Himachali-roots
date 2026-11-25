@@ -116,4 +116,44 @@ describe('public storefront', () => {
     expect(productResponse.text).toContain('"@type":"Product"');
     expect(productResponse.text).toContain('/shop/test-shawl');
   });
+
+  it('returns full ProductSummary fields for paid bestsellers on /api/home', async () => {
+    const nowIso = new Date().toISOString();
+    execute(
+      db,
+      `INSERT INTO orders (id, order_number, user_id, email, status, subtotal_paise, total_paise, shipping_address, idempotency_key, placed_at, paid_at, created_at, is_demo)
+       VALUES ('ord_bs_1', 'PR-BS-1', ?, 'customer@test.local', 'paid', 100000, 100000, '{}', 'idk_bs_1', ?, ?, ?, 0)`,
+      IDS.customer,
+      nowIso,
+      nowIso,
+      nowIso,
+    );
+    execute(
+      db,
+      `INSERT INTO seller_orders (id, order_id, seller_id, reference, status, subtotal_paise, total_paise, commission_rate_bp, commission_paise, seller_earning_paise)
+       VALUES ('so_bs_1', 'ord_bs_1', ?, 'PR-BS-1-1', 'confirmed', 100000, 100000, 1200, 12000, 88000)`,
+      IDS.seller,
+    );
+    execute(
+      db,
+      `INSERT INTO order_items (id, order_id, seller_order_id, product_id, seller_id, name, sku, unit_price_paise, quantity, line_subtotal_paise, commission_rate_bp, commission_paise, seller_earning_paise)
+       VALUES ('oi_bs_1', 'ord_bs_1', 'so_bs_1', ?, ?, 'Test Shawl', 'TEST-SHAWL', 100000, 3, 300000, 1200, 36000, 264000)`,
+      IDS.product,
+      IDS.seller,
+    );
+
+    const response = await request(app).get('/api/home');
+    expect(response.status).toBe(200);
+    expect(response.body.bestsellers).toHaveLength(1);
+    expect(response.body.bestsellers[0]).toMatchObject({
+      id: IDS.product,
+      slug: 'test-shawl',
+      name: 'Test Shawl',
+      sellerSlug: 'test-loom',
+      categorySlug: 'test-weaves',
+      stock: 10,
+      unitsSold: 3,
+      ratingCount: 0,
+    });
+  });
 });

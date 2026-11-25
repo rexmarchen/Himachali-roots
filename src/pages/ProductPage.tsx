@@ -483,7 +483,7 @@ export function ProductPage() {
                 type="button"
                 onClick={() => setLightboxOpen(true)}
                 aria-label="Zoom photograph"
-                className="absolute bottom-3 right-3 z-10 inline-flex h-9 items-center gap-1.5 rounded-full border border-white/25 bg-black/55 px-3 text-[11px] font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/75"
+                className="absolute bottom-3 right-3 z-10 inline-flex min-h-11 sm:min-h-9 items-center gap-1.5 rounded-full border border-white/25 bg-black/55 px-3.5 text-[11px] font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/75"
               >
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5" aria-hidden>
                   <circle cx="9" cy="9" r="5" />
@@ -723,7 +723,7 @@ export function ProductPage() {
                   }
                   toggleWishlist.mutate(isSaved);
                 }}
-                className="flex min-h-9 items-center gap-1.5 underline underline-offset-4 transition-colors hover:text-forest"
+                className="flex min-h-11 sm:min-h-9 items-center gap-1.5 underline underline-offset-4 transition-colors hover:text-forest"
               >
                 <span>{isSaved ? '♥' : '♡'}</span> {isSaved ? 'In saved items' : 'Save for later'}
               </button>
@@ -748,7 +748,7 @@ export function ProductPage() {
                       toast.push(url);
                     }
                   }}
-                  className="min-h-9 underline underline-offset-4 transition-colors hover:text-forest"
+                  className="inline-flex min-h-11 sm:min-h-9 items-center underline underline-offset-4 transition-colors hover:text-forest"
                 >
                   Copy link
                 </button>
@@ -925,7 +925,12 @@ export function ProductPage() {
                   </div>
                   <div className="grid grid-cols-3 px-4 py-2.5">
                     <dt className="font-medium text-muted">Unit / net quantity</dt>
-                    <dd className="col-span-2 text-ink">{product.unit} {product.weightG ? `· Packed weight: ${product.weightG} g` : ''}</dd>
+                    <dd className="col-span-2 text-ink">
+                      {product.unit}
+                      {product.weightG && !(product.weightG === 1 && /\b1\s*g\b/i.test(product.unit))
+                        ? ` · Packed weight: ${product.weightG} g`
+                        : ''}
+                    </dd>
                   </div>
                 </dl>
               </div>
@@ -1097,7 +1102,7 @@ export function ProductPage() {
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2.5">
               {image && (
-                <img src={image.url} alt="" className="h-10 w-10 rounded-lg border border-[#E4DACE] object-cover shrink-0" />
+                <img src={image.url} alt="" className="hidden min-[360px]:block h-10 w-10 rounded-lg border border-[#E4DACE] object-cover shrink-0" />
               )}
               <div className="min-w-0">
                 <p className="line-clamp-1 text-xs font-semibold text-forest">{product.name}</p>

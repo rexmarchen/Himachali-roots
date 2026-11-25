@@ -96,7 +96,7 @@ export function OrderSummary({
               <button
                 type="button"
                 onClick={onRemoveCoupon}
-                className="shrink-0 text-[10.5px] text-muted underline underline-offset-2 hover:text-forest"
+                className="inline-flex min-h-11 sm:min-h-8 shrink-0 items-center px-1 text-[11px] text-muted underline underline-offset-2 hover:text-forest"
               >
                 Remove
               </button>
@@ -117,7 +117,7 @@ export function OrderSummary({
                 autoComplete="off"
                 aria-invalid={couponError ? true : undefined}
                 aria-describedby="checkout-coupon-help"
-                className="h-10 text-[12px] uppercase tracking-[0.06em]"
+                className="h-11 sm:h-10 text-[12px] uppercase tracking-[0.06em]"
                 invalid={Boolean(couponError)}
               />
               <CheckoutAction
@@ -126,7 +126,7 @@ export function OrderSummary({
                 onClick={onApplyCoupon}
                 loading={applyingCoupon}
                 disabled={couponInput.trim().length < 2}
-                className="h-10 shrink-0 px-4 text-[12px]"
+                className="h-11 sm:h-10 shrink-0 px-4 text-[12px]"
               >
                 Apply
               </CheckoutAction>

@@ -1,4 +1,4 @@
-import { useState, useTransition, useMemo } from 'react';
+import { useEffect, useState, useTransition, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { PublicMaker, MakersQueryResponse } from '@shared/types';
@@ -102,6 +102,15 @@ export function MakersPage() {
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(searchQuery);
+
+  useEffect(() => {
+    if (!mobileFiltersOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileFiltersOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [mobileFiltersOpen]);
 
   // Sync query parameters helper
   const updateParams = (updates: Record<string, string | null>) => {
@@ -251,7 +260,7 @@ export function MakersPage() {
                     )}
                     <button
                       type="submit"
-                      className="min-h-8 rounded-sm bg-forest px-3.5 py-1.5 text-xs font-semibold tracking-wide text-paper hover:bg-forest-deep transition-colors"
+                      className="min-h-11 sm:min-h-8 rounded-sm bg-forest px-3.5 py-1.5 text-xs font-semibold tracking-wide text-paper hover:bg-forest-deep transition-colors"
                     >
                       Search
                     </button>
@@ -270,7 +279,7 @@ export function MakersPage() {
                     key={pill.region}
                     type="button"
                     onClick={() => updateParams({ region: isSelected ? null : pill.region })}
-                    className={`inline-flex min-h-9 items-center rounded-sm px-2.5 py-1 text-xs transition-colors ${
+                    className={`inline-flex min-h-11 sm:min-h-9 items-center rounded-sm px-2.5 py-1 text-xs transition-colors ${
                       isSelected
                         ? 'bg-forest text-paper font-semibold shadow-xs'
                         : 'border border-sand bg-surface/80 text-ink/75 hover:border-forest/40 hover:text-forest'
@@ -302,7 +311,7 @@ export function MakersPage() {
                       key={cat.slug}
                       type="button"
                       onClick={() => updateParams({ category: cat.slug === 'all' ? null : cat.slug })}
-                      className={`min-h-9 shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium tracking-wide transition-colors ${
+                      className={`min-h-11 sm:min-h-9 shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium tracking-wide transition-colors ${
                         isActive
                           ? 'bg-forest text-paper shadow-sm'
                           : 'border border-sand bg-surface/70 text-ink/80 hover:border-forest/40 hover:bg-surface'
@@ -387,7 +396,7 @@ export function MakersPage() {
               <button
                 type="button"
                 onClick={() => setMobileFiltersOpen(true)}
-                className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-sand bg-surface px-3.5 py-2 text-xs font-semibold text-forest shadow-2xs active:scale-95"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-sand bg-surface px-3.5 py-2 text-xs font-semibold text-forest shadow-2xs active:scale-95"
               >
                 <svg className="h-4 w-4 text-terra" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />

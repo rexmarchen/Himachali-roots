@@ -7,6 +7,7 @@ import { api, ApiError, errorFields, errorMessage } from '@/lib/api';
 import { useAuth, useCartQuery } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { usePageMeta } from '@/lib/usePageMeta';
+import { useKeyboardOpen } from '@/lib/useKeyboardOpen';
 import { Alert, ErrorState, LoadingBlock, Modal } from '@/components/ui';
 import { CheckoutAction, CheckoutProgress } from './checkout/CheckoutParts';
 import { DeliveryStep, AddressFields } from './checkout/DeliveryStep';
@@ -91,6 +92,8 @@ export function CheckoutPage() {
   });
 
   const [stage, setStage] = useState<CheckoutStage>(1);
+  const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false);
+  const keyboardOpen = useKeyboardOpen();
   const [selectedAddressId, setSelectedAddressId] = useState<string | 'new' | null>(null);
   const [draft, setDraft] = useState<AddressDraft>(EMPTY_ADDRESS_DRAFT);
   const [saveNewAddress, setSaveNewAddress] = useState(true);
@@ -606,7 +609,7 @@ export function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <div className="mx-auto w-full max-w-[1200px] px-4 pb-28 pt-7 sm:px-6 lg:px-8 lg:pb-16 lg:pt-10">
+      <div className={`mx-auto w-full max-w-[1200px] px-4 ${keyboardOpen ? 'pb-6' : 'pb-28'} pt-7 sm:px-6 lg:px-8 lg:pb-16 lg:pt-10`}>
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-terra">Secure checkout</p>
@@ -635,6 +638,33 @@ export function CheckoutPage() {
         </div>
 
         {ordersNote(unavailable, cartEmpty)}
+
+        {totals ? (
+          <button
+            type="button"
+            onClick={() => setMobileSummaryOpen((open) => !open)}
+            aria-expanded={mobileSummaryOpen}
+            className="mt-5 flex min-h-12 w-full items-center justify-between gap-3 border border-line bg-surface px-4 py-2.5 text-left lg:hidden"
+          >
+            <span className="text-xs font-medium text-forest">
+              {mobileSummaryOpen
+                ? 'Hide order summary & promo code'
+                : `Order summary · ${cart.itemCount} item${cart.itemCount === 1 ? '' : 's'} · Promo code`}
+            </span>
+            <span className="flex items-center gap-2 font-serif text-lg text-forest tabular-nums">
+              {formatINR(totals.totalPaise)}
+              <svg
+                viewBox="0 0 20 20"
+                className={`h-4 w-4 text-muted transition-transform ${mobileSummaryOpen ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                aria-hidden
+              >
+                <path d="M5 7.5 10 12.5 15 7.5" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </button>
+        ) : null}
 
         <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start lg:gap-10">
           <div className="min-w-0 space-y-4">
@@ -697,7 +727,7 @@ export function CheckoutPage() {
           </div>
 
           {totals ? (
-            <aside className="lg:sticky lg:top-[96px]">
+            <aside className={mobileSummaryOpen ? 'order-first lg:order-none lg:sticky lg:top-[96px]' : 'hidden lg:block lg:sticky lg:top-[96px]'}>
               <OrderSummary
                 cart={cart}
                 totals={totals}
@@ -715,7 +745,13 @@ export function CheckoutPage() {
       </div>
 
       {totals ? (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/97 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:hidden">
+        <div
+          className={
+            keyboardOpen
+              ? 'mx-auto w-full max-w-[1200px] border-t border-line bg-paper px-4 pb-8 pt-3 sm:px-6 lg:hidden'
+              : 'fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/97 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:hidden'
+          }
+        >
           <div className="mx-auto flex max-w-[1200px] items-center gap-4">
             <div className="min-w-0 flex-1">
               <p className="text-[9.5px] uppercase tracking-[0.14em] text-muted">Total payable</p>

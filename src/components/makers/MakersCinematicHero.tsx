@@ -218,7 +218,7 @@ export function MakersCinematicHero({ onExploreClick }: MakersCinematicHeroProps
           type="button"
           onClick={onExploreClick}
           aria-label="Scroll to Maker Directory"
-          className="inline-flex flex-col items-center gap-1 text-[11px] font-medium tracking-wider uppercase text-[#E4DACE]/70 hover:text-[#FAF7F2] transition-colors"
+          className="inline-flex min-h-11 flex-col items-center justify-center gap-1 px-3 py-1 text-[11px] font-medium tracking-wider uppercase text-[#E4DACE]/70 hover:text-[#FAF7F2] transition-colors"
         >
           <span>Discover Artisans Below</span>
           <svg

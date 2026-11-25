@@ -26,9 +26,9 @@ const buttonVariants: Record<Variant, string> = {
 };
 
 const buttonSizes: Record<Size, string> = {
-  sm: 'h-9 px-3.5 text-[13px]',
-  md: 'h-11 px-5 text-sm',
-  lg: 'h-12 px-6 text-sm',
+  sm: 'min-h-11 sm:min-h-9 sm:h-9 px-3.5 text-[13px]',
+  md: 'min-h-11 px-5 text-sm',
+  lg: 'min-h-12 px-6 text-sm',
 };
 
 export function buttonClass(variant: Variant = 'primary', size: Size = 'md', extra = ''): string {
@@ -448,7 +448,7 @@ export function Pagination({
             type="button"
             onClick={() => onChange(candidate)}
             aria-current={candidate === page ? 'page' : undefined}
-            className={`h-9 min-w-9 border px-2 text-[13px] ${
+            className={`min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 sm:h-9 border px-2 text-[13px] ${
               candidate === page ? 'border-forest bg-forest text-paper' : 'border-line bg-surface text-ink hover:border-forest/40'
             }`}
           >

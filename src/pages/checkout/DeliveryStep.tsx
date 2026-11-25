@@ -230,7 +230,7 @@ export function DeliveryStep({
                 <button
                   type="button"
                   onClick={() => onEditAddress(address)}
-                  className="absolute right-3 top-3 border border-line bg-white px-2 py-1 text-[10.5px] text-muted transition-colors hover:border-forest/40 hover:text-forest"
+                  className="absolute right-2.5 top-2.5 inline-flex min-h-11 sm:min-h-8 items-center border border-line bg-white px-3 py-1 text-[11px] text-muted transition-colors hover:border-forest/40 hover:text-forest"
                 >
                   Edit
                 </button>

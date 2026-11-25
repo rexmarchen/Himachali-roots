@@ -149,7 +149,7 @@ export function BackLink({ onClick, children = 'Back' }: { onClick: () => void; 
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 text-[12.5px] text-muted transition-colors hover:text-forest"
+      className="inline-flex min-h-11 sm:min-h-9 items-center gap-1.5 text-[12.5px] text-muted transition-colors hover:text-forest"
     >
       <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
         <path d="M10 3 5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

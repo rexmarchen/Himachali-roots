@@ -699,3 +699,41 @@ export function getRegions(db: Db): { region: string; productCount: number }[] {
       GROUP BY p.region ORDER BY product_count DESC`,
   ).map((row) => ({ region: row.region, productCount: row.product_count }));
 }
+
+export function listBestsellerProducts(
+  db: Db,
+  days = 90,
+  limit = 4,
+): (ProductSummary & { unitsSold: number })[] {
+  const sinceIso = new Date(Date.now() - days * 86400_000).toISOString();
+  const topRows = queryAll<{ id: string; units: number }>(
+    db,
+    `SELECT p.id, SUM(oi.quantity) AS units
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id AND o.paid_at IS NOT NULL
+       JOIN products p ON p.id = oi.product_id AND p.status = 'approved'
+       JOIN seller_profiles s ON s.id = p.seller_id AND s.status = 'approved' AND s.store_status = 'active'
+      WHERE o.created_at >= ?
+      GROUP BY p.id
+      ORDER BY units DESC
+      LIMIT ?`,
+    sinceIso,
+    limit,
+  );
+  if (topRows.length === 0) return [];
+  const unitsById = new Map(topRows.map((row) => [row.id, Number(row.units)]));
+  const placeholders = topRows.map(() => '?').join(',');
+  const summaryRows = queryAll<SummaryRow>(
+    db,
+    `${SUMMARY_SELECT} WHERE p.id IN (${placeholders})`,
+    ...topRows.map((row) => row.id),
+  );
+  const enriched = attachCampaignMeta(db, summaryRows.map(mapSummary));
+  const byId = new Map(enriched.map((item) => [item.id, item]));
+  const ordered: (ProductSummary & { unitsSold: number })[] = [];
+  for (const row of topRows) {
+    const product = byId.get(row.id);
+    if (product) ordered.push({ ...product, unitsSold: unitsById.get(row.id) ?? 0 });
+  }
+  return ordered;
+}

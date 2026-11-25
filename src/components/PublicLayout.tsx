@@ -6,6 +6,7 @@ import { useAuth, useCartCount, useSiteContent } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { EcommerceSearchBar } from './EcommerceSearchBar';
 import { SearchModal } from './SearchModal';
+import { useKeyboardOpen } from '@/lib/useKeyboardOpen';
 
 const NAV = [
   { label: 'Shop', to: '/shop' },
@@ -17,8 +18,12 @@ const NAV = [
 
 function Wordmark({ compact = false, light = false }: { compact?: boolean; light?: boolean }) {
   return (
-    <Link to="/" className="group flex items-center gap-2.5 sm:gap-3" aria-label="DEAR HILLS home">
-      <svg viewBox="0 0 48 48" className="h-8 w-8 sm:h-9 sm:w-9 lg:h-9 lg:w-9 xl:h-10 xl:w-10 shrink-0 drop-shadow-xs" aria-hidden>
+    <Link to="/" className="group flex items-center gap-2 sm:gap-3" aria-label="DEAR HILLS home">
+      <svg
+        viewBox="0 0 48 48"
+        className="h-7 w-7 min-[360px]:h-8 min-[360px]:w-8 sm:h-9 sm:w-9 lg:h-9 lg:w-9 xl:h-10 xl:w-10 shrink-0 drop-shadow-xs"
+        aria-hidden
+      >
         <rect width="48" height="48" rx="2" fill={light ? '#F7F3EB' : '#243D32'} />
         <path d="M9 35 20 15l5 11 4-6 9 15H9Z" fill={light ? '#243D32' : '#F7F3EB'} />
         <path d="M16 35 25 21l6 14H16Z" fill="#C77759" />
@@ -26,7 +31,7 @@ function Wordmark({ compact = false, light = false }: { compact?: boolean; light
       </svg>
       <span className="leading-none">
         <span
-          className={`block font-serif text-[17px] sm:text-[18px] lg:text-[20px] xl:text-[22px] tracking-[0.02em] transition-colors duration-200 ${
+          className={`block font-serif text-[15.5px] min-[360px]:text-[17px] sm:text-[18px] lg:text-[20px] xl:text-[22px] tracking-[0.02em] transition-colors duration-200 ${
             light ? 'text-[#FFFEFA] group-hover:text-sand' : 'text-forest group-hover:text-terra'
           }`}
         >
@@ -34,7 +39,7 @@ function Wordmark({ compact = false, light = false }: { compact?: boolean; light
         </span>
         {!compact ? (
           <span
-            className={`mt-0.5 sm:mt-1 block text-[7.5px] sm:text-[8px] lg:text-[9px] xl:text-[9.5px] font-semibold uppercase tracking-[0.28em] transition-colors duration-200 ${
+            className={`mt-0.5 sm:mt-1 block text-[6.5px] min-[360px]:text-[7.5px] sm:text-[8px] lg:text-[9px] xl:text-[9.5px] font-semibold uppercase tracking-[0.2em] min-[360px]:tracking-[0.28em] transition-colors duration-200 ${
               light ? 'text-white/75' : 'text-muted'
             }`}
           >
@@ -293,7 +298,7 @@ function CartLink({ count, compact = false, light = false }: { count: number; co
       to="/cart"
       className={
         compact
-          ? `relative inline-flex h-9.5 w-9.5 lg:h-10 lg:w-10 items-center justify-center transition-colors ${
+          ? `relative inline-flex h-11 w-11 lg:h-10 lg:w-10 items-center justify-center transition-colors ${
               light ? 'text-white hover:text-sand' : 'text-ink hover:text-terra'
             }`
           : `relative inline-flex min-h-11 lg:min-h-12 items-center gap-2 border px-3 sm:px-3.5 lg:px-4 text-[12px] sm:text-xs lg:text-sm font-medium transition-colors ${
@@ -304,7 +309,7 @@ function CartLink({ count, compact = false, light = false }: { count: number; co
       }
       aria-label={`Shopping bag with ${count} item${count === 1 ? '' : 's'}`}
     >
-      <Icon name="bag" className={compact ? 'h-4 w-4 lg:h-[18px] lg:w-[18px]' : 'h-4 w-4 lg:h-5 lg:w-5'} />
+      <Icon name="bag" className={compact ? 'h-5 w-5 lg:h-[18px] lg:w-[18px]' : 'h-4 w-4 lg:h-5 lg:w-5'} />
       {!compact ? <span className="hidden sm:inline">Bag</span> : null}
       <span
         className={
@@ -428,10 +433,10 @@ function Header() {
 
   return (
     <>
+      <HeritageAnnouncementBar customText={announcement?.active && announcement.text ? announcement.text : undefined} />
       <header
         className="sticky top-0 z-40 border-b border-line bg-paper/95 text-ink shadow-2xs backdrop-blur-md"
       >
-        <HeritageAnnouncementBar customText={announcement?.active && announcement.text ? announcement.text : undefined} />
 
         <div className="mx-auto flex h-12 sm:h-14 max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-4 px-3.5 sm:px-6 lg:px-8 xl:px-10">
           <div className="shrink-0">
@@ -735,11 +740,11 @@ const AUTH_PATHS = ['/login', '/register', '/forgot-password', '/reset-password'
 
 function shouldShowTabBar(pathname: string): boolean {
   if (pathname === '/cart') return false;
-  if (pathname.startsWith('/shop/')) return false;
+  if (pathname.startsWith('/shop/') || pathname.startsWith('/products/')) return false;
   if (pathname.startsWith('/checkout') || pathname.startsWith('/seller') || pathname.startsWith('/admin')) return false;
   if (pathname === '/sell' || pathname.startsWith('/become-a-maker')) return false;
   if (AUTH_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) return false;
-  return ['/', '/shop', '/makers', '/about', '/sourcing', '/faq', '/contact', '/credits', '/offers', '/policies', '/account'].some(
+  return ['/', '/shop', '/categories', '/category', '/makers', '/sellers', '/blog', '/about', '/sourcing', '/faq', '/contact', '/credits', '/offers', '/policies', '/account'].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
 }
@@ -748,7 +753,8 @@ function MobileTabBar({ onOpenSearch }: { onOpenSearch: () => void }) {
   const { pathname } = useLocation();
   const { user } = useAuth();
   const cartCount = useCartCount();
-  if (!shouldShowTabBar(pathname)) return null;
+  const keyboardOpen = useKeyboardOpen();
+  if (!shouldShowTabBar(pathname) || keyboardOpen) return null;
 
   const tabs = [
     { label: 'Home', to: '/', icon: 'home' as const, active: pathname === '/' },

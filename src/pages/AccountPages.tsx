@@ -56,7 +56,7 @@ export function AccountLayout() {
         </div>
       </div>
       <div className="mt-6 grid gap-8 lg:grid-cols-[210px_1fr]">
-        <nav className="no-scrollbar flex gap-1 overflow-x-auto lg:flex-col" aria-label="Account sections">
+        <nav className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line/70 lg:flex-col lg:border-b-0" aria-label="Account sections">
           {ACCOUNT_TABS.map((tab) => (
             <NavLink
               key={tab.to}

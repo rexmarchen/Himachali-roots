@@ -5,6 +5,7 @@ import { api, errorMessage } from '@/lib/api';
 import { useAuth, useCartQuery } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { usePageMeta } from '@/lib/usePageMeta';
+import { useKeyboardOpen } from '@/lib/useKeyboardOpen';
 import {
   Alert,
   Breadcrumbs,
@@ -20,6 +21,7 @@ export function CartPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const { user, config } = useAuth();
+  const keyboardOpen = useKeyboardOpen();
 
   const updateQuantity = useMutation({
     mutationFn: ({ productId, quantity }: { productId: string; quantity: number }) =>
@@ -213,7 +215,7 @@ export function CartPage() {
         </div>
       )}
 
-      {hasLines && cart ? (
+      {hasLines && cart && !keyboardOpen ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-xl lg:hidden">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
             <div className="min-w-0">

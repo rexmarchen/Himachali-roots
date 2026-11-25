@@ -247,16 +247,16 @@ export function SearchModal({
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-2.5">
                   Browse by Valley Category
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <div className="flex flex-wrap gap-2 sm:grid sm:grid-cols-3 sm:gap-2.5">
                   {CATEGORIES.map((cat) => (
                     <button
                       key={cat.slug}
                       type="button"
                       onClick={() => handleSelectCategory(cat.slug)}
-                      className="group flex items-center gap-2.5 p-2.5 rounded-xl border border-[#E7DFD3] bg-white/70 hover:bg-white hover:border-forest/40 hover:shadow-xs transition-all text-left"
+                      className="group inline-flex min-h-11 items-center gap-2 px-3 py-2 rounded-xl border border-[#E7DFD3] bg-white/70 hover:bg-white hover:border-forest/40 hover:shadow-xs transition-all text-left sm:w-full"
                     >
                       <span className="w-2 h-2 rounded-full bg-terra shrink-0" />
-                      <span className="text-xs font-medium text-ink group-hover:text-forest transition-colors truncate">
+                      <span className="text-xs font-medium text-ink group-hover:text-forest transition-colors">
                         {cat.name}
                       </span>
                     </button>

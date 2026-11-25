@@ -369,7 +369,7 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+                  className="absolute inset-y-0 right-0 flex min-w-11 items-center justify-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? 'Hide' : 'Show'}
@@ -403,6 +403,7 @@ export function LoginPage() {
 export function RegisterPage() {
   usePageMeta({ title: 'Create your account · Dear Hills', noindex: true });
   const [form, setForm] = useState({ fullName: '', email: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
   const [consent, setConsent] = useState(false);
   const [terms, setTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -521,22 +522,33 @@ export function RegisterPage() {
           />
         </Field>
         <Field label="Password" required hint="10+ characters, letters and numbers" error={fields.password}>
-          <Input
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={10}
-            value={form.password}
-            onChange={(event) => setForm({ ...form, password: event.target.value })}
-            invalid={Boolean(fields.password)}
-          />
+          <div className="relative">
+            <Input
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              required
+              minLength={10}
+              value={form.password}
+              onChange={(event) => setForm({ ...form, password: event.target.value })}
+              invalid={Boolean(fields.password)}
+              className="pr-14"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute inset-y-0 right-0 flex min-w-11 items-center justify-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </Field>
-        <label className="flex items-start gap-2.5 text-[12px] leading-relaxed text-muted">
-          <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 accent-forest" />
+        <label className="flex min-h-11 items-start gap-2.5 py-1.5 text-[12px] leading-relaxed text-muted">
+          <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-forest" />
           Send me occasional notes about new makers and seasonal stock. I can unsubscribe at any time.
         </label>
-        <label className="flex items-start gap-2.5 text-[12px] leading-relaxed text-muted">
-          <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-0.5 accent-forest" />
+        <label className="flex min-h-11 items-start gap-2.5 py-1.5 text-[12px] leading-relaxed text-muted">
+          <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-forest" />
           <span>
             I accept the draft{' '}
             <Link to="/policies/terms" className="underline underline-offset-2 hover:text-forest">terms</Link> and{' '}
@@ -813,7 +825,7 @@ export function ForgotPasswordPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+                className="absolute inset-y-0 right-0 flex min-w-11 items-center justify-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? 'Hide' : 'Show'}
@@ -833,7 +845,7 @@ export function ForgotPasswordPage() {
               <button
                 type="button"
                 onClick={() => setShowConfirm(!showConfirm)}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+                className="absolute inset-y-0 right-0 flex min-w-11 items-center justify-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
                 aria-label={showConfirm ? 'Hide password' : 'Show password'}
               >
                 {showConfirm ? 'Hide' : 'Show'}
@@ -1012,7 +1024,7 @@ export function ResetPasswordPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+                className="absolute inset-y-0 right-0 flex min-w-11 items-center justify-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? 'Hide' : 'Show'}
@@ -1032,7 +1044,7 @@ export function ResetPasswordPage() {
               <button
                 type="button"
                 onClick={() => setShowConfirm(!showConfirm)}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
+                className="absolute inset-y-0 right-0 flex min-w-11 items-center justify-center px-3 text-xs font-medium text-muted hover:text-forest select-none"
                 aria-label={showConfirm ? 'Hide password' : 'Show password'}
               >
                 {showConfirm ? 'Hide' : 'Show'}

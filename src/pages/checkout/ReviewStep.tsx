@@ -11,7 +11,7 @@ function EditButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="text-[11px] text-muted underline decoration-line underline-offset-4 transition-colors hover:text-forest"
+      className="inline-flex min-h-11 sm:min-h-8 items-center px-2 -mr-2 text-[11px] text-muted underline decoration-line underline-offset-4 transition-colors hover:text-forest"
     >
       Edit
     </button>

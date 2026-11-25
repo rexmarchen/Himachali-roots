@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { execute, queryAll, queryOne, type Db } from '../db.js';
-import { getProduct, getRegions, getSellerStorefront, listCategories, listProducts, listPublicMakers, listPublicSellers } from '../lib/catalog.js';
+import { getProduct, getRegions, getSellerStorefront, listCategories, listProducts, listPublicMakers, listBestsellerProducts, listPublicSellers } from '../lib/catalog.js';
 import {
   campaignStats,
   effectiveCampaignStatus,
@@ -55,30 +55,7 @@ export function publicRouter(db: Db): Router {
         ? listProducts(db, { category: content.homepage.gifting.categorySlug, pageSize: 4 })
         : { items: [] };
 
-    const bestsellerRows = queryAll<{
-      slug: string;
-      name: string;
-      price_paise: number;
-      image_url: string | null;
-      image_alt: string | null;
-      seller_name: string;
-      units: number;
-    }>(
-      db,
-      `SELECT p.slug, p.name, p.price_paise, s.business_name AS seller_name,
-              SUM(oi.quantity) AS units,
-              (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url,
-              (SELECT alt FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_alt
-         FROM order_items oi
-         JOIN orders o ON o.id = oi.order_id AND o.paid_at IS NOT NULL
-         JOIN products p ON p.id = oi.product_id AND p.status = 'approved'
-         JOIN seller_profiles s ON s.id = p.seller_id AND s.status = 'approved' AND s.store_status = 'active'
-        WHERE o.created_at >= ?
-        GROUP BY p.id
-        ORDER BY units DESC
-        LIMIT 4`,
-      new Date(Date.now() - 90 * 86400_000).toISOString(),
-    );
+    const bestsellers = listBestsellerProducts(db, 90, 4);
 
     const reviews = queryAll<{
       id: string;
@@ -121,15 +98,7 @@ export function publicRouter(db: Db): Router {
       campaign: featuredCampaignRow
         ? mapCampaign(featuredCampaignRow, featuredStats!.productCount, featuredStats!.maxDiscountPercent)
         : null,
-      bestsellers: bestsellerRows.map((row) => ({
-        slug: row.slug,
-        name: row.name,
-        pricePaise: row.price_paise,
-        imageUrl: row.image_url,
-        imageAlt: row.image_alt,
-        sellerName: row.seller_name,
-        unitsSold: row.units,
-      })),
+      bestsellers,
       featured: products.items,
       newArrivals: newArrivals.items,
       catalogPreview: catalogPreview.items,

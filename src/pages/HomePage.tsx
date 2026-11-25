@@ -3,7 +3,6 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Category, CampaignSummary, ProductSummary } from '@shared/types';
-import { formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
 import { BRAND_ALTERNATE_NAMES, BRAND_NAME, MARKETPLACE_HOME_DESCRIPTION, MARKETPLACE_HOME_TITLE } from '@shared/seo';
 import { api } from '@/lib/api';
@@ -17,7 +16,6 @@ import {
   ErrorState,
   LinkButton,
   SectionHeading,
-  Spinner,
 } from '@/components/ui';
 
 interface MakerSummary {
@@ -35,15 +33,7 @@ interface HomeResponse {
   categories: Category[];
   makers: MakerSummary[];
   campaign: CampaignSummary | null;
-  bestsellers: {
-    slug: string;
-    name: string;
-    pricePaise: number;
-    imageUrl: string | null;
-    imageAlt: string | null;
-    sellerName: string;
-    unitsSold: number;
-  }[];
+  bestsellers: (ProductSummary & { unitsSold: number })[];
   featured: ProductSummary[];
   newArrivals: ProductSummary[];
   catalogPreview?: ProductSummary[];
@@ -192,7 +182,7 @@ function CinematicHero() {
 
   return (
     <section
-      className="relative isolate flex min-h-[54svh] sm:min-h-[60svh] w-full flex-col justify-end overflow-hidden bg-[#101918] text-white lg:min-h-[calc(100svh-8.5rem)] lg:max-h-[750px]"
+      className="relative isolate flex min-h-[38svh] min-[375px]:min-h-[42svh] sm:min-h-[58svh] w-full flex-col justify-end overflow-hidden bg-[#101918] text-white lg:min-h-[calc(100svh-8.5rem)] lg:max-h-[750px]"
       aria-roledescription="carousel"
       aria-label="Photographs from Himachal Pradesh"
       onKeyDown={onKeyDown}
@@ -243,7 +233,7 @@ function CinematicHero() {
         />
       </div>
 
-      <div className="relative z-30 mx-auto flex w-full max-w-[88rem] flex-1 flex-col justify-end px-4 pb-5 pt-8 sm:px-8 sm:pb-10 sm:pt-16 lg:px-12 lg:pb-14 lg:pt-14">
+      <div className="relative z-30 mx-auto flex w-full max-w-[88rem] flex-1 flex-col justify-end px-4 pb-4 pt-6 sm:px-8 sm:pb-10 sm:pt-16 lg:px-12 lg:pb-14 lg:pt-14">
         <div className="max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="inline-flex items-center gap-2.5 rounded-full border border-white/25 bg-black/50 px-3.5 py-1.5 sm:px-4 sm:py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-white shadow-sm backdrop-blur-md sm:text-xs">
@@ -252,32 +242,32 @@ function CinematicHero() {
             </div>
           </div>
 
-          <h1 className="mt-3 font-serif text-[2.2rem] font-normal leading-[1.05] tracking-[-0.02em] !text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.65)] sm:mt-4 sm:text-5xl md:text-6xl lg:text-[4.3rem] xl:text-[5rem]">
+          <h1 className="mt-2.5 font-serif text-[2rem] min-[375px]:text-[2.2rem] font-normal leading-[1.05] tracking-[-0.02em] !text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.65)] sm:mt-4 sm:text-5xl md:text-6xl lg:text-[4.3rem] xl:text-[5rem]">
             From the Himalayas,
             <span className="mt-1 block font-normal italic text-butter">with heart.</span>
           </h1>
 
-          <p className="mt-3.5 max-w-xl text-[15px] font-light leading-relaxed text-white/95 drop-shadow-[0_1px_10px_rgba(0,0,0,0.6)] sm:mt-4 sm:text-lg lg:text-xl lg:max-w-2xl">
-            Mountain honey, handloom wool, Kangra tea, and woodcraft — listed by reviewed sellers and dispatched from their own workshops and orchards.
+          <p className="mt-2.5 max-w-xl text-[14px] min-[375px]:text-[15px] font-light leading-relaxed text-white/95 drop-shadow-[0_1px_10px_rgba(0,0,0,0.6)] sm:mt-4 sm:text-lg lg:text-xl lg:max-w-2xl">
+            Mountain honey, handloom wool, Kangra tea, and more — crafted by local artisans.
           </p>
 
-          <div className="mt-5 grid grid-cols-1 gap-2.5 sm:mt-7 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
+          <div className="mt-4 grid grid-cols-1 min-[360px]:grid-cols-2 gap-2.5 sm:mt-7 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
             <LinkButton
               to="/shop"
               size="lg"
-              className="w-full sm:w-auto !border-terra !bg-terra !text-white shadow-lg transition-all hover:!bg-[#C97253] rounded-md text-sm sm:text-base font-semibold px-6 py-3.5 sm:px-8 sm:py-4"
+              className="w-full sm:w-auto !border-terra !bg-terra !text-white shadow-lg transition-all hover:!bg-[#C97253] rounded-md text-[13px] min-[375px]:text-sm sm:text-base font-semibold px-4 py-3 sm:px-8 sm:py-4"
             >
-              Shop the collection
-              <span aria-hidden className="ml-2">
+              Shop the Collection
+              <span aria-hidden className="ml-1.5 sm:ml-2">
                 →
               </span>
             </LinkButton>
 
             <Link
               to="/makers"
-              className="inline-flex min-h-12 w-full sm:w-auto items-center justify-center gap-2 rounded-md border border-white/45 bg-black/35 px-5 py-3 sm:px-7 sm:py-3.5 text-sm sm:text-base font-semibold text-white shadow-sm backdrop-blur-md transition-all hover:border-white hover:bg-black/50"
+              className="inline-flex min-h-12 w-full sm:w-auto items-center justify-center gap-2 rounded-md border border-white/45 bg-black/35 px-4 py-3 sm:px-7 sm:py-3.5 text-[13px] min-[375px]:text-sm sm:text-base font-semibold text-white shadow-sm backdrop-blur-md transition-all hover:border-white hover:bg-black/50"
             >
-              Meet the makers
+              Meet the Makers
             </Link>
           </div>
 
@@ -362,7 +352,7 @@ function CinematicHero() {
                   onClick={() => setManualPause((value) => !value)}
                   aria-label={manualPause ? 'Resume the photograph sequence' : 'Pause the photograph sequence'}
                   aria-pressed={manualPause}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-white/30 text-white/85 transition-colors hover:border-white hover:text-white"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-white/30 text-white/85 transition-colors hover:border-white hover:text-white"
                 >
                   {manualPause ? (
                     <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3" aria-hidden>
@@ -521,16 +511,19 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
               Organised by craft discipline — handloom woolens, teas, honey, and mountain pantry staples.
             </p>
           </div>
-          <Link
-            to="/shop"
-            className="self-start text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:text-terra sm:self-auto"
-          >
-            Browse all ({listingCount} listings) →
-          </Link>
+          <div className="flex items-center justify-between gap-3 sm:block">
+            <Link
+              to="/shop"
+              className="inline-flex min-h-11 items-center text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:text-terra"
+            >
+              Browse all ({listingCount} listings) →
+            </Link>
+            <span className="text-[11px] font-medium text-muted md:hidden">Swipe →</span>
+          </div>
         </div>
 
         {liveCategories.length ? (
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
+          <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-3 md:gap-5 md:overflow-visible md:px-0 lg:grid-cols-4">
             {liveCategories.map((category, index) => {
               const visual = CATEGORY_VISUALS[category.slug] ?? {
                 image: category.imageUrl || '/images/editorial-terrace.jpg',
@@ -540,7 +533,7 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
                 <Link
                   key={category.id}
                   to={`/categories/${encodeURIComponent(category.slug)}`}
-                  className={`group relative flex flex-col justify-end overflow-hidden rounded-xl border border-line bg-[#172321] aspect-[4/3] sm:aspect-[4/3.2] transition-all duration-500 ease-out transform hover:-translate-y-1 hover:border-terra/50 hover:shadow-md ${
+                  className={`group relative flex w-[160px] min-[375px]:w-[178px] shrink-0 snap-start md:w-auto flex-col justify-end overflow-hidden rounded-xl border border-line bg-[#172321] aspect-[4/3] sm:aspect-[4/3.2] transition-all duration-500 ease-out transform hover:-translate-y-1 hover:border-terra/50 hover:shadow-md ${
                     isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
                   }`}
                   style={{ transitionDelay: isInView ? `${(index % 4) * 60}ms` : '0ms' }}
@@ -1347,41 +1340,25 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
 
         <div className="grid grid-cols-2 gap-2.5 sm:gap-6 md:grid-cols-4">
           {bestsellers.map((item, index) => (
-            <Link
-              key={item.slug}
-              to={`/shop/${item.slug}`}
-              className={`group w-full min-w-0 flex flex-col justify-between bg-white rounded-xl sm:rounded-none border border-[#E4DACE]/75 shadow-[0_1px_4px_rgba(23,35,33,0.03)] p-2 sm:p-0 sm:border-0 sm:bg-transparent sm:shadow-none transition-all duration-500 ease-out transform hover:-translate-y-1 ${
+            <div
+              key={item.id ?? item.slug}
+              className={`flex flex-col transition-all duration-500 ease-out transform ${
                 isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
               }`}
               style={{ transitionDelay: isInView ? `${(index % 4) * 60}ms` : '0ms' }}
             >
-              <div>
-                <div className="relative aspect-square overflow-hidden rounded-lg sm:rounded-none border border-[#E4DACE]/40 sm:border-line/60 bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE]">
-                  {item.imageUrl ? (
-                    <img
-                      src={item.imageUrl}
-                      alt={item.imageAlt ?? item.name}
-                      loading="lazy"
-                      decoding="async"
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-[10px] text-muted">No photo</div>
-                  )}
-                  <span className="absolute left-1.5 top-1.5 rounded sm:rounded-none bg-[#172321]/90 text-white px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider shadow-xs">
-                    #{index + 1} Best
-                  </span>
-                </div>
-                <p className="mt-2 truncate text-[9.5px] sm:text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#B96243]">{item.sellerName}</p>
-                <h3 className="mt-0.5 line-clamp-2 text-[12.5px] sm:text-[16px] font-semibold sm:font-normal leading-snug text-forest transition-colors group-hover:text-terra min-h-[34px] sm:min-h-[42px]">
-                  {item.name}
-                </h3>
+              <div className="mb-1.5 flex items-center justify-between gap-1 text-[10px] font-semibold">
+                <span className="rounded bg-[#172321] px-2 py-0.5 uppercase tracking-wider text-white">
+                  #{index + 1} Best
+                </span>
+                <span className="rounded-xs bg-emerald-50 px-1.5 py-0.5 text-emerald-800 tabular-nums">
+                  {item.unitsSold} sold
+                </span>
               </div>
-              <div className="mt-2 flex items-center justify-between gap-x-1 border-t border-line/40 pt-1.5 sm:border-0 sm:pt-1">
-                <span className="text-[13.5px] font-bold text-[#172321] sm:font-medium sm:text-[14px] tabular-nums">{formatINR(item.pricePaise)}</span>
-                <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded-xs tabular-nums">{item.unitsSold} sold</span>
+              <div className="flex flex-1 [&>article]:w-full">
+                <ProductCard product={item} showAddToCart />
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       </div>
@@ -1470,7 +1447,7 @@ function CatalogShowcaseSection({
           <button
             type="button"
             onClick={() => setSelectedCategory('all')}
-            className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-4 text-xs font-semibold transition-all ${
+            className={`inline-flex min-h-11 sm:min-h-9 items-center gap-2 rounded-full border px-4 text-xs font-semibold transition-all ${
               selectedCategory === 'all'
                 ? 'border-forest bg-forest text-paper shadow-xs'
                 : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
@@ -1495,7 +1472,7 @@ function CatalogShowcaseSection({
                 key={cat.id}
                 type="button"
                 onClick={() => setSelectedCategory(cat.slug)}
-                className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
+                className={`inline-flex min-h-11 sm:min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
                   isSelected
                     ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
                     : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
@@ -1613,10 +1590,25 @@ export function HomePage() {
 
   if (home.isLoading) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center bg-paper px-4">
-        <div className="flex flex-col items-center gap-3 text-sm text-muted">
-          <Spinner className="h-7 w-7 text-forest" />
-          <span className="font-serif text-base text-forest">Gathering Himalayan shelves…</span>
+      <div className="min-h-[70vh] bg-paper" aria-busy="true" aria-label="Loading storefront">
+        <span className="sr-only">Gathering Himalayan shelves…</span>
+        <div className="h-[42svh] sm:h-[58svh] w-full animate-pulse motion-reduce:animate-none bg-[#172321]/90" />
+        <div className="mx-auto max-w-[88rem] px-4 py-8 sm:px-6 lg:px-8 xl:px-10 space-y-10">
+          <div className="flex gap-3 overflow-hidden md:grid md:grid-cols-4 md:gap-5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-32 w-[160px] min-[375px]:w-[178px] md:w-auto shrink-0 rounded-xl bg-sand/50 animate-pulse motion-reduce:animate-none" />
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2.5 rounded-xl border border-line/50 bg-white p-2.5">
+                <div className="aspect-[4/4.6] w-full rounded-lg bg-sand/45 animate-pulse motion-reduce:animate-none" />
+                <div className="h-3 w-2/3 rounded bg-sand/60 animate-pulse motion-reduce:animate-none" />
+                <div className="h-4 w-5/6 rounded bg-sand/60 animate-pulse motion-reduce:animate-none" />
+                <div className="h-10 w-full rounded bg-sand/45 animate-pulse motion-reduce:animate-none" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
