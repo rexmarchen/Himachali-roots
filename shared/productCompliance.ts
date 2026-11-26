@@ -241,3 +241,65 @@ export function validateProductCompliance(input: {
 export function firstComplianceError(errors: Record<string, string>): string {
   return Object.values(errors)[0] ?? 'Complete the category-specific product information before submitting.';
 }
+
+export interface ProtectedClaimRule {
+  id: 'pure_pashmina' | 'gi_certified' | 'organic_certified';
+  label: string;
+  pattern: RegExp;
+  message: string;
+}
+
+export const PROTECTED_CLAIM_RULES: ProtectedClaimRule[] = [
+  {
+    id: 'pure_pashmina',
+    label: 'Pure Pashmina',
+    pattern: /\bpure\s+pashmina\b|\b100%\s+pashmina\b/i,
+    message:
+      'Protected claim "pure pashmina" requires an admin-approved origin/material certificate before submission or publication.',
+  },
+  {
+    id: 'gi_certified',
+    label: 'GI Certified / GI Tagged',
+    pattern: /\bgi[\s-]+(?:certified|tagged|tag)\b|\bgeographical\s+indication\s+certified\b/i,
+    message:
+      'Protected claim "GI certified / GI tagged" requires GI documentation verified by an administrator.',
+  },
+  {
+    id: 'organic_certified',
+    label: 'Organic Certified',
+    pattern: /\borganic\s+certified\b|\bcertified\s+organic\b/i,
+    message:
+      'Protected claim "organic certified" requires an admin-approved organic certification document before publication.',
+  },
+];
+
+export function countDescriptionWords(text: string | null | undefined): number {
+  const stripped = (text ?? '').replace(/<[^>]*>/g, ' ').trim();
+  if (!stripped) return 0;
+  return stripped.split(/\s+/).filter(Boolean).length;
+}
+
+export function findProtectedClaimViolations(input: {
+  texts: Array<string | null | undefined>;
+  hasAcceptedOriginOrCraftProof?: boolean;
+  giVerifiedByAdmin?: boolean;
+  hasAcceptedOrganicProof?: boolean;
+}): { errors: Record<string, string>; matchedClaims: string[] } {
+  const combined = input.texts.filter(Boolean).join(' ');
+  const errors: Record<string, string> = {};
+  const matchedClaims: string[] = [];
+
+  for (const rule of PROTECTED_CLAIM_RULES) {
+    if (!rule.pattern.test(combined)) continue;
+    matchedClaims.push(rule.label);
+    if (rule.id === 'pure_pashmina' && !input.hasAcceptedOriginOrCraftProof) {
+      errors.claims = rule.message;
+    } else if (rule.id === 'gi_certified' && !input.giVerifiedByAdmin) {
+      errors.giTagged = rule.message;
+    } else if (rule.id === 'organic_certified' && !input.hasAcceptedOrganicProof) {
+      errors.claims = errors.claims ?? rule.message;
+    }
+  }
+
+  return { errors, matchedClaims };
+}

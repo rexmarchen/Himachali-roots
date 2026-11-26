@@ -38,6 +38,7 @@ async function razorpayRequest<T>(path: string, init?: RequestInit): Promise<T> 
   }
   const response = await fetch(`${RAZORPAY_API}${path}`, {
     ...init,
+    signal: init?.signal ?? AbortSignal.timeout(10_000),
     headers: {
       Authorization: authHeader(),
       'Content-Type': 'application/json',

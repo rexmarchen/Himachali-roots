@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Address, CartView, OrderView } from '@shared/types';
 import { formatINR } from '@shared/types';
+import { safeExternalUrl } from '@shared/urls';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
@@ -457,11 +458,14 @@ export function OrderDetailPage() {
                     {sellerOrder.shipment.carrier} · {sellerOrder.shipment.trackingNumber}
                   </p>
                   <p className="text-[11px] text-muted">Shipped {formatDate(sellerOrder.shipment.shippedAt)}{sellerOrder.shipment.deliveredAt ? ` · Delivered ${formatDate(sellerOrder.shipment.deliveredAt)}` : ''}</p>
-                  {sellerOrder.shipment.trackingUrl ? (
-                    <a href={sellerOrder.shipment.trackingUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-forest underline underline-offset-2">
-                      Open carrier tracking
-                    </a>
-                  ) : null}
+                  {(() => {
+                    const safeUrl = safeExternalUrl(sellerOrder.shipment.trackingUrl);
+                    return safeUrl ? (
+                      <a href={safeUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-forest underline underline-offset-2">
+                        Open carrier tracking
+                      </a>
+                    ) : null;
+                  })()}
                   {sellerOrder.shipment.events.length ? (
                     <ol className="mt-3 space-y-1.5 text-[11.5px] text-muted">
                       {sellerOrder.shipment.events.map((event, index) => (

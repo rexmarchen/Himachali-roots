@@ -7,7 +7,7 @@ import type {
   SellerOrderView,
   ShipmentView,
 } from '../../shared/types.js';
-import { AppError, badRequest, conflict, notFound } from './http.js';
+import { AppError, badRequest, conflict, notFound, safeJsonParse } from './http.js';
 import { audit } from './audit.js';
 import { allocate, commissionOn, evaluateCoupon, resolveCommissionBp, shippingFor, taxComponentInclusive } from './pricing.js';
 import { newId, orderNumber, sellerOrderReference } from './ids.js';
@@ -94,6 +94,8 @@ export function recordOrderEvent(
   );
 }
 
+const MAX_PENDING_ORDERS_PER_USER = 5;
+
 export function createOrder(db: Db, input: CheckoutInput): { orderId: string; orderNumber: string; totalPaise: number } {
   const existing = queryOne<{ id: string; user_id: string; order_number: string; total_paise: number }>(
     db,
@@ -103,6 +105,20 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
   if (existing) {
     if (existing.user_id !== input.userId) throw conflict('Duplicate checkout key.');
     return { orderId: existing.id, orderNumber: existing.order_number, totalPaise: existing.total_paise };
+  }
+
+  const activePendingCount =
+    queryOne<{ count: number }>(
+      db,
+      "SELECT COUNT(*) AS count FROM orders WHERE user_id = ? AND status = 'pending_payment' AND (reservation_expires_at IS NULL OR reservation_expires_at > ?)",
+      input.userId,
+      new Date().toISOString(),
+    )?.count ?? 0;
+  if (activePendingCount >= MAX_PENDING_ORDERS_PER_USER) {
+    throw conflict(
+      'You already have several orders awaiting payment. Complete or wait for an existing order before starting a new one.',
+      'too_many_pending_orders',
+    );
   }
 
   validateAddress(input.address);
@@ -504,6 +520,11 @@ export function markOrderPaid(db: Db, params: PaidParams): { alreadyProcessed: b
         expected: order.total_paise,
         received: params.amountPaise,
         provider: params.provider,
+      });
+      recordOrderEvent(db, {
+        orderId: order.id,
+        type: 'payment.amount_mismatch',
+        description: `Amount mismatch flagged: expected ${order.total_paise} paise, received ${params.amountPaise} paise.`,
       });
       throw new AppError(
         409,
@@ -982,7 +1003,14 @@ export function getOrderView(
     couponCode: order.coupon_code,
     placedAt: order.placed_at,
     paidAt: order.paid_at,
-    shippingAddress: JSON.parse(order.shipping_address) as OrderAddress,
+    shippingAddress: safeJsonParse<OrderAddress>(order.shipping_address, {
+      fullName: '',
+      phone: '',
+      line1: '',
+      city: '',
+      state: '',
+      pincode: '',
+    }),
     sellerOrders,
     payment: payment ? { provider: payment.provider, status: payment.status, providerPaymentId: payment.provider_payment_id } : null,
     canCancel: order.status === 'paid' && cancellable,

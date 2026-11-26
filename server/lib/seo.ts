@@ -1,6 +1,6 @@
 import { queryAll, queryOne, type Db } from '../db.js';
 import { env } from '../env.js';
-import { BLOG_POSTS } from '../../shared/blog.js';
+import { findJournalPostBySlug } from '../../shared/guides.js';
 import { POLICY_KEYS } from '../../shared/content.js';
 import {
   BECOME_MAKER_SEO_DESCRIPTION,
@@ -9,9 +9,14 @@ import {
   BRAND_NAME,
   buildCategoryFallbackDescription,
   buildCategorySeoTitle,
+  buildCraftHubTitle,
   buildProductFallbackDescription,
   buildProductSeoTitle,
+  buildRegionCraftTitle,
+  buildRegionHubTitle,
   cleanSeoText,
+  fitSeoDescription,
+  fitSeoTitle,
   isDemoProductInput,
   isDemoSellerInput,
   MAKERS_SEO_DESCRIPTION,
@@ -23,6 +28,7 @@ import {
   SHOP_SEO_DESCRIPTION,
   SHOP_SEO_TITLE,
 } from '../../shared/seo.js';
+import { getCraftBySlug, getRegionBySlug, getRegionCraftCombo, listCrafts, listRegions } from './himalayan.js';
 
 export { cleanSeoText, isDemoProductInput, isDemoSellerInput };
 import {
@@ -246,6 +252,14 @@ export function getSeoMetadata(
       seller_slug: string;
       seller_email: string | null;
       region: string | null;
+      region_slug: string | null;
+      district_village: string | null;
+      craft_type: string | null;
+      craft_slug: string | null;
+      technique: string | null;
+      gi_tagged: number;
+      gi_name: string | null;
+      gi_registration_ref: string | null;
       category_name: string;
       category_slug: string;
       rating_average: number | null;
@@ -253,7 +267,8 @@ export function getSeoMetadata(
     }>(
       db,
       `SELECT p.id, p.name, p.slug, p.short_description, p.description, p.price_paise, p.sku,
-              p.origin_place, p.materials, p.is_demo,
+              p.origin_place, p.materials, p.is_demo, p.region_slug, p.district_village,
+              p.craft_type, p.craft_slug, p.technique, p.gi_tagged, p.gi_name, p.gi_registration_ref,
               i.quantity - i.reserved_quantity AS stock,
               acp.promo_price_paise,
               s.business_name, s.slug AS seller_slug, COALESCE(NULLIF(p.region, ''), s.region) AS region, u.email AS seller_email,
@@ -324,6 +339,9 @@ export function getSeoMetadata(
       name: product.name,
       categorySlug: product.category_slug,
       categoryName: product.category_name,
+      region: product.region,
+      craftType: product.craft_type,
+      materials: product.materials,
     });
     const description =
       cleanSeoText(product.short_description) ||
@@ -369,6 +387,36 @@ export function getSeoMetadata(
           )
         : [];
 
+    const additionalProperties: Array<Record<string, unknown>> = [];
+    if (product.region) {
+      additionalProperties.push({ '@type': 'PropertyValue', name: 'Region', value: product.region });
+    }
+    if (product.district_village || product.origin_place) {
+      additionalProperties.push({
+        '@type': 'PropertyValue',
+        name: 'District / Village',
+        value: product.district_village || product.origin_place,
+      });
+    }
+    if (product.craft_type) {
+      additionalProperties.push({ '@type': 'PropertyValue', name: 'Craft', value: product.craft_type });
+    }
+    if (product.technique) {
+      additionalProperties.push({ '@type': 'PropertyValue', name: 'Technique', value: product.technique });
+    }
+    additionalProperties.push({
+      '@type': 'PropertyValue',
+      name: 'GI Tagged',
+      value: product.gi_tagged === 1 ? product.gi_name || 'Verified GI Tagged' : 'No',
+    });
+    if (product.gi_tagged === 1 && product.gi_registration_ref) {
+      additionalProperties.push({
+        '@type': 'PropertyValue',
+        name: 'GI Registration Reference',
+        value: product.gi_registration_ref,
+      });
+    }
+
     const productEntity: Record<string, unknown> = {
       '@type': 'Product',
       '@id': `${canonicalUrl}#product`,
@@ -379,10 +427,11 @@ export function getSeoMetadata(
       sku: product.sku || product.id,
       category: product.category_name,
       ...(product.materials ? { material: product.materials } : {}),
+      additionalProperty: additionalProperties,
       brand: {
         '@type': 'Brand',
         name: BRAND_NAME,
-        alternateName: 'DearHills',
+        alternateName: [...BRAND_ALTERNATE_NAMES],
       },
       countryOfOrigin: {
         '@type': 'Country',
@@ -434,6 +483,13 @@ export function getSeoMetadata(
       }
     }
 
+    const regionCrumb = product.region_slug && product.region
+      ? [{ name: product.region, path: `/regions/${product.region_slug}` }]
+      : [];
+    const craftCrumb = product.craft_slug && product.craft_type
+      ? [{ name: product.craft_type, path: `/crafts/${product.craft_slug}` }]
+      : [{ name: product.category_name, path: `/categories/${product.category_slug}` }];
+
     return {
       title,
       description,
@@ -447,12 +503,385 @@ export function getSeoMetadata(
           productEntity,
           breadcrumbList(origin, [
             { name: 'Home', path: '' },
-            { name: 'Shop', path: '/shop' },
-            { name: product.category_name, path: `/categories/${product.category_slug}` },
+            ...regionCrumb,
+            ...craftCrumb,
             { name: product.name, path: `/shop/${product.slug}` },
           ]),
         ],
       },
+    };
+  }
+
+  // 2a. Pillar Page: /himalayan-handmade-products
+  if (normalizedPath === '/himalayan-handmade-products') {
+    const canonicalUrl = `${origin}/himalayan-handmade-products`;
+    const activeRegions = listRegions(db);
+    const activeCrafts = listCrafts(db);
+    const title = fitSeoTitle(`Himalayan Handmade Products & Crafts | ${BRAND_NAME}`, 60, BRAND_NAME);
+    const description = fitSeoDescription(
+      `Shop authentic handmade crafts, handloom wool, Pashmina, regional teas & honey from 7 Indian Himalayan regions direct from verified makers.`,
+      158,
+    );
+    return {
+      title,
+      description,
+      canonicalUrl,
+      imageUrl: fallbackImage,
+      ogType: 'website',
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@graph': [
+          {
+            '@type': 'CollectionPage',
+            name: 'Authentic Indian Himalayan Handmade Products',
+            url: canonicalUrl,
+            description,
+          },
+          {
+            '@type': 'ItemList',
+            name: 'Indian Himalayan Regions & Crafts',
+            itemListElement: [
+              ...activeRegions.map((r, idx) => ({
+                '@type': 'ListItem',
+                position: idx + 1,
+                name: r.name,
+                url: `${origin}/regions/${r.slug}`,
+              })),
+              ...activeCrafts.map((c, idx) => ({
+                '@type': 'ListItem',
+                position: activeRegions.length + idx + 1,
+                name: c.name,
+                url: `${origin}/crafts/${c.slug}`,
+              })),
+            ],
+          },
+          breadcrumbList(origin, [
+            { name: 'Home', path: '' },
+            { name: 'Himalayan Handmade Products', path: '/himalayan-handmade-products' },
+          ]),
+        ],
+      },
+    };
+  }
+
+  // 2b. GI-Tagged Hub: /gi-tagged
+  if (normalizedPath === '/gi-tagged') {
+    const canonicalUrl = `${origin}/gi-tagged`;
+    const giItems = queryAll<{ name: string; slug: string }>(
+      db,
+      `SELECT p.name, p.slug
+         FROM products p
+         JOIN seller_profiles s ON s.id = p.seller_id
+         LEFT JOIN users u ON u.id = s.user_id
+        WHERE p.status = 'approved'
+          AND s.status = 'approved'
+          AND s.store_status = 'active'
+          AND p.gi_tagged = 1
+          AND p.origin_verified = 1
+          AND NOT ${DEMO_PRODUCT_SQL}
+        ORDER BY p.is_featured DESC, p.updated_at DESC
+        LIMIT 24`,
+    );
+    const hasFilter = Boolean(queryStr(queryParams, 'q') || queryStr(queryParams, 'sort') || Number(queryStr(queryParams, 'page')) > 1);
+    const title = fitSeoTitle(`GI-Tagged Himalayan Products | ${BRAND_NAME}`, 60, BRAND_NAME);
+    const description = fitSeoDescription(
+      'Explore verified Geographical Indication (GI) tagged Himalayan shawls, teas, and artisan crafts backed by approved origin documentation.',
+      158,
+    );
+    return {
+      title,
+      description,
+      canonicalUrl,
+      imageUrl: `${origin}/images/product-shawl.jpg`,
+      ogType: 'website',
+      noindex: hasFilter,
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@graph': [
+          {
+            '@type': 'CollectionPage',
+            name: 'Verified GI-Tagged Products of the Indian Himalayas',
+            url: canonicalUrl,
+            description,
+          },
+          {
+            '@type': 'ItemList',
+            itemListElement: giItems.map((item, idx) => ({
+              '@type': 'ListItem',
+              position: idx + 1,
+              name: item.name,
+              url: `${origin}/shop/${item.slug}`,
+            })),
+          },
+          breadcrumbList(origin, [
+            { name: 'Home', path: '' },
+            { name: 'GI-Tagged Products', path: '/gi-tagged' },
+          ]),
+        ],
+      },
+    };
+  }
+
+  // 2c. Region + Craft Combination Hub: /regions/:region/:subject (strict anti-doorway gate)
+  const regionComboMatch = normalizedPath.match(/^\/regions\/([^/]+)\/([^/]+)$/);
+  if (regionComboMatch) {
+    const regionSlug = safeDecodeURIComponent(regionComboMatch[1]);
+    const subjectSlug = safeDecodeURIComponent(regionComboMatch[2]);
+    const combo = getRegionCraftCombo(db, regionSlug, subjectSlug);
+    if (!combo) {
+      return {
+        title: fitSeoTitle(`Collection not found | ${BRAND_NAME}`, 60, BRAND_NAME),
+        description: SHOP_SEO_DESCRIPTION,
+        canonicalUrl: `${origin}/regions/${encodeURIComponent(regionSlug)}`,
+        imageUrl: fallbackImage,
+        noindex: true,
+        statusCode: 404,
+      };
+    }
+    const hasFilter = Boolean(
+      queryStr(queryParams, 'q') ||
+        queryStr(queryParams, 'sort') ||
+        queryStr(queryParams, 'minPrice') ||
+        queryStr(queryParams, 'maxPrice') ||
+        Number(queryStr(queryParams, 'page')) > 1,
+    );
+    const canonicalUrl = `${origin}/regions/${combo.region.slug}/${combo.subjectSlug}`;
+    const title = buildRegionCraftTitle(combo.subjectName, combo.region.name, BRAND_NAME);
+    const description = fitSeoDescription(
+      `Buy authentic ${combo.subjectName} from ${combo.region.name}. Direct from verified Himalayan artisans with transparent origin and nationwide delivery.`,
+      155,
+    );
+    const comboProducts = queryAll<{ name: string; slug: string }>(
+      db,
+      `SELECT p.name, p.slug
+         FROM products p
+         JOIN seller_profiles s ON s.id = p.seller_id
+         LEFT JOIN users u ON u.id = s.user_id
+         JOIN categories c ON c.id = p.category_id
+        WHERE p.status = 'approved'
+          AND s.status = 'approved'
+          AND s.store_status = 'active'
+          AND NOT ${DEMO_PRODUCT_SQL}
+          AND (LOWER(COALESCE(p.region_slug, '')) = LOWER(?) OR LOWER(COALESCE(p.region, '')) = LOWER(?))
+          AND (LOWER(COALESCE(p.craft_slug, '')) = LOWER(?) OR LOWER(c.slug) = LOWER(?))
+        LIMIT 12`,
+      combo.region.slug,
+      combo.region.name,
+      combo.subjectSlug,
+      combo.subjectSlug,
+    );
+    const graph: Array<Record<string, unknown>> = [
+      {
+        '@type': 'CollectionPage',
+        name: `${combo.subjectName} from ${combo.region.name}`,
+        url: canonicalUrl,
+        description,
+      },
+      {
+        '@type': 'ItemList',
+        itemListElement: comboProducts.map((item, idx) => ({
+          '@type': 'ListItem',
+          position: idx + 1,
+          name: item.name,
+          url: `${origin}/shop/${item.slug}`,
+        })),
+      },
+      breadcrumbList(origin, [
+        { name: 'Home', path: '' },
+        { name: combo.region.name, path: `/regions/${combo.region.slug}` },
+        { name: combo.subjectName, path: `/regions/${combo.region.slug}/${combo.subjectSlug}` },
+      ]),
+    ];
+    if (combo.faqs.length > 0) {
+      graph.push({
+        '@type': 'FAQPage',
+        mainEntity: combo.faqs.map((f) => ({
+          '@type': 'Question',
+          name: f.question,
+          acceptedAnswer: { '@type': 'Answer', text: f.answer },
+        })),
+      });
+    }
+    return {
+      title,
+      description,
+      canonicalUrl,
+      imageUrl: toAbsoluteUrl(origin, combo.craft?.heroImage || combo.region.heroImage, fallbackImage),
+      ogType: 'website',
+      noindex: hasFilter,
+      jsonLd: { '@context': 'https://schema.org', '@graph': graph },
+    };
+  }
+
+  // 2d. Region Hub: /regions/:region
+  const regionMatch = normalizedPath.match(/^\/regions\/([^/]+)$/);
+  if (regionMatch) {
+    const slug = safeDecodeURIComponent(regionMatch[1]);
+    const region = getRegionBySlug(db, slug);
+    if (!region) {
+      return {
+        title: fitSeoTitle(`Region not found | ${BRAND_NAME}`, 60, BRAND_NAME),
+        description: SHOP_SEO_DESCRIPTION,
+        canonicalUrl: `${origin}/himalayan-handmade-products`,
+        imageUrl: fallbackImage,
+        noindex: true,
+        statusCode: 404,
+      };
+    }
+    const hasFilter = Boolean(
+      queryStr(queryParams, 'q') ||
+        queryStr(queryParams, 'sort') ||
+        queryStr(queryParams, 'craft') ||
+        queryStr(queryParams, 'minPrice') ||
+        queryStr(queryParams, 'maxPrice') ||
+        Number(queryStr(queryParams, 'page')) > 1,
+    );
+    const canonicalUrl = `${origin}/regions/${region.slug}`;
+    const title = buildRegionHubTitle(region.name, BRAND_NAME);
+    const description = fitSeoDescription(
+      `Shop authentic handmade crafts, handloom wool & mountain foods from ${region.name}. Verified origin & direct artisan dispatch on ${BRAND_NAME}.`,
+      155,
+    );
+    const regionProducts = queryAll<{ name: string; slug: string }>(
+      db,
+      `SELECT p.name, p.slug
+         FROM products p
+         JOIN seller_profiles s ON s.id = p.seller_id
+         LEFT JOIN users u ON u.id = s.user_id
+        WHERE p.status = 'approved'
+          AND s.status = 'approved'
+          AND s.store_status = 'active'
+          AND NOT ${DEMO_PRODUCT_SQL}
+          AND (LOWER(COALESCE(p.region_slug, '')) = LOWER(?) OR LOWER(COALESCE(p.region, '')) = LOWER(?))
+        LIMIT 16`,
+      region.slug,
+      region.name,
+    );
+    const graph: Array<Record<string, unknown>> = [
+      {
+        '@type': 'CollectionPage',
+        name: `Handmade Products from ${region.name}`,
+        url: canonicalUrl,
+        description,
+      },
+      {
+        '@type': 'ItemList',
+        itemListElement: regionProducts.map((item, idx) => ({
+          '@type': 'ListItem',
+          position: idx + 1,
+          name: item.name,
+          url: `${origin}/shop/${item.slug}`,
+        })),
+      },
+      breadcrumbList(origin, [
+        { name: 'Home', path: '' },
+        { name: 'Himalayan Regions', path: '/himalayan-handmade-products' },
+        { name: region.name, path: `/regions/${region.slug}` },
+      ]),
+    ];
+    if (region.faqs.length > 0) {
+      graph.push({
+        '@type': 'FAQPage',
+        mainEntity: region.faqs.map((f) => ({
+          '@type': 'Question',
+          name: f.question,
+          acceptedAnswer: { '@type': 'Answer', text: f.answer },
+        })),
+      });
+    }
+    return {
+      title,
+      description,
+      canonicalUrl,
+      imageUrl: toAbsoluteUrl(origin, region.heroImage, fallbackImage),
+      ogType: 'website',
+      noindex: hasFilter,
+      jsonLd: { '@context': 'https://schema.org', '@graph': graph },
+    };
+  }
+
+  // 2e. Craft Hub: /crafts/:craft
+  const craftMatch = normalizedPath.match(/^\/crafts\/([^/]+)$/);
+  if (craftMatch) {
+    const slug = safeDecodeURIComponent(craftMatch[1]);
+    const craft = getCraftBySlug(db, slug);
+    if (!craft) {
+      return {
+        title: fitSeoTitle(`Craft not found | ${BRAND_NAME}`, 60, BRAND_NAME),
+        description: SHOP_SEO_DESCRIPTION,
+        canonicalUrl: `${origin}/himalayan-handmade-products`,
+        imageUrl: fallbackImage,
+        noindex: true,
+        statusCode: 404,
+      };
+    }
+    const hasFilter = Boolean(
+      queryStr(queryParams, 'q') ||
+        queryStr(queryParams, 'sort') ||
+        queryStr(queryParams, 'region') ||
+        Number(queryStr(queryParams, 'page')) > 1,
+    );
+    const canonicalUrl = `${origin}/crafts/${craft.slug}`;
+    const title = buildCraftHubTitle(craft.name, BRAND_NAME);
+    const description = fitSeoDescription(
+      `Buy authentic Himalayan ${craft.name} direct from verified artisans. Learn genuineness checks & workshop heritage on ${BRAND_NAME}.`,
+      155,
+    );
+    const craftProducts = queryAll<{ name: string; slug: string }>(
+      db,
+      `SELECT p.name, p.slug
+         FROM products p
+         JOIN seller_profiles s ON s.id = p.seller_id
+         LEFT JOIN users u ON u.id = s.user_id
+        WHERE p.status = 'approved'
+          AND s.status = 'approved'
+          AND s.store_status = 'active'
+          AND NOT ${DEMO_PRODUCT_SQL}
+          AND (LOWER(COALESCE(p.craft_slug, '')) = LOWER(?) OR LOWER(COALESCE(p.craft_type, '')) = LOWER(?))
+        LIMIT 16`,
+      craft.slug,
+      craft.name,
+    );
+    const graph: Array<Record<string, unknown>> = [
+      {
+        '@type': 'CollectionPage',
+        name: `${craft.name} from the Himalayas`,
+        url: canonicalUrl,
+        description,
+      },
+      {
+        '@type': 'ItemList',
+        itemListElement: craftProducts.map((item, idx) => ({
+          '@type': 'ListItem',
+          position: idx + 1,
+          name: item.name,
+          url: `${origin}/shop/${item.slug}`,
+        })),
+      },
+      breadcrumbList(origin, [
+        { name: 'Home', path: '' },
+        { name: 'Himalayan Crafts', path: '/himalayan-handmade-products' },
+        { name: craft.name, path: `/crafts/${craft.slug}` },
+      ]),
+    ];
+    if (craft.faqs.length > 0) {
+      graph.push({
+        '@type': 'FAQPage',
+        mainEntity: craft.faqs.map((f) => ({
+          '@type': 'Question',
+          name: f.question,
+          acceptedAnswer: { '@type': 'Answer', text: f.answer },
+        })),
+      });
+    }
+    return {
+      title,
+      description,
+      canonicalUrl,
+      imageUrl: toAbsoluteUrl(origin, craft.heroImage, fallbackImage),
+      ogType: 'website',
+      noindex: hasFilter,
+      jsonLd: { '@context': 'https://schema.org', '@graph': graph },
     };
   }
 
@@ -567,6 +996,9 @@ export function getSeoMetadata(
       q ||
         queryStr(queryParams, 'sort') ||
         queryStr(queryParams, 'region') ||
+        queryStr(queryParams, 'craft') ||
+        queryStr(queryParams, 'technique') ||
+        queryStr(queryParams, 'gi') ||
         queryStr(queryParams, 'seller') ||
         queryStr(queryParams, 'minPrice') ||
         queryStr(queryParams, 'maxPrice') ||
@@ -575,8 +1007,22 @@ export function getSeoMetadata(
         pageNum > 1,
     );
 
+    const shopItems = queryAll<{ name: string; slug: string }>(
+      db,
+      `SELECT p.name, p.slug
+         FROM products p
+         JOIN seller_profiles s ON s.id = p.seller_id
+         LEFT JOIN users u ON u.id = s.user_id
+        WHERE p.status = 'approved'
+          AND s.status = 'approved'
+          AND s.store_status = 'active'
+          AND NOT ${DEMO_PRODUCT_SQL}
+        ORDER BY p.is_featured DESC, p.updated_at DESC
+        LIMIT 16`,
+    );
+
     return {
-      title: q ? `Search results for “${q}” | Dear Hills` : SHOP_SEO_TITLE,
+      title: q ? fitSeoTitle(`Search “${q}” | ${BRAND_NAME}`, 60, BRAND_NAME) : SHOP_SEO_TITLE,
       description: SHOP_SEO_DESCRIPTION,
       canonicalUrl,
       imageUrl: `${origin}/images/product-shawl.jpg`,
@@ -590,6 +1036,15 @@ export function getSeoMetadata(
             name: SHOP_SEO_COLLECTION_NAME,
             url: canonicalUrl,
             description: SHOP_SEO_DESCRIPTION,
+          },
+          {
+            '@type': 'ItemList',
+            itemListElement: shopItems.map((item, idx) => ({
+              '@type': 'ListItem',
+              position: idx + 1,
+              name: item.name,
+              url: `${origin}/shop/${item.slug}`,
+            })),
           },
           breadcrumbList(origin, [
             { name: 'Home', path: '' },
@@ -701,23 +1156,24 @@ export function getSeoMetadata(
     };
   }
 
-  // 6. Blog Post: /blog/:slug
-  const blogMatch = normalizedPath.match(/^\/blog\/([^/]+)$/);
+  // 6. Blog / Guide Post: /blog/:slug or /guides/:slug
+  const blogMatch = normalizedPath.match(/^\/(?:blog|guides)\/([^/]+)$/);
   if (blogMatch) {
+    const isGuideRoute = normalizedPath.startsWith('/guides/');
     const slug = safeDecodeURIComponent(blogMatch[1]);
-    const post = BLOG_POSTS.find((p) => p.slug === slug);
+    const post = findJournalPostBySlug(slug);
     if (!post) {
       return {
-        title: 'Story not found · Dear Hills Journal',
+        title: `Story not found · ${BRAND_NAME}`,
         description: 'The requested Himalayan heritage guide could not be found.',
-        canonicalUrl: `${origin}/blog/${encodeURIComponent(slug)}`,
+        canonicalUrl: `${origin}${isGuideRoute ? '/guides' : '/blog'}/${encodeURIComponent(slug)}`,
         imageUrl: fallbackImage,
         noindex: true,
         statusCode: 404,
       };
     }
 
-    const canonicalUrl = `${origin}/blog/${post.slug}`;
+    const canonicalUrl = `${origin}/${isGuideRoute ? 'guides' : 'blog'}/${post.slug}`;
     const imageUrl = toAbsoluteUrl(origin, post.coverImage, fallbackImage);
 
     const graph: Array<Record<string, unknown>> = [
@@ -751,8 +1207,8 @@ export function getSeoMetadata(
       },
       breadcrumbList(origin, [
         { name: 'Home', path: '' },
-        { name: 'Mountain Journal', path: '/blog' },
-        { name: post.title, path: `/blog/${post.slug}` },
+        { name: isGuideRoute ? 'Himalayan Guides' : 'Mountain Journal', path: isGuideRoute ? '/guides' : '/blog' },
+        { name: post.title, path: `/${isGuideRoute ? 'guides' : 'blog'}/${post.slug}` },
       ]),
     ];
 
@@ -771,8 +1227,8 @@ export function getSeoMetadata(
     }
 
     return {
-      title: post.metaTitle,
-      description: post.metaDescription,
+      title: fitSeoTitle(post.metaTitle, 60, BRAND_NAME),
+      description: fitSeoDescription(post.metaDescription, 158),
       canonicalUrl,
       imageUrl,
       ogType: 'article',
@@ -783,13 +1239,15 @@ export function getSeoMetadata(
     };
   }
 
-  // 7. Blog Index: /blog or /journal
-  if (normalizedPath === '/blog' || normalizedPath === '/journal') {
-    const canonicalUrl = `${origin}/blog`;
+  // 7. Blog / Guides Index: /blog, /journal, or /guides
+  if (normalizedPath === '/blog' || normalizedPath === '/journal' || normalizedPath === '/guides') {
+    const canonicalUrl = normalizedPath === '/guides' ? `${origin}/guides` : `${origin}/blog`;
     return {
-      title: 'Himalayan Journal & Craft Stories | Dear Hills Blog',
-      description:
-        'Guides and stories celebrating authentic Himachal living — how to identify pure Pahadi honey, Kullu vs Kinnauri shawl weaving, and buying guide for authentic mountain goods.',
+      title: fitSeoTitle(`Himalayan Guides & Craft Stories | ${BRAND_NAME}`, 60, BRAND_NAME),
+      description: fitSeoDescription(
+        'Original guides across Pashmina, Kullu & Kinnauri shawls, GI tags, Himalayan honey, Kangra & Darjeeling tea, Aipan, Chamba rumal & wool care.',
+        158,
+      ),
       canonicalUrl,
       imageUrl: fallbackImage,
       ogType: 'website',
@@ -833,6 +1291,8 @@ export function getSeoMetadata(
       story: string | null;
       region: string | null;
       village: string | null;
+      craft_specialty: string | null;
+      years_of_practice: number | null;
       seller_category: string | null;
       logo_url: string | null;
       cover_url: string | null;
@@ -840,7 +1300,7 @@ export function getSeoMetadata(
     }>(
       db,
       `SELECT s.business_name, s.slug, s.tagline, s.story, s.region, s.village,
-              s.seller_category, s.logo_url, s.cover_url, u.email
+              s.craft_specialty, s.years_of_practice, s.seller_category, s.logo_url, s.cover_url, u.email
        FROM seller_profiles s
        LEFT JOIN users u ON u.id = s.user_id
        WHERE s.slug = ? AND s.status = 'approved' AND s.store_status = 'active'`,
@@ -849,7 +1309,7 @@ export function getSeoMetadata(
 
     if (!seller) {
       return {
-        title: 'Maker not available · Dear Hills',
+        title: fitSeoTitle(`Maker not available · ${BRAND_NAME}`, 60, BRAND_NAME),
         description: 'This maker storefront may not exist or may not be published yet.',
         canonicalUrl: `${origin}/makers/${encodeURIComponent(slug)}`,
         imageUrl: fallbackImage,
@@ -858,11 +1318,13 @@ export function getSeoMetadata(
       };
     }
 
-    const title = `${seller.business_name} — Mountain Artisan Story | Dear Hills`;
-    const description =
+    const title = fitSeoTitle(`${seller.business_name} — Artisan Story | ${BRAND_NAME}`, 60, BRAND_NAME);
+    const description = fitSeoDescription(
       cleanSeoText(seller.tagline) ||
-      cleanSeoText(seller.story) ||
-      `Meet ${seller.business_name} from ${seller.region || 'Himachal Pradesh'}. Crafting authentic mountain goods with generational heritage on Dear Hills.`;
+        cleanSeoText(seller.story) ||
+        `Meet ${seller.business_name} from ${seller.region || 'the Indian Himalayas'}. Authentic craft & direct sourcing on ${BRAND_NAME}.`,
+      158,
+    );
     const canonicalUrl = `${origin}/makers/${seller.slug}`;
     const imageUrl = toAbsoluteUrl(origin, seller.cover_url ?? seller.logo_url, fallbackImage);
     const isDemo = isDemoSellerInput({
@@ -887,10 +1349,11 @@ export function getSeoMetadata(
             url: canonicalUrl,
             image: imageUrl,
             description,
+            ...(seller.craft_specialty ? { knowsAbout: seller.craft_specialty } : {}),
             address: {
               '@type': 'PostalAddress',
-              addressLocality: seller.village || seller.region || 'Himachal Pradesh',
-              addressRegion: 'Himachal Pradesh',
+              addressLocality: seller.village || seller.region || 'Indian Himalayas',
+              addressRegion: seller.region || 'Indian Himalayas',
               addressCountry: 'IN',
             },
           },
@@ -944,11 +1407,13 @@ export function getSeoMetadata(
   // 10. About / Our Story
   if (normalizedPath === '/about' || normalizedPath === '/our-story') {
     const canonicalUrl = `${origin}/about`;
-    const description =
+    const description = fitSeoDescription(
       cleanSeoText(getSiteContent(db).about.intro) ||
-      'Dear Hills connects conscious global buyers with authentic Himalayan artisans, weavers, and organic farmers in Himachal Pradesh with verified provenance and fair pay.';
+        `${BRAND_NAME} connects buyers with verified Himalayan artisans, weavers, and organic growers across 7 mountain regions.`,
+      158,
+    );
     return {
-      title: 'Our Story & Philosophy — Preserving Himalayan Living Heritage | Dear Hills',
+      title: fitSeoTitle(`Our Story — Himalayan Heritage Marketplace | ${BRAND_NAME}`, 60, BRAND_NAME),
       description,
       canonicalUrl,
       imageUrl: `${origin}/images/editorial-terrace.jpg`,
@@ -958,7 +1423,7 @@ export function getSeoMetadata(
         '@graph': [
           {
             '@type': 'AboutPage',
-            name: 'About Dear Hills',
+            name: `About ${BRAND_NAME}`,
             url: canonicalUrl,
             description,
           },
@@ -974,11 +1439,13 @@ export function getSeoMetadata(
   // 11. How We Source
   if (normalizedPath === '/sourcing') {
     const canonicalUrl = `${origin}/sourcing`;
-    const description =
+    const description = fitSeoDescription(
       cleanSeoText(getSiteContent(db).sourcing.intro) ||
-      'Every shawl, tea harvest, honey jar, and handloom piece is verified at source in the mountain valleys of Himachal Pradesh.';
+        'Every shawl, tea harvest, honey jar, and handloom piece is verified at source across the Indian Himalayan valleys.',
+      158,
+    );
     return {
-      title: 'How We Source — Pure Alpine Origin & Ethical Provenance | Dear Hills',
+      title: fitSeoTitle(`How We Source — Verified Himalayan Origin | ${BRAND_NAME}`, 60, BRAND_NAME),
       description,
       canonicalUrl,
       imageUrl: `${origin}/images/weaving.jpg`,
@@ -1005,11 +1472,13 @@ export function getSeoMetadata(
   if (normalizedPath === '/faq') {
     const canonicalUrl = `${origin}/faq`;
     const faqItems = getSiteContent(db).faq.items;
-    const description =
-      'Answers about India-wide shipping, 7-day returns, maker verification, platform fees, and authentic Himalayan products on Dear Hills.';
+    const description = fitSeoDescription(
+      `Answers about India-wide shipping, 7-day returns, origin checks, GI verification, and authentic Himalayan crafts on ${BRAND_NAME}.`,
+      158,
+    );
 
     return {
-      title: 'Frequently Asked Questions — Shipping, Returns & Sourcing | Dear Hills',
+      title: fitSeoTitle(`FAQ — Shipping, Returns & Authenticity | ${BRAND_NAME}`, 60, BRAND_NAME),
       description,
       canonicalUrl,
       imageUrl: fallbackImage,

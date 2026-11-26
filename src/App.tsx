@@ -30,6 +30,21 @@ const BlogIndexPage = lazy(() => import('@/pages/BlogPage').then((module) => ({ 
 const BlogPostDetailPage = lazy(() =>
   import('@/pages/BlogPage').then((module) => ({ default: module.BlogPostDetailPage })),
 );
+const RegionHubPage = lazy(() =>
+  import('@/pages/HimalayanHubPages').then((module) => ({ default: module.RegionHubPage })),
+);
+const CraftHubPage = lazy(() =>
+  import('@/pages/HimalayanHubPages').then((module) => ({ default: module.CraftHubPage })),
+);
+const RegionCraftComboPage = lazy(() =>
+  import('@/pages/HimalayanHubPages').then((module) => ({ default: module.RegionCraftComboPage })),
+);
+const GiTaggedHubPage = lazy(() =>
+  import('@/pages/HimalayanHubPages').then((module) => ({ default: module.GiTaggedHubPage })),
+);
+const HimalayanPillarPage = lazy(() =>
+  import('@/pages/HimalayanHubPages').then((module) => ({ default: module.HimalayanPillarPage })),
+);
 const AboutPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ default: module.AboutPage })));
 const SourcingPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ default: module.SourcingPage })));
 const FaqPage = lazy(() => import('@/pages/PublicPages').then((module) => ({ default: module.FaqPage })));
@@ -194,6 +209,13 @@ export function App() {
         <Route path="sellers/:slug" element={<MakerDetailPage />} />
         <Route path="blog" element={<BlogIndexPage />} />
         <Route path="blog/:slug" element={<BlogPostDetailPage />} />
+        <Route path="guides" element={<BlogIndexPage />} />
+        <Route path="guides/:slug" element={<BlogPostDetailPage />} />
+        <Route path="himalayan-handmade-products" element={<HimalayanPillarPage />} />
+        <Route path="gi-tagged" element={<GiTaggedHubPage />} />
+        <Route path="regions/:region" element={<RegionHubPage />} />
+        <Route path="regions/:region/:subject" element={<RegionCraftComboPage />} />
+        <Route path="crafts/:craft" element={<CraftHubPage />} />
         <Route path="journal" element={<Navigate to="/blog" replace />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="sourcing" element={<SourcingPage />} />

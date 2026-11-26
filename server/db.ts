@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
+import { DEFAULT_HIMALAYAN_CRAFTS, DEFAULT_HIMALAYAN_REGIONS } from './lib/himalayanSeeds.js';
 
 export type Db = DatabaseSync;
 
@@ -52,6 +53,15 @@ function reconcileLegacySchema(db: Db): void {
     addColumn(db, 'users', 'password_changed_at', 'TEXT');
     addColumn(db, 'users', 'mfa_secret', 'TEXT');
     addColumn(db, 'users', 'mfa_enabled_at', 'TEXT');
+    addColumn(db, 'users', 'failed_login_attempts', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'users', 'locked_until', 'TEXT');
+  }
+  if (tableExists(db, 'sessions')) {
+    addColumn(db, 'sessions', 'scope', "TEXT NOT NULL DEFAULT 'standard'");
+    addColumn(db, 'sessions', 'mfa_verified_at', 'TEXT');
+  }
+  if (tableExists(db, 'audit_logs')) {
+    addColumn(db, 'audit_logs', 'ip_address', 'TEXT');
   }
   if (tableExists(db, 'seller_profiles')) {
     addColumn(db, 'seller_profiles', 'seller_category', 'TEXT');
@@ -61,6 +71,9 @@ function reconcileLegacySchema(db: Db): void {
     addColumn(db, 'seller_profiles', 'payout_status_before_hold', 'TEXT');
     addColumn(db, 'seller_profiles', 'logo_url', 'TEXT');
     addColumn(db, 'seller_profiles', 'cover_url', 'TEXT');
+    addColumn(db, 'seller_profiles', 'craft_specialty', 'TEXT');
+    addColumn(db, 'seller_profiles', 'years_of_practice', 'INTEGER');
+    addColumn(db, 'seller_profiles', 'workshop_photos_json', 'TEXT');
   }
   if (tableExists(db, 'seller_applications')) {
     addColumn(db, 'seller_applications', 'created_at', 'TEXT');
@@ -80,6 +93,18 @@ function reconcileLegacySchema(db: Db): void {
     addColumn(db, 'products', 'variety_grade', 'TEXT');
     addColumn(db, 'products', 'harvest_info', 'TEXT');
     addColumn(db, 'products', 'dispatch_conditions', 'TEXT');
+    addColumn(db, 'products', 'region_slug', 'TEXT');
+    addColumn(db, 'products', 'district_village', 'TEXT');
+    addColumn(db, 'products', 'craft_type', 'TEXT');
+    addColumn(db, 'products', 'craft_slug', 'TEXT');
+    addColumn(db, 'products', 'technique', 'TEXT');
+    addColumn(db, 'products', 'gi_tagged', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'products', 'gi_requested', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'products', 'gi_name', 'TEXT');
+    addColumn(db, 'products', 'gi_registration_ref', 'TEXT');
+    addColumn(db, 'products', 'gi_verified_at', 'TEXT');
+    addColumn(db, 'products', 'gi_verified_by', 'TEXT');
+    addColumn(db, 'products', 'made_to_order', 'INTEGER NOT NULL DEFAULT 0');
   }
   // Migration 8 columns must exist before schema.sql runs: its unique index on
   // refunds(dedupe_key) would otherwise fail on a database created at v7.
@@ -331,7 +356,121 @@ export function openDatabase(filename: string): Db {
 
   migratePayoutHoldStatus(db);
   markMigration(db, 13);
+
+  migrateSecurityHardening(db);
+  markMigration(db, 14);
+
+  migratePanHimalayanSeo(db);
+  markMigration(db, 15);
   return db;
+}
+
+/**
+ * Migration 15: Adds Pan-Himalayan regions, crafts, GI/origin metadata on
+ * products and makers, and slug_redirects for 301 canonical evolution.
+ */
+function migratePanHimalayanSeo(db: Db): void {
+  addColumn(db, 'seller_profiles', 'craft_specialty', 'TEXT');
+  addColumn(db, 'seller_profiles', 'years_of_practice', 'INTEGER');
+  addColumn(db, 'seller_profiles', 'workshop_photos_json', 'TEXT');
+
+  addColumn(db, 'products', 'region_slug', 'TEXT');
+  addColumn(db, 'products', 'district_village', 'TEXT');
+  addColumn(db, 'products', 'craft_type', 'TEXT');
+  addColumn(db, 'products', 'craft_slug', 'TEXT');
+  addColumn(db, 'products', 'technique', 'TEXT');
+  addColumn(db, 'products', 'gi_tagged', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'products', 'gi_requested', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'products', 'gi_name', 'TEXT');
+  addColumn(db, 'products', 'gi_registration_ref', 'TEXT');
+  addColumn(db, 'products', 'gi_verified_at', 'TEXT');
+  addColumn(db, 'products', 'gi_verified_by', 'TEXT');
+  addColumn(db, 'products', 'made_to_order', 'INTEGER NOT NULL DEFAULT 0');
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_products_region_slug ON products(region_slug);
+    CREATE INDEX IF NOT EXISTS idx_products_craft_slug ON products(craft_slug);
+    CREATE INDEX IF NOT EXISTS idx_products_gi_tagged ON products(gi_tagged);
+  `);
+
+  const insertRegion = db.prepare(`
+    INSERT OR IGNORE INTO regions
+      (id, name, slug, short_name, intro_text, hero_image, famous_crafts_json, famous_foods_json, faqs_json, sort_order, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+  `);
+  for (const r of DEFAULT_HIMALAYAN_REGIONS) {
+    insertRegion.run(
+      r.id,
+      r.name,
+      r.slug,
+      r.shortName,
+      r.introText,
+      r.heroImage,
+      JSON.stringify(r.famousCrafts),
+      JSON.stringify(r.famousFoods),
+      JSON.stringify(r.faqs),
+      r.sortOrder,
+    );
+  }
+
+  const insertCraft = db.prepare(`
+    INSERT OR IGNORE INTO crafts
+      (id, name, slug, intro_text, history, how_to_identify, hero_image, faqs_json, sort_order, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+  `);
+  for (const c of DEFAULT_HIMALAYAN_CRAFTS) {
+    insertCraft.run(
+      c.id,
+      c.name,
+      c.slug,
+      c.introText,
+      c.history,
+      c.howToIdentify,
+      c.heroImage,
+      JSON.stringify(c.faqs),
+      c.sortOrder,
+    );
+  }
+
+  // Canonical regional aliases so /regions/kashmir routes cleanly to /regions/jammu-and-kashmir.
+  db.prepare('INSERT OR IGNORE INTO slug_redirects (old_path, new_path) VALUES (?, ?)').run(
+    '/regions/kashmir',
+    '/regions/jammu-and-kashmir',
+  );
+  db.prepare('INSERT OR IGNORE INTO slug_redirects (old_path, new_path) VALUES (?, ?)').run(
+    '/regions/darjeeling',
+    '/regions/darjeeling-kalimpong',
+  );
+  db.prepare('INSERT OR IGNORE INTO slug_redirects (old_path, new_path) VALUES (?, ?)').run(
+    '/regions/kalimpong',
+    '/regions/darjeeling-kalimpong',
+  );
+}
+
+/**
+ * Migration 14: Adds isolated admin/customer session scopes, per-account login
+ * lockout tracking, audit log IP addresses, and SQLite triggers enforcing that
+ * audit_logs remain append-only.
+ */
+function migrateSecurityHardening(db: Db): void {
+  addColumn(db, 'users', 'failed_login_attempts', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'users', 'locked_until', 'TEXT');
+  addColumn(db, 'sessions', 'scope', "TEXT NOT NULL DEFAULT 'standard'");
+  addColumn(db, 'sessions', 'mfa_verified_at', 'TEXT');
+  addColumn(db, 'audit_logs', 'ip_address', 'TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_scope ON sessions(user_id, scope)');
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_update
+    BEFORE UPDATE ON audit_logs
+    BEGIN
+      SELECT RAISE(ABORT, 'audit_logs is append-only');
+    END;
+    CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_delete
+    BEFORE DELETE ON audit_logs
+    BEGIN
+      SELECT RAISE(ABORT, 'audit_logs is append-only');
+    END;
+  `);
 }
 
 /**

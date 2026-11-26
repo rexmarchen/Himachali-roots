@@ -82,6 +82,11 @@ interface ShiprocketAuthToken {
 let cachedAuth: ShiprocketAuthToken | null = null;
 
 const SHIPROCKET_BASE = 'https://apiv2.shiprocket.in/v1/external';
+const SHIPROCKET_TIMEOUT_MS = 10_000;
+
+function shiprocketFetch(url: string, init: RequestInit): Promise<Response> {
+  return fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(SHIPROCKET_TIMEOUT_MS) });
+}
 
 /** Authenticate with Shiprocket API and cache the JWT token. */
 export async function getShiprocketToken(): Promise<string> {
@@ -98,7 +103,7 @@ export async function getShiprocketToken(): Promise<string> {
     return cachedAuth.token;
   }
 
-  const response = await fetch(`${SHIPROCKET_BASE}/auth/login`, {
+  const response = await shiprocketFetch(`${SHIPROCKET_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -174,7 +179,7 @@ export async function checkCourierServiceability(
     request.pickupPincode,
   )}&delivery_postcode=${encodeURIComponent(request.deliveryPincode)}&weight=${weightKg}&cod=${codParam}`;
 
-  const response = await fetch(url, {
+  const response = await shiprocketFetch(url, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -251,7 +256,7 @@ export async function ensureShiprocketPickupLocation(
 ): Promise<string> {
   const cleanNickname = locationNickname.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 36) || 'Primary';
   try {
-    await fetch(`${SHIPROCKET_BASE}/settings/company/addpickup`, {
+    await shiprocketFetch(`${SHIPROCKET_BASE}/settings/company/addpickup`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -357,7 +362,7 @@ export async function bookCourierShipment(
       weight: weightKg,
     };
 
-    const createRes = await fetch(`${SHIPROCKET_BASE}/orders/create/adhoc`, {
+    const createRes = await shiprocketFetch(`${SHIPROCKET_BASE}/orders/create/adhoc`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -376,7 +381,7 @@ export async function bookCourierShipment(
     const shipmentIdNum = Number(createData.shipment_id);
 
     // 2. Assign AWB
-    const awbRes = await fetch(`${SHIPROCKET_BASE}/courier/assign/awb`, {
+    const awbRes = await shiprocketFetch(`${SHIPROCKET_BASE}/courier/assign/awb`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -401,7 +406,7 @@ export async function bookCourierShipment(
     let pickupToken: string | null = null;
     let pickupScheduledAt: string | null = null;
     try {
-      const pickupRes = await fetch(`${SHIPROCKET_BASE}/courier/generate/pickup`, {
+      const pickupRes = await shiprocketFetch(`${SHIPROCKET_BASE}/courier/generate/pickup`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -422,7 +427,7 @@ export async function bookCourierShipment(
     // 4. Generate Shipping Label URL
     let labelUrl: string | null = null;
     try {
-      const labelRes = await fetch(`${SHIPROCKET_BASE}/courier/generate/label`, {
+      const labelRes = await shiprocketFetch(`${SHIPROCKET_BASE}/courier/generate/label`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

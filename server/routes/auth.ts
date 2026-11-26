@@ -5,9 +5,11 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { execute, queryOne, tx, type Db } from '../db.js';
 import {
+  clearAdminSessionCookie,
   clearSessionCookie,
   createSession,
   destroySession,
+  adminSessionToken,
   getSessionUser,
   hasUsablePassword,
   hashPassword,
@@ -16,6 +18,7 @@ import {
   requireAuth,
   rotateSession,
   sessionToken,
+  setAdminSessionCookie,
   setSessionCookie,
   sha256,
   verifyPassword,
@@ -27,7 +30,7 @@ import { audit } from '../lib/audit.js';
 import { parse, unauthorized, badRequest, conflict, forbidden, AppError } from '../lib/http.js';
 import { newId, randomToken } from '../lib/ids.js';
 import { ensureCart, CART_COOKIE, setCartCookie } from '../lib/cart.js';
-import { notify } from '../lib/email.js';
+import { escapeHtml, notify } from '../lib/email.js';
 
 const emailSchema = z.string().trim().toLowerCase().email('Enter a valid email address.').max(254);
 const passwordSchema = z
@@ -56,11 +59,21 @@ const googleSchema = z.object({
 const googleLinkSchema = z.object({
   linkToken: z.string().min(20, 'Start Google sign-in again.').max(200),
   password: z.string().min(1, 'Enter your account password.').max(200),
+  challengeToken: z.string().min(20).max(200).optional(),
+  code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code.').optional(),
 });
 
 const LINK_CHALLENGE_MINUTES = 10;
 const MFA_CHALLENGE_MINUTES = 10;
 const MFA_MAX_ATTEMPTS = 5;
+const LOGIN_MAX_FAILURES = 5;
+const LOGIN_LOCKOUT_MS = 15 * 60_000;
+const unknownEmailFailures = new Map<string, { count: number; lockedUntil: number }>();
+
+export function clearUnknownLoginLockouts(): void {
+  unknownEmailFailures.clear();
+}
+
 // A real scrypt comparison runs even when the email is unknown, so response
 // timing does not reveal whether an account exists.
 const DUMMY_PASSWORD_HASH = hashPassword('not-a-real-account-password-0');
@@ -74,6 +87,8 @@ interface AuthUserRow {
   full_name: string;
   mfa_secret?: string | null;
   mfa_enabled_at?: string | null;
+  failed_login_attempts?: number;
+  locked_until?: string | null;
 }
 
 interface MfaChallengeRow {
@@ -106,7 +121,7 @@ function findUserByEmail(db: Db, email: string): AuthUserRow | undefined {
   return queryOne<AuthUserRow>(
     db,
     `SELECT u.id, u.email, u.password_hash, u.is_disabled, u.email_verified,
-            u.mfa_secret, u.mfa_enabled_at,
+            u.mfa_secret, u.mfa_enabled_at, u.failed_login_attempts, u.locked_until,
             COALESCE(p.full_name, '') AS full_name
        FROM users u LEFT JOIN profiles p ON p.id = u.id
       WHERE u.email = ?`,
@@ -188,8 +203,14 @@ function attachCart(db: Db, req: Request, res: Response, userId: string): void {
   setCartCookie(res, cart.token, req);
 }
 
-function signInResponse(db: Db, req: Request, res: Response, userId: string) {
-  rotateSession(db, req, res, userId);
+function signInResponse(
+  db: Db,
+  req: Request,
+  res: Response,
+  userId: string,
+  options: { mfaVerifiedAt?: string | null } = {},
+) {
+  rotateSession(db, req, res, userId, options);
   attachCart(db, req, res, userId);
   return { ok: true, user: getSessionUser(db, userId) };
 }
@@ -266,7 +287,7 @@ async function issueVerification(
     email: user.email,
     type: 'verify_email',
     subject: 'Confirm your DEAR HILLS account',
-    body: `<p>Hello ${user.fullName || 'there'},</p><p>Please confirm your email address to finish setting up your account.</p>
+    body: `<p>Hello ${escapeHtml(user.fullName || 'there')},</p><p>Please confirm your email address to finish setting up your account.</p>
       <p><a href="${link}" style="display:inline-block;background:#243D32;color:#F7F3EB;padding:12px 20px;text-decoration:none">Confirm email</a></p>
       <p style="font-size:13px;color:#6B6F68">If you did not create this account, you can ignore this message.</p>`,
     dedupeKey,
@@ -308,8 +329,9 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
       );
     }
 
-    const token = createSession(db, userId);
+    const token = createSession(db, userId, { scope: 'standard' });
     setSessionCookie(req, res, token);
+    clearAdminSessionCookie(req, res);
     const cart = ensureCart(db, userId, (req.cookies as Record<string, string> | undefined)?.[CART_COOKIE] ?? null);
     setCartCookie(res, cart.token, req);
     const devVerifyUrl = await issueVerification(db, { id: userId, email, fullName: input.fullName });
@@ -324,21 +346,62 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
     res.json({ user: req.user ?? null });
   });
 
-  router.post('/login', authLimiter(15), (req, res) => {
-    const input = parse(loginSchema, req.body);
-    const user = findUserByEmail(db, normalizeEmail(input.email));
+  router.post('/login', authLimiter(10), (req, res) => {
+    const input = parse(loginSchema.strict(), req.body);
+    const email = normalizeEmail(input.email);
+    const nowMs = Date.now();
+    const user = findUserByEmail(db, email);
+
+    const lockedUntilMs = user?.locked_until ? Date.parse(user.locked_until) : 0;
+    const unknownState = unknownEmailFailures.get(email);
+    if ((Number.isFinite(lockedUntilMs) && lockedUntilMs > nowMs) || (unknownState && unknownState.lockedUntil > nowMs)) {
+      throw new AppError(
+        429,
+        'account_locked',
+        'Too many failed sign-in attempts. Please wait 15 minutes and try again.',
+      );
+    }
+
     // Provider-only accounts have no usable password; compare against a dummy
     // hash so their response timing matches an unknown email.
     const storedHash = user && hasUsablePassword(user.password_hash) ? user.password_hash : DUMMY_PASSWORD_HASH;
     const valid = verifyPassword(input.password, storedHash) && Boolean(user && hasUsablePassword(user.password_hash));
     if (!user || !valid) {
-      audit(db, user ? { id: user.id, email: user.email } : null, 'auth.signin.failed', 'user', user?.id ?? normalizeEmail(input.email));
+      if (user) {
+        const previousAttempts =
+          user.locked_until && Date.parse(user.locked_until) <= nowMs ? 0 : (user.failed_login_attempts ?? 0);
+        const nextAttempts = previousAttempts + 1;
+        const lockUntil = nextAttempts >= LOGIN_MAX_FAILURES ? new Date(nowMs + LOGIN_LOCKOUT_MS).toISOString() : null;
+        execute(
+          db,
+          'UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?',
+          nextAttempts,
+          lockUntil,
+          user.id,
+        );
+        audit(db, { id: user.id, email: user.email }, 'auth.signin.failed', 'user', user.id, null, {
+          attempts: nextAttempts,
+          locked: Boolean(lockUntil),
+        });
+      } else {
+        const prev = unknownState && unknownState.lockedUntil <= nowMs ? { count: 0, lockedUntil: 0 } : (unknownState ?? { count: 0, lockedUntil: 0 });
+        const nextCount = prev.count + 1;
+        unknownEmailFailures.set(email, {
+          count: nextCount,
+          lockedUntil: nextCount >= LOGIN_MAX_FAILURES ? nowMs + LOGIN_LOCKOUT_MS : 0,
+        });
+        audit(db, null, 'auth.signin.failed', 'user', email);
+      }
       throw unauthorized('That email and password combination is not recognised.');
     }
     if (user.is_disabled) {
       audit(db, { id: user.id, email: user.email }, 'auth.signin.disabled', 'user', user.id);
       throw disabledError();
     }
+    if ((user.failed_login_attempts ?? 0) > 0 || user.locked_until) {
+      execute(db, 'UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?', user.id);
+    }
+    unknownEmailFailures.delete(email);
     if (PasswordService.needsRehash(user.password_hash)) {
       const upgradedHash = PasswordService.hash(input.password);
       execute(db, 'UPDATE users SET password_hash = ? WHERE id = ?', upgradedHash, user.id);
@@ -356,10 +419,11 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
     if (req.user) {
       audit(db, req.user, 'auth.signout', 'user', req.user.id);
     }
-    // Clear the cookie even when the session is already expired so a browser
-    // cannot keep sending a dead identifier.
+    // Clear both customer and isolated admin sessions even if already expired.
     destroySession(db, sessionToken(req));
+    destroySession(db, adminSessionToken(req));
     clearSessionCookie(req, res);
+    clearAdminSessionCookie(req, res);
     res.json({ ok: true });
   });
 
@@ -411,10 +475,35 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
     const body = tx(db, () => {
       execute(db, 'UPDATE mfa_challenges SET used_at = ? WHERE id = ?', now, challenge.id);
       execute(db, 'DELETE FROM mfa_challenges WHERE user_id = ? AND used_at IS NULL', user.id);
-      return signInResponse(db, req, res, user.id);
+      return signInResponse(db, req, res, user.id, { mfaVerifiedAt: now });
     });
     audit(db, { id: user.id, email: user.email }, 'auth.mfa.signin', 'user', user.id);
     res.json(body);
+  });
+
+  router.post('/mfa/step-up', authLimiter(10), requireAuth, (req, res) => {
+    const input = parse(
+      z.object({ code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code.') }).strict(),
+      req.body,
+    );
+    const user = queryOne<{ mfa_secret: string | null; mfa_enabled_at: string | null }>(
+      db,
+      'SELECT mfa_secret, mfa_enabled_at FROM users WHERE id = ?',
+      req.user!.id,
+    );
+    if (!user?.mfa_secret || !user.mfa_enabled_at) {
+      throw badRequest('Two-step verification is not enabled on this account.');
+    }
+    if (!MfaService.verifyToken(user.mfa_secret, input.code)) {
+      throw unauthorized('That code is not correct.');
+    }
+    const now = new Date().toISOString();
+    const stdToken = sessionToken(req);
+    const admToken = adminSessionToken(req);
+    if (stdToken) execute(db, 'UPDATE sessions SET mfa_verified_at = ? WHERE token_hash = ?', now, sha256(stdToken));
+    if (admToken) execute(db, 'UPDATE sessions SET mfa_verified_at = ? WHERE token_hash = ?', now, sha256(admToken));
+    audit(db, req.user!, 'auth.mfa.step_up', 'user', req.user!.id);
+    res.json({ ok: true, stepUpActive: true, validMinutes: env.adminStepUpMinutes });
   });
 
   router.get('/mfa', requireAuth, (req, res) => {
@@ -682,6 +771,38 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
       name: challenge.display_name,
       picture: challenge.avatar_url,
     };
+    let verifiedChallengeId: string | null = null;
+    if (mfaEnabled(user)) {
+      if (!input.challengeToken || !input.code) {
+        res.json({
+          ...mfaRequiredResponse(db, user.id),
+          linkingRequired: true,
+          linkToken: input.linkToken,
+        });
+        return;
+      }
+      const mfaChallenge = queryOne<MfaChallengeRow>(
+        db,
+        `SELECT id, user_id, attempts, expires_at FROM mfa_challenges
+          WHERE token_hash = ? AND user_id = ? AND used_at IS NULL AND expires_at > ?`,
+        sha256(input.challengeToken),
+        user.id,
+        now,
+      );
+      if (!mfaChallenge) {
+        throw unauthorized('That verification request has expired. Start Google sign-in again.');
+      }
+      if (mfaChallenge.attempts >= MFA_MAX_ATTEMPTS) {
+        execute(db, 'DELETE FROM mfa_challenges WHERE id = ?', mfaChallenge.id);
+        throw unauthorized('Too many incorrect codes. Start again.');
+      }
+      if (!user.mfa_secret || !MfaService.verifyToken(user.mfa_secret, input.code)) {
+        execute(db, 'UPDATE mfa_challenges SET attempts = attempts + 1 WHERE id = ?', mfaChallenge.id);
+        throw unauthorized('That code is not correct.');
+      }
+      verifiedChallengeId = mfaChallenge.id;
+    }
+
     const token = tx(db, () => {
       execute(
         db,
@@ -689,17 +810,37 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
         now,
         sha256(input.linkToken),
       );
+      if (verifiedChallengeId) {
+        execute(db, 'UPDATE mfa_challenges SET used_at = ? WHERE id = ?', now, verifiedChallengeId);
+        execute(db, 'DELETE FROM mfa_challenges WHERE user_id = ? AND used_at IS NULL', user.id);
+      }
       recordGoogleIdentity(db, user.id, profile);
-      execute(
-        db,
-        'UPDATE users SET email_verified = 1, updated_at = ? WHERE id = ?',
-        now,
-        user.id,
-      );
-      return createSession(db, user.id);
+      if (profile.emailVerified) {
+        execute(
+          db,
+          'UPDATE users SET email_verified = 1, updated_at = ? WHERE id = ?',
+          now,
+          user.id,
+        );
+      }
+      return createSession(db, user.id, {
+        scope: 'standard',
+        mfaVerifiedAt: verifiedChallengeId ? now : null,
+      });
     });
     destroySession(db, sessionToken(req));
+    destroySession(db, adminSessionToken(req));
     setSessionCookie(req, res, token);
+    const isAdmin = Boolean(queryOne(db, "SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'admin'", user.id));
+    if (isAdmin) {
+      setAdminSessionCookie(
+        req,
+        res,
+        createSession(db, user.id, { scope: 'admin', mfaVerifiedAt: verifiedChallengeId ? now : null }),
+      );
+    } else {
+      clearAdminSessionCookie(req, res);
+    }
     attachCart(db, req, res, user.id);
     audit(db, { id: user.id, email: user.email }, 'auth.google.link', 'user', user.id);
     res.json({ ok: true, user: getSessionUser(db, user.id), linkingRequired: false });
@@ -847,7 +988,7 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
         subject: `Your Dear Hills password reset code: ${otp}`,
         body: `<div style="font-family:sans-serif;max-width:540px;color:#243D32">
           <h2 style="font-size:22px;color:#243D32;margin-bottom:12px">Dear Hills Account Recovery</h2>
-          <p>Hello ${user.full_name || 'there'},</p>
+          <p>Hello ${escapeHtml(user.full_name || 'there')},</p>
           <p>We received a request to reset your password. Use the verification code below:</p>
           <div style="background:#F7F3EB;border:1px solid #D9D2C5;padding:16px;text-align:center;margin:20px 0">
             <span style="font-family:monospace;font-size:32px;font-weight:bold;letter-spacing:6px;color:#243D32">${otp}</span>
@@ -1058,7 +1199,7 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
         email: user.email,
         type: 'password_changed',
         subject: 'Your Dear Hills password has been changed',
-        body: `<p>Hello ${user.full_name || 'there'},</p>
+        body: `<p>Hello ${escapeHtml(user.full_name || 'there')},</p>
           <p>The password for your Dear Hills account was recently updated. All existing sessions were signed out for security.</p>
           <p>If you did not make this change, please contact our support team immediately.</p>`,
         dedupeKey: `pwd_changed:${userId}:${nowIso.slice(0, 13)}`,

@@ -6,6 +6,14 @@ import { env } from '../env.js';
 import { execute, queryAll, queryOne, type Db } from '../db.js';
 import { getProduct, getRegions, getSellerStorefront, listCategories, listProducts, listPublicMakers, listBestsellerProducts, listPublicSellers } from '../lib/catalog.js';
 import {
+  getCraftBySlug,
+  getRegionBySlug,
+  getRegionCraftCombo,
+  listCrafts,
+  listIndexableRegionCraftCombos,
+  listRegions,
+} from '../lib/himalayan.js';
+import {
   campaignStats,
   effectiveCampaignStatus,
   getCampaignBySlug,
@@ -19,7 +27,7 @@ import { newId } from '../lib/ids.js';
 import { getPolicy, getSiteContent } from '../lib/site.js';
 import { paymentProviderStatus } from '../lib/payments.js';
 import { shippingFor } from '../lib/pricing.js';
-import { notify } from '../lib/email.js';
+import { escapeHtml, notify } from '../lib/email.js';
 import {
   cleanSeoText,
   countRealCampaignProducts,
@@ -28,6 +36,7 @@ import {
 } from '../lib/seo.js';
 import { buildProductFallbackDescription } from '../../shared/seo.js';
 import { BLOG_POSTS } from '../../shared/blog.js';
+import { HIMALAYAN_GUIDES } from '../../shared/guides.js';
 
 function optInt(value: unknown): number | undefined {
   if (value === undefined || value === null || value === '') return undefined;
@@ -104,6 +113,8 @@ export function publicRouter(db: Db): Router {
       catalogPreview: catalogPreview.items,
       gifting: gifting.items,
       regions: getRegions(db).slice(0, 6),
+      himalayanRegions: listRegions(db),
+      crafts: listCrafts(db),
       reviews: reviews.map((review) => ({
         id: review.id,
         rating: review.rating,
@@ -126,7 +137,15 @@ export function publicRouter(db: Db): Router {
     });
   });
 
-  router.get(['/products', '/shop/products'], (req, res) => {
+  const searchLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: env.isTest ? 10_000 : 120,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: { code: 'rate_limited', message: 'Too many search requests. Please wait a moment.' } },
+  });
+
+  router.get(['/products', '/shop/products'], searchLimiter, (req, res) => {
     const sortRaw = str(req.query.sort);
     const sort = (['relevance', 'newest', 'price_asc', 'price_desc', 'popular'] as const).includes(
       sortRaw as 'newest',
@@ -138,6 +157,10 @@ export function publicRouter(db: Db): Router {
       category: str(req.query.category),
       seller: str(req.query.seller),
       region: str(req.query.region),
+      regionSlug: str(req.query.regionSlug),
+      craft: str(req.query.craft),
+      technique: str(req.query.technique),
+      giTagged: req.query.gi === 'true' || req.query.giTagged === 'true',
       minPricePaise: optInt(req.query.minPrice),
       maxPricePaise: optInt(req.query.maxPrice),
       inStock: req.query.inStock === 'true',
@@ -152,6 +175,8 @@ export function publicRouter(db: Db): Router {
         categories: listCategories(db),
         sellers: listPublicSellers(db).map((seller) => ({ name: seller.name, slug: seller.slug })),
         regions: getRegions(db),
+        himalayanRegions: listRegions(db),
+        crafts: listCrafts(db),
         priceRangePaise: queryOne<{ min: number | null; max: number | null }>(
           db,
           `SELECT MIN(p.price_paise) AS min, MAX(p.price_paise) AS max
@@ -323,7 +348,116 @@ export function publicRouter(db: Db): Router {
   });
 
   router.get('/regions', (_req, res) => {
-    res.json({ regions: getRegions(db) });
+    res.json({
+      regions: getRegions(db),
+      himalayanRegions: listRegions(db),
+      crafts: listCrafts(db),
+    });
+  });
+
+  router.get('/regions/:slug', (req, res) => {
+    const region = getRegionBySlug(db, String(req.params.slug));
+    if (!region) throw notFound('That Himalayan region was not found.');
+    const products = listProducts(db, {
+      regionSlug: region.slug,
+      regionName: region.name,
+      excludeDemo: true,
+      pageSize: 24,
+      sort: 'newest',
+    });
+    const combos = listIndexableRegionCraftCombos(db).filter((c) => c.region.slug === region.slug);
+    res.json({
+      region,
+      products,
+      crafts: listCrafts(db),
+      combos: combos.map((c) => ({
+        name: c.subjectName,
+        slug: c.subjectSlug,
+        productCount: c.productCount,
+      })),
+    });
+  });
+
+  router.get('/regions/:region/:subject', (req, res) => {
+    const combo = getRegionCraftCombo(db, String(req.params.region), String(req.params.subject));
+    if (!combo) throw notFound('This regional craft collection is not available.');
+    const products = listProducts(db, {
+      regionSlug: combo.region.slug,
+      regionName: combo.region.name,
+      ...(combo.craft ? { craft: combo.craft.slug } : { category: combo.category!.slug }),
+      excludeDemo: true,
+      pageSize: 24,
+      sort: 'newest',
+    });
+    res.json({
+      region: combo.region,
+      craft: combo.craft ?? null,
+      category: combo.category ?? null,
+      introText: combo.introText,
+      faqs: combo.faqs,
+      products,
+    });
+  });
+
+  router.get('/crafts', (_req, res) => {
+    res.json({ crafts: listCrafts(db), regions: listRegions(db) });
+  });
+
+  router.get('/crafts/:slug', (req, res) => {
+    const craft = getCraftBySlug(db, String(req.params.slug));
+    if (!craft) throw notFound('That Himalayan craft was not found.');
+    const products = listProducts(db, {
+      craft: craft.slug,
+      excludeDemo: true,
+      pageSize: 24,
+      sort: 'newest',
+    });
+    const combos = listIndexableRegionCraftCombos(db).filter((c) => c.craft?.slug === craft.slug);
+    res.json({
+      craft,
+      products,
+      regions: listRegions(db),
+      combos: combos.map((c) => ({
+        regionName: c.region.name,
+        regionSlug: c.region.slug,
+        productCount: c.productCount,
+      })),
+    });
+  });
+
+  router.get('/gi-tagged', (_req, res) => {
+    const products = listProducts(db, {
+      giTagged: true,
+      excludeDemo: true,
+      pageSize: 48,
+      sort: 'newest',
+    });
+    res.json({
+      products,
+      regions: listRegions(db),
+      crafts: listCrafts(db),
+    });
+  });
+
+  router.get('/himalayan-handmade-products', (_req, res) => {
+    const regions = listRegions(db);
+    const crafts = listCrafts(db);
+    const categories = listCategories(db);
+    const featured = listProducts(db, { excludeDemo: true, pageSize: 12, sort: 'popular' });
+    const combos = listIndexableRegionCraftCombos(db);
+    res.json({
+      regions,
+      crafts,
+      categories,
+      featured,
+      combos: combos.map((c) => ({
+        regionName: c.region.name,
+        regionSlug: c.region.slug,
+        subjectName: c.subjectName,
+        subjectSlug: c.subjectSlug,
+        productCount: c.productCount,
+      })),
+    });
   });
 
   router.get('/site', (_req, res) => {
@@ -337,6 +471,8 @@ export function publicRouter(db: Db): Router {
   router.get('/config', (_req, res) => {
     const payments = paymentProviderStatus();
     res.json({
+      brand: env.brand,
+      features: env.features,
       payments,
       shipping: {
         freeThresholdPaise: env.freeShippingThresholdPaise,
@@ -448,7 +584,7 @@ export function publicRouter(db: Db): Router {
         email: env.smtp.supportEmail,
         type: 'support_ticket',
         subject: `Support: ${input.subject}`,
-        body: `<p><strong>From:</strong> ${input.name} &lt;${input.email}&gt;<br/><strong>Order:</strong> ${input.orderNumber ?? '—'}</p><p>${input.message.replaceAll('<', '&lt;')}</p>`,
+        body: `<p><strong>From:</strong> ${escapeHtml(input.name)} &lt;${escapeHtml(input.email)}&gt;<br/><strong>Order:</strong> ${escapeHtml(input.orderNumber ?? '—')}</p><p>${escapeHtml(input.message)}</p>`,
         dedupeKey: `support:${id}`,
       });
       const reference = id.replace('sup_', 'SUP-').slice(0, 14).toUpperCase();
@@ -580,8 +716,11 @@ export function sitemapRouter(db: Db): Router {
     const base = resolveSitemapBase(req);
     const staticEntries = [
       { path: '/', priority: '1.0', changefreq: 'daily' },
+      { path: '/himalayan-handmade-products', priority: '0.95', changefreq: 'daily' },
       { path: '/shop', priority: '0.9', changefreq: 'daily' },
+      { path: '/gi-tagged', priority: '0.85', changefreq: 'weekly' },
       { path: '/blog', priority: '0.8', changefreq: 'daily' },
+      { path: '/guides', priority: '0.8', changefreq: 'daily' },
       { path: '/makers', priority: '0.8', changefreq: 'weekly' },
       { path: '/become-a-maker', priority: '0.8', changefreq: 'weekly' },
       { path: '/about', priority: '0.7', changefreq: 'monthly' },
@@ -677,10 +816,30 @@ export function sitemapRouter(db: Db): Router {
         effectiveCampaignStatus(campaign) === 'active' && countRealCampaignProducts(db, campaign.id) > 0,
     );
 
+    const activeRegions = listRegions(db);
+    const activeCrafts = listCrafts(db);
+    const validCombos = listIndexableRegionCraftCombos(db);
+
     const urls = [
       ...staticEntries.map(
         (entry) =>
           `<url><loc>${escapeXml(base + entry.path)}</loc><changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`,
+      ),
+      ...activeRegions.map((region) => {
+        const imgTag = region.heroImage
+          ? `<image:image><image:loc>${escapeXml(toAbsolute(base, region.heroImage))}</image:loc><image:title>${escapeXml(region.name)}</image:title></image:image>`
+          : '';
+        return `<url><loc>${escapeXml(`${base}/regions/${region.slug}`)}</loc><changefreq>weekly</changefreq><priority>0.85</priority>${imgTag}</url>`;
+      }),
+      ...activeCrafts.map((craft) => {
+        const imgTag = craft.heroImage
+          ? `<image:image><image:loc>${escapeXml(toAbsolute(base, craft.heroImage))}</image:loc><image:title>${escapeXml(craft.name)}</image:title></image:image>`
+          : '';
+        return `<url><loc>${escapeXml(`${base}/crafts/${craft.slug}`)}</loc><changefreq>weekly</changefreq><priority>0.85</priority>${imgTag}</url>`;
+      }),
+      ...validCombos.map(
+        (combo) =>
+          `<url><loc>${escapeXml(`${base}/regions/${combo.region.slug}/${combo.subjectSlug}`)}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`,
       ),
       ...categories.map((category) => {
         const lastmod = category.last_updated ? `<lastmod>${escapeXml(category.last_updated.slice(0, 10))}</lastmod>` : '';
@@ -712,6 +871,10 @@ export function sitemapRouter(db: Db): Router {
         const fullImg = toAbsolute(base, post.coverImage);
         return `<url><loc>${escapeXml(`${base}/blog/${post.slug}`)}</loc><lastmod>${escapeXml(post.publishedAt)}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority><image:image><image:loc>${escapeXml(fullImg)}</image:loc><image:title>${escapeXml(post.title)}</image:title></image:image></url>`;
       }),
+      ...HIMALAYAN_GUIDES.map((guide) => {
+        const fullImg = toAbsolute(base, guide.coverImage);
+        return `<url><loc>${escapeXml(`${base}/guides/${guide.slug}`)}</loc><lastmod>${escapeXml(guide.publishedAt)}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority><image:image><image:loc>${escapeXml(fullImg)}</image:loc><image:title>${escapeXml(guide.title)}</image:title></image:image></url>`;
+      }),
       ...policyPaths.map(
         (path) =>
           `<url><loc>${escapeXml(base + path)}</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>`,
@@ -738,6 +901,7 @@ export function sitemapRouter(db: Db): Router {
       sku: string;
       weight_g: number | null;
       region: string | null;
+      craft_type: string | null;
       origin_place: string | null;
       stock: number;
       seller_name: string;
@@ -746,7 +910,8 @@ export function sitemapRouter(db: Db): Router {
     }>(
       db,
       `SELECT p.id, p.slug, p.name, p.short_description, p.description, p.price_paise,
-              p.sku, p.weight_g, COALESCE(NULLIF(p.region, ''), s.region) AS region, p.origin_place,
+              p.sku, p.weight_g, COALESCE(NULLIF(p.region, ''), s.region) AS region,
+              p.craft_type, p.origin_place,
               acp.promo_price_paise,
               i.quantity - i.reserved_quantity AS stock,
               s.business_name AS seller_name,
@@ -870,8 +1035,8 @@ export function sitemapRouter(db: Db): Router {
           `<g:shipping><g:country>IN</g:country><g:service>Standard Shipping</g:service><g:price>${(shippingPaise / 100).toFixed(2)} INR</g:price></g:shipping>`,
           ...(row.weight_g && row.weight_g > 0 ? [`<g:shipping_weight>${row.weight_g} g</g:shipping_weight>`] : []),
           ...(row.region ? [`<g:custom_label_0>${escapeXml(row.region)}</g:custom_label_0>`] : []),
-          `<g:custom_label_1>${escapeXml(row.seller_name)}</g:custom_label_1>`,
-          ...(campaignMeta?.name ? [`<g:custom_label_2>${escapeXml(campaignMeta.name)}</g:custom_label_2>`] : []),
+          `<g:custom_label_1>${escapeXml(row.craft_type || row.category_name)}</g:custom_label_1>`,
+          `<g:custom_label_2>${escapeXml(row.seller_name)}</g:custom_label_2>`,
         ];
 
         return `<item>${parts.join('')}</item>`;
@@ -893,11 +1058,21 @@ export function sitemapRouter(db: Db): Router {
       .set('Cache-Control', 'public, max-age=86400')
       .send(`User-agent: *
 Allow: /
+Allow: /regions/
+Allow: /crafts/
+Allow: /categories/
+Allow: /gi-tagged
+Allow: /himalayan-handmade-products
+Allow: /guides/
 Allow: /sellers/
 Allow: /api/home
 Allow: /api/products
 Allow: /api/shop/
 Allow: /api/categories
+Allow: /api/regions
+Allow: /api/crafts
+Allow: /api/gi-tagged
+Allow: /api/himalayan-handmade-products
 Allow: /api/makers
 Allow: /api/sellers/
 Allow: /api/campaigns/

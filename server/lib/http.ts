@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
-import type { ZodType } from 'zod';
-import { ZodError } from 'zod';
+import { z, type ZodType, ZodError } from 'zod';
+import { isSafeHttpUrl, isSafeSiteHref } from '../../shared/urls.js';
 import { env } from '../env.js';
 
 export class AppError extends Error {
@@ -196,4 +196,27 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
 
 export function clientIp(req: Request): string {
   return req.ip ?? req.socket.remoteAddress ?? 'unknown';
+}
+
+export const safeTrackingUrlSchema = z
+  .string()
+  .trim()
+  .max(500)
+  .refine((value) => !value || isSafeHttpUrl(value, true), 'Enter a valid http:// or https:// tracking URL.')
+  .optional()
+  .or(z.literal(''));
+
+export const safeSiteHrefSchema = z
+  .string()
+  .trim()
+  .max(300)
+  .refine((value) => !value || isSafeSiteHref(value, false), 'Use a site-relative path or an https:// URL.');
+
+export function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }

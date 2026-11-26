@@ -4,13 +4,15 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { execute, queryAll, queryOne, tx, type Db } from '../db.js';
-import { requireAdmin } from '../lib/auth.js';
+import { requireAdminMiddleware, requireAdminStepUp } from '../lib/auth.js';
 import { audit } from '../lib/audit.js';
-import { badRequest, conflict, notFound, parse } from '../lib/http.js';
+import { badRequest, conflict, notFound, parse, safeSiteHrefSchema } from '../lib/http.js';
 import { newId, uniqueSlug } from '../lib/ids.js';
 import { escapeHtml, notify, notificationQueueSummary } from '../lib/email.js';
 import { getOrderView, decideRefund, createRefundForReturn, generateSettlement, markSettlementPaid, markManualRefundCompleted, sellerOrderAction, refreshOrderStatus } from '../lib/orders.js';
-import { imageUpload, hasValidFileSignature, resolvePrivateDocPath } from '../lib/uploads.js';
+import { cleanupUploadedFile, imageUpload, hasValidFileSignature, resolvePrivateDocPath, sendPrivateDocument } from '../lib/uploads.js';
+import { decryptPayoutDetails } from '../lib/payoutCrypto.js';
+import { isSafeHttpUrl } from '../../shared/urls.js';
 import { getSiteContent, setSiteContent } from '../lib/site.js';
 import {
   assertProductNotInAnotherCampaign,
@@ -26,7 +28,8 @@ import {
 import { POLICY_KEYS } from '../../shared/content.js';
 import { assertProductionConfig } from '../env.js';
 import { paymentProviderStatus } from '../lib/payments.js';
-import { firstComplianceError, validateProductCompliance, complianceGroupFor } from '../lib/productCompliance.js';
+import { firstComplianceError, findProtectedClaimViolations, sellerAcceptedProofFlags, validateProductCompliance, complianceGroupFor } from '../lib/productCompliance.js';
+import { listCrafts, listRegions, recordSlugRedirect, slugifyValue } from '../lib/himalayan.js';
 import {
   applySellerDecision,
   checkDocumentRequirements,
@@ -53,9 +56,15 @@ function sellerUser(db: Db, sellerId: string): { email: string; user_id: string;
   );
 }
 
-export function adminRouter(db: Db): Router {
+export interface AdminRouterDeps {
+  requireAdminMfa?: boolean;
+}
+
+export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
   const router = Router();
-  router.use(requireAdmin);
+  const requireAdminMfa = deps.requireAdminMfa ?? env.requireAdminMfa;
+  const stepUp = requireAdminStepUp(db, requireAdminMfa);
+  router.use(requireAdminMiddleware(requireAdminMfa));
 
   router.get('/overview', (_req, res) => {
     const since = new Date(Date.now() - 30 * 86400_000).toISOString();
@@ -388,7 +397,7 @@ export function adminRouter(db: Db): Router {
         ...seller,
         operatingAddress: seller.operating_address ? parseJson<Record<string, unknown> | null>(String(seller.operating_address), null) : null,
         payoutDetails: seller.payout_details_json
-          ? parseJson<Record<string, unknown> | null>(String(seller.payout_details_json), null)
+          ? decryptPayoutDetails(String(seller.payout_details_json))
           : (application?.payout_json ? parseJson<Record<string, unknown> | null>(String(application.payout_json), null) : null),
         email: user?.email,
         emailVerified: user?.email_verified === 1,
@@ -477,11 +486,7 @@ export function adminRouter(db: Db): Router {
       sellerId: doc.seller_id,
       docType: doc.doc_type,
     });
-    res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.original_name)}"`);
-    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    fs.createReadStream(resolvedPath).pipe(res);
+    sendPrivateDocument(res, resolvedPath, doc.mime_type, doc.original_name);
   });
 
   router.post('/sellers/:id/decision', async (req, res) => {
@@ -684,6 +689,9 @@ export function adminRouter(db: Db): Router {
         decision: z.enum(['approve', 'reject', 'request_edit', 'request_changes']),
         reason: z.string().trim().max(1000).optional(),
         originVerified: z.boolean().optional(),
+        giTagged: z.boolean().optional(),
+        giName: z.string().trim().max(160).optional(),
+        giRegistrationRef: z.string().trim().max(80).optional(),
         taxRateBp: z.number().int().min(0).max(5000).optional(),
       }),
       req.body,
@@ -729,8 +737,21 @@ export function adminRouter(db: Db): Router {
         product,
         sellerFssaiNumber: typeof applicationData.fssaiNumber === 'string' ? applicationData.fssaiNumber : null,
       });
-      if (Object.keys(compliance.errors).length) {
-        throw badRequest(firstComplianceError(compliance.errors), compliance.errors);
+      const proofFlags = sellerAcceptedProofFlags(db, product.seller_id);
+      const claimRow = queryOne<{ short_description: string; gi_tagged: number }>(
+        db,
+        'SELECT short_description, gi_tagged FROM products WHERE id = ?',
+        product.id,
+      );
+      const claimCheck = findProtectedClaimViolations({
+        texts: [product.name, claimRow?.short_description, product.description, product.materials],
+        hasAcceptedOriginOrCraftProof: proofFlags.hasAcceptedOriginOrCraftProof || input.originVerified === true,
+        giVerifiedByAdmin: input.giTagged === true || claimRow?.gi_tagged === 1 || proofFlags.hasAcceptedGiProof,
+        hasAcceptedOrganicProof: proofFlags.hasAcceptedOrganicProof,
+      });
+      const allComplianceErrors = { ...compliance.errors, ...claimCheck.errors };
+      if (Object.keys(allComplianceErrors).length) {
+        throw badRequest(firstComplianceError(allComplianceErrors), allComplianceErrors);
       }
     }
     if (input.decision !== 'approve' && (!input.reason || input.reason.trim().length < 10)) {
@@ -746,6 +767,11 @@ export function adminRouter(db: Db): Router {
                 approved_at = CASE WHEN ? = 'approved' THEN ? ELSE approved_at END,
                 published_at = CASE WHEN ? = 'approved' THEN ? ELSE published_at END,
                 origin_verified = COALESCE(?, origin_verified),
+                gi_tagged = COALESCE(?, gi_tagged),
+                gi_name = COALESCE(?, gi_name),
+                gi_registration_ref = COALESCE(?, gi_registration_ref),
+                gi_verified_at = CASE WHEN ? = 1 THEN COALESCE(gi_verified_at, ?) ELSE CASE WHEN ? = 0 THEN NULL ELSE gi_verified_at END END,
+                gi_verified_by = CASE WHEN ? = 1 THEN COALESCE(gi_verified_by, ?) ELSE CASE WHEN ? = 0 THEN NULL ELSE gi_verified_by END END,
                 tax_rate_bp = COALESCE(?, tax_rate_bp), updated_at = ?
           WHERE id = ?`,
         nextStatus,
@@ -757,6 +783,15 @@ export function adminRouter(db: Db): Router {
         nextStatus,
         now,
         input.originVerified === undefined ? null : input.originVerified ? 1 : 0,
+        input.giTagged === undefined ? null : input.giTagged ? 1 : 0,
+        input.giName ?? null,
+        input.giRegistrationRef ?? null,
+        input.giTagged === undefined ? null : input.giTagged ? 1 : 0,
+        now,
+        input.giTagged === undefined ? null : input.giTagged ? 1 : 0,
+        input.giTagged === undefined ? null : input.giTagged ? 1 : 0,
+        req.user!.id,
+        input.giTagged === undefined ? null : input.giTagged ? 1 : 0,
         input.taxRateBp === undefined ? null : input.taxRateBp,
         now,
         product.id,
@@ -829,14 +864,25 @@ export function adminRouter(db: Db): Router {
         sellerId: z.string().optional(),
         shortDescription: z.string().trim().max(300).default(''),
         description: z.string().trim().min(10, 'Write at least 10 characters for the description.').max(8000),
-        pricePaise: z.number().int().min(0, 'Price cannot be negative.').max(10_000_000),
+        pricePaise: z.number().int().min(100, 'Price must be at least ₹1.').max(10_000_000),
         compareAtPricePaise: z.number().int().min(0).max(10_000_000).nullable().optional(),
         sku: z.string().trim().min(2).max(80).regex(/^[A-Za-z0-9._-]+$/, 'SKU contains invalid characters.').optional(),
         stock: z.number().int().min(0, 'Stock cannot be negative.').max(100_000).default(0),
         lowStockThreshold: z.number().int().min(0).max(1000).default(3),
         unit: z.string().trim().min(1).max(30).default('piece'),
         weightG: z.number().int().min(0).max(500_000).nullable().optional(),
+        dimensions: z.string().trim().max(120).optional(),
         originPlace: z.string().trim().max(120).optional(),
+        region: z.string().trim().max(80).optional(),
+        regionSlug: z.string().trim().max(80).optional(),
+        districtVillage: z.string().trim().max(120).optional(),
+        craftType: z.string().trim().max(120).optional(),
+        craftSlug: z.string().trim().max(80).optional(),
+        technique: z.string().trim().max(80).optional(),
+        giTagged: z.boolean().optional(),
+        giName: z.string().trim().max(160).optional(),
+        giRegistrationRef: z.string().trim().max(80).optional(),
+        madeToOrder: z.boolean().optional(),
         materials: z.string().trim().max(500).optional(),
         careInstructions: z.string().trim().max(500).optional(),
         foodInfo: z.string().trim().max(1000).optional(),
@@ -844,7 +890,7 @@ export function adminRouter(db: Db): Router {
         isDemo: z.boolean().default(true),
         imageUrl: z.string().trim().max(500).optional(),
         imageAlt: z.string().trim().max(200).optional(),
-      }),
+      }).strict(),
       req.body,
     );
 
@@ -933,10 +979,12 @@ export function adminRouter(db: Db): Router {
         db,
         `INSERT INTO products (
            id, seller_id, category_id, name, slug, short_description, description,
-           price_paise, compare_at_price_paise, sku, unit, weight_g, materials,
-           care_instructions, food_info, origin_place, origin_verified, status,
+           price_paise, compare_at_price_paise, sku, unit, weight_g, dimensions, materials,
+           care_instructions, food_info, origin_place, region, region_slug, district_village,
+           craft_type, craft_slug, technique, gi_tagged, gi_name, gi_registration_ref,
+           gi_verified_at, gi_verified_by, made_to_order, origin_verified, status,
            is_demo, published_at, approved_at, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         productId,
         seller.id,
         category.id,
@@ -949,10 +997,24 @@ export function adminRouter(db: Db): Router {
         sku,
         input.unit,
         input.weightG ?? null,
+        input.dimensions ?? null,
         input.materials ?? null,
         input.careInstructions ?? null,
         input.foodInfo ?? null,
         input.originPlace ?? null,
+        input.region ?? null,
+        input.regionSlug ? slugifyValue(input.regionSlug) : input.region ? slugifyValue(input.region) : null,
+        input.districtVillage ?? null,
+        input.craftType ?? null,
+        input.craftSlug ? slugifyValue(input.craftSlug) : input.craftType ? slugifyValue(input.craftType) : null,
+        input.technique ?? null,
+        input.giTagged ? 1 : 0,
+        input.giName ?? null,
+        input.giRegistrationRef ?? null,
+        input.giTagged ? now : null,
+        input.giTagged ? req.user!.id : null,
+        input.madeToOrder ? 1 : 0,
+        input.giTagged ? 1 : 0,
         input.status,
         input.isDemo ? 1 : 0,
         isApproved ? now : null,
@@ -1019,19 +1081,30 @@ export function adminRouter(db: Db): Router {
         categoryId: z.string().min(2).optional(),
         shortDescription: z.string().trim().max(300).optional(),
         description: z.string().trim().min(10).max(8000).optional(),
-        pricePaise: z.number().int().min(0, 'Price cannot be negative.').max(10_000_000).optional(),
+        pricePaise: z.number().int().min(100, 'Price must be at least ₹1.').max(10_000_000).optional(),
         compareAtPricePaise: z.number().int().min(0).max(10_000_000).nullable().optional(),
         sku: z.string().trim().min(2).max(80).regex(/^[A-Za-z0-9._-]+$/).optional(),
         unit: z.string().trim().min(1).max(30).optional(),
         weightG: z.number().int().min(0).max(500_000).nullable().optional(),
+        dimensions: z.string().trim().max(120).nullable().optional(),
         originPlace: z.string().trim().max(120).nullable().optional(),
+        region: z.string().trim().max(80).nullable().optional(),
+        regionSlug: z.string().trim().max(80).nullable().optional(),
+        districtVillage: z.string().trim().max(120).nullable().optional(),
+        craftType: z.string().trim().max(120).nullable().optional(),
+        craftSlug: z.string().trim().max(80).nullable().optional(),
+        technique: z.string().trim().max(80).nullable().optional(),
+        giTagged: z.boolean().optional(),
+        giName: z.string().trim().max(160).nullable().optional(),
+        giRegistrationRef: z.string().trim().max(80).nullable().optional(),
+        madeToOrder: z.boolean().optional(),
         materials: z.string().trim().max(500).nullable().optional(),
         careInstructions: z.string().trim().max(500).nullable().optional(),
         foodInfo: z.string().trim().max(1000).nullable().optional(),
         status: z.enum(['draft', 'pending', 'approved', 'paused', 'archived']).optional(),
         isDemo: z.boolean().optional(),
         originVerified: z.boolean().optional(),
-      }),
+      }).strict(),
       req.body,
     );
 
@@ -1126,6 +1199,9 @@ export function adminRouter(db: Db): Router {
     }
 
     tx(db, () => {
+      if (input.slug && input.slug !== product.slug) {
+        recordSlugRedirect(db, `/shop/${product.slug}`, `/shop/${input.slug}`);
+      }
       execute(
         db,
         `UPDATE products SET
@@ -1139,7 +1215,20 @@ export function adminRouter(db: Db): Router {
            sku = COALESCE(?, sku),
            unit = COALESCE(?, unit),
            weight_g = CASE WHEN ? IS NOT NULL THEN ? ELSE weight_g END,
+           dimensions = CASE WHEN ? IS NOT NULL THEN ? ELSE dimensions END,
            origin_place = CASE WHEN ? IS NOT NULL THEN ? ELSE origin_place END,
+           region = CASE WHEN ? IS NOT NULL THEN ? ELSE region END,
+           region_slug = CASE WHEN ? IS NOT NULL THEN ? ELSE region_slug END,
+           district_village = CASE WHEN ? IS NOT NULL THEN ? ELSE district_village END,
+           craft_type = CASE WHEN ? IS NOT NULL THEN ? ELSE craft_type END,
+           craft_slug = CASE WHEN ? IS NOT NULL THEN ? ELSE craft_slug END,
+           technique = CASE WHEN ? IS NOT NULL THEN ? ELSE technique END,
+           gi_tagged = CASE WHEN ? IS NOT NULL THEN ? ELSE gi_tagged END,
+           gi_name = CASE WHEN ? IS NOT NULL THEN ? ELSE gi_name END,
+           gi_registration_ref = CASE WHEN ? IS NOT NULL THEN ? ELSE gi_registration_ref END,
+           gi_verified_at = CASE WHEN ? = 1 THEN COALESCE(gi_verified_at, ?) ELSE CASE WHEN ? = 0 THEN NULL ELSE gi_verified_at END END,
+           gi_verified_by = CASE WHEN ? = 1 THEN COALESCE(gi_verified_by, ?) ELSE CASE WHEN ? = 0 THEN NULL ELSE gi_verified_by END END,
+           made_to_order = CASE WHEN ? IS NOT NULL THEN ? ELSE made_to_order END,
            materials = CASE WHEN ? IS NOT NULL THEN ? ELSE materials END,
            care_instructions = CASE WHEN ? IS NOT NULL THEN ? ELSE care_instructions END,
            food_info = CASE WHEN ? IS NOT NULL THEN ? ELSE food_info END,
@@ -1161,8 +1250,36 @@ export function adminRouter(db: Db): Router {
         input.unit ?? null,
         input.weightG !== undefined ? 1 : null,
         input.weightG ?? null,
+        input.dimensions !== undefined ? 1 : null,
+        input.dimensions ?? null,
         input.originPlace !== undefined ? 1 : null,
         input.originPlace ?? null,
+        input.region !== undefined ? 1 : null,
+        input.region ?? null,
+        input.regionSlug !== undefined || input.region !== undefined ? 1 : null,
+        input.regionSlug ? slugifyValue(input.regionSlug) : input.region ? slugifyValue(input.region) : null,
+        input.districtVillage !== undefined ? 1 : null,
+        input.districtVillage ?? null,
+        input.craftType !== undefined ? 1 : null,
+        input.craftType ?? null,
+        input.craftSlug !== undefined || input.craftType !== undefined ? 1 : null,
+        input.craftSlug ? slugifyValue(input.craftSlug) : input.craftType ? slugifyValue(input.craftType) : null,
+        input.technique !== undefined ? 1 : null,
+        input.technique ?? null,
+        input.giTagged !== undefined ? 1 : null,
+        input.giTagged ? 1 : 0,
+        input.giName !== undefined ? 1 : null,
+        input.giName ?? null,
+        input.giRegistrationRef !== undefined ? 1 : null,
+        input.giRegistrationRef ?? null,
+        input.giTagged !== undefined ? (input.giTagged ? 1 : 0) : null,
+        now,
+        input.giTagged !== undefined ? (input.giTagged ? 1 : 0) : null,
+        input.giTagged !== undefined ? (input.giTagged ? 1 : 0) : null,
+        req.user!.id,
+        input.giTagged !== undefined ? (input.giTagged ? 1 : 0) : null,
+        input.madeToOrder !== undefined ? 1 : null,
+        input.madeToOrder ? 1 : 0,
         input.materials !== undefined ? 1 : null,
         input.materials ?? null,
         input.careInstructions !== undefined ? 1 : null,
@@ -1180,7 +1297,19 @@ export function adminRouter(db: Db): Router {
         product.id,
       );
 
-      audit(db, req.user!, 'product.updated_by_admin', 'product', product.id, { status: product.status }, { ...input });
+      audit(
+        db,
+        req.user!,
+        'product.updated_by_admin',
+        'product',
+        product.id,
+        {
+          status: product.status,
+          pricePaise: product.price_paise,
+          compareAtPricePaise: product.compare_at_price_paise,
+        },
+        { ...input, status: nextStatus },
+      );
     });
 
     res.json({ ok: true, status: nextStatus, message: 'Product updated successfully.' });
@@ -1191,6 +1320,11 @@ export function adminRouter(db: Db): Router {
       id: string;
       status: string;
       seller_id: string;
+      name: string;
+      short_description: string;
+      description: string;
+      origin_verified: number;
+      gi_tagged: number;
       materials: string | null;
       dimensions: string | null;
       care_instructions: string | null;
@@ -1203,7 +1337,8 @@ export function adminRouter(db: Db): Router {
       category_name: string | null;
     }>(
       db,
-      `SELECT p.id, p.status, p.seller_id, p.materials, p.dimensions, p.care_instructions, p.weight_g,
+      `SELECT p.id, p.status, p.seller_id, p.name, p.short_description, p.description, p.origin_verified, p.gi_tagged,
+              p.materials, p.dimensions, p.care_instructions, p.weight_g,
               p.compliance_json, p.variety_grade, p.harvest_info, p.dispatch_conditions,
               c.slug AS category_slug, c.name AS category_name
          FROM products p LEFT JOIN categories c ON c.id = p.category_id
@@ -1219,8 +1354,16 @@ export function adminRouter(db: Db): Router {
       product,
       sellerFssaiNumber: typeof applicationData.fssaiNumber === 'string' ? applicationData.fssaiNumber : null,
     });
-    if (Object.keys(compliance.errors).length) {
-      throw badRequest(firstComplianceError(compliance.errors), compliance.errors);
+    const proofFlags = sellerAcceptedProofFlags(db, product.seller_id);
+    const claimCheck = findProtectedClaimViolations({
+      texts: [product.name, product.short_description, product.description, product.materials],
+      hasAcceptedOriginOrCraftProof: proofFlags.hasAcceptedOriginOrCraftProof || product.origin_verified === 1,
+      giVerifiedByAdmin: product.gi_tagged === 1 || proofFlags.hasAcceptedGiProof,
+      hasAcceptedOrganicProof: proofFlags.hasAcceptedOrganicProof,
+    });
+    const allComplianceErrors = { ...compliance.errors, ...claimCheck.errors };
+    if (Object.keys(allComplianceErrors).length) {
+      throw badRequest(firstComplianceError(allComplianceErrors), allComplianceErrors);
     }
     const now = new Date().toISOString();
     execute(
@@ -1324,15 +1467,21 @@ export function adminRouter(db: Db): Router {
       'SELECT id, name FROM products WHERE id = ?',
       productId,
     );
-    if (!product) throw notFound('Product not found.');
+    if (!product) {
+      cleanupUploadedFile(req.file?.path);
+      throw notFound('Product not found.');
+    }
     if (!req.file) throw badRequest('Choose an image file.');
     if (!hasValidFileSignature(req.file.path, 'image')) {
-      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      cleanupUploadedFile(req.file.path);
       throw badRequest('That file does not look like a valid JPEG, PNG, or WebP image.');
     }
 
     const count = queryOne<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM product_images WHERE product_id = ?', product.id)?.count ?? 0;
-    if (count >= 8) throw conflict('A product can have at most 8 images.');
+    if (count >= 8) {
+      cleanupUploadedFile(req.file.path);
+      throw conflict('A product can have at most 8 images.');
+    }
 
     const alt = String(req.body.alt ?? '').trim() || `${product.name} photograph`;
     const url = `/uploads/${path.basename(req.file.filename)}`;
@@ -1608,7 +1757,7 @@ export function adminRouter(db: Db): Router {
     res.json({ refunds: rows });
   });
 
-  router.post('/refunds/:id/decide', async (req, res) => {
+  router.post('/refunds/:id/decide', stepUp, async (req, res) => {
     const input = parse(
       z.object({
         decision: z.enum(['approve', 'reject']),
@@ -1621,7 +1770,7 @@ export function adminRouter(db: Db): Router {
     const refund = queryOne<{ id: string; order_id: string; amount_paise: number; status: string; requested_by: string }>(
       db,
       'SELECT id, order_id, amount_paise, status, requested_by FROM refunds WHERE id = ?',
-      req.params.id,
+      String(req.params.id),
     );
     if (!refund) throw notFound('Refund not found.');
     const result = await decideRefund(db, {
@@ -1648,7 +1797,7 @@ export function adminRouter(db: Db): Router {
             : `Refund approved for ${order.order_number}`,
         body: `<p>${input.decision === 'reject' ? 'After review, this refund request was not approved.' : 'Your refund has been approved.'}</p>
           <p><strong>Amount:</strong> ₹${(refund.amount_paise / 100).toLocaleString('en-IN')}</p>
-          ${input.note ? `<p><strong>Note:</strong> ${input.note.replaceAll('<', '&lt;')}</p>` : ''}
+          ${input.note ? `<p><strong>Note:</strong> ${escapeHtml(input.note)}</p>` : ''}
           <p>${result.status === 'processing' ? 'The payment provider is processing it; the status will update when confirmed.' : result.status === 'approved' ? 'The refund has been approved and recorded. A bank/UPI transfer still has to be completed and confirmed.' : 'The final status is shown in your account.'}</p>`,
         dedupeKey: `refund-decision:${refund.id}:${input.decision}`,
       });
@@ -1656,7 +1805,7 @@ export function adminRouter(db: Db): Router {
     res.json(result);
   });
 
-  router.post('/refunds/:id/complete-manual', async (req, res) => {
+  router.post('/refunds/:id/complete-manual', stepUp, async (req, res) => {
     const input = parse(
       z.object({
         manualReference: z.string().trim().min(4).max(120),
@@ -1667,7 +1816,7 @@ export function adminRouter(db: Db): Router {
     const refund = queryOne<{ id: string; order_id: string; amount_paise: number; status: string }>(
       db,
       'SELECT id, order_id, amount_paise, status FROM refunds WHERE id = ?',
-      req.params.id,
+      String(req.params.id),
     );
     if (!refund) throw notFound('Refund not found.');
     const result = markManualRefundCompleted(db, {
@@ -1766,7 +1915,7 @@ export function adminRouter(db: Db): Router {
         email: order.email,
         type: input.decision === 'approve' ? 'return_approved' : 'return_rejected',
         subject: `Return request ${input.decision === 'approve' ? 'approved' : 'declined'} — ${order.order_number}`,
-        body: `<p>${input.decision === 'approve' ? 'Your return has been approved and a refund request has been recorded for review.' : 'After review, we could not approve this return.'}</p><p><strong>Note:</strong> ${input.note.replaceAll('<', '&lt;')}</p>`,
+        body: `<p>${input.decision === 'approve' ? 'Your return has been approved and a refund request has been recorded for review.' : 'After review, we could not approve this return.'}</p><p><strong>Note:</strong> ${escapeHtml(input.note)}</p>`,
         dedupeKey: `return-decision:${ret.id}:${input.decision}`,
       });
     }
@@ -2013,6 +2162,218 @@ export function adminRouter(db: Db): Router {
     res.json({ category: categoryRows().find((row) => row.id === current.id) });
   });
 
+  /* ----------------------- Himalayan Regions & Crafts ------------------- */
+
+  const faqItemSchema = z.object({
+    question: z.string().trim().min(5).max(300),
+    answer: z.string().trim().min(10).max(1500),
+  });
+
+  router.get('/regions', (_req, res) => {
+    res.json({ regions: listRegions(db, { includeInactive: true }) });
+  });
+
+  router.post('/regions', (req, res) => {
+    const input = parse(
+      z.object({
+        name: z.string().trim().min(2).max(100),
+        slug: z.string().trim().min(2).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
+        shortName: z.string().trim().max(60).optional(),
+        introText: z.string().trim().min(50).max(4000),
+        heroImage: z.string().trim().max(500).nullable().optional(),
+        famousCrafts: z.array(z.string().trim().min(2).max(100)).max(20).optional().default([]),
+        famousFoods: z.array(z.string().trim().min(2).max(100)).max(20).optional().default([]),
+        faqs: z.array(faqItemSchema).max(10).optional().default([]),
+        sortOrder: z.number().int().min(0).max(10_000).optional().default(100),
+      }),
+      req.body,
+    );
+    const slug = input.slug || slugifyValue(input.name);
+    if (queryOne(db, 'SELECT 1 FROM regions WHERE slug = ? OR LOWER(name) = LOWER(?)', slug, input.name)) {
+      throw conflict('A region with that name or slug already exists.', 'region_exists');
+    }
+    const id = newId('reg_');
+    execute(
+      db,
+      `INSERT INTO regions
+         (id, name, slug, short_name, intro_text, hero_image, famous_crafts_json, famous_foods_json, faqs_json, sort_order, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      id,
+      input.name,
+      slug,
+      input.shortName || input.name,
+      input.introText,
+      input.heroImage ?? null,
+      JSON.stringify(input.famousCrafts),
+      JSON.stringify(input.famousFoods),
+      JSON.stringify(input.faqs),
+      input.sortOrder,
+    );
+    audit(db, req.user!, 'region.created', 'region', id, null, { name: input.name, slug });
+    res.status(201).json({ region: listRegions(db, { includeInactive: true }).find((r) => r.id === id) });
+  });
+
+  router.patch('/regions/:id', (req, res) => {
+    const existing = queryOne<{ id: string; slug: string; name: string }>(
+      db,
+      'SELECT id, slug, name FROM regions WHERE id = ?',
+      req.params.id,
+    );
+    if (!existing) throw notFound('Region not found.');
+    const input = parse(
+      z.object({
+        name: z.string().trim().min(2).max(100).optional(),
+        slug: z.string().trim().min(2).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
+        shortName: z.string().trim().max(60).optional(),
+        introText: z.string().trim().min(50).max(4000).optional(),
+        heroImage: z.string().trim().max(500).nullable().optional(),
+        famousCrafts: z.array(z.string().trim().min(2).max(100)).max(20).optional(),
+        famousFoods: z.array(z.string().trim().min(2).max(100)).max(20).optional(),
+        faqs: z.array(faqItemSchema).max(10).optional(),
+        sortOrder: z.number().int().min(0).max(10_000).optional(),
+        isActive: z.boolean().optional(),
+      }),
+      req.body,
+    );
+    if (input.slug && input.slug !== existing.slug) {
+      if (queryOne(db, 'SELECT 1 FROM regions WHERE slug = ? AND id != ?', input.slug, existing.id)) {
+        throw conflict('A region with that slug already exists.', 'slug_in_use');
+      }
+      recordSlugRedirect(db, `/regions/${existing.slug}`, `/regions/${input.slug}`);
+    }
+    execute(
+      db,
+      `UPDATE regions SET
+         name = COALESCE(?, name),
+         slug = COALESCE(?, slug),
+         short_name = COALESCE(?, short_name),
+         intro_text = COALESCE(?, intro_text),
+         hero_image = CASE WHEN ? IS NOT NULL THEN ? ELSE hero_image END,
+         famous_crafts_json = COALESCE(?, famous_crafts_json),
+         famous_foods_json = COALESCE(?, famous_foods_json),
+         faqs_json = COALESCE(?, faqs_json),
+         sort_order = COALESCE(?, sort_order),
+         is_active = COALESCE(?, is_active),
+         updated_at = ?
+       WHERE id = ?`,
+      input.name ?? null,
+      input.slug ?? null,
+      input.shortName ?? null,
+      input.introText ?? null,
+      input.heroImage !== undefined ? 1 : null,
+      input.heroImage ?? null,
+      input.famousCrafts ? JSON.stringify(input.famousCrafts) : null,
+      input.famousFoods ? JSON.stringify(input.famousFoods) : null,
+      input.faqs ? JSON.stringify(input.faqs) : null,
+      input.sortOrder ?? null,
+      input.isActive === undefined ? null : input.isActive ? 1 : 0,
+      new Date().toISOString(),
+      existing.id,
+    );
+    audit(db, req.user!, 'region.updated', 'region', existing.id, existing, input);
+    res.json({ region: listRegions(db, { includeInactive: true }).find((r) => r.id === existing.id) });
+  });
+
+  router.get('/crafts', (_req, res) => {
+    res.json({ crafts: listCrafts(db, { includeInactive: true }) });
+  });
+
+  router.post('/crafts', (req, res) => {
+    const input = parse(
+      z.object({
+        name: z.string().trim().min(2).max(100),
+        slug: z.string().trim().min(2).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
+        introText: z.string().trim().min(40).max(4000),
+        history: z.string().trim().max(4000).optional().default(''),
+        howToIdentify: z.string().trim().max(4000).optional().default(''),
+        heroImage: z.string().trim().max(500).nullable().optional(),
+        faqs: z.array(faqItemSchema).max(10).optional().default([]),
+        sortOrder: z.number().int().min(0).max(10_000).optional().default(100),
+      }),
+      req.body,
+    );
+    const slug = input.slug || slugifyValue(input.name);
+    if (queryOne(db, 'SELECT 1 FROM crafts WHERE slug = ? OR LOWER(name) = LOWER(?)', slug, input.name)) {
+      throw conflict('A craft with that name or slug already exists.', 'craft_exists');
+    }
+    const id = newId('crf_');
+    execute(
+      db,
+      `INSERT INTO crafts
+         (id, name, slug, intro_text, history, how_to_identify, hero_image, faqs_json, sort_order, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      id,
+      input.name,
+      slug,
+      input.introText,
+      input.history,
+      input.howToIdentify,
+      input.heroImage ?? null,
+      JSON.stringify(input.faqs),
+      input.sortOrder,
+    );
+    audit(db, req.user!, 'craft.created', 'craft', id, null, { name: input.name, slug });
+    res.status(201).json({ craft: listCrafts(db, { includeInactive: true }).find((c) => c.id === id) });
+  });
+
+  router.patch('/crafts/:id', (req, res) => {
+    const existing = queryOne<{ id: string; slug: string; name: string }>(
+      db,
+      'SELECT id, slug, name FROM crafts WHERE id = ?',
+      req.params.id,
+    );
+    if (!existing) throw notFound('Craft not found.');
+    const input = parse(
+      z.object({
+        name: z.string().trim().min(2).max(100).optional(),
+        slug: z.string().trim().min(2).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
+        introText: z.string().trim().min(40).max(4000).optional(),
+        history: z.string().trim().max(4000).optional(),
+        howToIdentify: z.string().trim().max(4000).optional(),
+        heroImage: z.string().trim().max(500).nullable().optional(),
+        faqs: z.array(faqItemSchema).max(10).optional(),
+        sortOrder: z.number().int().min(0).max(10_000).optional(),
+        isActive: z.boolean().optional(),
+      }),
+      req.body,
+    );
+    if (input.slug && input.slug !== existing.slug) {
+      if (queryOne(db, 'SELECT 1 FROM crafts WHERE slug = ? AND id != ?', input.slug, existing.id)) {
+        throw conflict('A craft with that slug already exists.', 'slug_in_use');
+      }
+      recordSlugRedirect(db, `/crafts/${existing.slug}`, `/crafts/${input.slug}`);
+    }
+    execute(
+      db,
+      `UPDATE crafts SET
+         name = COALESCE(?, name),
+         slug = COALESCE(?, slug),
+         intro_text = COALESCE(?, intro_text),
+         history = COALESCE(?, history),
+         how_to_identify = COALESCE(?, how_to_identify),
+         hero_image = CASE WHEN ? IS NOT NULL THEN ? ELSE hero_image END,
+         faqs_json = COALESCE(?, faqs_json),
+         sort_order = COALESCE(?, sort_order),
+         is_active = COALESCE(?, is_active),
+         updated_at = ?
+       WHERE id = ?`,
+      input.name ?? null,
+      input.slug ?? null,
+      input.introText ?? null,
+      input.history ?? null,
+      input.howToIdentify ?? null,
+      input.heroImage !== undefined ? 1 : null,
+      input.heroImage ?? null,
+      input.faqs ? JSON.stringify(input.faqs) : null,
+      input.sortOrder ?? null,
+      input.isActive === undefined ? null : input.isActive ? 1 : 0,
+      new Date().toISOString(),
+      existing.id,
+    );
+    audit(db, req.user!, 'craft.updated', 'craft', existing.id, existing, input);
+    res.json({ craft: listCrafts(db, { includeInactive: true }).find((c) => c.id === existing.id) });
+  });
+
   /* ----------------------------- Commissions --------------------------- */
 
   router.get('/commissions', (_req, res) => {
@@ -2045,7 +2406,7 @@ export function adminRouter(db: Db): Router {
     res.json({ rules, entries, summary, defaultRateBp: env.defaultCommissionBp });
   });
 
-  router.post('/commissions', (req, res) => {
+  router.post('/commissions', stepUp, (req, res) => {
     const input = parse(
       z.object({
         scope: z.enum(['global', 'category', 'seller']),
@@ -2206,7 +2567,7 @@ export function adminRouter(db: Db): Router {
     res.json({ settlement: batch, items });
   });
 
-  router.post('/settlements', (req, res) => {
+  router.post('/settlements', stepUp, (req, res) => {
     const input = parse(
       z.object({
         sellerId: z.string().min(3),
@@ -2220,7 +2581,7 @@ export function adminRouter(db: Db): Router {
     res.status(201).json(result);
   });
 
-  router.post('/settlements/:id/pay', async (req, res) => {
+  router.post('/settlements/:id/pay', stepUp, async (req, res) => {
     const input = parse(
       z.object({
         providerReference: z.string().trim().min(4).max(120),
@@ -2231,7 +2592,7 @@ export function adminRouter(db: Db): Router {
     const batch = queryOne<{ id: string; seller_id: string; net_paise: number; reference: string; status: string }>(
       db,
       'SELECT id, seller_id, net_paise, reference, status FROM settlement_batches WHERE id = ?',
-      req.params.id,
+      String(req.params.id),
     );
     if (!batch) throw notFound('Settlement not found.');
     markSettlementPaid(db, req.user!, batch.id, input.providerReference, input.note);
@@ -2244,14 +2605,14 @@ export function adminRouter(db: Db): Router {
         subject: `Settlement paid — ${batch.reference}`,
         body: `<p>Your settlement has been recorded as paid.</p>
           <p><strong>Amount:</strong> ₹${(batch.net_paise / 100).toLocaleString('en-IN')}<br/>
-          <strong>Bank/UPI reference:</strong> ${input.providerReference.replaceAll('<', '&lt;')}</p>`,
+          <strong>Bank/UPI reference:</strong> ${escapeHtml(input.providerReference)}</p>`,
         dedupeKey: `settlement-paid:${batch.id}`,
       });
     }
     res.json({ ok: true });
   });
 
-  router.post('/sellers/:id/adjustments', (req, res) => {
+  router.post('/sellers/:id/adjustments', stepUp, (req, res) => {
     const input = parse(
       z.object({
         amountPaise: z.number().int().min(-10_000_000).max(10_000_000).refine((value) => value !== 0),
@@ -2259,7 +2620,7 @@ export function adminRouter(db: Db): Router {
       }),
       req.body,
     );
-    const seller = queryOne<{ id: string }>(db, 'SELECT id FROM seller_profiles WHERE id = ?', req.params.id);
+    const seller = queryOne<{ id: string }>(db, 'SELECT id FROM seller_profiles WHERE id = ?', String(req.params.id));
     if (!seller) throw notFound('Seller not found.');
     const id = newId('led_');
     try {
@@ -2377,7 +2738,7 @@ export function adminRouter(db: Db): Router {
    * checked them. This is a manual review step, not a bank-account validation
    * service.
    */
-  router.post('/sellers/:id/payouts/verify', (req, res) => {
+  router.post('/sellers/:id/payouts/verify', stepUp, (req, res) => {
     const input = parse(
       z.object({
         note: z.string().trim().min(5, 'Record what was checked.').max(500),
@@ -2387,7 +2748,7 @@ export function adminRouter(db: Db): Router {
     const seller = queryOne<{ id: string; business_name: string; payout_details_json: string | null; payout_status: string }>(
       db,
       'SELECT id, business_name, payout_details_json, payout_status FROM seller_profiles WHERE id = ?',
-      req.params.id,
+      String(req.params.id),
     );
     if (!seller) throw notFound('Seller not found.');
     if (!seller.payout_details_json) {
@@ -2518,7 +2879,7 @@ export function adminRouter(db: Db): Router {
         z.object({
           active: z.boolean(),
           text: z.string().trim().min(3).max(180),
-          href: z.string().trim().max(200).optional(),
+          href: safeSiteHrefSchema.optional(),
         }),
         input.value,
       );
@@ -2530,17 +2891,17 @@ export function adminRouter(db: Db): Router {
             eyebrow: z.string().max(80),
             title: z.string().max(140),
             body: z.string().max(600),
-            image: z.string().max(300),
+            image: safeSiteHrefSchema,
             imageAlt: z.string().max(240),
             imageCredit: z.string().max(240),
             ctaLabel: z.string().max(60),
-            ctaHref: z.string().max(200),
+            ctaHref: safeSiteHrefSchema,
           }),
           editorial: z.object({
             title: z.string().max(140),
             body: z.string().max(2000),
             signature: z.string().max(160),
-            image: z.string().max(300),
+            image: safeSiteHrefSchema,
             imageAlt: z.string().max(240),
             imageCredit: z.string().max(240),
           }),
@@ -2666,7 +3027,8 @@ export function adminRouter(db: Db): Router {
 
   const assertPosterUrl = (url: string | null) => {
     if (!url) return;
-    if (!/^(https?:\/\/|\/(?:images|uploads)\/)/.test(url) || /\s/.test(url)) {
+    const isLocalPath = /^\/(?:images|uploads)\//.test(url) && !/\s/.test(url);
+    if (!isLocalPath && !isSafeHttpUrl(url, false)) {
       throw badRequest('Use an https image URL or an uploaded /images or /uploads path.', {
         posterUrl: 'Use a valid image URL.',
       });
@@ -3083,7 +3445,7 @@ export function adminRouter(db: Db): Router {
     const total = queryOne<{ count: number }>(db, `SELECT COUNT(*) AS count FROM audit_logs ${where}`, ...params)?.count ?? 0;
     const rows = queryAll<Record<string, unknown>>(
       db,
-      `SELECT id, actor_id, actor_email, action, entity_type, entity_id, before_json, after_json, created_at
+      `SELECT id, actor_id, actor_email, action, entity_type, entity_id, before_json, after_json, ip_address, created_at
          FROM audit_logs ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       ...params,
       pageSize,
@@ -3092,8 +3454,10 @@ export function adminRouter(db: Db): Router {
     res.json({
       logs: rows.map((row) => ({
         ...row,
+        ipAddress: row.ip_address ?? null,
         before: row.before_json ? JSON.parse(String(row.before_json)) : null,
         after: row.after_json ? JSON.parse(String(row.after_json)) : null,
+        ip_address: undefined,
         before_json: undefined,
         after_json: undefined,
       })),

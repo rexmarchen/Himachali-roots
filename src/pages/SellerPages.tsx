@@ -5,6 +5,7 @@ import type { Category, ProductStatus, SellerProduct } from '@shared/types';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
 import { COMPLIANCE_GUIDES, complianceGroupFor } from '@shared/productCompliance';
 import { buildProductFallbackDescription, buildProductShortFallback } from '@shared/seo';
+import { safeExternalUrl } from '@shared/urls';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { usePageMeta } from '@/lib/usePageMeta';
@@ -44,6 +45,9 @@ interface SellerApplicationResponse {
     payoutStatus: string;
     region: string | null;
     village: string | null;
+    craftSpecialty?: string | null;
+    yearsOfPractice?: number | null;
+    workshopPhotos?: string[];
     tagline: string | null;
     story: string | null;
     logoUrl: string | null;
@@ -1388,6 +1392,9 @@ interface DashboardResponse {
     slug: string | null;
     region: string | null;
     village: string | null;
+    craftSpecialty?: string | null;
+    yearsOfPractice?: number | null;
+    workshopPhotos?: string[];
     tagline: string | null;
     story: string | null;
     logoUrl: string | null;
@@ -2833,6 +2840,18 @@ interface ProductEditorResponse {
     originPlace: string | null;
     originVerified: boolean;
     region: string | null;
+    regionSlug?: string | null;
+    districtVillage?: string | null;
+    craftType?: string | null;
+    craftSlug?: string | null;
+    technique?: string | null;
+    giTagged?: boolean;
+    giRequested?: boolean;
+    giName?: string | null;
+    giRegistrationRef?: string | null;
+    madeToOrder?: boolean;
+    descriptionWordCount?: number;
+    needsDescriptionRewrite?: boolean;
     attributes: Record<string, string> | null;
     status: ProductStatus;
     rejectionReason: string | null;
@@ -2875,6 +2894,15 @@ const EMPTY_PRODUCT = {
   compliance: { ...EMPTY_COMPLIANCE },
   originPlace: '',
   region: '',
+  regionSlug: '',
+  districtVillage: '',
+  craftType: '',
+  craftSlug: '',
+  technique: '',
+  giRequested: false,
+  giName: '',
+  giRegistrationRef: '',
+  madeToOrder: false,
 };
 
 function toPaise(value: string): number {
@@ -2909,6 +2937,16 @@ export function SellerProductEditorPage() {
   const categories = useQuery({
     queryKey: ['categories'],
     queryFn: () => api<{ categories: Category[]; subcategories: Category[] }>('/categories'),
+  });
+
+  const regionalTaxonomy = useQuery({
+    queryKey: ['public-regions-taxonomy'],
+    queryFn: () =>
+      api<{
+        himalayanRegions?: { id: string; name: string; slug: string }[];
+        crafts?: { id: string; name: string; slug: string }[];
+      }>('/regions'),
+    staleTime: 5 * 60_000,
   });
 
   const product = useQuery({
@@ -3002,6 +3040,15 @@ export function SellerProductEditorPage() {
       },
       originPlace: loadedProduct.originPlace ?? '',
       region: loadedProduct.region ?? '',
+      regionSlug: loadedProduct.regionSlug ?? '',
+      districtVillage: loadedProduct.districtVillage ?? '',
+      craftType: loadedProduct.craftType ?? '',
+      craftSlug: loadedProduct.craftSlug ?? '',
+      technique: loadedProduct.technique ?? '',
+      giRequested: Boolean(loadedProduct.giRequested),
+      giName: loadedProduct.giName ?? '',
+      giRegistrationRef: loadedProduct.giRegistrationRef ?? '',
+      madeToOrder: Boolean(loadedProduct.madeToOrder),
     });
     setInventory({
       quantity: String(loadedProduct.inventory.quantity),
@@ -3230,6 +3277,15 @@ export function SellerProductEditorPage() {
       compliance: Object.keys(compliance).length ? compliance : undefined,
       originPlace: form.originPlace || undefined,
       region: form.region || undefined,
+      regionSlug: form.regionSlug || undefined,
+      districtVillage: form.districtVillage || undefined,
+      craftType: form.craftType || undefined,
+      craftSlug: form.craftSlug || undefined,
+      technique: form.technique || undefined,
+      giRequested: form.giRequested,
+      giName: form.giName || undefined,
+      giRegistrationRef: form.giRegistrationRef || undefined,
+      madeToOrder: form.madeToOrder,
     };
 
     try {
@@ -3941,21 +3997,124 @@ export function SellerProductEditorPage() {
                 />
               </Field>
 
-              <Field label="Place of Origin / Village / District" hint="Must be in Himachal Pradesh">
+              <Field label="District or Village of Origin" hint="e.g. Kotgarh (Shimla), Srinagar, Leh, Almora, Gangtok">
                 <Input
-                  value={form.originPlace}
-                  onChange={(event) => setForm({ ...form, originPlace: event.target.value })}
-                  placeholder="e.g. Kotgarh, Shimla District"
+                  value={form.districtVillage || form.originPlace}
+                  onChange={(event) =>
+                    setForm({ ...form, districtVillage: event.target.value, originPlace: event.target.value })
+                  }
+                  placeholder="e.g. Chamba Town / Leh / Almora"
                 />
               </Field>
 
-              <Field label="Valley / Region" hint="Appears on public product provenance badge">
-                <Input
-                  value={form.region}
-                  onChange={(event) => setForm({ ...form, region: event.target.value })}
-                  placeholder="e.g. Kullu Valley, Himachal Pradesh"
-                />
+              <Field label="Indian Himalayan State / Region" hint="Powers regional discovery pages">
+                <Select
+                  value={form.regionSlug}
+                  onChange={(event) => {
+                    const slug = event.target.value;
+                    const match = regionalTaxonomy.data?.himalayanRegions?.find((r) => r.slug === slug);
+                    setForm({
+                      ...form,
+                      regionSlug: slug,
+                      region: match ? match.name : form.region,
+                    });
+                  }}
+                >
+                  <option value="">Select Himalayan region…</option>
+                  {(regionalTaxonomy.data?.himalayanRegions ?? []).map((r) => (
+                    <option key={r.id} value={r.slug}>
+                      {r.name}
+                    </option>
+                  ))}
+                </Select>
               </Field>
+
+              <Field label="Craft Tradition" hint="Links product to Craft hub">
+                <Select
+                  value={form.craftSlug}
+                  onChange={(event) => {
+                    const slug = event.target.value;
+                    const match = regionalTaxonomy.data?.crafts?.find((c) => c.slug === slug);
+                    setForm({
+                      ...form,
+                      craftSlug: slug,
+                      craftType: match ? match.name : form.craftType,
+                    });
+                  }}
+                >
+                  <option value="">Select traditional craft…</option>
+                  {(regionalTaxonomy.data?.crafts ?? []).map((c) => (
+                    <option key={c.id} value={c.slug}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              <Field label="Making Technique" hint="Handloom, hand-embroidered, hand-carved, organic, etc.">
+                <Select
+                  value={form.technique}
+                  onChange={(event) => setForm({ ...form, technique: event.target.value })}
+                >
+                  <option value="">Select technique…</option>
+                  <option value="handloom">Handloom</option>
+                  <option value="hand-embroidered">Hand-embroidered</option>
+                  <option value="hand-carved">Hand-carved</option>
+                  <option value="hand-painted">Hand-painted</option>
+                  <option value="organic">Organic grown</option>
+                  <option value="wild-harvested">Wild-harvested</option>
+                  <option value="orthodox">Orthodox tea process</option>
+                  <option value="cold-pressed">Cold-pressed</option>
+                  <option value="small-batch">Small-batch artisanal</option>
+                </Select>
+              </Field>
+
+              <div className="sm:col-span-2 grid gap-3 rounded-sm border border-line bg-paper/60 p-3.5 sm:grid-cols-2">
+                <label className="flex items-start gap-2.5 text-xs text-forest">
+                  <input
+                    type="checkbox"
+                    checked={form.madeToOrder}
+                    onChange={(event) => setForm({ ...form, madeToOrder: event.target.checked })}
+                    className="mt-0.5 accent-forest"
+                  />
+                  <span>
+                    <span className="font-semibold">Made to order</span>
+                    <span className="block text-muted">Handcrafted after order confirmation</span>
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-2.5 text-xs text-forest">
+                  <input
+                    type="checkbox"
+                    checked={form.giRequested}
+                    onChange={(event) => setForm({ ...form, giRequested: event.target.checked })}
+                    className="mt-0.5 accent-forest"
+                  />
+                  <span>
+                    <span className="font-semibold">Request GI Tag verification</span>
+                    <span className="block text-muted">Published as GI-tagged only after admin review</span>
+                  </span>
+                </label>
+
+                {form.giRequested ? (
+                  <>
+                    <Field label="GI Tag Name" hint="e.g. Kullu Shawl / Kangra Tea / Kashmir Pashmina">
+                      <Input
+                        value={form.giName}
+                        onChange={(event) => setForm({ ...form, giName: event.target.value })}
+                        placeholder="Official GI name"
+                      />
+                    </Field>
+                    <Field label="GI Registration Reference" hint="Certificate or GI number for reviewer">
+                      <Input
+                        value={form.giRegistrationRef}
+                        onChange={(event) => setForm({ ...form, giRegistrationRef: event.target.value })}
+                        placeholder="e.g. GI-App-123"
+                      />
+                    </Field>
+                  </>
+                ) : null}
+              </div>
 
               <Field label="Materials or Ingredients" className="sm:col-span-2" required={needsMaterialDetails} error={fields.materials}>
                 <Input
@@ -4044,19 +4203,26 @@ export function SellerProductEditorPage() {
 
               <Field
                 label="Full Heritage & Craft Description"
-                hint="Explain the crafting tradition, heritage techniques, taste notes, or harvesting journey"
+                hint="Aim for 150+ unique words covering craft method, origin, and care (never copy vendor boilerplate)"
               >
                 <Textarea
                   rows={7}
                   maxLength={6000}
                   value={form.description}
                   onChange={(event) => setForm({ ...form, description: event.target.value })}
-                  placeholder="Write the story of how this product is made, its cultural significance in Himachal Pradesh, and the artisan heritage behind it..."
+                  placeholder="Write the story of how this product is made across the Indian Himalayas, materials used, artisan community, and care instructions..."
                 />
-                <div className="flex items-center justify-between mt-1 text-[10.5px] text-[#172321]/50">
-                  <span>Recommended: at least 80 characters for public moderation approval.</span>
-                  <span>{form.description.length} / 6000</span>
-                </div>
+                {(() => {
+                  const words = form.description.trim().split(/\s+/).filter(Boolean).length;
+                  return (
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10.5px]">
+                      <span className={words > 0 && words < 100 ? 'font-medium text-amber-800' : 'text-[#172321]/55'}>
+                        {words} words · {words < 100 ? 'Rewrite flagged: add 100–150+ unique words for strong SEO ranking.' : 'Strong unique description length.'}
+                      </span>
+                      <span className="text-[#172321]/50">{form.description.length} / 6000</span>
+                    </div>
+                  );
+                })()}
               </Field>
             </div>
           </section>
@@ -4874,7 +5040,10 @@ export function SellerOrderDetailPage() {
               <h2 className="text-lg">Shipment</h2>
               <p className="mt-2 text-sm">{data.shipment.carrier} · {data.shipment.trackingNumber}</p>
               <p className="text-[11px] text-muted">Shipped {formatDate(data.shipment.shippedAt)}{data.shipment.deliveredAt ? ` · delivered ${formatDate(data.shipment.deliveredAt)}` : ''}</p>
-              {data.shipment.trackingUrl ? <a href={data.shipment.trackingUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-forest underline underline-offset-2">Open tracking</a> : null}
+              {(() => {
+                const safeUrl = safeExternalUrl(data.shipment.trackingUrl);
+                return safeUrl ? <a href={safeUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-forest underline underline-offset-2">Open tracking</a> : null;
+              })()}
               <ol className="mt-3 space-y-1 text-[11.5px] text-muted">
                 {data.shipment.events.map((event, index) => <li key={`${event.status}-${index}`}>{formatDate(event.occurredAt)} · {event.status.replaceAll('_', ' ')}{event.description ? ` — ${event.description}` : ''}</li>)}
               </ol>
@@ -5481,7 +5650,7 @@ export function SellerProfilePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const application = useQuery({ queryKey: ['seller-application'], queryFn: () => api<SellerApplicationResponse>('/seller/application') });
-  const [form, setForm] = useState({ businessName: '', tagline: '', story: '', region: '', village: '', line1: '', line2: '', city: '', state: 'Himachal Pradesh', pincode: '' });
+  const [form, setForm] = useState({ businessName: '', tagline: '', story: '', region: '', village: '', craftSpecialty: '', yearsOfPractice: '', line1: '', line2: '', city: '', state: 'Himachal Pradesh', pincode: '' });
   const [prefilledSellerId, setPrefilledSellerId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [docType, setDocType] = useState('id_proof');
@@ -5498,6 +5667,8 @@ export function SellerProfilePage() {
       story: savedSeller.story ?? '',
       region: savedSeller.region ?? '',
       village: savedSeller.village ?? '',
+      craftSpecialty: savedSeller.craftSpecialty ?? '',
+      yearsOfPractice: savedSeller.yearsOfPractice != null ? String(savedSeller.yearsOfPractice) : '',
       line1: savedSeller.operatingAddress?.line1 ?? '',
       line2: savedSeller.operatingAddress?.line2 ?? '',
       city: savedSeller.operatingAddress?.city ?? '',
@@ -5519,6 +5690,8 @@ export function SellerProfilePage() {
           story: form.story || undefined,
           region: form.region || undefined,
           village: form.village || undefined,
+          craftSpecialty: form.craftSpecialty || undefined,
+          yearsOfPractice: form.yearsOfPractice ? Number(form.yearsOfPractice) : undefined,
           operatingAddress: {
             line1: form.line1,
             line2: form.line2 || undefined,
@@ -5689,8 +5862,10 @@ export function SellerProfilePage() {
               <Input required value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} />
             </Field>
             <Field label="Tagline"><Input maxLength={160} value={form.tagline} onChange={(event) => setForm({ ...form, tagline: event.target.value })} /></Field>
-            <Field label="Region"><Input value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })} /></Field>
+            <Field label="Region / Himalayan state"><Input value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })} placeholder="e.g. Himachal Pradesh, Ladakh, Uttarakhand" /></Field>
             <Field label="Village or town"><Input value={form.village} onChange={(event) => setForm({ ...form, village: event.target.value })} /></Field>
+            <Field label="Craft specialty"><Input value={form.craftSpecialty} onChange={(event) => setForm({ ...form, craftSpecialty: event.target.value })} placeholder="e.g. Handwoven Pashmina & Kinnauri Shawls" /></Field>
+            <Field label="Years of practice"><Input type="number" min={0} max={200} value={form.yearsOfPractice} onChange={(event) => setForm({ ...form, yearsOfPractice: event.target.value })} placeholder="e.g. 25" /></Field>
           </div>
           <Field label="Store story" className="mt-4" hint="Up to 3,000 characters">
             <Textarea rows={6} maxLength={3000} value={form.story} onChange={(event) => setForm({ ...form, story: event.target.value })} />

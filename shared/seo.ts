@@ -1,23 +1,81 @@
 import { complianceGroupFor } from './productCompliance.js';
 
+function readEnvBrand(): string {
+  try {
+    const procEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+    const raw = procEnv?.VITE_BRAND_NAME ?? procEnv?.BRAND_NAME;
+    if (raw && raw.trim()) return raw.trim();
+  } catch {
+    // Browser environments without process.env fall back cleanly.
+  }
+  return 'Dear Hills';
+}
+
 export const MARKETPLACE_DEFAULT_ORIGIN = 'https://www.dearhills.in';
-export const BRAND_NAME = 'Dear Hills';
+export const BRAND_NAME = readEnvBrand();
+export const BRAND_DOMAIN = 'dearhills.in';
 export const BRAND_ALTERNATE_NAMES = ['DEAR HILLS', 'DearHills', 'dearhills', 'dearhills.in'] as const;
 export const BRAND_LOGO_URL = `${MARKETPLACE_DEFAULT_ORIGIN}/favicon-192x192.png`;
-export const MARKETPLACE_HOME_TITLE =
-  'DEAR HILLS — Authentic Himalayan Handloom, Organic Harvest & Mountain Goods | DearHills.in';
+export const MARKETPLACE_HOME_TITLE = `${BRAND_NAME} — Authentic Himalayan Goods | DearHills.in`;
 export const MARKETPLACE_HOME_DESCRIPTION =
-  'Official DearHills (dearhills.in) marketplace for authentic Himachal Pradesh handloom shawls, Kangra tea, raw honey, orchard fruits & mountain crafts.';
-export const SHOP_SEO_TITLE = 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Crafts | Dear Hills';
-export const SHOP_SEO_COLLECTION_NAME = 'Shop Authentic Himachal Handloom, Organic Foods & Mountain Crafts';
+  `Official DearHills (${BRAND_DOMAIN}) marketplace for authentic Indian Himalayan handloom shawls, regional teas, raw honey & mountain crafts.`;
+export const SHOP_SEO_TITLE = `Shop Himalayan Handloom, Crafts & Food | ${BRAND_NAME}`;
+export const SHOP_SEO_COLLECTION_NAME = 'Shop Authentic Himalayan Handloom, Crafts & Mountain Harvest';
 export const SHOP_SEO_DESCRIPTION =
-  'Browse authentic Himachali shawls, orthodox Kangra tea, raw wildflower honey, orchard produce, cold-pressed oils and mountain crafts from reviewed local makers and growers.';
-export const MAKERS_SEO_TITLE = 'Meet the Mountain Makers & Artisans of Himachal Pradesh | Dear Hills';
+  'Browse handmade Pashmina, Kullu & Kinnauri shawls, Aipan art, Kangra & Darjeeling tea, and pure mountain honey direct from verified Himalayan artisans.';
+export const MAKERS_SEO_TITLE = `Himalayan Makers & Artisan Workshops | ${BRAND_NAME}`;
 export const MAKERS_SEO_DESCRIPTION =
-  'Discover the generational weavers, orchardists, tea planters, beekeepers, and woodworkers across the valleys of Himachal Pradesh on Dear Hills.';
-export const BECOME_MAKER_SEO_TITLE = 'Sell with Dear Hills — Himalayan Artisan & Producer Onboarding';
+  'Discover generational weavers, orchardists, tea planters, beekeepers, and woodworkers across Himachal, Uttarakhand, Kashmir, Ladakh, Sikkim & the Eastern Hills.';
+export const BECOME_MAKER_SEO_TITLE = `Sell with ${BRAND_NAME} — Himalayan Artisan Onboarding`;
 export const BECOME_MAKER_SEO_DESCRIPTION =
-  'Join Dear Hills and bring authentic Himalayan handloom, orthodox tea, raw forest honey, orchard harvest and village craft to conscious customers across India.';
+  `Join ${BRAND_NAME} to share authentic Himalayan handloom, tea, honey, orchard harvest and village craft with customers across India.`;
+
+export function fitSeoTitle(rawTitle: string, maxLength = 60, brand = BRAND_NAME): string {
+  const clean = rawTitle.replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxLength) return clean;
+  const suffix = ` | ${brand}`;
+  if (clean.endsWith(suffix)) {
+    const budget = maxLength - suffix.length;
+    if (budget > 12) {
+      const head = clean.slice(0, clean.length - suffix.length).trim();
+      const shortened = head.length <= budget ? head : `${head.slice(0, budget - 1).trim()}…`;
+      return `${shortened}${suffix}`;
+    }
+  }
+  return `${clean.slice(0, maxLength - 1).trim()}…`;
+}
+
+export function fitSeoDescription(rawDescription: string, maxLength = 158): string {
+  return cleanSeoText(rawDescription, maxLength);
+}
+
+export function buildRegionHubTitle(regionName: string, brand = BRAND_NAME): string {
+  const full = `Handmade Products from ${regionName} | ${brand}`;
+  if (full.length <= 60) return full;
+  return fitSeoTitle(`${regionName} Handmade Products | ${brand}`, 60, brand);
+}
+
+export function buildCraftHubTitle(craftName: string, brand = BRAND_NAME): string {
+  const full = `${craftName} from the Himalayas: Authentic & Handmade | ${brand}`;
+  if (full.length <= 60) return full;
+  const medium = `${craftName}: Authentic Himalayan Craft | ${brand}`;
+  if (medium.length <= 60) return medium;
+  return fitSeoTitle(`${craftName} | ${brand}`, 60, brand);
+}
+
+export function buildRegionCraftTitle(craftName: string, regionName: string, brand = BRAND_NAME): string {
+  const full = `${craftName} from ${regionName}: Buy Direct from Artisans | ${brand}`;
+  if (full.length <= 60) return full;
+  const medium = `${craftName} from ${regionName} | ${brand}`;
+  if (medium.length <= 60) return medium;
+  return fitSeoTitle(`${craftName} · ${regionName} | ${brand}`, 60, brand);
+}
+
+export function buildProductImageAlt(productName: string, regionName: string | null | undefined, makerName: string | null | undefined): string {
+  const region = (regionName ?? '').trim() || 'the Indian Himalayas';
+  const maker = (makerName ?? '').trim() || BRAND_NAME;
+  return `${productName} handmade in ${region} by ${maker}`;
+}
 
 export function isDemoSellerInput(seller: {
   slug?: string | null;
@@ -65,6 +123,8 @@ export interface ProductSeoInput {
   categoryName?: string | null;
   originPlace?: string | null;
   region?: string | null;
+  craftType?: string | null;
+  materials?: string | null;
 }
 
 export interface CategorySeoInput {
@@ -108,7 +168,18 @@ export function productTitleSuffix(categorySlug?: string | null, categoryName?: 
 }
 
 export function buildProductSeoTitle(input: ProductSeoInput): string {
-  return `${input.name} — ${productTitleSuffix(input.categorySlug, input.categoryName)} | Dear Hills`;
+  const craftOrMaterial = (input.craftType || input.materials || '').trim();
+  const region = (input.region || '').trim();
+  if (craftOrMaterial && region) {
+    return fitSeoTitle(`${input.name} | ${craftOrMaterial} from ${region} | ${BRAND_NAME}`, 60, BRAND_NAME);
+  }
+  const suffix = productTitleSuffix(input.categorySlug, input.categoryName);
+  const full = `${input.name} — ${suffix} | ${BRAND_NAME}`;
+  if (full.length <= 60) return full;
+  const compactSuffix = suffix.replace(/^(?:Authentic|Fresh|Pure)\s+/i, '').trim();
+  const compact = `${input.name} — ${compactSuffix} | ${BRAND_NAME}`;
+  if (compact.length <= 60) return compact;
+  return fitSeoTitle(compact, 60, BRAND_NAME);
 }
 
 export function buildProductFallbackDescription(input: ProductSeoInput): string {

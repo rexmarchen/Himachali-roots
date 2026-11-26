@@ -3,7 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ProductDetail } from '@shared/types';
 import { formatINR } from '@shared/types';
-import { buildProductFallbackDescription, buildProductSeoTitle, cleanSeoText, isDemoProductInput } from '@shared/seo';
+import {
+  BRAND_NAME,
+  buildProductFallbackDescription,
+  buildProductImageAlt,
+  buildProductSeoTitle,
+  cleanSeoText,
+  isDemoProductInput,
+} from '@shared/seo';
 import { ApiError, api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
@@ -201,10 +208,13 @@ export function ProductPage() {
         name: metaProduct.name,
         categorySlug: metaProduct.categorySlug,
         categoryName: metaProduct.categoryName,
+        region: metaProduct.region || metaProduct.seller?.region,
+        craftType: metaProduct.craftType,
+        materials: metaProduct.materials,
       })
     : isProductNotFound
-      ? 'Listing not available · Dear Hills'
-      : 'Authentic Himalayan Product · Dear Hills';
+      ? `Listing not available · ${BRAND_NAME}`
+      : `Authentic Himalayan Product · ${BRAND_NAME}`;
 
   const productJsonLd = metaProduct
     ? {
@@ -220,9 +230,28 @@ export function ProductPage() {
             sku: metaProduct.sku || metaProduct.id,
             category: metaProduct.categoryName,
             ...(metaProduct.materials ? { material: metaProduct.materials } : {}),
+            additionalProperty: [
+              ...(metaProduct.region ? [{ '@type': 'PropertyValue', name: 'Region', value: metaProduct.region }] : []),
+              ...(metaProduct.districtVillage || metaProduct.originPlace
+                ? [
+                    {
+                      '@type': 'PropertyValue',
+                      name: 'District / Village',
+                      value: metaProduct.districtVillage || metaProduct.originPlace,
+                    },
+                  ]
+                : []),
+              ...(metaProduct.craftType ? [{ '@type': 'PropertyValue', name: 'Craft', value: metaProduct.craftType }] : []),
+              ...(metaProduct.technique ? [{ '@type': 'PropertyValue', name: 'Technique', value: metaProduct.technique }] : []),
+              {
+                '@type': 'PropertyValue',
+                name: 'GI Tagged',
+                value: metaProduct.giTagged && metaProduct.originVerified ? metaProduct.giName || 'Verified GI Tagged' : 'No',
+              },
+            ],
             brand: {
               '@type': 'Brand',
-              name: 'Dear Hills',
+              name: BRAND_NAME,
               alternateName: 'DearHills',
             },
             countryOfOrigin: {
@@ -311,22 +340,48 @@ export function ProductPage() {
           },
           {
             '@type': 'BreadcrumbList',
-            itemListElement: [
-              { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
-              { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://www.dearhills.in/shop' },
-              {
+            itemListElement: (() => {
+              const items: Array<{ '@type': string; position: number; name: string; item: string }> = [
+                { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
+              ];
+              if (metaProduct.region && metaProduct.regionSlug) {
+                items.push({
+                  '@type': 'ListItem',
+                  position: items.length + 1,
+                  name: metaProduct.region,
+                  item: `https://www.dearhills.in/regions/${encodeURIComponent(metaProduct.regionSlug)}`,
+                });
+              } else {
+                items.push({
+                  '@type': 'ListItem',
+                  position: items.length + 1,
+                  name: 'Shop',
+                  item: 'https://www.dearhills.in/shop',
+                });
+              }
+              if (metaProduct.craftType && metaProduct.craftSlug) {
+                items.push({
+                  '@type': 'ListItem',
+                  position: items.length + 1,
+                  name: metaProduct.craftType,
+                  item: `https://www.dearhills.in/crafts/${encodeURIComponent(metaProduct.craftSlug)}`,
+                });
+              } else {
+                items.push({
+                  '@type': 'ListItem',
+                  position: items.length + 1,
+                  name: metaProduct.categoryName,
+                  item: `https://www.dearhills.in/categories/${metaProduct.categorySlug}`,
+                });
+              }
+              items.push({
                 '@type': 'ListItem',
-                position: 3,
-                name: metaProduct.categoryName,
-                item: `https://www.dearhills.in/categories/${metaProduct.categorySlug}`,
-              },
-              {
-                '@type': 'ListItem',
-                position: 4,
+                position: items.length + 1,
                 name: metaProduct.name,
                 item: `https://www.dearhills.in/shop/${metaProduct.slug}`,
-              },
-            ],
+              });
+              return items;
+            })(),
           },
         ],
       }
@@ -459,7 +514,7 @@ export function ProductPage() {
               >
                 <img
                   src={image.url}
-                  alt={image.alt}
+                  alt={buildProductImageAlt(product.name, product.region || product.seller.region, product.sellerName)}
                   loading="eager"
                   fetchPriority="high"
                   className="h-full w-full object-cover transition-transform duration-500 sm:group-hover:scale-[1.02]"
@@ -567,10 +622,31 @@ export function ProductPage() {
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-ink/75">{product.shortDescription}</p>
 
           <div className="mt-3.5 flex flex-wrap items-center gap-2">
+            {product.giTagged && product.originVerified ? (
+              <Link
+                to="/gi-tagged"
+                className="inline-flex items-center gap-1 rounded-full border border-emerald-700/30 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100"
+              >
+                ✓ GI Tagged{product.giName ? `: ${product.giName}` : ''}
+              </Link>
+            ) : null}
             {product.originVerified ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#66745A]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#556349]">
+              <Link
+                to="/policies/authenticity"
+                className="inline-flex items-center gap-1 rounded-full bg-[#66745A]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#556349] hover:underline"
+              >
                 <span className="h-1.5 w-1.5 rounded-full bg-[#556349]" />
                 Origin verified
+              </Link>
+            ) : null}
+            {product.madeToOrder ? (
+              <span className="inline-flex items-center rounded-full border border-amber-700/25 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-900">
+                Made to order
+              </span>
+            ) : null}
+            {product.technique ? (
+              <span className="inline-flex items-center rounded-full border border-[#E4DACE] bg-[#FAF7F2] px-2.5 py-0.5 text-[11px] font-medium text-[#172321]/85 capitalize">
+                {product.technique}
               </span>
             ) : null}
             {product.varietyGrade ? (
@@ -578,15 +654,26 @@ export function ProductPage() {
                 {product.varietyGrade}
               </span>
             ) : null}
-            {product.originPlace ? (
+            {product.originPlace || product.districtVillage ? (
               <span className="inline-flex items-center rounded-full border border-[#E4DACE] bg-[#FAF7F2] px-2.5 py-0.5 text-[11px] font-medium text-[#172321]/80">
-                📍 {product.originPlace}
+                📍 {product.districtVillage || product.originPlace}
               </span>
             ) : null}
-            {product.harvestInfo ? (
-              <span className="inline-flex items-center rounded-full border border-[#E4DACE] bg-[#FAF7F2] px-2.5 py-0.5 text-[11px] font-medium text-[#172321]/80">
-                🗓 {product.harvestInfo}
-              </span>
+            {product.regionSlug && product.region ? (
+              <Link
+                to={`/regions/${product.regionSlug}`}
+                className="inline-flex items-center rounded-full border border-forest/20 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-forest hover:border-terra hover:text-terra"
+              >
+                {product.region}
+              </Link>
+            ) : null}
+            {product.craftSlug && product.craftType ? (
+              <Link
+                to={`/crafts/${product.craftSlug}`}
+                className="inline-flex items-center rounded-full border border-forest/20 bg-surface px-2.5 py-0.5 text-[11px] font-medium text-forest hover:border-terra hover:text-terra"
+              >
+                {product.craftType}
+              </Link>
             ) : null}
           </div>
 
@@ -885,12 +972,52 @@ export function ProductPage() {
                       <dd className="col-span-2 font-semibold text-ink">{product.varietyGrade}</dd>
                     </div>
                   ) : null}
-                  {product.originPlace || product.region ? (
+                  {product.originPlace || product.districtVillage || product.region ? (
                     <div className="grid grid-cols-3 px-4 py-2.5">
                       <dt className="font-medium text-muted">Origin / region</dt>
-                      <dd className="col-span-2 text-ink">{product.originPlace ? `${product.originPlace}, ` : ''}{product.region ?? 'Himachal Pradesh'}</dd>
+                      <dd className="col-span-2 text-ink">
+                        {[product.districtVillage || product.originPlace, product.region ?? 'Indian Himalayas'].filter(Boolean).join(', ')}
+                      </dd>
                     </div>
                   ) : null}
+                  {product.craftType ? (
+                    <div className="grid grid-cols-3 px-4 py-2.5">
+                      <dt className="font-medium text-muted">Craft &amp; technique</dt>
+                      <dd className="col-span-2 text-ink">
+                        {product.craftSlug ? (
+                          <Link to={`/crafts/${product.craftSlug}`} className="font-medium text-terra hover:underline">
+                            {product.craftType}
+                          </Link>
+                        ) : (
+                          product.craftType
+                        )}
+                        {product.technique ? ` · ${product.technique}` : ''}
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div className="grid grid-cols-3 px-4 py-2.5">
+                    <dt className="font-medium text-muted">GI tag status</dt>
+                    <dd className="col-span-2 text-ink">
+                      {product.giTagged && product.originVerified
+                        ? `Verified GI Tagged${product.giName ? ` — ${product.giName}` : ''}${product.giRegistrationRef ? ` (Ref: ${product.giRegistrationRef})` : ''}`
+                        : 'Not GI-verified on this listing'}
+                    </dd>
+                  </div>
+                  {product.careInstructions ? (
+                    <div className="grid grid-cols-3 px-4 py-2.5">
+                      <dt className="font-medium text-muted">Care instructions</dt>
+                      <dd className="col-span-2 text-ink">{product.careInstructions}</dd>
+                    </div>
+                  ) : null}
+                  <div className="grid grid-cols-3 px-4 py-2.5">
+                    <dt className="font-medium text-muted">Shipping &amp; returns</dt>
+                    <dd className="col-span-2 text-ink">
+                      {product.shippingEstimate} {product.returnPolicy}{' '}
+                      <Link to="/policies/authenticity" className="text-terra underline underline-offset-2">
+                        Authenticity check
+                      </Link>
+                    </dd>
+                  </div>
                   {product.harvestInfo ? (
                     <div className="grid grid-cols-3 px-4 py-2.5">
                       <dt className="font-medium text-muted">Harvest / crafting</dt>

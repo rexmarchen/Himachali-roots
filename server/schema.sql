@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
   password_changed_at TEXT,
   mfa_secret TEXT,
   mfa_enabled_at TEXT,
+  failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
@@ -38,6 +40,8 @@ CREATE TABLE IF NOT EXISTS user_roles (
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  scope TEXT NOT NULL DEFAULT 'standard' CHECK (scope IN ('standard','admin')),
+  mfa_verified_at TEXT,
   expires_at TEXT NOT NULL,
   last_seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
@@ -152,6 +156,9 @@ CREATE TABLE IF NOT EXISTS seller_profiles (
       ('farmer_grower','artisan_craftsperson','food_producer','home_business','local_brand','retailer')),
   tagline TEXT,
   story TEXT,
+  craft_specialty TEXT,
+  years_of_practice INTEGER,
+  workshop_photos_json TEXT,
   logo_url TEXT,
   cover_url TEXT,
   region TEXT,
@@ -262,6 +269,45 @@ CREATE TABLE IF NOT EXISTS seller_notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_seller_notifications_unread ON seller_notifications(seller_id, read_at, created_at);
 
+CREATE TABLE IF NOT EXISTS regions (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  slug TEXT NOT NULL UNIQUE,
+  short_name TEXT NOT NULL DEFAULT '',
+  intro_text TEXT NOT NULL DEFAULT '',
+  hero_image TEXT,
+  famous_crafts_json TEXT NOT NULL DEFAULT '[]',
+  famous_foods_json TEXT NOT NULL DEFAULT '[]',
+  faqs_json TEXT NOT NULL DEFAULT '[]',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_regions_active ON regions(is_active, sort_order);
+
+CREATE TABLE IF NOT EXISTS crafts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  slug TEXT NOT NULL UNIQUE,
+  intro_text TEXT NOT NULL DEFAULT '',
+  history TEXT NOT NULL DEFAULT '',
+  how_to_identify TEXT NOT NULL DEFAULT '',
+  hero_image TEXT,
+  faqs_json TEXT NOT NULL DEFAULT '[]',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_crafts_active ON crafts(is_active, sort_order);
+
+CREATE TABLE IF NOT EXISTS slug_redirects (
+  old_path TEXT PRIMARY KEY,
+  new_path TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -295,6 +341,18 @@ CREATE TABLE IF NOT EXISTS products (
   origin_place TEXT,
   origin_verified INTEGER NOT NULL DEFAULT 0,
   region TEXT,
+  region_slug TEXT,
+  district_village TEXT,
+  craft_type TEXT,
+  craft_slug TEXT,
+  technique TEXT,
+  gi_tagged INTEGER NOT NULL DEFAULT 0,
+  gi_requested INTEGER NOT NULL DEFAULT 0,
+  gi_name TEXT,
+  gi_registration_ref TEXT,
+  gi_verified_at TEXT,
+  gi_verified_by TEXT,
+  made_to_order INTEGER NOT NULL DEFAULT 0,
   variety_grade TEXT,
   harvest_info TEXT,
   dispatch_conditions TEXT,
@@ -816,6 +874,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   entity_id TEXT NOT NULL,
   before_json TEXT,
   after_json TEXT,
+  ip_address TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);

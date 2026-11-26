@@ -55,33 +55,26 @@ function storageFor(directory: string, allowed: Record<string, string>, prefix =
 async function optimiseUploadedImage(file: Express.Multer.File): Promise<void> {
   const extension = path.extname(file.filename).toLowerCase();
   const format = extension === '.png' ? 'png' : extension === '.webp' ? 'webp' : 'jpeg';
-  const temporaryPath = `${file.path}.optimising`;
-  try {
-    const base = sharp(file.path, { failOn: 'error', limitInputPixels: MAX_IMAGE_PIXELS })
-      .rotate()
-      .resize({
-        width: MAX_IMAGE_DIMENSION,
-        height: MAX_IMAGE_DIMENSION,
-        fit: 'inside',
-        withoutEnlargement: true,
-      });
-    const pipeline =
-      format === 'png'
-        ? base.png({ compressionLevel: 9 })
-        : format === 'webp'
-          ? base.webp({ quality: 82, effort: 4 })
-          : base.jpeg({ quality: 85, mozjpeg: true });
-    await pipeline.toFile(temporaryPath);
-    fs.renameSync(temporaryPath, file.path);
-    file.size = fs.statSync(file.path).size;
-  } catch (error) {
-    try {
-      fs.unlinkSync(temporaryPath);
-    } catch {
-      // Nothing to clean up.
-    }
-    throw error;
-  }
+  // Read into memory before invoking sharp so libvips does not hold an OS file handle
+  // on file.path while overwriting it (prevents Windows EPERM on .webp uploads).
+  const inputBuffer = fs.readFileSync(file.path);
+  const base = sharp(inputBuffer, { failOn: 'error', limitInputPixels: MAX_IMAGE_PIXELS })
+    .rotate()
+    .resize({
+      width: MAX_IMAGE_DIMENSION,
+      height: MAX_IMAGE_DIMENSION,
+      fit: 'inside',
+      withoutEnlargement: true,
+    });
+  const pipeline =
+    format === 'png'
+      ? base.png({ compressionLevel: 9 })
+      : format === 'webp'
+        ? base.webp({ quality: 82, effort: 4 })
+        : base.jpeg({ quality: 85, mozjpeg: true });
+  const outputBuffer = await pipeline.toBuffer();
+  fs.writeFileSync(file.path, outputBuffer);
+  file.size = outputBuffer.length;
 }
 
 export function imageUpload() {
@@ -127,8 +120,37 @@ export function imageUpload() {
   };
 }
 
+export function cleanupUploadedFile(filePath: string | null | undefined): void {
+  if (!filePath) return;
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch {
+    // Temp file may already have been deleted.
+  }
+}
+
+export function sendPrivateDocument(
+  res: Response,
+  resolvedPath: string,
+  mimeType: string,
+  originalName: string,
+): void {
+  const safeName = encodeURIComponent(path.basename(originalName || 'document'));
+  res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+  // Sandbox document rendering inside same-origin admin iframes without permitting any active script execution.
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; object-src 'self'; frame-ancestors 'self'",
+  );
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  fs.createReadStream(resolvedPath).pipe(res);
+}
+
 export function documentUpload() {
-  return multer({
+  const upload = multer({
     storage: storageFor(privateDocsDir, DOC_TYPES, 'doc_'),
     limits: { fileSize: 5 * 1024 * 1024, files: 1 },
     fileFilter: (_req, file, cb) => {
@@ -139,6 +161,32 @@ export function documentUpload() {
       cb(null, true);
     },
   });
+
+  return {
+    single(field: string) {
+      const middleware = upload.single(field);
+      return (req: Request, res: Response, next: NextFunction): void => {
+        middleware(req, res, (error: unknown) => {
+          if (error) {
+            next(error);
+            return;
+          }
+          const file = req.file;
+          if (!file || file.mimetype === 'application/pdf') {
+            next();
+            return;
+          }
+          // Re-encode KYC raster images to strip EXIF/GPS metadata and verify full image decode.
+          void optimiseUploadedImage(file)
+            .then(() => next())
+            .catch(() => {
+              cleanupUploadedFile(file.path);
+              next(badRequest('That file does not look like a valid PDF, JPEG, PNG, or WebP document.'));
+            });
+        });
+      };
+    },
+  };
 }
 
 /**

@@ -538,7 +538,8 @@ describe('SEO, structured data, sitemap, merchant feed, and demo noindex guard',
     );
 
     const teaSeo = getSeoMetadata(db, '/shop/kangra-green-tea', 'www.dearhills.in');
-    expect(teaSeo.title).toBe('Kangra valley green tea — Authentic Himachal Tea | Dear Hills');
+    expect(teaSeo.title).toBe('Kangra valley green tea — Himachal Tea | Dear Hills');
+    expect(teaSeo.title.length).toBeLessThanOrEqual(60);
     expect(teaSeo.description).toContain('Palampur, Kangra');
     expect(teaSeo.title.toLowerCase()).not.toContain('handcrafted');
     expect(teaSeo.description.toLowerCase()).not.toContain('handcrafted');
@@ -562,7 +563,8 @@ describe('SEO, structured data, sitemap, merchant feed, and demo noindex guard',
     );
 
     const walnutSeo = getSeoMetadata(db, '/shop/kinnaur-walnuts', 'www.dearhills.in');
-    expect(walnutSeo.title).toBe('Kinnaur walnut kernels — Authentic Himalayan Harvest | Dear Hills');
+    expect(walnutSeo.title).toBe('Kinnaur walnut kernels — Himalayan Harvest | Dear Hills');
+    expect(walnutSeo.title.length).toBeLessThanOrEqual(60);
     expect(walnutSeo.title.toLowerCase()).not.toContain('handcrafted');
 
     const oilSeo = getSeoMetadata(db, '/shop/chuli-oil', 'www.dearhills.in');
@@ -570,7 +572,8 @@ describe('SEO, structured data, sitemap, merchant feed, and demo noindex guard',
     expect(oilSeo.title.toLowerCase()).not.toContain('handcrafted');
 
     const craftSeo = getSeoMetadata(db, '/shop/carved-cedar-box', 'www.dearhills.in');
-    expect(craftSeo.title).toBe('Carved Cedar Box — Authentic Handcrafted Himachal | Dear Hills');
+    expect(craftSeo.title).toBe('Carved Cedar Box — Handcrafted Himachal | Dear Hills');
+    expect(craftSeo.title.length).toBeLessThanOrEqual(60);
     expect(craftSeo.description).toContain('handcrafted in Chamba');
 
     const produceCatSeo = getSeoMetadata(db, '/categories/fruits-and-fresh-produce', 'www.dearhills.in');
@@ -779,7 +782,7 @@ describe('SEO, structured data, sitemap, merchant feed, and demo noindex guard',
       width: 192,
       height: 192,
     });
-    expect(htmlHome).toContain('<h1>DEAR HILLS');
+    expect(htmlHome).toContain('<h1>Dear Hills');
     expect(htmlHome).toContain('<nav aria-label="Dear Hills primary navigation"');
 
     const noindexSeo = getSeoMetadata(db, '/cart', 'www.dearhills.in');

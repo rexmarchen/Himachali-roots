@@ -5,11 +5,11 @@ import { env } from '../env.js';
 import { execute, queryOne, type Db } from '../db.js';
 import { requireAuth } from '../lib/auth.js';
 import { addToCart, CART_COOKIE, ensureCart, getCartView, removeCartItem, setCartCookie, updateCartItem } from '../lib/cart.js';
-import { AppError, badRequest, conflict, notFound, parse, unauthorized } from '../lib/http.js';
-import { createOrder, getOrderView, initializeOrderPayment, markOrderPaid, notifyOrderPaid } from '../lib/orders.js';
+import { AppError, badRequest, clientIp, conflict, notFound, parse, unauthorized } from '../lib/http.js';
+import { createOrder, getOrderView, initializeOrderPayment, markOrderPaid, notifyOrderPaid, recordOrderEvent } from '../lib/orders.js';
 import { evaluateCoupon } from '../lib/pricing.js';
 import { fetchRazorpayPayment, type RazorpayPayment, verifyCheckoutSignature, verifyShippingWebhook, verifyWebhookSignature } from '../lib/payments.js';
-import { notify } from '../lib/email.js';
+import { escapeHtml, notify } from '../lib/email.js';
 
 export interface ShopRouterDeps {
   /** Injected so provider verification can be tested without network calls. */
@@ -35,13 +35,30 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
   const router = Router();
   const fetchPayment = deps.fetchRazorpayPayment ?? ((paymentId: string) => fetchRazorpayPayment(paymentId));
 
+  const cartMutationLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: env.isTest ? 1000 : 60,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: { code: 'rate_limited', message: 'Too many bag updates. Please wait a moment.' } },
+  });
+
+  const checkoutLimiter = rateLimit({
+    windowMs: 15 * 60_000,
+    limit: env.isTest ? 1000 : 20,
+    keyGenerator: (req) => req.user?.id ?? clientIp(req),
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: { code: 'rate_limited', message: 'Too many checkout attempts. Please wait and try again.' } },
+  });
+
   router.get('/cart', (req, res) => {
     const { cart, token } = ensureCart(db, req.user?.id ?? null, cartTokenFrom(req));
     setCartCookie(res, token, req);
     res.json({ cart: getCartView(db, cart.id) });
   });
 
-  router.post('/cart/items', (req, res) => {
+  router.post('/cart/items', cartMutationLimiter, (req, res) => {
     const input = parse(
       z.object({ productId: z.string().min(3).max(80), quantity: z.number().int().min(1).max(99) }),
       req.body,
@@ -52,18 +69,18 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
     res.status(201).json({ cart: getCartView(db, cart.id) });
   });
 
-  router.patch('/cart/items/:productId', (req, res) => {
+  router.patch('/cart/items/:productId', cartMutationLimiter, (req, res) => {
     const input = parse(z.object({ quantity: z.number().int().min(0).max(99) }), req.body);
     const { cart, token } = ensureCart(db, req.user?.id ?? null, cartTokenFrom(req));
     setCartCookie(res, token, req);
-    updateCartItem(db, cart.id, req.params.productId, input.quantity);
+    updateCartItem(db, cart.id, String(req.params.productId), input.quantity);
     res.json({ cart: getCartView(db, cart.id) });
   });
 
-  router.delete('/cart/items/:productId', (req, res) => {
+  router.delete('/cart/items/:productId', cartMutationLimiter, (req, res) => {
     const { cart, token } = ensureCart(db, req.user?.id ?? null, cartTokenFrom(req));
     setCartCookie(res, token, req);
-    removeCartItem(db, cart.id, req.params.productId);
+    removeCartItem(db, cart.id, String(req.params.productId));
     res.json({ cart: getCartView(db, cart.id) });
   });
 
@@ -89,7 +106,7 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
     });
   });
 
-  router.post('/checkout', requireAuth, async (req, res) => {
+  router.post('/checkout', checkoutLimiter, requireAuth, async (req, res) => {
     const input = parse(
       z.object({
         address: addressSchema,
@@ -115,15 +132,20 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
     try {
       payment = await initializeOrderPayment(db, created.orderId, req.user!.id);
     } catch (error) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'checkout_payment_init_failed',
+          orderId: created.orderId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
       payment = {
         provider: 'unconfigured' as const,
         amountPaise: created.totalPaise,
         orderNumber: created.orderNumber,
         devPaymentsEnabled: env.allowDevPayments || env.simulatedCheckoutEnabled,
-        message:
-          error instanceof Error
-            ? `Order saved, but payment could not be started: ${error.message}`
-            : 'Order saved, but payment could not be started.',
+        message: 'Order saved, but online payment could not be started right now. Please retry from your order page.',
       };
     }
 
@@ -215,12 +237,36 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
     }
     if ((providerPayment.currency ?? 'INR').toUpperCase() !== 'INR') {
       mismatch('payment.currency_mismatch', { expected: 'INR', received: providerPayment.currency });
+      recordOrderEvent(db, {
+        orderId: payment.order_id,
+        type: 'payment.currency_mismatch',
+        description: `Rejected payment currency mismatch: expected INR, received ${String(providerPayment.currency ?? 'unknown')}.`,
+      });
+      await notify(db, {
+        email: env.email.adminNotificationEmail,
+        type: 'security_payment_mismatch',
+        subject: `Security alert: payment currency mismatch on order ${payment.order_id}`,
+        body: `<p>Blocked payment verification due to currency mismatch.</p><p><strong>Order ID:</strong> ${escapeHtml(payment.order_id)}<br/><strong>Received:</strong> ${escapeHtml(String(providerPayment.currency ?? 'unknown'))}</p>`,
+        dedupeKey: `sec-curr-mismatch:${input.razorpayPaymentId}`,
+      });
       throw badRequest('The payment currency does not match this order.');
     }
     if (Number(providerPayment.amount) !== payment.amount_paise) {
       mismatch('payment.amount_mismatch', {
         expected: payment.amount_paise,
         received: providerPayment.amount,
+      });
+      recordOrderEvent(db, {
+        orderId: payment.order_id,
+        type: 'payment.amount_mismatch',
+        description: `Rejected payment amount mismatch: expected ${payment.amount_paise} paise, received ${String(providerPayment.amount)} paise.`,
+      });
+      await notify(db, {
+        email: env.email.adminNotificationEmail,
+        type: 'security_payment_mismatch',
+        subject: `Security alert: payment amount mismatch on order ${payment.order_id}`,
+        body: `<p>Blocked payment verification due to amount mismatch.</p><p><strong>Order ID:</strong> ${escapeHtml(payment.order_id)}<br/><strong>Expected:</strong> ${payment.amount_paise} paise<br/><strong>Received:</strong> ${escapeHtml(String(providerPayment.amount))} paise</p>`,
+        dedupeKey: `sec-amt-mismatch:${input.razorpayPaymentId}`,
       });
       throw badRequest('The paid amount does not match the order total.');
     }
@@ -341,6 +387,18 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
                 'payment.amount_mismatch',
                 JSON.stringify({ expected: payment.amount_paise, received: amount }),
               );
+              recordOrderEvent(db, {
+                orderId: payment.order_id,
+                type: 'payment.amount_mismatch',
+                description: `Webhook payment amount mismatch: expected ${payment.amount_paise} paise, received ${amount} paise.`,
+              });
+              await notify(db, {
+                email: env.email.adminNotificationEmail,
+                type: 'security_payment_mismatch',
+                subject: `Security alert: webhook amount mismatch on order ${payment.order_id}`,
+                body: `<p>Razorpay webhook reported a payment amount mismatch.</p><p><strong>Order ID:</strong> ${escapeHtml(payment.order_id)}<br/><strong>Expected:</strong> ${payment.amount_paise} paise<br/><strong>Received:</strong> ${amount} paise</p>`,
+                dedupeKey: `sec-wh-mismatch:${providerEventId}`,
+              });
             } else {
               markOrderPaid(db, {
                 orderId: payment.order_id,
@@ -436,7 +494,7 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
                 email: order.email,
                 type: 'refund_completed',
                 subject: `Refund completed for ${order.order_number}`,
-                body: `<p>Your refund has been confirmed by the payment provider.</p><p><strong>Reference:</strong> ${entity.id}</p>`,
+                body: `<p>Your refund has been confirmed by the payment provider.</p><p><strong>Reference:</strong> ${escapeHtml(entity.id)}</p>`,
                 dedupeKey: `refund-complete:${refund.id}`,
               });
             }

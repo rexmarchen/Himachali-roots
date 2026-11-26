@@ -238,7 +238,7 @@ function CinematicHero() {
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="inline-flex items-center gap-2.5 rounded-full border border-white/25 bg-black/50 px-3.5 py-1.5 sm:px-4 sm:py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-white shadow-sm backdrop-blur-md sm:text-xs">
               <span className="h-2 w-2 rounded-full bg-terra" aria-hidden />
-              <span>Rooted in Himachal Pradesh</span>
+              <span>Indian Himalayan Marketplace</span>
             </div>
           </div>
 
@@ -248,7 +248,7 @@ function CinematicHero() {
           </h1>
 
           <p className="mt-2.5 max-w-xl text-[14px] min-[375px]:text-[15px] font-light leading-relaxed text-white/95 drop-shadow-[0_1px_10px_rgba(0,0,0,0.6)] sm:mt-4 sm:text-lg lg:text-xl lg:max-w-2xl">
-            Mountain honey, handloom wool, Kangra tea, and more — crafted by local artisans.
+            Handwoven wool, GI-verified crafts, wild mountain honey, and organic teas from artisans across Himachal Pradesh, Uttarakhand, Kashmir, Ladakh, Sikkim, Arunachal, and Darjeeling.
           </p>
 
           <div className="mt-4 grid grid-cols-1 min-[360px]:grid-cols-2 gap-2.5 sm:mt-7 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
@@ -1721,22 +1721,56 @@ export function HomePage() {
       {/* Seller Application Callout Banner (Born in the High Valleys) */}
       <SellerBannerSection counts={data.counts} />
 
-      {/* Regional filter pills */}
+      {/* Pan-Himalayan regional hubs & crafts links */}
       <section className="mx-auto max-w-[88rem] px-5 pb-8 sm:px-8 lg:px-10 xl:px-12">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line pt-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs uppercase tracking-wider text-muted font-semibold mr-2">Regions:</span>
-            {data.regions.map((region) => (
-              <Link key={region.region} to={`/shop?region=${encodeURIComponent(region.region)}`}>
-                <Badge tone="sand">
-                  {region.region} ({region.productCount})
-                </Badge>
+        <div className="space-y-4 border-t border-line pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs uppercase tracking-wider text-muted font-semibold mr-2">Himalayan Regions:</span>
+              {[
+                { name: 'Himachal Pradesh', slug: 'himachal-pradesh' },
+                { name: 'Uttarakhand', slug: 'uttarakhand' },
+                { name: 'Jammu & Kashmir', slug: 'jammu-and-kashmir' },
+                { name: 'Ladakh', slug: 'ladakh' },
+                { name: 'Sikkim', slug: 'sikkim' },
+                { name: 'Arunachal Pradesh', slug: 'arunachal-pradesh' },
+                { name: 'Darjeeling & Kalimpong', slug: 'darjeeling-kalimpong' },
+              ].map((hub) => (
+                <Link key={hub.slug} to={`/regions/${hub.slug}`}>
+                  <Badge tone="sand">{hub.name}</Badge>
+                </Link>
+              ))}
+              {data.regions.map((region) => (
+                <Link key={region.region} to={`/shop?region=${encodeURIComponent(region.region)}`}>
+                  <Badge tone="sand">
+                    {region.region} ({region.productCount})
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <Link to="/himalayan-handmade-products" className="link-underline text-xs font-semibold uppercase tracking-wider text-forest">
+                Himalayan Craft Index →
               </Link>
-            ))}
+              <Link to="/gi-tagged" className="link-underline text-xs font-semibold uppercase tracking-wider text-terra">
+                Verified GI Hub →
+              </Link>
+            </div>
           </div>
-          <Link to="/shop" className="link-underline text-xs font-semibold uppercase tracking-wider text-forest">
-            Explore All Shelves →
-          </Link>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+            <span className="text-[11px] uppercase tracking-wider font-semibold mr-1">Crafts &amp; Guides:</span>
+            <Link to="/crafts/pashmina-shawls" className="hover:text-forest underline">Pashmina Shawls</Link>
+            <span>·</span>
+            <Link to="/crafts/kullu-kinnauri-shawls" className="hover:text-forest underline">Kullu &amp; Kinnauri Shawls</Link>
+            <span>·</span>
+            <Link to="/crafts/himalayan-tea" className="hover:text-forest underline">Himalayan Tea</Link>
+            <span>·</span>
+            <Link to="/crafts/himalayan-honey" className="hover:text-forest underline">Himalayan Honey</Link>
+            <span>·</span>
+            <Link to="/crafts/aipan-art" className="hover:text-forest underline">Aipan Art</Link>
+            <span>·</span>
+            <Link to="/guides" className="hover:text-forest underline font-medium text-forest">Buying &amp; Craft Guides</Link>
+          </div>
         </div>
       </section>
 

@@ -1,9 +1,17 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { execute, queryAll, queryOne, tx, type Db } from '../db.js';
 import { env } from '../env.js';
-import { hasUsablePassword, hashPassword, requireAuth, sessionToken, sha256, verifyPassword } from '../lib/auth.js';
-import { badRequest, conflict, notFound, parse, unauthorized } from '../lib/http.js';
+import {
+  destroyAllUserSessions,
+  hasUsablePassword,
+  hashPassword,
+  requireAuth,
+  rotateSession,
+  verifyPassword,
+} from '../lib/auth.js';
+import { badRequest, clientIp, conflict, notFound, parse, unauthorized } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { getOrderView, requestCancellation, requestReturn, validateAddress } from '../lib/orders.js';
 import { notify, escapeHtml } from '../lib/email.js';
@@ -97,7 +105,16 @@ export function accountRouter(db: Db): Router {
     res.json({ ok: true });
   });
 
-  router.post('/password', (req, res) => {
+  const passwordLimiter = rateLimit({
+    windowMs: 15 * 60_000,
+    limit: env.isTest ? 1000 : 8,
+    keyGenerator: (req) => req.user?.id ?? clientIp(req),
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: { code: 'rate_limited', message: 'Too many password attempts. Please wait and try again.' } },
+  });
+
+  router.post('/password', passwordLimiter, (req, res) => {
     const input = parse(
       z.object({
         currentPassword: z.string().max(200).optional().default(''),
@@ -118,19 +135,20 @@ export function accountRouter(db: Db): Router {
     if (!hasPassword && input.currentPassword) {
       throw badRequest('This account has no password yet. Leave the current password blank to set one.');
     }
-    const token = sessionToken(req);
     tx(db, () => {
       execute(
         db,
-        'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?',
+        'UPDATE users SET password_hash = ?, password_changed_at = ?, updated_at = ? WHERE id = ?',
         hashPassword(input.newPassword),
+        new Date().toISOString(),
         new Date().toISOString(),
         req.user!.id,
       );
-      if (token) {
-        execute(db, 'DELETE FROM sessions WHERE user_id = ? AND token_hash != ?', req.user!.id, sha256(token));
-      }
+      // Invalidate all existing standard & admin sessions across devices, then rotate caller session.
+      destroyAllUserSessions(db, req.user!.id);
+      audit(db, req.user!, 'auth.password.changed', 'user', req.user!.id);
     });
+    rotateSession(db, req, res, req.user!.id);
     res.json({ ok: true, message: 'Password updated.' });
   });
 

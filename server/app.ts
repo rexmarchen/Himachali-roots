@@ -7,8 +7,9 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { env } from './env.js';
 import type { Db } from './db.js';
-import { attachUser } from './lib/auth.js';
-import { corsMiddleware, csrfGuard, errorMiddleware } from './lib/http.js';
+import { adminSessionToken, attachUser, isAdminNetworkAllowed, loadSessionUser, sessionToken } from './lib/auth.js';
+import { auditContextStorage } from './lib/audit.js';
+import { clientIp, corsMiddleware, csrfGuard, errorMiddleware } from './lib/http.js';
 import { authRouter, type AuthRouterDeps } from './routes/auth.js';
 import { publicRouter, sitemapRouter } from './routes/public.js';
 import { shopRouter, type ShopRouterDeps } from './routes/shop.js';
@@ -16,15 +17,40 @@ import { accountRouter } from './routes/account.js';
 import { sellerRouter } from './routes/seller.js';
 import { adminRouter } from './routes/admin.js';
 import { getSeoMetadata, injectSeoIntoHtml } from './lib/seo.js';
+import { resolveSlugRedirect } from './lib/himalayan.js';
 
 import { MetricsRegistry } from './core/telemetry/metrics.js';
 
-export type AppDeps = Partial<AuthRouterDeps> & Partial<ShopRouterDeps>;
+export type AppDeps = Partial<AuthRouterDeps> &
+  Partial<ShopRouterDeps> & {
+    requireAdminMfa?: boolean;
+  };
 
 export function createApp(db: Db, deps: AppDeps = {}): express.Express {
   const app = express();
+  const requireAdminMfa = deps.requireAdminMfa ?? env.requireAdminMfa;
   app.disable('x-powered-by');
   if (env.trustProxy) app.set('trust proxy', 1);
+
+  if (env.isProduction && env.appUrl.startsWith('https://')) {
+    app.use((req, res, next) => {
+      if (req.path.startsWith('/api/health')) {
+        next();
+        return;
+      }
+      const proto = (req.get('x-forwarded-proto') || req.protocol || '').split(',')[0].trim().toLowerCase();
+      if (proto === 'https' || req.secure) {
+        next();
+        return;
+      }
+      const host = req.get('x-forwarded-host') || req.get('host');
+      if (host && (req.method === 'GET' || req.method === 'HEAD')) {
+        res.redirect(301, `https://${host}${req.originalUrl}`);
+        return;
+      }
+      res.status(403).json({ error: { code: 'https_required', message: 'HTTPS is required.' } });
+    });
+  }
 
   app.use((req, res, next) => {
     const supplied = req.get('x-request-id');
@@ -44,7 +70,7 @@ export function createApp(db: Db, deps: AppDeps = {}): express.Express {
       });
     });
 
-    next();
+    auditContextStorage.run({ ip: clientIp(req) }, next);
   });
 
   app.use(
@@ -138,8 +164,48 @@ export function createApp(db: Db, deps: AppDeps = {}): express.Express {
   app.use('/api', shopRouter(db, deps));
   app.use('/api/account', accountRouter(db));
   app.use('/api/seller', sellerRouter(db));
-  app.use('/api/admin', adminRouter(db));
+  app.use('/api/admin', adminRouter(db, { requireAdminMfa }));
   app.use('/', sitemapRouter(db));
+
+  // Server-side deny-by-default guard for /admin and /admin/* HTML routes.
+  app.use('/admin', (req, res, next) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+
+    if (!isAdminNetworkAllowed(req)) {
+      res.status(403).type('text/plain').send('Administrator access is restricted on this host or network.');
+      return;
+    }
+
+    const adminUser = loadSessionUser(db, adminSessionToken(req), 'admin');
+    const standardUser = loadSessionUser(db, sessionToken(req), 'standard');
+    if (!adminUser && !standardUser) {
+      res.redirect(302, `/login?next=${encodeURIComponent(req.originalUrl || '/admin')}`);
+      return;
+    }
+
+    const actor = adminUser ?? standardUser!;
+    if (!actor.roles.includes('admin')) {
+      res
+        .status(403)
+        .type('text/html; charset=utf-8')
+        .send('<!doctype html><html><head><title>403 Forbidden</title></head><body><h1>403 Forbidden</h1><p>Administrator access required.</p></body></html>');
+      return;
+    }
+
+    if (!adminUser) {
+      res.redirect(302, `/login?next=${encodeURIComponent(req.originalUrl || '/admin')}`);
+      return;
+    }
+
+    if (requireAdminMfa && !adminUser.mfaEnabled) {
+      res.redirect(302, '/account/profile?mfa=required');
+      return;
+    }
+
+    next();
+  });
 
   app.use(
     '/uploads',
@@ -199,6 +265,11 @@ export function createApp(db: Db, deps: AppDeps = {}): express.Express {
     app.use((req, res, next) => {
       if ((req.method !== 'GET' && req.method !== 'HEAD') || req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
         next();
+        return;
+      }
+      const redirectTarget = resolveSlugRedirect(db, req.path);
+      if (redirectTarget) {
+        res.redirect(301, redirectTarget);
         return;
       }
       const indexPath = path.join(dist, 'index.html');

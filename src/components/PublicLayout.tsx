@@ -1,7 +1,8 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { api, errorMessage } from '@/lib/api';
-import { formatINR } from '@shared/types';
+import { formatINR, type CraftEntity, type RegionEntity } from '@shared/types';
 import { useAuth, useCartCount, useSiteContent } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { EcommerceSearchBar } from './EcommerceSearchBar';
@@ -9,11 +10,12 @@ import { SearchModal } from './SearchModal';
 import { useKeyboardOpen } from '@/lib/useKeyboardOpen';
 
 const NAV = [
-  { label: 'Shop', to: '/shop' },
+  { label: 'Shop by Region', to: '/himalayan-handmade-products' },
+  { label: 'Shop by Craft', to: '/crafts/pashmina-shawls' },
+  { label: 'Food & Organic', to: '/categories/pantry-and-preserves' },
+  { label: 'GI Tagged', to: '/gi-tagged' },
+  { label: 'Gifts', to: '/categories/gifting' },
   { label: 'Makers', to: '/makers' },
-  { label: 'Journal', to: '/blog' },
-  { label: 'How we source', to: '/sourcing' },
-  { label: 'Our Story', to: '/about' },
 ];
 
 function Wordmark({ compact = false, light = false }: { compact?: boolean; light?: boolean }) {
@@ -894,6 +896,14 @@ function Newsletter() {
 
 function Footer({ flushTop = false, extraBottomPad = false }: { flushTop?: boolean; extraBottomPad?: boolean }) {
   const { config } = useAuth();
+  const navMeta = useQuery({
+    queryKey: ['public-regions-nav'],
+    queryFn: () => api<{ himalayanRegions?: RegionEntity[]; crafts?: CraftEntity[] }>('/regions'),
+    staleTime: 5 * 60_000,
+  });
+  const indexableRegions = (navMeta.data?.himalayanRegions ?? []).filter((r) => (r.productCount ?? 0) > 0);
+  const indexableCrafts = (navMeta.data?.crafts ?? []).filter((c) => (c.productCount ?? 0) > 0);
+  const brandTitle = config?.brand?.name ?? 'DEAR HILLS';
   return (
     <footer
       className={`${flushTop ? 'mt-0' : 'mt-16'} border-t border-forest-deep bg-forest text-paper ${
@@ -905,37 +915,50 @@ function Footer({ flushTop = false, extraBottomPad = false }: { flushTop?: boole
           <div>
             <Wordmark compact light />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-paper/70">
-              A curated marketplace for products made and grown in Himachal Pradesh. Every listing names the store behind
-              it, and every maker and product is reviewed before publication.
+              A curated marketplace for handmade crafts and authentic harvests across the Indian Himalayas. Every listing names the workshop behind it, and every maker is reviewed before publication.
             </p>
-            <div className="mt-6 flex flex-wrap gap-2 text-[10.5px] uppercase tracking-[0.16em] text-paper/50">
-              <span>Mandi</span> · <span>Kullu</span> · <span>Kangra</span> · <span>Kinnaur</span> · <span>Lahaul</span> · <span>Chamba</span>
+            <div className="mt-6 flex flex-wrap gap-2 text-[10.5px] uppercase tracking-[0.16em] text-paper/75">
+              {(indexableRegions.length ? indexableRegions : [{ name: 'Himachal Pradesh', slug: 'himachal-pradesh' }]).map((r) => (
+                <Link key={r.slug} to={`/regions/${r.slug}`} className="hover:text-sand transition-colors">
+                  {r.name}
+                </Link>
+              ))}
             </div>
+            {indexableCrafts.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2 text-[10.5px] text-paper/60">
+                {indexableCrafts.map((c) => (
+                  <Link key={c.slug} to={`/crafts/${c.slug}`} className="hover:text-sand transition-colors">
+                    {c.name}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div>
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">Explore the shelves</h3>
             <ul className="mt-4 space-y-2.5 text-sm text-paper/75">
+              <li><Link to="/himalayan-handmade-products" className="hover:text-sand transition-colors">Himalayan Handmade Pillar</Link></li>
               <li><Link to="/shop" className="hover:text-sand transition-colors">All products</Link></li>
-              <li><Link to="/categories/shawls-and-weaves" className="hover:text-sand transition-colors">Shawls & Handlooms</Link></li>
-              <li><Link to="/categories/pantry-and-preserves" className="hover:text-sand transition-colors">Mountain Pantry & Honey</Link></li>
-              <li><Link to="/categories/gifting" className="hover:text-sand transition-colors">Curated Himalayan Gifting</Link></li>
+              <li><Link to="/gi-tagged" className="hover:text-sand transition-colors">Verified GI Tagged</Link></li>
+              <li><Link to="/categories/shawls-and-weaves" className="hover:text-sand transition-colors">Shawls &amp; Handlooms</Link></li>
+              <li><Link to="/categories/pantry-and-preserves" className="hover:text-sand transition-colors">Mountain Pantry &amp; Honey</Link></li>
               <li><Link to="/makers" className="hover:text-sand transition-colors">Meet the makers</Link></li>
               <li><Link to="/sourcing" className="hover:text-sand transition-colors">The Sourcing Standard</Link></li>
             </ul>
           </div>
 
           <div>
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">Information & Trust</h3>
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sand/80">Information &amp; Trust</h3>
             <ul className="mt-4 space-y-2.5 text-sm text-paper/75">
-              <li><Link to="/about" className="hover:text-sand transition-colors">Our story & philosophy</Link></li>
-              <li><Link to="/blog" className="hover:text-sand transition-colors">Mountain Journal &amp; Guides</Link></li>
-              <li><Link to="/policies/shipping" className="hover:text-sand transition-colors">Shipping & delivery</Link></li>
-              <li><Link to="/policies/returns" className="hover:text-sand transition-colors">Returns & refunds</Link></li>
-              <li><Link to="/policies/authenticity" className="hover:text-sand transition-colors">Authenticity & product claims</Link></li>
-              <li><Link to="/policies/seller-terms" className="hover:text-sand transition-colors">Seller terms & KYC</Link></li>
-              <li><Link to="/credits" className="hover:text-sand transition-colors">Photography credits</Link></li>
-              <li><Link to="/contact" className="hover:text-sand transition-colors">Contact & support</Link></li>
+              <li><Link to="/about" className="hover:text-sand transition-colors">Our story &amp; philosophy</Link></li>
+              <li><Link to="/guides" className="hover:text-sand transition-colors">Himalayan Craft Guides</Link></li>
+              <li><Link to="/blog" className="hover:text-sand transition-colors">Mountain Journal</Link></li>
+              <li><Link to="/policies/shipping" className="hover:text-sand transition-colors">Shipping &amp; delivery</Link></li>
+              <li><Link to="/policies/returns" className="hover:text-sand transition-colors">Returns &amp; refunds</Link></li>
+              <li><Link to="/policies/authenticity" className="hover:text-sand transition-colors">Authenticity &amp; product claims</Link></li>
+              <li><Link to="/policies/seller-terms" className="hover:text-sand transition-colors">Seller terms &amp; KYC</Link></li>
+              <li><Link to="/contact" className="hover:text-sand transition-colors">Contact &amp; support</Link></li>
             </ul>
           </div>
 
@@ -945,8 +968,7 @@ function Footer({ flushTop = false, extraBottomPad = false }: { flushTop?: boole
         <div className="flex flex-col gap-4 pt-8 text-[11px] leading-relaxed text-paper/50 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl space-y-1.5">
             <p>
-              © {new Date().getFullYear()} DEAR HILLS. Demonstration build — policy documents are drafts pending legal
-              review. Product and seller records in this environment are labelled demo data.
+              © {new Date().getFullYear()} {brandTitle}. Authentic Indian Himalayan craft &amp; mountain produce marketplace.
             </p>
             <p>
               Photography is authentic and illustrative of Himachal Pradesh, sourced under creative licences listed on the{' '}

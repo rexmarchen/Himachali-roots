@@ -4,6 +4,8 @@ import type { CartView, SessionUser } from '@shared/types';
 import { api } from './api';
 
 export interface SiteConfig {
+  brand?: { name: string; domain: string };
+  features?: { international: boolean };
   payments: {
     provider: string;
     configured: boolean;

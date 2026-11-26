@@ -89,6 +89,11 @@ export const env = {
   trustProxy: trustProxySetting(),
   sessionDays: int(process.env.SESSION_DAYS, 30),
   sessionIdleDays: int(process.env.SESSION_IDLE_DAYS, 7),
+  adminSessionIdleMinutes: Math.max(5, int(process.env.ADMIN_SESSION_IDLE_MINUTES, 30)),
+  adminStepUpMinutes: Math.max(1, int(process.env.ADMIN_STEP_UP_MINUTES, 15)),
+  requireAdminMfa: bool(process.env.ADMIN_REQUIRE_MFA, nodeEnv !== 'test'),
+  adminAllowedIps: list(process.env.ADMIN_ALLOWED_IPS),
+  adminSubdomain: (process.env.ADMIN_SUBDOMAIN ?? '').trim().toLowerCase(),
   sessionSameSite,
   /** Extra browser origins allowed to call the API with credentials (split frontend/API deployments). */
   allowedOrigins: list(process.env.ALLOWED_ORIGINS),
@@ -148,6 +153,14 @@ export const env = {
     },
   },
   sentryDsn: process.env.SENTRY_DSN ?? '',
+  payoutEncryptionKey: (process.env.PAYOUT_ENCRYPTION_KEY ?? '').trim(),
+  brand: {
+    name: (process.env.BRAND_NAME ?? 'Dear Hills').trim() || 'Dear Hills',
+    domain: (process.env.BRAND_DOMAIN ?? 'dearhills.in').trim() || 'dearhills.in',
+  },
+  features: {
+    international: bool(process.env.FEATURE_INTERNATIONAL, false),
+  },
   seo: {
     googleSiteVerification: (process.env.GOOGLE_SITE_VERIFICATION ?? '').trim(),
     sameAs: list(process.env.ORGANIZATION_SAME_AS),
@@ -189,6 +202,9 @@ export function assertProductionConfig(): string[] {
     if (env.sessionIdleDays < 1 || env.sessionIdleDays > env.sessionDays) {
       problems.push('CRITICAL: SESSION_IDLE_DAYS must be between 1 and SESSION_DAYS.');
     }
+    if (!bool(process.env.ADMIN_REQUIRE_MFA, true)) {
+      problems.push('CRITICAL: ADMIN_REQUIRE_MFA must not be disabled in production.');
+    }
     if (env.sessionSameSite === 'none' && !env.appUrl.startsWith('https://')) {
       problems.push('CRITICAL: SESSION_COOKIE_SAMESITE=none requires APP_URL to use https://.');
     }
@@ -202,6 +218,9 @@ export function assertProductionConfig(): string[] {
     }
     if (!env.email.adminNotificationEmail || env.email.adminNotificationEmail.endsWith('.example')) {
       problems.push('ADMIN_NOTIFICATION_EMAIL is not configured with a real monitored inbox.');
+    }
+    if (!env.payoutEncryptionKey) {
+      problems.push('PAYOUT_ENCRYPTION_KEY is not configured — seller bank details are stored without application-layer encryption.');
     }
   }
   return problems;

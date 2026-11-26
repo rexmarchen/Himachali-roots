@@ -105,7 +105,7 @@ describe('public storefront', () => {
     const homeResponse = await request(app).get('/');
     expect(homeResponse.status).toBe(200);
     expect(homeResponse.headers['content-type']).toContain('text/html');
-    expect(homeResponse.text).toContain('<title>DEAR HILLS — Authentic Himalayan Handloom');
+    expect(homeResponse.text).toContain('<title>Dear Hills — Authentic Himalayan Goods | DearHills.in</title>');
     expect(homeResponse.text).toContain('rel="canonical"');
     expect(homeResponse.text).toContain('id="seo-structured-data"');
     expect(homeResponse.text).toContain('"@type":"Organization"');

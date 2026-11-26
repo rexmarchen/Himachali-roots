@@ -1,7 +1,10 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Db } from '../db.js';
 import { execute } from '../db.js';
 import { newId } from './ids.js';
 import type { SessionUser } from '../../shared/types.js';
+
+export const auditContextStorage = new AsyncLocalStorage<{ ip?: string }>();
 
 const SENSITIVE_KEYS = /password|secret|token|hash|authorization|card|cvv|document|file_path/i;
 
@@ -27,11 +30,13 @@ export function audit(
   entityId: string,
   before?: unknown,
   after?: unknown,
+  ipAddress?: string | null,
 ): void {
+  const effectiveIp = ipAddress ?? auditContextStorage.getStore()?.ip ?? null;
   execute(
     db,
-    `INSERT INTO audit_logs (id, actor_id, actor_email, action, entity_type, entity_id, before_json, after_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO audit_logs (id, actor_id, actor_email, action, entity_type, entity_id, before_json, after_json, ip_address)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     newId('aud_'),
     actor?.id ?? null,
     actor?.email ?? null,
@@ -40,5 +45,6 @@ export function audit(
     entityId,
     before === undefined ? null : JSON.stringify(redact(before)),
     after === undefined ? null : JSON.stringify(redact(after)),
+    effectiveIp,
   );
 }

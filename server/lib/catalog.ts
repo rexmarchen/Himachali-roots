@@ -1,7 +1,9 @@
 import { queryAll, queryOne, type Db } from '../db.js';
 import type { Category, Paged, ProductDetail, ProductSummary, Review } from '../../shared/types.js';
+import { countDescriptionWords } from '../../shared/productCompliance.js';
 import { notFound } from './http.js';
 import { attachCampaignMeta } from './campaigns.js';
+import { regionMatchSql } from './himalayan.js';
 
 const PUBLIC_CONDITION = "p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'";
 
@@ -22,6 +24,15 @@ interface SummaryRow {
   stock: number;
   is_demo: number;
   region: string | null;
+  region_slug?: string | null;
+  district_village?: string | null;
+  craft_type?: string | null;
+  craft_slug?: string | null;
+  technique?: string | null;
+  gi_tagged?: number;
+  gi_name?: string | null;
+  gi_registration_ref?: string | null;
+  made_to_order?: number;
   is_featured: number;
   rating_average: number | null;
   rating_count: number;
@@ -54,6 +65,15 @@ function mapSummary(row: SummaryRow): ProductSummary {
     stock: row.stock,
     isDemo: row.is_demo === 1,
     region: row.region,
+    regionSlug: row.region_slug ?? null,
+    districtVillage: row.district_village ?? null,
+    craftType: row.craft_type ?? null,
+    craftSlug: row.craft_slug ?? null,
+    technique: row.technique ?? null,
+    giTagged: row.gi_tagged === 1,
+    giName: row.gi_name ?? null,
+    giRegistrationRef: row.gi_registration_ref ?? null,
+    madeToOrder: row.made_to_order === 1,
     isFeatured: row.is_featured === 1,
     ratingAverage: row.rating_average,
     ratingCount: row.rating_count,
@@ -62,7 +82,9 @@ function mapSummary(row: SummaryRow): ProductSummary {
 
 const SUMMARY_SELECT = `
   SELECT p.id, p.slug, p.name, p.short_description, p.price_paise, p.compare_at_price_paise,
-         p.region, p.is_featured, p.is_demo, acp.promo_price_paise,
+         COALESCE(NULLIF(p.region, ''), s.region) AS region, p.region_slug, p.district_village,
+         p.craft_type, p.craft_slug, p.technique, p.gi_tagged, p.gi_name, p.gi_registration_ref, p.made_to_order,
+         p.is_featured, p.is_demo, acp.promo_price_paise,
          i.quantity - i.reserved_quantity AS stock,
          s.business_name AS seller_name, s.slug AS seller_slug,
          c.name AS category_name, c.slug AS category_slug,
@@ -82,6 +104,12 @@ export interface ProductQuery {
   category?: string;
   seller?: string;
   region?: string;
+  regionSlug?: string;
+  regionName?: string;
+  craft?: string;
+  technique?: string;
+  giTagged?: boolean;
+  excludeDemo?: boolean;
   minPricePaise?: number;
   maxPricePaise?: number;
   inStock?: boolean;
@@ -134,6 +162,24 @@ export function listProducts(db: Db, query: ProductQuery): Paged<ProductSummary>
   if (query.region) {
     conditions.push('p.region = ?');
     params.push(query.region);
+  }
+  if (query.regionSlug) {
+    conditions.push(regionMatchSql('?', '?'));
+    params.push(query.regionSlug, query.regionName || query.regionSlug);
+  }
+  if (query.craft) {
+    conditions.push('(LOWER(COALESCE(p.craft_slug, \'\')) = LOWER(?) OR LOWER(COALESCE(p.craft_type, \'\')) = LOWER(?))');
+    params.push(query.craft, query.craft);
+  }
+  if (query.technique) {
+    conditions.push('LOWER(COALESCE(p.technique, \'\')) = LOWER(?)');
+    params.push(query.technique);
+  }
+  if (query.giTagged) {
+    conditions.push('p.gi_tagged = 1 AND p.origin_verified = 1');
+  }
+  if (query.excludeDemo) {
+    conditions.push("p.is_demo = 0 AND UPPER(p.sku) NOT LIKE 'DEMO-%' AND p.price_paise > 100 AND LOWER(s.slug) NOT LIKE '%-demo' AND LOWER(s.slug) != 'demo'");
   }
   if (query.minPricePaise !== undefined) {
     conditions.push('COALESCE(acp.promo_price_paise, p.price_paise) >= ?');
@@ -233,6 +279,7 @@ export function getProduct(db: Db, slug: string): ProductDetail {
     `SELECT p.*, i.quantity - i.reserved_quantity AS stock, acp.promo_price_paise,
             s.business_name AS seller_name, s.slug AS seller_slug, s.id AS seller_id,
             s.tagline AS seller_tagline, s.story AS seller_story, s.region AS seller_region,
+            s.craft_specialty AS seller_craft_specialty, s.years_of_practice AS seller_years_of_practice,
             s.logo_url AS seller_logo_url, s.cover_url AS seller_cover_url,
             c.name AS category_name, c.slug AS category_slug,
             (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url,
@@ -305,6 +352,8 @@ export function getProduct(db: Db, slug: string): ProductDetail {
   return {
     ...summary,
     description: row.description,
+    descriptionWordCount: countDescriptionWords(row.description),
+    needsDescriptionRewrite: countDescriptionWords(row.description) < 100,
     sku: row.sku,
     unit: row.unit,
     weightG: row.weight_g,
@@ -314,6 +363,8 @@ export function getProduct(db: Db, slug: string): ProductDetail {
     foodInfo: row.food_info,
     originPlace: row.origin_place,
     originVerified: row.origin_verified === 1,
+    giRequested: (row as { gi_requested?: number }).gi_requested === 1,
+    giVerifiedAt: (row as { gi_verified_at?: string | null }).gi_verified_at ?? null,
     varietyGrade: (row as { variety_grade?: string | null }).variety_grade ?? null,
     harvestInfo: (row as { harvest_info?: string | null }).harvest_info ?? null,
     dispatchConditions: (row as { dispatch_conditions?: string | null }).dispatch_conditions ?? null,
@@ -327,6 +378,8 @@ export function getProduct(db: Db, slug: string): ProductDetail {
       tagline: row.seller_tagline,
       story: row.seller_story,
       region: row.seller_region,
+      craftSpecialty: (row as { seller_craft_specialty?: string | null }).seller_craft_specialty ?? null,
+      yearsOfPractice: (row as { seller_years_of_practice?: number | null }).seller_years_of_practice ?? null,
       logoUrl: row.seller_logo_url,
       coverUrl: row.seller_cover_url,
     },
@@ -618,6 +671,9 @@ export function getSellerStorefront(db: Db, slug: string) {
     story: string | null;
     region: string | null;
     village: string | null;
+    craft_specialty: string | null;
+    years_of_practice: number | null;
+    workshop_photos_json: string | null;
     logo_url: string | null;
     cover_url: string | null;
     verified_at: string | null;
@@ -631,7 +687,8 @@ export function getSellerStorefront(db: Db, slug: string) {
   }>(
     db,
     `SELECT s.id, s.business_name AS name, s.slug, s.seller_type, s.seller_category, s.tagline, s.story,
-            s.region, s.village, s.logo_url, s.cover_url, s.verified_at, s.approved_at, s.created_at,
+            s.region, s.village, s.craft_specialty, s.years_of_practice, s.workshop_photos_json,
+            s.logo_url, s.cover_url, s.verified_at, s.approved_at, s.created_at,
             (SELECT COUNT(*) FROM products p WHERE p.seller_id = s.id AND p.status = 'approved') AS product_count,
             (SELECT pi.url FROM products p JOIN product_images pi ON pi.product_id = p.id
               WHERE p.seller_id = s.id AND p.status = 'approved' ORDER BY p.is_featured DESC, pi.sort_order LIMIT 1) AS image_url,
@@ -666,6 +723,16 @@ export function getSellerStorefront(db: Db, slug: string) {
     specialities = [];
   }
 
+  let workshopPhotos: string[] = [];
+  try {
+    if (seller.workshop_photos_json) {
+      const parsed = JSON.parse(seller.workshop_photos_json);
+      if (Array.isArray(parsed)) workshopPhotos = parsed.filter((item): item is string => typeof item === 'string');
+    }
+  } catch {
+    workshopPhotos = [];
+  }
+
   return {
     id: seller.id,
     name: seller.name,
@@ -676,6 +743,9 @@ export function getSellerStorefront(db: Db, slug: string) {
     story: seller.story,
     region: seller.region,
     village: seller.village,
+    craftSpecialty: seller.craft_specialty ?? null,
+    yearsOfPractice: seller.years_of_practice ?? (seller.years_operating ? Number(seller.years_operating) : null),
+    workshopPhotos,
     logoUrl: seller.logo_url,
     coverUrl: seller.cover_url,
     imageUrl: seller.image_url ?? seller.cover_url ?? seller.logo_url,

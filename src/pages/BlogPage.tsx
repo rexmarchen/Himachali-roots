@@ -1,8 +1,9 @@
 import { useState, useMemo, type ReactNode } from 'react';
-import { Link, useParams, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Paged, ProductSummary } from '@shared/types';
-import { BLOG_POSTS } from '@/data/blogPosts';
+import { ALL_JOURNAL_POSTS, HIMALAYAN_GUIDES, findJournalPostBySlug, isGuidePost } from '@shared/guides';
+import { BRAND_NAME, fitSeoDescription, fitSeoTitle } from '@shared/seo';
 import { api } from '@/lib/api';
 import { parseMarkdownBlocks } from '@/lib/blogMarkdown';
 import { usePageMeta } from '@/lib/usePageMeta';
@@ -43,7 +44,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function renderInlineMarkdown(text: string): ReactNode[] {
   const tokens: ReactNode[] = [];
-  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\))/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let keyIdx = 0;
@@ -55,11 +56,37 @@ function renderInlineMarkdown(text: string): ReactNode[] {
     if (token.startsWith('**') && token.endsWith('**')) {
       tokens.push(
         <strong key={`b-${keyIdx++}`} className="font-semibold text-forest">
-          {token.slice(2, -2)}
+          {renderInlineMarkdown(token.slice(2, -2))}
         </strong>,
       );
     } else if (token.startsWith('*') && token.endsWith('*')) {
       tokens.push(<em key={`i-${keyIdx++}`}>{token.slice(1, -1)}</em>);
+    } else if (token.startsWith('[')) {
+      const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (linkMatch) {
+        const [, label, href] = linkMatch;
+        if (href.startsWith('/')) {
+          tokens.push(
+            <Link key={`l-${keyIdx++}`} to={href} className="font-medium text-terra underline underline-offset-2 hover:text-forest">
+              {label}
+            </Link>,
+          );
+        } else {
+          tokens.push(
+            <a
+              key={`a-${keyIdx++}`}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-terra underline underline-offset-2 hover:text-forest"
+            >
+              {label}
+            </a>,
+          );
+        }
+      } else {
+        tokens.push(token);
+      }
     }
     lastIndex = match.index + token.length;
   }
@@ -69,28 +96,39 @@ function renderInlineMarkdown(text: string): ReactNode[] {
   return tokens;
 }
 
-/* ---------------- Blog Index Page ---------------- */
+/* ---------------- Blog & Guides Index Page ---------------- */
 export function BlogIndexPage() {
+  const location = useLocation();
+  const isGuidesIndex = location.pathname.startsWith('/guides');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const dataset = isGuidesIndex ? HIMALAYAN_GUIDES : ALL_JOURNAL_POSTS;
 
   usePageMeta({
-    title: 'Himalayan Journal & Craft Stories | Dear Hills Blog',
-    description:
-      'Guides and stories celebrating authentic Himachal living — how to identify pure Pahadi honey, Kullu vs Kinnauri shawl weaving, and buying guide for authentic mountain goods.',
-    canonicalPath: '/blog',
+    title: fitSeoTitle(
+      isGuidesIndex
+        ? `Himalayan Craft & Buying Guides | ${BRAND_NAME}`
+        : `Himalayan Journal & Guides | ${BRAND_NAME}`,
+      60,
+      BRAND_NAME,
+    ),
+    description: fitSeoDescription(
+      'Original guides across Pashmina, Kullu & Kinnauri shawls, GI tags, Himalayan honey, Kangra & Darjeeling tea, Aipan, Chamba rumal & wool care.',
+      158,
+    ),
+    canonicalPath: isGuidesIndex ? '/guides' : '/blog',
     jsonLd: {
       '@context': 'https://schema.org',
       '@graph': [
         {
           '@type': 'Blog',
-          name: 'Dear Hills Mountain Journal',
-          url: 'https://www.dearhills.in/blog',
+          name: `${BRAND_NAME} Mountain Journal & Guides`,
+          url: `https://www.dearhills.in${isGuidesIndex ? '/guides' : '/blog'}`,
           description:
-            'Stories, cultural guides, and sourcing notes from the high-altitude valleys of Himachal Pradesh.',
+            'Deep guides, craft heritage notes, and sourcing checks across all Indian Himalayan regions.',
           publisher: {
             '@type': 'Organization',
-            name: 'Dear Hills',
+            name: BRAND_NAME,
             logo: {
               '@type': 'ImageObject',
               url: 'https://www.dearhills.in/favicon-192x192.png',
@@ -103,7 +141,12 @@ export function BlogIndexPage() {
           '@type': 'BreadcrumbList',
           itemListElement: [
             { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
-            { '@type': 'ListItem', position: 2, name: 'Mountain Journal', item: 'https://www.dearhills.in/blog' },
+            {
+              '@type': 'ListItem',
+              position: 2,
+              name: isGuidesIndex ? 'Himalayan Guides' : 'Mountain Journal',
+              item: `https://www.dearhills.in${isGuidesIndex ? '/guides' : '/blog'}`,
+            },
           ],
         },
       ],
@@ -111,12 +154,12 @@ export function BlogIndexPage() {
   });
 
   const categories = useMemo(() => {
-    const set = new Set(BLOG_POSTS.map((p) => p.category));
+    const set = new Set(dataset.map((p) => p.category));
     return ['All', ...Array.from(set)];
-  }, []);
+  }, [dataset]);
 
   const filteredPosts = useMemo(() => {
-    return BLOG_POSTS.filter((post) => {
+    return dataset.filter((post) => {
       const matchCat = selectedCategory === 'All' || post.category === selectedCategory;
       const matchQuery =
         !searchQuery ||
@@ -125,7 +168,7 @@ export function BlogIndexPage() {
         post.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
       return matchCat && matchQuery;
     });
-  }, [selectedCategory, searchQuery]);
+  }, [dataset, selectedCategory, searchQuery]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 sm:py-12">
@@ -177,12 +220,14 @@ export function BlogIndexPage() {
 
       {/* Articles Grid */}
       <div className="mt-10 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-        {filteredPosts.map((post) => (
+        {filteredPosts.map((post) => {
+          const postHref = `${isGuidePost(post) ? '/guides' : '/blog'}/${post.slug}`;
+          return (
           <article
             key={post.id}
             className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-all duration-300 hover:shadow-md hover:border-sand/60"
           >
-            <Link to={`/blog/${post.slug}`} className="relative block aspect-[16/10] overflow-hidden bg-sand/10">
+            <Link to={postHref} className="relative block aspect-[16/10] overflow-hidden bg-sand/10">
               <img
                 src={post.coverImage}
                 alt={post.coverAlt}
@@ -203,7 +248,7 @@ export function BlogIndexPage() {
                 </div>
 
                 <h2 className="mt-2.5 font-serif text-xl sm:text-2xl font-medium leading-snug text-forest group-hover:text-terra transition-colors">
-                  <Link to={`/blog/${post.slug}`}>{post.title}</Link>
+                  <Link to={postHref}>{post.title}</Link>
                 </h2>
 
                 <p className="mt-2.5 text-xs sm:text-sm leading-relaxed text-ink/75 line-clamp-3 font-sans">
@@ -225,7 +270,7 @@ export function BlogIndexPage() {
                 </div>
 
                 <Link
-                  to={`/blog/${post.slug}`}
+                  to={postHref}
                   className="text-xs font-semibold text-terra hover:underline flex items-center gap-1"
                 >
                   Read guide →
@@ -233,19 +278,22 @@ export function BlogIndexPage() {
               </div>
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
-/* ---------------- Single Blog Post Page ---------------- */
+/* ---------------- Single Blog / Guide Post Page ---------------- */
 export function BlogPostDetailPage() {
   const { slug } = useParams<{ slug: string }>();
+  const location = useLocation();
+  const isGuideRoute = location.pathname.startsWith('/guides/');
   const [copied, setCopied] = useState(false);
 
   const post = useMemo(() => {
-    return BLOG_POSTS.find((p) => p.slug === slug);
+    return slug ? findJournalPostBySlug(slug) : undefined;
   }, [slug]);
 
   const productsQuery = useQuery({
@@ -278,7 +326,8 @@ export function BlogPostDetailPage() {
 
   const markdownBlocks = useMemo(() => (post ? parseMarkdownBlocks(post.content) : []), [post]);
 
-  const currentUrl = `https://www.dearhills.in/blog/${slug ?? ''}`;
+  const routePrefix = isGuideRoute ? '/guides' : '/blog';
+  const currentUrl = `https://www.dearhills.in${routePrefix}/${slug ?? ''}`;
 
   const jsonLd = useMemo(() => {
     if (!post) return undefined;
@@ -289,7 +338,7 @@ export function BlogPostDetailPage() {
       {
         '@type': 'BlogPosting',
         headline: post.title,
-        description: post.metaDescription,
+        description: fitSeoDescription(post.metaDescription, 158),
         image: [coverUrl],
         datePublished: post.publishedAt,
         dateModified: post.publishedAt,
@@ -301,7 +350,7 @@ export function BlogPostDetailPage() {
         },
         publisher: {
           '@type': 'Organization',
-          name: 'Dear Hills',
+          name: BRAND_NAME,
           logo: {
             '@type': 'ImageObject',
             url: 'https://www.dearhills.in/favicon-192x192.png',
@@ -318,7 +367,12 @@ export function BlogPostDetailPage() {
         '@type': 'BreadcrumbList',
         itemListElement: [
           { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.dearhills.in' },
-          { '@type': 'ListItem', position: 2, name: 'Mountain Journal', item: 'https://www.dearhills.in/blog' },
+          {
+            '@type': 'ListItem',
+            position: 2,
+            name: isGuideRoute ? 'Himalayan Guides' : 'Mountain Journal',
+            item: `https://www.dearhills.in${routePrefix}`,
+          },
           { '@type': 'ListItem', position: 3, name: post.title, item: currentUrl },
         ],
       },
@@ -342,12 +396,14 @@ export function BlogPostDetailPage() {
       '@context': 'https://schema.org',
       '@graph': graph,
     };
-  }, [post, currentUrl]);
+  }, [post, currentUrl, isGuideRoute, routePrefix]);
 
   usePageMeta({
-    title: post ? post.metaTitle : 'Story Not Found — Dear Hills Blog',
-    description: post ? post.metaDescription : 'The requested Himalayan heritage story could not be found.',
-    canonicalPath: `/blog/${slug ?? ''}`,
+    title: post ? fitSeoTitle(post.metaTitle, 60, BRAND_NAME) : `Story Not Found · ${BRAND_NAME}`,
+    description: post
+      ? fitSeoDescription(post.metaDescription, 158)
+      : 'The requested Himalayan heritage guide could not be found.',
+    canonicalPath: `${routePrefix}/${slug ?? ''}`,
     image: post?.coverImage,
     ogType: 'article',
     jsonLd,
@@ -355,7 +411,7 @@ export function BlogPostDetailPage() {
   });
 
   if (!post) {
-    return <Navigate to="/blog" replace />;
+    return <Navigate to={routePrefix} replace />;
   }
 
   const handleCopyLink = async () => {
@@ -417,6 +473,13 @@ export function BlogPostDetailPage() {
           className="h-full w-full object-cover"
         />
       </div>
+
+      {isGuidePost(post) && post.factCheckRequired ? (
+        <div className="mt-6 max-w-3xl mx-auto rounded-xl border border-amber-300/70 bg-amber-50/70 px-4 py-3 text-xs leading-relaxed text-amber-950">
+          <strong className="font-semibold">Editorial verification note:</strong>{' '}
+          {post.verificationNote ?? 'Specific GI registry numbers, historic dates, and regional cooperative filings referenced in this educational guide should be checked against official producer and registry records.'}
+        </div>
+      ) : null}
 
       {/* Content Body */}
       <div className="mt-10 max-w-3xl mx-auto prose prose-emerald font-sans leading-relaxed text-ink/80 text-[15px] sm:text-base">

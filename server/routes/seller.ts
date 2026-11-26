@@ -7,19 +7,30 @@ import { env } from '../env.js';
 import { execute, queryAll, queryOne, tx, type Db } from '../db.js';
 import { requireApprovedSeller, requireAuth } from '../lib/auth.js';
 import { audit } from '../lib/audit.js';
-import { badRequest, conflict, notFound, parse } from '../lib/http.js';
+import { badRequest, conflict, notFound, parse, safeTrackingUrlSchema } from '../lib/http.js';
 import { newId, uniqueSlug } from '../lib/ids.js';
 import {
   calculateFileSha256,
+  cleanupUploadedFile,
   deletePrivateDoc,
   documentUpload,
   hasValidFileSignature,
   imageUpload,
   resolvePrivateDocPath,
+  sendPrivateDocument,
 } from '../lib/uploads.js';
+import { decryptPayoutDetails, encryptPayoutDetails } from '../lib/payoutCrypto.js';
 import { notify, escapeHtml } from '../lib/email.js';
 import { COMMISSION_BASIS_NOTE } from '../lib/pricing.js';
-import { firstComplianceError, validateProductCompliance, COMPLIANCE_GUIDES } from '../lib/productCompliance.js';
+import {
+  countDescriptionWords,
+  findProtectedClaimViolations,
+  firstComplianceError,
+  sellerAcceptedProofFlags,
+  validateProductCompliance,
+  COMPLIANCE_GUIDES,
+} from '../lib/productCompliance.js';
+import { slugifyValue } from '../lib/himalayan.js';
 import { sellerOrderAction, type SellerAction } from '../lib/orders.js';
 import {
   applyApplicantWithdrawal,
@@ -171,6 +182,15 @@ const productSchema = z.object({
   foodInfo: z.string().trim().max(1500).optional(),
   originPlace: z.string().trim().max(120).optional(),
   region: z.string().trim().max(80).optional(),
+  regionSlug: z.string().trim().max(80).optional(),
+  districtVillage: z.string().trim().max(120).optional(),
+  craftType: z.string().trim().max(120).optional(),
+  craftSlug: z.string().trim().max(80).optional(),
+  technique: z.string().trim().max(80).optional(),
+  giRequested: z.boolean().optional(),
+  giName: z.string().trim().max(160).optional(),
+  giRegistrationRef: z.string().trim().max(80).optional(),
+  madeToOrder: z.boolean().optional(),
   varietyGrade: z.string().trim().max(120).optional(),
   harvestInfo: z.string().trim().max(200).optional(),
   dispatchConditions: z.string().trim().max(200).optional(),
@@ -187,12 +207,12 @@ const productSchema = z.object({
       allergenInfo: z.string().trim().max(300).optional(),
     })
     .optional(),
-});
+}).strict();
 
-const productUpdateSchema = productSchema.extend({
+const productUpdateSchema = productSchema.partial().extend({
   estimatedCostPaise: z.number().int().min(0).max(10_000_000).optional(),
   packagingCostPaise: z.number().int().min(0).max(10_000_000).optional(),
-});
+}).strict();
 
 function emptyToNull(value: string | undefined): string | null {
   return value && value.trim() ? value.trim() : null;
@@ -274,6 +294,11 @@ export function sellerRouter(db: Db): Router {
         payoutStatus: seller.payout_status,
         region: seller.region,
         village: seller.village,
+        craftSpecialty: (seller as typeof seller & { craft_specialty?: string | null }).craft_specialty ?? null,
+        yearsOfPractice: (seller as typeof seller & { years_of_practice?: number | null }).years_of_practice ?? null,
+        workshopPhotos: (seller as typeof seller & { workshop_photos_json?: string | null }).workshop_photos_json
+          ? parseJson<string[]>(String((seller as typeof seller & { workshop_photos_json?: string | null }).workshop_photos_json), [])
+          : [],
         tagline: seller.tagline,
         story: seller.story,
         logoUrl: seller.logo_url,
@@ -947,11 +972,7 @@ export function sellerRouter(db: Db): Router {
       throw notFound('Document file not found on storage.');
     }
 
-    res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.original_name)}"`);
-    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    fs.createReadStream(resolved).pipe(res);
+    sendPrivateDocument(res, resolved, doc.mime_type, doc.original_name);
   });
 
   /* -------------------------- Approved seller -------------------------- */
@@ -1355,6 +1376,18 @@ export function sellerRouter(db: Db): Router {
         originPlace: product.origin_place,
         originVerified: product.origin_verified === 1,
         region: product.region,
+        regionSlug: (product.region_slug as string | null) ?? null,
+        districtVillage: (product.district_village as string | null) ?? null,
+        craftType: (product.craft_type as string | null) ?? null,
+        craftSlug: (product.craft_slug as string | null) ?? null,
+        technique: (product.technique as string | null) ?? null,
+        giTagged: product.gi_tagged === 1,
+        giRequested: product.gi_requested === 1,
+        giName: (product.gi_name as string | null) ?? null,
+        giRegistrationRef: (product.gi_registration_ref as string | null) ?? null,
+        madeToOrder: product.made_to_order === 1,
+        descriptionWordCount: countDescriptionWords(String(product.description ?? '')),
+        needsDescriptionRewrite: countDescriptionWords(String(product.description ?? '')) < 100,
         varietyGrade: (product.variety_grade as string | null) ?? null,
         harvestInfo: (product.harvest_info as string | null) ?? null,
         dispatchConditions: (product.dispatch_conditions as string | null) ?? null,
@@ -1415,15 +1448,19 @@ export function sellerRouter(db: Db): Router {
 
     const productId = newId('prd_');
     const slug = uniqueSlug(input.name, (candidate) => Boolean(queryOne(db, 'SELECT 1 FROM products WHERE slug = ?', candidate)));
+    const resolvedRegionSlug = input.regionSlug?.trim() ? slugifyValue(input.regionSlug) : input.region?.trim() ? slugifyValue(input.region) : null;
+    const resolvedCraftSlug = input.craftSlug?.trim() ? slugifyValue(input.craftSlug) : input.craftType?.trim() ? slugifyValue(input.craftType) : null;
     tx(db, () => {
       execute(
         db,
         `INSERT INTO products
            (id, seller_id, category_id, name, slug, short_description, description, price_paise, compare_at_price_paise,
             sku, unit, weight_g, dimensions, materials, care_instructions, food_info, compliance_json,
-            origin_place, region, variety_grade, harvest_info, dispatch_conditions, estimated_cost_paise, packaging_cost_paise,
+            origin_place, region, region_slug, district_village, craft_type, craft_slug, technique,
+            gi_tagged, gi_requested, gi_name, gi_registration_ref, made_to_order,
+            variety_grade, harvest_info, dispatch_conditions, estimated_cost_paise, packaging_cost_paise,
             attributes, status, is_demo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0)`,
         productId,
         id,
         input.categoryId,
@@ -1443,6 +1480,15 @@ export function sellerRouter(db: Db): Router {
         input.compliance ? JSON.stringify(input.compliance) : null,
         emptyToNull(input.originPlace),
         emptyToNull(input.region),
+        resolvedRegionSlug,
+        emptyToNull(input.districtVillage),
+        emptyToNull(input.craftType),
+        resolvedCraftSlug,
+        emptyToNull(input.technique),
+        input.giRequested ? 1 : 0,
+        emptyToNull(input.giName),
+        emptyToNull(input.giRegistrationRef),
+        input.madeToOrder ? 1 : 0,
         emptyToNull(input.varietyGrade),
         emptyToNull(input.harvestInfo),
         emptyToNull(input.dispatchConditions),
@@ -1453,10 +1499,19 @@ export function sellerRouter(db: Db): Router {
       execute(db, 'INSERT INTO inventory (product_id, quantity) VALUES (?, 0)', productId);
       audit(db, req.user!, 'product.created', 'product', productId, null, { name: input.name, productSeller: id });
     });
-    res.status(201).json({ id: productId, slug, sku, status: 'draft', message: 'Draft saved. Add images, stock, and submit for review.' });
+    const wordCount = countDescriptionWords(description);
+    res.status(201).json({
+      id: productId,
+      slug,
+      sku,
+      status: 'draft',
+      descriptionWordCount: wordCount,
+      needsDescriptionRewrite: wordCount < 100,
+      message: 'Draft saved. Add images, stock, and submit for review.',
+    });
   });
 
-  router.patch('/products/:id', (req, res) => {
+  router.patch('/products/:id', async (req, res) => {
     const id = sellerId(req);
     const existing = queryOne<Record<string, unknown> & {
       id: string;
@@ -1466,10 +1521,20 @@ export function sellerRouter(db: Db): Router {
       short_description: string;
       description: string;
       category_id: string;
+      unit: string;
+      weight_g: number | null;
+      dimensions: string | null;
       materials: string | null;
+      care_instructions: string | null;
+      food_info: string | null;
+      compliance_json: string | null;
       origin_place: string | null;
       region: string | null;
+      variety_grade: string | null;
+      harvest_info: string | null;
+      dispatch_conditions: string | null;
       compare_at_price_paise: number | null;
+      attributes: string | null;
       sku: string;
     }>(db, 'SELECT * FROM products WHERE id = ? AND seller_id = ?', req.params.id, id);
     if (!existing) throw notFound('Product not found.');
@@ -1477,18 +1542,19 @@ export function sellerRouter(db: Db): Router {
       throw conflict('This listing is in review and cannot be edited until a reviewer responds.');
     }
     const input = parse(productUpdateSchema, req.body);
-    if (
-      input.compareAtPricePaise !== null &&
-      input.compareAtPricePaise !== undefined &&
-      input.compareAtPricePaise < input.pricePaise
-    ) {
+    const nextPricePaise = input.pricePaise ?? existing.price_paise;
+    const nextCompareAtPaise =
+      input.compareAtPricePaise !== undefined ? input.compareAtPricePaise : existing.compare_at_price_paise;
+    if (nextCompareAtPaise !== null && nextCompareAtPaise !== undefined && nextCompareAtPaise < nextPricePaise) {
       throw badRequest('Compare-at price must be at least the selling price.', {
         compareAtPricePaise: 'Must be at least the selling price.',
       });
     }
-    const category = queryOne<{ id: string }>(db, 'SELECT id FROM categories WHERE id = ? AND is_active = 1', input.categoryId);
+    const nextCategoryId = input.categoryId ?? existing.category_id;
+    const category = queryOne<{ id: string }>(db, 'SELECT id FROM categories WHERE id = ? AND is_active = 1', nextCategoryId);
     if (!category) throw badRequest('Choose a valid category.', { categoryId: 'Invalid category.' });
-    const effectiveSku = (input.sku || '').trim() || existing.sku;
+    const nextName = input.name ?? existing.name;
+    const effectiveSku = (input.sku ?? '').trim() || existing.sku;
     if (
       effectiveSku !== existing.sku &&
       queryOne(db, 'SELECT 1 FROM products WHERE seller_id = ? AND sku = ? AND id != ?', id, effectiveSku, existing.id)
@@ -1497,15 +1563,55 @@ export function sellerRouter(db: Db): Router {
     }
     const shortDesc: string = input.shortDescription?.trim() || existing.short_description;
     const desc: string = input.description?.trim() || existing.description;
+    const nextMaterials = input.materials !== undefined ? emptyToNull(input.materials) : existing.materials;
+    const nextOriginPlace = input.originPlace !== undefined ? emptyToNull(input.originPlace) : existing.origin_place;
+    const nextRegion = input.region !== undefined ? emptyToNull(input.region) : existing.region;
+    const nextRegionSlug =
+      input.regionSlug !== undefined
+        ? emptyToNull(slugifyValue(input.regionSlug))
+        : input.region !== undefined
+          ? emptyToNull(slugifyValue(input.region))
+          : ((existing.region_slug as string | null) ?? null);
+    const nextDistrictVillage =
+      input.districtVillage !== undefined
+        ? emptyToNull(input.districtVillage)
+        : ((existing.district_village as string | null) ?? null);
+    const nextCraftType =
+      input.craftType !== undefined ? emptyToNull(input.craftType) : ((existing.craft_type as string | null) ?? null);
+    const nextCraftSlug =
+      input.craftSlug !== undefined
+        ? emptyToNull(slugifyValue(input.craftSlug))
+        : input.craftType !== undefined
+          ? emptyToNull(slugifyValue(input.craftType))
+          : ((existing.craft_slug as string | null) ?? null);
+    const nextTechnique =
+      input.technique !== undefined ? emptyToNull(input.technique) : ((existing.technique as string | null) ?? null);
+    const nextGiRequested =
+      input.giRequested !== undefined ? (input.giRequested ? 1 : 0) : Number(existing.gi_requested ?? 0);
+    const nextGiName = input.giName !== undefined ? emptyToNull(input.giName) : ((existing.gi_name as string | null) ?? null);
+    const nextGiRegRef =
+      input.giRegistrationRef !== undefined
+        ? emptyToNull(input.giRegistrationRef)
+        : ((existing.gi_registration_ref as string | null) ?? null);
+    const nextMadeToOrder =
+      input.madeToOrder !== undefined ? (input.madeToOrder ? 1 : 0) : Number(existing.made_to_order ?? 0);
     const materialChange =
-      input.name !== existing.name ||
-      input.pricePaise !== existing.price_paise ||
+      nextName !== existing.name ||
+      nextPricePaise !== existing.price_paise ||
       desc !== existing.description ||
-      input.categoryId !== existing.category_id ||
-      (input.materials ?? null) !== existing.materials ||
-      (input.originPlace ?? null) !== existing.origin_place ||
-      (input.region ?? null) !== existing.region ||
-      (input.compareAtPricePaise ?? null) !== existing.compare_at_price_paise;
+      nextCategoryId !== existing.category_id ||
+      nextMaterials !== existing.materials ||
+      nextOriginPlace !== existing.origin_place ||
+      nextRegion !== existing.region ||
+      nextCraftType !== ((existing.craft_type as string | null) ?? null) ||
+      nextGiName !== ((existing.gi_name as string | null) ?? null) ||
+      (nextCompareAtPaise ?? null) !== existing.compare_at_price_paise;
+    const priceChanged = nextPricePaise !== existing.price_paise;
+    const priceChangePercent =
+      priceChanged && existing.price_paise > 0
+        ? Math.round((Math.abs(nextPricePaise - existing.price_paise) * 100) / existing.price_paise)
+        : 0;
+    const priceSpikeFlagged = priceChanged && priceChangePercent >= 50;
     const nextStatus =
       existing.status === 'approved' && materialChange
         ? 'pending'
@@ -1518,46 +1624,82 @@ export function sellerRouter(db: Db): Router {
         `UPDATE products SET category_id = ?, name = ?, short_description = ?, description = ?, price_paise = ?,
                 compare_at_price_paise = ?, sku = ?, unit = ?, weight_g = ?, dimensions = ?, materials = ?,
                 care_instructions = ?, food_info = ?, compliance_json = ?, origin_place = ?, region = ?,
+                region_slug = ?, district_village = ?, craft_type = ?, craft_slug = ?, technique = ?,
+                gi_requested = ?, gi_name = ?, gi_registration_ref = ?, made_to_order = ?,
                 variety_grade = ?, harvest_info = ?, dispatch_conditions = ?,
                 estimated_cost_paise = COALESCE(?, estimated_cost_paise), packaging_cost_paise = COALESCE(?, packaging_cost_paise),
                 attributes = ?, status = ?, rejection_reason = CASE WHEN ? = 'pending' THEN NULL ELSE rejection_reason END, updated_at = ?
           WHERE id = ? AND seller_id = ?`,
-        input.categoryId,
-        input.name,
+        nextCategoryId,
+        nextName,
         shortDesc,
         desc,
-        input.pricePaise,
-        input.compareAtPricePaise ?? null,
+        nextPricePaise,
+        nextCompareAtPaise ?? null,
         effectiveSku,
-        input.unit,
-        input.weightG ?? null,
-        emptyToNull(input.dimensions),
-        emptyToNull(input.materials),
-        emptyToNull(input.careInstructions),
-        emptyToNull(input.foodInfo),
-        input.compliance ? JSON.stringify(input.compliance) : null,
-        emptyToNull(input.originPlace),
-        emptyToNull(input.region),
-        emptyToNull(input.varietyGrade),
-        emptyToNull(input.harvestInfo),
-        emptyToNull(input.dispatchConditions),
+        input.unit ?? existing.unit,
+        input.weightG !== undefined ? input.weightG : existing.weight_g,
+        input.dimensions !== undefined ? emptyToNull(input.dimensions) : existing.dimensions,
+        nextMaterials,
+        input.careInstructions !== undefined ? emptyToNull(input.careInstructions) : existing.care_instructions,
+        input.foodInfo !== undefined ? emptyToNull(input.foodInfo) : existing.food_info,
+        input.compliance !== undefined ? JSON.stringify(input.compliance) : existing.compliance_json,
+        nextOriginPlace,
+        nextRegion,
+        nextRegionSlug,
+        nextDistrictVillage,
+        nextCraftType,
+        nextCraftSlug,
+        nextTechnique,
+        nextGiRequested,
+        nextGiName,
+        nextGiRegRef,
+        nextMadeToOrder,
+        input.varietyGrade !== undefined ? emptyToNull(input.varietyGrade) : existing.variety_grade,
+        input.harvestInfo !== undefined ? emptyToNull(input.harvestInfo) : existing.harvest_info,
+        input.dispatchConditions !== undefined ? emptyToNull(input.dispatchConditions) : existing.dispatch_conditions,
         input.estimatedCostPaise ?? null,
         input.packagingCostPaise ?? null,
-        input.attributes ? JSON.stringify(input.attributes) : null,
+        input.attributes !== undefined ? JSON.stringify(input.attributes) : existing.attributes,
         nextStatus,
         nextStatus,
         new Date().toISOString(),
         existing.id,
         id,
       );
-      audit(db, req.user!, 'product.updated', 'product', existing.id, { status: existing.status }, {
-        status: nextStatus,
-        materialChange,
-      });
+      audit(
+        db,
+        req.user!,
+        priceChanged ? 'product.price_or_listing_updated' : 'product.updated',
+        'product',
+        existing.id,
+        {
+          status: existing.status,
+          pricePaise: existing.price_paise,
+          compareAtPricePaise: existing.compare_at_price_paise,
+        },
+        {
+          status: nextStatus,
+          pricePaise: nextPricePaise,
+          compareAtPricePaise: nextCompareAtPaise ?? null,
+          materialChange,
+          ...(priceChanged ? { priceChangePercent, priceSpikeFlagged } : {}),
+        },
+      );
     });
+    if (priceSpikeFlagged && existing.status === 'approved') {
+      await notify(db, {
+        email: env.email.adminNotificationEmail,
+        type: 'security_price_spike',
+        subject: `Large price change flagged for review — ${existing.sku}`,
+        body: `<p>A seller updated the price of <strong>${escapeHtml(nextName)}</strong> (${escapeHtml(existing.sku)}) by ${priceChangePercent}% (from ₹${(existing.price_paise / 100).toFixed(2)} to ₹${(nextPricePaise / 100).toFixed(2)}).</p><p>The listing has been moved to pending moderation for admin review.</p>`,
+        dedupeKey: `price-spike:${existing.id}:${nextPricePaise}:${new Date().toISOString().slice(0, 13)}`,
+      });
+    }
     res.json({
       ok: true,
       status: nextStatus,
+      priceSpikeFlagged,
       message:
         nextStatus === 'pending'
           ? 'Saved. Material changes to a live listing return it to moderation.'
@@ -1573,10 +1715,13 @@ export function sellerRouter(db: Db): Router {
       String(req.params.id),
       id,
     );
-    if (!product) throw notFound('Product not found.');
+    if (!product) {
+      cleanupUploadedFile(req.file?.path);
+      throw notFound('Product not found.');
+    }
     if (!req.file) throw badRequest('Choose an image.');
     if (!hasValidFileSignature(req.file.path, 'image')) {
-      fs.unlinkSync(req.file.path);
+      cleanupUploadedFile(req.file.path);
       throw badRequest('That file does not look like a valid JPEG, PNG, or WebP image.');
     }
     const count = queryOne<{ count: number }>(
@@ -1584,7 +1729,10 @@ export function sellerRouter(db: Db): Router {
       'SELECT COUNT(*) AS count FROM product_images WHERE product_id = ?',
       String(product.id),
     );
-    if ((count?.count ?? 0) >= 6) throw conflict('A product can have at most 6 images.');
+    if ((count?.count ?? 0) >= 6) {
+      cleanupUploadedFile(req.file.path);
+      throw conflict('A product can have at most 6 images.');
+    }
     const rawAlt = String(req.body.alt ?? '').trim();
     const alt = rawAlt.length >= 3 ? rawAlt : `${product.name || 'Authentic Himachali Creation'} photograph`;
     const url = `/uploads/${path.basename(req.file.filename)}`;
@@ -1692,8 +1840,21 @@ export function sellerRouter(db: Db): Router {
       product,
       sellerFssaiNumber: typeof applicationData.fssaiNumber === 'string' ? applicationData.fssaiNumber : null,
     });
-    if (Object.keys(compliance.errors).length) {
-      throw badRequest(firstComplianceError(compliance.errors), compliance.errors);
+    const proofFlags = sellerAcceptedProofFlags(db, id);
+    const productExtra = queryOne<{ short_description: string; gi_tagged: number }>(
+      db,
+      'SELECT short_description, gi_tagged FROM products WHERE id = ?',
+      product.id,
+    );
+    const claimCheck = findProtectedClaimViolations({
+      texts: [product.name, productExtra?.short_description, product.description, product.materials],
+      hasAcceptedOriginOrCraftProof: proofFlags.hasAcceptedOriginOrCraftProof,
+      giVerifiedByAdmin: productExtra?.gi_tagged === 1 || proofFlags.hasAcceptedGiProof,
+      hasAcceptedOrganicProof: proofFlags.hasAcceptedOrganicProof,
+    });
+    const mergedErrors = { ...compliance.errors, ...claimCheck.errors };
+    if (Object.keys(mergedErrors).length) {
+      throw badRequest(firstComplianceError(mergedErrors), mergedErrors);
     }
     const now = new Date().toISOString();
     execute(
@@ -1988,7 +2149,7 @@ export function sellerRouter(db: Db): Router {
         action: z.enum(!env.isProduction ? ['confirm', 'accept', 'pack', 'ship', 'deliver', 'cancel', 'reject'] : ['confirm', 'accept', 'pack', 'ship', 'cancel', 'reject']),
         carrier: z.string().trim().max(80).optional(),
         trackingNumber: z.string().trim().max(120).optional(),
-        trackingUrl: z.string().trim().url().max(500).optional().or(z.literal('')),
+        trackingUrl: safeTrackingUrlSchema,
         note: z.string().trim().max(500).optional(),
         reason: z.string().trim().max(500).optional(),
       }),
@@ -2463,6 +2624,11 @@ export function sellerRouter(db: Db): Router {
         coverUrl: seller.cover_url,
         region: seller.region,
         village: seller.village,
+        craftSpecialty: (seller as SellerRow & { craft_specialty?: string | null }).craft_specialty ?? null,
+        yearsOfPractice: (seller as SellerRow & { years_of_practice?: number | null }).years_of_practice ?? null,
+        workshopPhotos: (seller as SellerRow & { workshop_photos_json?: string | null }).workshop_photos_json
+          ? parseJson<string[]>(String((seller as SellerRow & { workshop_photos_json?: string | null }).workshop_photos_json), [])
+          : [],
         sellerCategory: seller.seller_category,
         operatingAddress: seller.operating_address
           ? parseJson<Record<string, unknown>>(seller.operating_address, {})
@@ -2476,10 +2642,13 @@ export function sellerRouter(db: Db): Router {
   router.post('/profile/image/:kind', imageUpload().single('image'), (req, res) => {
     const id = sellerId(req);
     const kind = String(req.params.kind);
-    if (kind !== 'logo' && kind !== 'cover') throw badRequest('Choose logo or cover.');
+    if (kind !== 'logo' && kind !== 'cover') {
+      cleanupUploadedFile(req.file?.path);
+      throw badRequest('Choose logo or cover.');
+    }
     if (!req.file) throw badRequest('Choose an image.');
     if (!hasValidFileSignature(req.file.path, 'image')) {
-      fs.unlinkSync(req.file.path);
+      cleanupUploadedFile(req.file.path);
       throw badRequest('That file does not look like a valid JPEG, PNG, or WebP image.');
     }
     const column = kind === 'logo' ? 'logo_url' : 'cover_url';
@@ -2546,6 +2715,9 @@ export function sellerRouter(db: Db): Router {
         story: z.string().trim().max(3000).optional(),
         region: z.string().trim().max(80).optional(),
         village: z.string().trim().max(120).optional(),
+        craftSpecialty: z.string().trim().max(160).optional(),
+        yearsOfPractice: z.number().int().min(0).max(200).nullable().optional(),
+        workshopPhotos: z.array(z.string().trim().max(500)).max(8).optional(),
         operatingAddress: z
           .object({
             line1: z.string().trim().min(4).max(200),
@@ -2567,12 +2739,18 @@ export function sellerRouter(db: Db): Router {
     execute(
       db,
       `UPDATE seller_profiles SET business_name = ?, tagline = ?, story = ?, region = ?, village = ?,
+              craft_specialty = COALESCE(?, craft_specialty),
+              years_of_practice = COALESCE(?, years_of_practice),
+              workshop_photos_json = COALESCE(?, workshop_photos_json),
               operating_address = COALESCE(?, operating_address), updated_at = ? WHERE id = ?`,
       input.businessName,
       emptyToNull(input.tagline),
       emptyToNull(input.story),
       emptyToNull(input.region),
       emptyToNull(input.village),
+      input.craftSpecialty !== undefined ? emptyToNull(input.craftSpecialty) : null,
+      input.yearsOfPractice ?? null,
+      input.workshopPhotos !== undefined ? JSON.stringify(input.workshopPhotos) : null,
       input.operatingAddress ? JSON.stringify(input.operatingAddress) : null,
       new Date().toISOString(),
       id,
@@ -2593,14 +2771,7 @@ export function sellerRouter(db: Db): Router {
     );
     if (!seller) throw notFound('Seller profile not found.');
 
-    let details: Record<string, unknown> | null = null;
-    if (seller.payout_details_json) {
-      try {
-        details = JSON.parse(seller.payout_details_json);
-      } catch {
-        details = null;
-      }
-    }
+    let details: Record<string, unknown> | null = decryptPayoutDetails(seller.payout_details_json);
     if (!details) {
       const app = latestApplication(db, id);
       if (app?.payout_json) {
@@ -2667,7 +2838,7 @@ export function sellerRouter(db: Db): Router {
       `UPDATE seller_profiles
           SET payout_details_json = ?, payout_status = 'pending_verification', updated_at = ?
         WHERE id = ?`,
-      JSON.stringify(cleanDetails),
+      encryptPayoutDetails(cleanDetails),
       new Date().toISOString(),
       id,
     );

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { createApp, type AppDeps } from '../app.js';
 import { execute, initDb, queryAll, queryOne, type Db } from '../db.js';
 import { hashPassword } from '../lib/auth.js';
+import { seedDefaultRegionsAndCrafts } from '../lib/himalayan.js';
 import type { RazorpayPayment } from '../lib/payments.js';
 
 export const TEST_PASSWORD = 'TestPass123!';
@@ -77,10 +78,19 @@ export function resetDb(db: Db): void {
     "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'schema_migrations'",
   );
   db.exec('PRAGMA foreign_keys = OFF');
+  db.exec('DROP TRIGGER IF EXISTS trg_audit_logs_no_delete');
   for (const table of tables) {
     db.exec(`DELETE FROM "${table.name}"`);
   }
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_delete
+    BEFORE DELETE ON audit_logs
+    BEGIN
+      SELECT RAISE(ABORT, 'audit_logs is append-only');
+    END;
+  `);
   db.exec('PRAGMA foreign_keys = ON');
+  seedDefaultRegionsAndCrafts(db);
 }
 
 function addUser(

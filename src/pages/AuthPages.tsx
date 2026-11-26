@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { isSafeInternalPath } from '@shared/urls';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { usePageMeta } from '@/lib/usePageMeta';
 import { useAuth } from '@/lib/session';
@@ -79,7 +80,7 @@ function GoogleAuthSection({
   const { config } = useAuth();
   const [linking, setLinking] = useState<{ linkToken: string; email: string } | null>(null);
   const [linkPassword, setLinkPassword] = useState('');
-  const [mfa, setMfa] = useState<{ challengeToken: string } | null>(null);
+  const [mfa, setMfa] = useState<{ challengeToken: string; pendingLink?: { linkToken: string; password: string } } | null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [linkingBusy, setLinkingBusy] = useState(false);
@@ -118,10 +119,19 @@ function GoogleAuthSection({
     setLinkingBusy(true);
     setError(null);
     try {
-      await api('/auth/google/link', {
+      const result = await api<GoogleSignInResult>('/auth/google/link', {
         method: 'POST',
         body: { linkToken: linking.linkToken, password: linkPassword },
       });
+      if (result.mfaRequired && result.challengeToken) {
+        setMfa({
+          challengeToken: result.challengeToken,
+          pendingLink: { linkToken: linking.linkToken, password: linkPassword },
+        });
+        setLinking(null);
+        setLinkPassword('');
+        return;
+      }
       setLinking(null);
       setLinkPassword('');
       await onAuthenticated();
@@ -138,10 +148,22 @@ function GoogleAuthSection({
     setLinkingBusy(true);
     setError(null);
     try {
-      await api('/auth/mfa/verify', {
-        method: 'POST',
-        body: { challengeToken: mfa.challengeToken, code: mfaCode },
-      });
+      if (mfa.pendingLink) {
+        await api('/auth/google/link', {
+          method: 'POST',
+          body: {
+            linkToken: mfa.pendingLink.linkToken,
+            password: mfa.pendingLink.password,
+            challengeToken: mfa.challengeToken,
+            code: mfaCode,
+          },
+        });
+      } else {
+        await api('/auth/mfa/verify', {
+          method: 'POST',
+          body: { challengeToken: mfa.challengeToken, code: mfaCode },
+        });
+      }
       setMfa(null);
       setMfaCode('');
       await onAuthenticated();
@@ -252,7 +274,7 @@ export function LoginPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const rawNext = params.get('next');
-  const next = rawNext && rawNext.startsWith('/') && rawNext !== '/account' ? rawNext : '/';
+  const next = rawNext && isSafeInternalPath(rawNext) && rawNext !== '/account' ? rawNext : '/';
 
   const completeSignIn = async (message = 'Signed in.') => {
     await queryClient.invalidateQueries({ queryKey: ['session'] });
@@ -415,7 +437,7 @@ export function RegisterPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const rawNext = params.get('next');
-  const next = rawNext && rawNext.startsWith('/') && rawNext !== '/account' ? rawNext : '/';
+  const next = rawNext && isSafeInternalPath(rawNext) && rawNext !== '/account' ? rawNext : '/';
 
   const completeRegistration = async (message: string) => {
     await queryClient.invalidateQueries({ queryKey: ['session'] });

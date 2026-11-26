@@ -57,7 +57,14 @@ export function MakerDetailPage() {
     queryKey: ['maker', slug],
     queryFn: () =>
       api<{
-        seller: PublicSeller & { village: string | null; approvedAt: string | null; sellerCategory?: string | null };
+        seller: PublicSeller & {
+          village: string | null;
+          approvedAt: string | null;
+          sellerCategory?: string | null;
+          craftSpecialty?: string | null;
+          yearsOfPractice?: number | null;
+          workshopPhotos?: string[];
+        };
         products: { items: ProductSummary[] };
       }>(`/sellers/${encodeURIComponent(slug)}`),
     enabled: Boolean(slug),
@@ -320,14 +327,40 @@ export function MakerDetailPage() {
                 <p className="text-[10px] uppercase tracking-wider text-muted">Approved listings</p>
               </div>
               <div className="rounded-lg bg-[#F7F1E7] p-3">
-                <p className="font-serif text-lg font-bold text-[#66745A]">{seller.region ?? 'Himachal'}</p>
+                <p className="font-serif text-lg font-bold text-[#66745A]">{seller.region ?? 'Himalayas'}</p>
                 <p className="text-[10px] uppercase tracking-wider text-muted">Seller region</p>
               </div>
-              <div className="rounded-lg bg-[#F7F1E7] p-3 col-span-2 sm:col-span-1">
-                <p className="font-serif text-lg font-bold text-[#D98263]">Reviewed</p>
-                <p className="text-[10px] uppercase tracking-wider text-muted">Seller status</p>
-              </div>
+              {seller.craftSpecialty ? (
+                <div className="rounded-lg bg-[#F7F1E7] p-3">
+                  <p className="font-serif text-base font-bold text-[#172321]">{seller.craftSpecialty}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted">Craft specialty</p>
+                </div>
+              ) : null}
+              {seller.yearsOfPractice != null ? (
+                <div className="rounded-lg bg-[#F7F1E7] p-3">
+                  <p className="font-serif text-lg font-bold text-[#D98263]">{seller.yearsOfPractice} yrs</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted">Years of practice</p>
+                </div>
+              ) : (
+                <div className="rounded-lg bg-[#F7F1E7] p-3 col-span-2 sm:col-span-1">
+                  <p className="font-serif text-lg font-bold text-[#D98263]">Reviewed</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted">Seller status</p>
+                </div>
+              )}
             </div>
+            {seller.workshopPhotos && seller.workshopPhotos.length > 0 ? (
+              <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3 border-t border-[#E4DACE]/70 pt-5">
+                {seller.workshopPhotos.map((photoUrl, idx) => (
+                  <img
+                    key={`${photoUrl}-${idx}`}
+                    src={photoUrl}
+                    alt={`${seller.name} workshop scene ${idx + 1}`}
+                    className="aspect-[4/3] w-full rounded-lg border border-[#E4DACE] object-cover"
+                    loading="lazy"
+                  />
+                ))}
+              </div>
+            ) : null}
           </div>
 
           {/* What the marketplace actually checks */}

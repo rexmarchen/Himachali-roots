@@ -40,6 +40,10 @@ export interface SessionUser {
   sellerId: string | null;
   sellerStatus: SellerStatus | null;
   emailVerified: boolean;
+  /** True when TOTP two-factor authentication is enrolled and active. */
+  mfaEnabled?: boolean;
+  /** True when the active isolated admin session has a recent TOTP step-up verification. */
+  adminStepUpActive?: boolean;
   /** False for accounts created through a provider until a password is set. */
   hasPassword?: boolean;
   /** Linked sign-in providers, e.g. ["google"]. */
@@ -53,6 +57,51 @@ export interface Category {
   description: string | null;
   parentId: string | null;
   imageUrl: string | null;
+  productCount?: number;
+}
+
+export type ProductTechnique =
+  | 'handloom'
+  | 'hand-embroidered'
+  | 'hand-carved'
+  | 'hand-painted'
+  | 'organic'
+  | 'wild-harvested'
+  | 'orthodox'
+  | 'cold-pressed'
+  | 'small-batch';
+
+export interface HubFaq {
+  question: string;
+  answer: string;
+}
+
+export interface RegionEntity {
+  id: string;
+  name: string;
+  slug: string;
+  shortName: string;
+  introText: string;
+  heroImage: string | null;
+  famousCrafts: string[];
+  famousFoods: string[];
+  faqs: HubFaq[];
+  sortOrder: number;
+  isActive: boolean;
+  productCount?: number;
+}
+
+export interface CraftEntity {
+  id: string;
+  name: string;
+  slug: string;
+  introText: string;
+  history: string;
+  howToIdentify: string;
+  heroImage: string | null;
+  faqs: HubFaq[];
+  sortOrder: number;
+  isActive: boolean;
   productCount?: number;
 }
 
@@ -79,6 +128,15 @@ export interface ProductSummary {
   stock: number;
   isDemo: boolean;
   region: string | null;
+  regionSlug?: string | null;
+  districtVillage?: string | null;
+  craftType?: string | null;
+  craftSlug?: string | null;
+  technique?: string | null;
+  giTagged?: boolean;
+  giName?: string | null;
+  giRegistrationRef?: string | null;
+  madeToOrder?: boolean;
   isFeatured: boolean;
   ratingAverage: number | null;
   ratingCount: number;
@@ -93,6 +151,8 @@ export interface ProductSummary {
 
 export interface ProductDetail extends ProductSummary {
   description: string;
+  descriptionWordCount?: number;
+  needsDescriptionRewrite?: boolean;
   sku: string;
   unit: string;
   weightG: number | null;
@@ -102,6 +162,8 @@ export interface ProductDetail extends ProductSummary {
   foodInfo: string | null;
   originPlace: string | null;
   originVerified: boolean;
+  giRequested?: boolean;
+  giVerifiedAt?: string | null;
   varietyGrade?: string | null;
   harvestInfo?: string | null;
   dispatchConditions?: string | null;
@@ -115,6 +177,9 @@ export interface ProductDetail extends ProductSummary {
     tagline: string | null;
     story: string | null;
     region: string | null;
+    craftSpecialty?: string | null;
+    yearsOfPractice?: number | null;
+    workshopPhotos?: string[];
     logoUrl: string | null;
     coverUrl: string | null;
   };
@@ -389,6 +454,9 @@ export interface PublicMaker {
   story: string | null;
   region: string | null;
   village: string | null;
+  craftSpecialty?: string | null;
+  yearsOfPractice?: number | null;
+  workshopPhotos?: string[];
   logoUrl: string | null;
   coverUrl: string | null;
   imageUrl: string | null;

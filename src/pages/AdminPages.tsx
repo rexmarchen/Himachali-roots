@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ApplicationStatus, CampaignSummary, Category, OrderView, Paged, ProductStatus } from '@shared/types';
+import type { ApplicationStatus, CampaignSummary, Category, OrderView, Paged, ProductStatus, RegionEntity } from '@shared/types';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
 import { api, errorMessage } from '@/lib/api';
@@ -3333,6 +3333,9 @@ export function AdminProductDetailPage() {
   const [decision, setDecision] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [originVerified, setOriginVerified] = useState(false);
+  const [giTagged, setGiTagged] = useState(false);
+  const [giName, setGiName] = useState('');
+  const [giRegistrationRef, setGiRegistrationRef] = useState('');
   const [taxPercent, setTaxPercent] = useState('');
   const [busy, setBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -3361,10 +3364,18 @@ export function AdminProductDetailPage() {
     shortDescription: '',
     description: '',
     originPlace: '',
+    region: '',
+    districtVillage: '',
+    craftType: '',
+    technique: '',
     materials: '',
     foodInfo: '',
     isDemo: false,
     originVerified: false,
+    giTagged: false,
+    giName: '',
+    giRegistrationRef: '',
+    madeToOrder: false,
   });
 
   const detail = useQuery({
@@ -3398,10 +3409,18 @@ export function AdminProductDetailPage() {
       shortDescription: String(product.short_description ?? ''),
       description: String(product.description ?? ''),
       originPlace: String(product.origin_place ?? ''),
+      region: String(product.region ?? ''),
+      districtVillage: String(product.district_village ?? ''),
+      craftType: String(product.craft_type ?? ''),
+      technique: String(product.technique ?? ''),
       materials: String(product.materials ?? ''),
       foodInfo: String(product.food_info ?? ''),
       isDemo: Boolean(product.is_demo),
       originVerified: Boolean(product.origin_verified),
+      giTagged: Boolean(product.gi_tagged),
+      giName: String(product.gi_name ?? ''),
+      giRegistrationRef: String(product.gi_registration_ref ?? ''),
+      madeToOrder: Boolean(product.made_to_order),
     });
     setEditOpen(true);
   };
@@ -3447,10 +3466,18 @@ export function AdminProductDetailPage() {
           shortDescription: editForm.shortDescription.trim() || undefined,
           description: editForm.description.trim(),
           originPlace: editForm.originPlace.trim() || null,
+          region: editForm.region.trim() || null,
+          districtVillage: editForm.districtVillage.trim() || null,
+          craftType: editForm.craftType.trim() || null,
+          technique: editForm.technique.trim() || null,
           materials: editForm.materials.trim() || null,
           foodInfo: editForm.foodInfo.trim() || null,
           isDemo: editForm.isDemo,
           originVerified: editForm.originVerified,
+          giTagged: editForm.giTagged,
+          giName: editForm.giName.trim() || null,
+          giRegistrationRef: editForm.giRegistrationRef.trim() || null,
+          madeToOrder: editForm.madeToOrder,
         },
       });
       toast.push('Product details saved.');
@@ -3600,6 +3627,9 @@ export function AdminProductDetailPage() {
           decision,
           reason: reason.trim() || undefined,
           originVerified: decision === 'approve' ? originVerified : undefined,
+          giTagged: decision === 'approve' ? giTagged : undefined,
+          giName: decision === 'approve' && giName.trim() ? giName.trim() : undefined,
+          giRegistrationRef: decision === 'approve' && giRegistrationRef.trim() ? giRegistrationRef.trim() : undefined,
           taxRateBp,
         },
       });
@@ -3608,6 +3638,9 @@ export function AdminProductDetailPage() {
       setReason('');
       setTaxPercent('');
       setOriginVerified(false);
+      setGiTagged(false);
+      setGiName('');
+      setGiRegistrationRef('');
       await refresh();
     } catch (error) {
       toast.push(errorMessage(error), 'error');
@@ -3756,12 +3789,38 @@ export function AdminProductDetailPage() {
                 <dd className="mt-0.5 tabular-nums">{percentFromBp(Number(product.tax_rate_bp ?? 0))}</dd>
               </div>
               <div>
-                <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Origin</dt>
+                <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Origin &amp; Region</dt>
                 <dd className="mt-0.5">
-                  {text(product.origin_place)}
+                  {[text(product.district_village), text(product.region), text(product.origin_place)]
+                    .filter((v) => v && v !== '—')
+                    .join(' · ') || '—'}
                   <span className={`ml-1.5 text-[10px] ${product.origin_verified ? 'text-sage' : 'text-muted'}`}>
                     {product.origin_verified ? '· verified' : '· not verified'}
                   </span>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Craft &amp; Technique</dt>
+                <dd className="mt-0.5">
+                  {[text(product.craft_type), text(product.technique)].filter((v) => v && v !== '—').join(' · ') || '—'}
+                  {product.made_to_order ? ' · Made to order' : ''}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">GI Tag Status</dt>
+                <dd className="mt-0.5">
+                  {product.gi_tagged ? (
+                    <span className="font-medium text-forest">
+                      Verified GI{product.gi_name ? `: ${String(product.gi_name)}` : ''}
+                      {product.gi_registration_ref ? ` (${String(product.gi_registration_ref)})` : ''}
+                    </span>
+                  ) : product.gi_requested ? (
+                    <span className="text-amber-800">
+                      Seller requested{product.gi_name ? ` (${String(product.gi_name)})` : ''} — unverified
+                    </span>
+                  ) : (
+                    'Not claimed'
+                  )}
                 </dd>
               </div>
               <div>
@@ -3773,8 +3832,15 @@ export function AdminProductDetailPage() {
                 <dd className="mt-0.5">{text(product.short_description)}</dd>
               </div>
               <div className="sm:col-span-2">
-                <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Description</dt>
+                <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">
+                  Description ({String(product.description ?? '').trim().split(/\s+/).filter(Boolean).length} words)
+                </dt>
                 <dd className="mt-0.5 whitespace-pre-wrap leading-relaxed">{String(product.description)}</dd>
+                {String(product.description ?? '').trim().split(/\s+/).filter(Boolean).length < 100 ? (
+                  <p className="mt-1 text-[11px] font-medium text-amber-800">
+                    SEO notice: Under 100 words — expand to 150+ unique words for stronger organic indexing.
+                  </p>
+                ) : null}
               </div>
               <div className="sm:col-span-2">
                 <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Materials</dt>
@@ -4101,6 +4167,40 @@ export function AdminProductDetailPage() {
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Himalayan region / state">
+              <Input
+                value={editForm.region}
+                onChange={(event) => setEditForm((previous) => ({ ...previous, region: event.target.value }))}
+                placeholder="e.g. Himachal Pradesh, Ladakh, Uttarakhand"
+              />
+            </Field>
+            <Field label="District or village">
+              <Input
+                value={editForm.districtVillage}
+                onChange={(event) => setEditForm((previous) => ({ ...previous, districtVillage: event.target.value }))}
+                placeholder="e.g. Kullu, Leh, Almora"
+              />
+            </Field>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Craft type">
+              <Input
+                value={editForm.craftType}
+                onChange={(event) => setEditForm((previous) => ({ ...previous, craftType: event.target.value }))}
+                placeholder="e.g. Pashmina Shawls, Aipan Art"
+              />
+            </Field>
+            <Field label="Technique">
+              <Input
+                value={editForm.technique}
+                onChange={(event) => setEditForm((previous) => ({ ...previous, technique: event.target.value }))}
+                placeholder="handloom, hand-embroidered, hand-carved, organic"
+              />
+            </Field>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Origin place">
               <Input
                 value={editForm.originPlace}
@@ -4112,6 +4212,23 @@ export function AdminProductDetailPage() {
               <Input
                 value={editForm.materials}
                 onChange={(event) => setEditForm((previous) => ({ ...previous, materials: event.target.value }))}
+              />
+            </Field>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Verified GI Tag Name">
+              <Input
+                value={editForm.giName}
+                onChange={(event) => setEditForm((previous) => ({ ...previous, giName: event.target.value }))}
+                placeholder="e.g. Kullu Shawl"
+              />
+            </Field>
+            <Field label="GI Registration Reference">
+              <Input
+                value={editForm.giRegistrationRef}
+                onChange={(event) => setEditForm((previous) => ({ ...previous, giRegistrationRef: event.target.value }))}
+                placeholder="Official GI Ref #"
               />
             </Field>
           </div>
@@ -4147,6 +4264,30 @@ export function AdminProductDetailPage() {
               <span>
                 <span className="block font-medium text-ink">Origin verified</span>
                 <span className="text-muted">Enable only when supporting evidence is on file.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                checked={editForm.giTagged}
+                onChange={(event) => setEditForm((previous) => ({ ...previous, giTagged: event.target.checked }))}
+                className="mt-0.5 accent-forest"
+              />
+              <span>
+                <span className="block font-medium text-ink">Verified GI-Tagged product</span>
+                <span className="text-muted">Admin verification required. Never auto-claim GI without documentation.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                checked={editForm.madeToOrder}
+                onChange={(event) => setEditForm((previous) => ({ ...previous, madeToOrder: event.target.checked }))}
+                className="mt-0.5 accent-forest"
+              />
+              <span>
+                <span className="block font-medium text-ink">Made to order</span>
+                <span className="text-muted">Indicates custom small-batch production upon order.</span>
               </span>
             </label>
           </div>
@@ -4189,6 +4330,25 @@ export function AdminProductDetailPage() {
                 />
                 Origin evidence reviewed and on file
               </label>
+              <label className="flex items-start gap-2 text-[12.5px]">
+                <input
+                  type="checkbox"
+                  checked={giTagged}
+                  onChange={(event) => setGiTagged(event.target.checked)}
+                  className="mt-0.5 accent-forest"
+                />
+                Verified GI-Tagged product (enable only if GI documentation verified)
+              </label>
+              {giTagged ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Field label="Verified GI Name">
+                    <Input value={giName} onChange={(e) => setGiName(e.target.value)} placeholder="e.g. Kullu Shawl" />
+                  </Field>
+                  <Field label="GI Reference">
+                    <Input value={giRegistrationRef} onChange={(e) => setGiRegistrationRef(e.target.value)} placeholder="Ref #" />
+                  </Field>
+                </div>
+              ) : null}
               <Field label="GST rate" hint="Percent, optional">
                 <Input
                   inputMode="decimal"
@@ -4484,6 +4644,81 @@ export function AdminCategoriesPage() {
             <EmptyState title="No categories yet" body="Create the first category to let sellers submit products." />
           )}
         </section>
+      </div>
+      <AdminRegionsManager />
+    </div>
+  );
+}
+
+function AdminRegionsManager() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const regionsQuery = useQuery({
+    queryKey: ['admin-regions'],
+    queryFn: () => api<{ regions: RegionEntity[] }>('/admin/regions'),
+  });
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [introText, setIntroText] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const createRegion = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await api('/admin/regions', {
+        method: 'POST',
+        body: {
+          name: name.trim(),
+          slug: slug.trim() || undefined,
+          introText: introText.trim(),
+        },
+      });
+      toast.push('Himalayan region created.');
+      setName('');
+      setSlug('');
+      setIntroText('');
+      await queryClient.invalidateQueries({ queryKey: ['admin-regions'] });
+      await queryClient.invalidateQueries({ queryKey: ['public-regions-nav'] });
+    } catch (err) {
+      toast.push(errorMessage(err), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-line pt-7">
+      <h2 className="font-serif text-2xl text-forest">Himalayan Regions (SEO Hubs)</h2>
+      <p className="mt-1 text-xs text-muted">Add or review first-class mountain region hubs.</p>
+      <div className="mt-4 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <form onSubmit={(e) => void createRegion(e)} className="border border-line bg-surface p-5 space-y-3">
+          <h3 className="font-serif text-lg">Add a Region</h3>
+          <Field label="Region Name" required>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Spiti Valley" required />
+          </Field>
+          <Field label="Slug (optional)">
+            <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="e.g. spiti-valley" />
+          </Field>
+          <Field label="Intro Copy (150–300 words recommended)" required>
+            <Textarea rows={4} value={introText} onChange={(e) => setIntroText(e.target.value)} required />
+          </Field>
+          <Button type="submit" size="sm" loading={saving}>Add region</Button>
+        </form>
+        <div className="border border-line bg-surface p-5">
+          <h3 className="font-serif text-lg">Active Regions ({regionsQuery.data?.regions.length ?? 0})</h3>
+          <ul className="mt-3 divide-y divide-line text-xs">
+            {(regionsQuery.data?.regions ?? []).map((r) => (
+              <li key={r.id} className="flex items-center justify-between py-2.5">
+                <div>
+                  <p className="font-semibold text-ink">{r.name}</p>
+                  <p className="text-muted">/regions/{r.slug} · {r.productCount ?? 0} real listings</p>
+                </div>
+                <Badge tone={r.isActive ? 'forest' : 'neutral'}>{r.isActive ? 'Active' : 'Hidden'}</Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </div>
   );

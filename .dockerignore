@@ -3,6 +3,7 @@
 .vercel
 .github
 node_modules
+mobile
 dist
 dist-server
 data

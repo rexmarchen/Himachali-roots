@@ -94,7 +94,7 @@ export function ShopPage() {
   };
 
   const activeCount = useMemo(() => {
-    return ['q', 'category', 'seller', 'region', 'minPrice', 'maxPrice', 'inStock'].filter((key) => params.get(key)).length;
+    return ['q', 'category', 'seller', 'region', 'craft', 'technique', 'giTagged', 'minPrice', 'maxPrice', 'inStock'].filter((key) => params.get(key)).length;
   }, [params]);
 
   const clearAll = () => {
@@ -125,6 +125,9 @@ export function ShopPage() {
     q ||
       seller ||
       region ||
+      params.get('craft') ||
+      params.get('technique') ||
+      params.get('giTagged') ||
       params.get('sort') ||
       params.get('minPrice') ||
       params.get('maxPrice') ||

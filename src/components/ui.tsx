@@ -427,38 +427,78 @@ export function Pagination({
   page,
   totalPages,
   onChange,
+  buildHref,
 }: {
   page: number;
   totalPages: number;
   onChange: (page: number) => void;
+  buildHref?: (targetPage: number) => string;
 }) {
   if (totalPages <= 1) return null;
+  const resolveHref = (targetPage: number) => {
+    if (buildHref) return buildHref(targetPage);
+    if (typeof window === 'undefined') return `?page=${targetPage}`;
+    const next = new URLSearchParams(window.location.search);
+    if (targetPage <= 1) next.delete('page');
+    else next.set('page', String(targetPage));
+    const qs = next.toString();
+    return qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+  };
   const pages = Array.from({ length: totalPages }, (_, index) => index + 1).filter(
     (candidate) => candidate === 1 || candidate === totalPages || Math.abs(candidate - page) <= 1,
   );
   return (
     <nav aria-label="Pagination" className="mt-8 flex items-center justify-center gap-1.5">
-      <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => onChange(page - 1)}>
-        Previous
-      </Button>
+      {page <= 1 ? (
+        <Button variant="ghost" size="sm" disabled onClick={() => undefined}>
+          Previous
+        </Button>
+      ) : (
+        <Link
+          to={resolveHref(page - 1)}
+          onClick={(e) => {
+            e.preventDefault();
+            onChange(page - 1);
+          }}
+          className="inline-flex min-h-11 sm:min-h-9 items-center justify-center rounded-sm border border-line bg-surface px-3 text-xs font-medium text-ink hover:border-forest/40"
+        >
+          Previous
+        </Link>
+      )}
       {pages.map((candidate, index) => (
         <span key={candidate} className="flex items-center gap-1.5">
           {index > 0 && candidate - pages[index - 1] > 1 ? <span className="px-1 text-muted">…</span> : null}
-          <button
-            type="button"
-            onClick={() => onChange(candidate)}
+          <Link
+            to={resolveHref(candidate)}
+            onClick={(e) => {
+              e.preventDefault();
+              onChange(candidate);
+            }}
             aria-current={candidate === page ? 'page' : undefined}
-            className={`min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 sm:h-9 border px-2 text-[13px] ${
+            className={`inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 sm:h-9 border px-2 text-[13px] ${
               candidate === page ? 'border-forest bg-forest text-paper' : 'border-line bg-surface text-ink hover:border-forest/40'
             }`}
           >
             {candidate}
-          </button>
+          </Link>
         </span>
       ))}
-      <Button variant="ghost" size="sm" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>
-        Next
-      </Button>
+      {page >= totalPages ? (
+        <Button variant="ghost" size="sm" disabled onClick={() => undefined}>
+          Next
+        </Button>
+      ) : (
+        <Link
+          to={resolveHref(page + 1)}
+          onClick={(e) => {
+            e.preventDefault();
+            onChange(page + 1);
+          }}
+          className="inline-flex min-h-11 sm:min-h-9 items-center justify-center rounded-sm border border-line bg-surface px-3 text-xs font-medium text-ink hover:border-forest/40"
+        >
+          Next
+        </Link>
+      )}
     </nav>
   );
 }
