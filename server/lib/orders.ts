@@ -13,6 +13,15 @@ import { allocate, commissionOn, evaluateCoupon, resolveCommissionBp, shippingFo
 import { newId, orderNumber, sellerOrderReference } from './ids.js';
 import type { SessionUser } from '../../shared/types.js';
 import { OutboxService } from '../core/outbox/OutboxService.js';
+import { recordOrderEvent, refreshOrderStatus } from './orderLifecycle.js';
+import {
+  getFulfilmentsForOrder,
+  processOrderFulfilments,
+  routeOrderFulfilmentsOnConfirmation,
+  snapshotOrderItemShipping,
+} from './fulfilmentRouter.js';
+
+export { recordOrderEvent, refreshOrderStatus };
 
 interface CheckoutInput {
   userId: string;
@@ -54,44 +63,6 @@ export function validateAddress(address: OrderAddress): void {
   if (!address.city || address.city.trim().length < 2) fail('city', 'Enter the city or town.');
   if (!/^\d{6}$/.test(address.pincode)) fail('pincode', 'Enter a valid 6-digit PIN code.');
   if (!address.state || address.state.trim().length < 2) fail('state', 'Enter the state.');
-}
-
-/**
- * Append a business-readable event. Unlike audit_logs (which records staff
- * changes), this timeline is safe to show on an order because it contains no
- * internal margin, payment secret or provider payload data.
- */
-export function recordOrderEvent(
-  db: Db,
-  params: {
-    orderId: string;
-    sellerOrderId?: string | null;
-    type: string;
-    description: string;
-    actor?: (Pick<SessionUser, 'id'> & { roles?: string[] }) | null;
-    metadata?: Record<string, unknown>;
-  },
-): void {
-  const role = params.actor
-    ? params.actor.roles?.includes('admin')
-      ? 'admin'
-      : params.actor.roles?.includes('seller')
-        ? 'seller'
-        : 'customer'
-    : 'system';
-  execute(
-    db,
-    `INSERT INTO order_events (id, order_id, seller_order_id, type, description, actor_id, actor_role, metadata_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    newId('oev_'),
-    params.orderId,
-    params.sellerOrderId ?? null,
-    params.type.slice(0, 80),
-    params.description.slice(0, 500),
-    params.actor?.id ?? null,
-    role,
-    params.metadata ? JSON.stringify(params.metadata).slice(0, 2000) : null,
-  );
 }
 
 const MAX_PENDING_ORDERS_PER_USER = 5;
@@ -322,13 +293,40 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
         summary.earning,
       );
       for (const item of summary.items) {
+        const productShip = queryOne<{
+          seller_id: string;
+          fulfilment_method: string | null;
+          pickup_location_id: string | null;
+          weight_g: number | null;
+          package_length_cm: number | null;
+          package_breadth_cm: number | null;
+          package_height_cm: number | null;
+          handling_days: number | null;
+          shipping_config_json: string | null;
+          dimensions: string | null;
+        }>(
+          db,
+          `SELECT seller_id, fulfilment_method, pickup_location_id, weight_g,
+                  package_length_cm, package_breadth_cm, package_height_cm,
+                  handling_days, shipping_config_json, dimensions
+             FROM products WHERE id = ?`,
+          item.line.product_id,
+        );
+        const snap = snapshotOrderItemShipping(
+          db,
+          productShip ?? { seller_id: item.line.seller_id },
+          input.address,
+          item.line.name,
+        );
+
         execute(
           db,
           `INSERT INTO order_items (id, order_id, seller_order_id, product_id, seller_id, name, sku, image_url,
                                     unit_price_paise, original_unit_price_paise, quantity, line_subtotal_paise,
                                     discount_paise, tax_rate_bp, tax_paise, commission_rate_bp, commission_paise,
-                                    seller_earning_paise)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                    seller_earning_paise, fulfilment_method, pickup_location_id, package_weight_g,
+                                    package_length_cm, package_breadth_cm, package_height_cm, shipping_snapshot_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           newId('oit_'),
           id,
           sellerOrderId,
@@ -347,6 +345,13 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
           item.rateBp,
           item.commission,
           item.earning,
+          snap.fulfilmentMethod,
+          snap.pickupLocationId,
+          snap.weightG,
+          snap.lengthCm,
+          snap.breadthCm,
+          snap.heightCm,
+          snap.snapshotJson,
         );
       }
     }
@@ -703,6 +708,8 @@ export function markOrderPaid(db: Db, params: PaidParams): { alreadyProcessed: b
       execute(db, 'UPDATE seller_orders SET dispatch_by = ?, updated_at = ? WHERE id = ?', dispatchBy, new Date().toISOString(), so.id);
     }
 
+    routeOrderFulfilmentsOnConfirmation(db, order.id);
+
     OutboxService.enqueue(db, {
       aggregateType: 'order',
       aggregateId: order.id,
@@ -763,6 +770,8 @@ export async function notifyOrderPaid(db: Db, orderId: string): Promise<void> {
       dedupeKey: `seller-new-order:${seller.seller_order_id}`,
     });
   }
+
+  await processOrderFulfilments(db, orderId);
 }
 
 export function releaseExpiredOrders(db: Db, now = new Date()): number {
@@ -900,6 +909,8 @@ export function getOrderView(
     original_unit_price_paise: number | null;
     line_subtotal_paise: number;
     status: string;
+    fulfilment_method: string | null;
+    fulfilment_id: string | null;
     review_id: string | null;
     seller_name: string;
   }>(
@@ -911,6 +922,8 @@ export function getOrderView(
       WHERE oi.order_id = ? ORDER BY oi.created_at`,
     orderId,
   );
+
+  const allFulfilments = getFulfilmentsForOrder(db, orderId, { includeInternal: options.includeFinancials });
 
   const sellerOrders: SellerOrderView[] = sellers.map((seller) => {
     const shipmentRow = queryOne<{
@@ -953,9 +966,12 @@ export function getOrderView(
         status: item.status,
         sellerName: item.seller_name,
         sellerOrderId: item.seller_order_id,
+        fulfilmentMethod: item.fulfilment_method ?? undefined,
+        fulfilmentId: item.fulfilment_id ?? undefined,
         canReview: item.status === 'delivered' && !item.review_id,
         reviewed: Boolean(item.review_id),
       }));
+    const sellerFulfilments = allFulfilments.filter((f) => f.sellerOrderId === seller.id);
     return {
       id: seller.id,
       reference: seller.reference,
@@ -971,6 +987,7 @@ export function getOrderView(
         : {}),
       items: sellerItems,
       shipment,
+      fulfilments: sellerFulfilments,
       dispatchBy: seller.dispatch_by,
       shippedAt: seller.shipped_at,
       deliveredAt: seller.delivered_at,
@@ -1027,6 +1044,7 @@ export function getOrderView(
       pincode: '',
     }),
     sellerOrders,
+    fulfilments: allFulfilments,
     payment: payment ? { provider: payment.provider, status: payment.status, providerPaymentId: payment.provider_payment_id } : null,
     canCancel: order.status === 'paid' && cancellable,
     canRequestReturn: order.status !== 'cancelled' && returnable,
@@ -1237,13 +1255,23 @@ export function sellerOrderAction(
     if (!['pending', 'confirmed', 'packed'].includes(so.status)) {
       throw conflict('Shipped or delivered orders must go through the return process.');
     }
+    const inTransitFulfilment = queryOne<{ id: string }>(
+      db,
+      `SELECT id FROM order_fulfilments
+        WHERE seller_order_id = ? AND status IN ('picked_up','in_transit','out_for_delivery','delivered')`,
+      so.id,
+    );
+    if (inTransitFulfilment) {
+      throw conflict('One or more packages are already in transit or delivered.');
+    }
     tx(db, () => {
-      const items = queryAll<{ product_id: string; quantity: number }>(
+      const items = queryAll<{ product_id: string; quantity: number; status: string }>(
         db,
-        'SELECT product_id, quantity FROM order_items WHERE seller_order_id = ?',
+        'SELECT product_id, quantity, status FROM order_items WHERE seller_order_id = ?',
         so.id,
       );
       for (const item of items) {
+        if (item.status !== 'ordered') continue;
         execute(
           db,
           'UPDATE inventory SET reserved_quantity = MAX(0, reserved_quantity - ?), updated_at = ? WHERE product_id = ?',
@@ -1262,7 +1290,20 @@ export function sellerOrderAction(
         );
       }
       execute(db, "UPDATE seller_orders SET status = 'cancelled', updated_at = ? WHERE id = ?", now.toISOString(), so.id);
-      execute(db, "UPDATE order_items SET status = 'cancelled' WHERE seller_order_id = ?", so.id);
+      execute(db, "UPDATE order_items SET status = 'cancelled' WHERE seller_order_id = ? AND status != 'cancelled'", so.id);
+      execute(
+        db,
+        "UPDATE order_fulfilments SET status = 'cancelled', cancelled_at = ?, updated_at = ? WHERE seller_order_id = ? AND status != 'cancelled'",
+        now.toISOString(),
+        now.toISOString(),
+        so.id,
+      );
+      execute(
+        db,
+        "UPDATE shipping_sync_outbox SET status = 'dead_letter', last_error = 'Seller order cancelled', updated_at = ? WHERE seller_order_id = ? AND status IN ('pending','failed')",
+        now.toISOString(),
+        so.id,
+      );
       execute(
         db,
         `UPDATE seller_ledger_entries SET status = 'reversed'
@@ -1307,44 +1348,6 @@ export function sellerOrderAction(
   }
 
   refreshOrderStatus(db, so.order_id);
-}
-
-export function refreshOrderStatus(db: Db, orderId: string): string {
-  const order = queryOne<{ status: string; paid_at: string | null }>(
-    db,
-    'SELECT status, paid_at FROM orders WHERE id = ?',
-    orderId,
-  );
-  if (!order) return 'unknown';
-  if (['pending_payment', 'expired', 'refunded', 'partially_refunded'].includes(order.status)) return order.status;
-  const statuses = queryAll<{ status: string }>(db, 'SELECT status FROM seller_orders WHERE order_id = ?', orderId).map(
-    (row) => row.status,
-  );
-  if (statuses.length === 0) return order.status;
-  let next = order.status;
-  if (statuses.every((status) => status === 'cancelled')) next = 'cancelled';
-  else if (statuses.every((status) => ['delivered', 'returned', 'refunded', 'cancelled'].includes(status))) next = 'fulfilled';
-  else if (statuses.every((status) => ['shipped', 'delivered', 'returned', 'cancelled'].includes(status))) {
-    // All items dispatched and in transit across mountain courier networks
-    next = 'partially_fulfilled';
-  } else if (statuses.some((status) => ['shipped', 'delivered', 'returned'].includes(status))) {
-    next = 'partially_fulfilled';
-  } else if (order.paid_at) next = 'paid';
-
-  const refunded = queryOne<{ total: number }>(
-    db,
-    "SELECT COALESCE(SUM(amount_paise),0) AS total FROM refunds WHERE order_id = ? AND status = 'completed'",
-    orderId,
-  );
-  if ((refunded?.total ?? 0) > 0) {
-    const total = queryOne<{ total_paise: number }>(db, 'SELECT total_paise FROM orders WHERE id = ?', orderId);
-    if (total && (refunded?.total ?? 0) >= total.total_paise) next = 'refunded';
-    else if (next !== 'cancelled') next = 'partially_refunded';
-  }
-  if (next !== order.status) {
-    execute(db, 'UPDATE orders SET status = ? WHERE id = ?', next, orderId);
-  }
-  return next;
 }
 
 /* ------------------------------------------------------------------ */

@@ -216,6 +216,15 @@ function NavIcon({ type, className = 'h-4 w-4' }: { type: string; className?: st
           <path d="M16 10a4 4 0 0 1-8 0" />
         </svg>
       );
+    case 'shipping':
+      return (
+        <svg {...common}>
+          <path d="M10 17h4V5H2v12h3" />
+          <path d="M14 8h4l3 4v5h-3" />
+          <circle cx="7.5" cy="17.5" r="2.5" />
+          <circle cx="17.5" cy="17.5" r="2.5" />
+        </svg>
+      );
     case 'products':
       return (
         <svg {...common}>
@@ -411,6 +420,7 @@ const ADMIN_NAV: {
     label: 'Trade',
     items: [
       { label: 'Orders', to: '/admin/orders', icon: 'orders', badge: 'unfulfilled' },
+      { label: 'Shipping Management', to: '/admin/shipping', icon: 'shipping' },
       { label: 'Products', to: '/admin/products', icon: 'products', badge: 'products' },
       { label: 'Categories', to: '/admin/categories', icon: 'categories' },
     ],

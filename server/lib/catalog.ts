@@ -4,6 +4,7 @@ import { countDescriptionWords } from '../../shared/productCompliance.js';
 import { notFound } from './http.js';
 import { attachCampaignMeta } from './campaigns.js';
 import { regionMatchSql } from './himalayan.js';
+import { buildPublicProductShippingSummary } from './fulfilmentRouter.js';
 
 const PUBLIC_CONDITION = "p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'";
 
@@ -395,7 +396,21 @@ export function getProduct(db: Db, slug: string): ProductDetail {
     related,
     returnPolicy:
       '7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.',
-    shippingEstimate: 'Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch.',
+    shippingEstimate: (() => {
+      const s = buildPublicProductShippingSummary(
+        row as { fulfilment_method?: string | null; handling_days?: number | null; shipping_config_json?: string | null },
+      );
+      return s.estimatedDeliveryText
+        ? `${s.estimatedDeliveryText}. Delivery usually takes 3–7 working days after dispatch.`
+        : 'Dispatched within 2 working days. Delivery usually takes 3–7 working days after dispatch.';
+    })(),
+    fulfilmentMethod:
+      ((row as { fulfilment_method?: string | null }).fulfilment_method as 'SHIPROCKET' | 'OWN_DELIVERY' | 'EXTERNAL_SUPPLIER' | undefined) ??
+      'SHIPROCKET',
+    handlingDays: Number((row as { handling_days?: number | null }).handling_days ?? 2),
+    shippingSummary: buildPublicProductShippingSummary(
+      row as { fulfilment_method?: string | null; handling_days?: number | null; shipping_config_json?: string | null },
+    ),
   };
 }
 

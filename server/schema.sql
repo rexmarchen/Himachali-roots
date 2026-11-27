@@ -269,6 +269,33 @@ CREATE TABLE IF NOT EXISTS seller_notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_seller_notifications_unread ON seller_notifications(seller_id, read_at, created_at);
 
+CREATE TABLE IF NOT EXISTS seller_pickup_locations (
+  id TEXT PRIMARY KEY,
+  seller_id TEXT NOT NULL REFERENCES seller_profiles(id) ON DELETE CASCADE,
+  nickname TEXT NOT NULL,
+  shiprocket_location_name TEXT NOT NULL,
+  shiprocket_pickup_id TEXT,
+  contact_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  line1 TEXT NOT NULL,
+  line2 TEXT,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL,
+  pincode TEXT NOT NULL,
+  country TEXT NOT NULL DEFAULT 'India',
+  is_verified INTEGER NOT NULL DEFAULT 0,
+  is_approved INTEGER NOT NULL DEFAULT 0,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  verification_note TEXT,
+  verified_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (seller_id, shiprocket_location_name)
+);
+CREATE INDEX IF NOT EXISTS idx_seller_pickup_seller ON seller_pickup_locations(seller_id, is_active);
+
 CREATE TABLE IF NOT EXISTS regions (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
@@ -334,6 +361,14 @@ CREATE TABLE IF NOT EXISTS products (
   unit TEXT NOT NULL DEFAULT 'piece',
   weight_g INTEGER,
   dimensions TEXT,
+  fulfilment_method TEXT NOT NULL DEFAULT 'SHIPROCKET'
+    CHECK (fulfilment_method IN ('SHIPROCKET','OWN_DELIVERY','EXTERNAL_SUPPLIER')),
+  pickup_location_id TEXT REFERENCES seller_pickup_locations(id) ON DELETE SET NULL,
+  package_length_cm REAL,
+  package_breadth_cm REAL,
+  package_height_cm REAL,
+  handling_days INTEGER NOT NULL DEFAULT 2,
+  shipping_config_json TEXT,
   materials TEXT,
   care_instructions TEXT,
   food_info TEXT,
@@ -506,6 +541,57 @@ CREATE TABLE IF NOT EXISTS seller_orders (
 CREATE INDEX IF NOT EXISTS idx_seller_orders_seller ON seller_orders(seller_id, status);
 CREATE INDEX IF NOT EXISTS idx_seller_orders_order ON seller_orders(order_id);
 
+CREATE TABLE IF NOT EXISTS order_fulfilments (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  seller_order_id TEXT NOT NULL REFERENCES seller_orders(id) ON DELETE CASCADE,
+  seller_id TEXT NOT NULL REFERENCES seller_profiles(id),
+  fulfilment_method TEXT NOT NULL
+    CHECK (fulfilment_method IN ('SHIPROCKET','OWN_DELIVERY','EXTERNAL_SUPPLIER','UNKNOWN')),
+  status TEXT NOT NULL DEFAULT 'pending_sync',
+  provider TEXT NOT NULL DEFAULT 'manual',
+  pickup_location_id TEXT,
+  pickup_snapshot_json TEXT,
+  shipping_config_snapshot_json TEXT,
+  package_weight_g INTEGER NOT NULL DEFAULT 500,
+  package_length_cm REAL NOT NULL DEFAULT 15,
+  package_breadth_cm REAL NOT NULL DEFAULT 12,
+  package_height_cm REAL NOT NULL DEFAULT 8,
+  shiprocket_order_id INTEGER,
+  shiprocket_shipment_id INTEGER,
+  shiprocket_sync_status TEXT NOT NULL DEFAULT 'not_applicable'
+    CHECK (shiprocket_sync_status IN ('not_applicable','pending','synced','failed','flagged_admin_review')),
+  sync_attempts INTEGER NOT NULL DEFAULT 0,
+  last_sync_error TEXT,
+  last_synced_at TEXT,
+  courier_company_id INTEGER,
+  courier_name TEXT,
+  awb_code TEXT,
+  tracking_number TEXT,
+  tracking_url TEXT,
+  label_url TEXT,
+  pickup_scheduled_at TEXT,
+  pickup_token TEXT,
+  ready_to_ship_at TEXT,
+  dispatched_at TEXT,
+  delivered_at TEXT,
+  cancelled_at TEXT,
+  external_supplier_name TEXT,
+  external_order_ref TEXT,
+  own_delivery_evidence_json TEXT,
+  estimated_delivery_text TEXT,
+  admin_review_reason TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_order_fulfilments_order ON order_fulfilments(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_fulfilments_seller_order ON order_fulfilments(seller_order_id);
+CREATE INDEX IF NOT EXISTS idx_order_fulfilments_seller ON order_fulfilments(seller_id, status);
+CREATE INDEX IF NOT EXISTS idx_order_fulfilments_method_status ON order_fulfilments(fulfilment_method, status);
+CREATE INDEX IF NOT EXISTS idx_order_fulfilments_awb ON order_fulfilments(awb_code);
+CREATE INDEX IF NOT EXISTS idx_order_fulfilments_sr_shipment ON order_fulfilments(shiprocket_shipment_id);
+CREATE INDEX IF NOT EXISTS idx_order_fulfilments_sr_order ON order_fulfilments(shiprocket_order_id);
+
 CREATE TABLE IF NOT EXISTS order_items (
   id TEXT PRIMARY KEY,
   order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -525,12 +611,21 @@ CREATE TABLE IF NOT EXISTS order_items (
   commission_rate_bp INTEGER NOT NULL,
   commission_paise INTEGER NOT NULL,
   seller_earning_paise INTEGER NOT NULL,
+  fulfilment_method TEXT NOT NULL DEFAULT 'SHIPROCKET',
+  pickup_location_id TEXT,
+  package_weight_g INTEGER,
+  package_length_cm REAL,
+  package_breadth_cm REAL,
+  package_height_cm REAL,
+  shipping_snapshot_json TEXT,
+  fulfilment_id TEXT REFERENCES order_fulfilments(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'ordered'
     CHECK (status IN ('ordered','shipped','delivered','cancelled','returned','refunded')),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_seller_order ON order_items(seller_order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_fulfilment ON order_items(fulfilment_id);
 
 CREATE TABLE IF NOT EXISTS payments (
   id TEXT PRIMARY KEY,
@@ -561,6 +656,7 @@ CREATE TABLE IF NOT EXISTS payment_events (
 CREATE TABLE IF NOT EXISTS shipments (
   id TEXT PRIMARY KEY,
   seller_order_id TEXT NOT NULL UNIQUE REFERENCES seller_orders(id) ON DELETE CASCADE,
+  fulfilment_id TEXT REFERENCES order_fulfilments(id) ON DELETE SET NULL,
   provider TEXT NOT NULL DEFAULT 'manual',
   carrier TEXT NOT NULL,
   tracking_number TEXT NOT NULL,
@@ -585,6 +681,58 @@ CREATE TABLE IF NOT EXISTS shipment_events (
   occurred_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+CREATE TABLE IF NOT EXISTS fulfilment_events (
+  id TEXT PRIMARY KEY,
+  fulfilment_id TEXT NOT NULL REFERENCES order_fulfilments(id) ON DELETE CASCADE,
+  event_id TEXT UNIQUE,
+  source TEXT NOT NULL DEFAULT 'system',
+  status TEXT NOT NULL,
+  description TEXT,
+  actor_id TEXT,
+  actor_role TEXT,
+  metadata_json TEXT,
+  occurred_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_fulfilment_events_fulfilment ON fulfilment_events(fulfilment_id, occurred_at);
+
+CREATE TABLE IF NOT EXISTS shipping_sync_outbox (
+  id TEXT PRIMARY KEY,
+  fulfilment_id TEXT NOT NULL UNIQUE REFERENCES order_fulfilments(id) ON DELETE CASCADE,
+  order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  seller_order_id TEXT NOT NULL REFERENCES seller_orders(id) ON DELETE CASCADE,
+  dedupe_key TEXT NOT NULL UNIQUE,
+  job_type TEXT NOT NULL DEFAULT 'create_shiprocket_order'
+    CHECK (job_type IN ('create_shiprocket_order')),
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','processing','succeeded','failed','dead_letter')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 5,
+  next_retry_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  last_error TEXT,
+  completed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_shipping_sync_status_next ON shipping_sync_outbox(status, next_retry_at);
+
+CREATE TABLE IF NOT EXISTS shipping_webhook_logs (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL DEFAULT 'shiprocket',
+  event_key TEXT,
+  awb_code TEXT,
+  shiprocket_shipment_id INTEGER,
+  shiprocket_order_id INTEGER,
+  fulfilment_id TEXT,
+  raw_status TEXT,
+  mapped_status TEXT,
+  outcome TEXT NOT NULL,
+  note TEXT,
+  payload_summary_json TEXT,
+  received_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_shipping_webhook_logs_received ON shipping_webhook_logs(received_at DESC);
 
 CREATE TABLE IF NOT EXISTS cancellation_requests (
   id TEXT PRIMARY KEY,

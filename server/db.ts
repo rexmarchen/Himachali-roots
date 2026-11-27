@@ -105,6 +105,31 @@ function reconcileLegacySchema(db: Db): void {
     addColumn(db, 'products', 'gi_verified_at', 'TEXT');
     addColumn(db, 'products', 'gi_verified_by', 'TEXT');
     addColumn(db, 'products', 'made_to_order', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(
+      db,
+      'products',
+      'fulfilment_method',
+      "TEXT NOT NULL DEFAULT 'SHIPROCKET' CHECK (fulfilment_method IN ('SHIPROCKET','OWN_DELIVERY','EXTERNAL_SUPPLIER'))",
+    );
+    addColumn(db, 'products', 'pickup_location_id', 'TEXT');
+    addColumn(db, 'products', 'package_length_cm', 'REAL');
+    addColumn(db, 'products', 'package_breadth_cm', 'REAL');
+    addColumn(db, 'products', 'package_height_cm', 'REAL');
+    addColumn(db, 'products', 'handling_days', 'INTEGER NOT NULL DEFAULT 2');
+    addColumn(db, 'products', 'shipping_config_json', 'TEXT');
+  }
+  if (tableExists(db, 'order_items')) {
+    addColumn(db, 'order_items', 'fulfilment_method', "TEXT NOT NULL DEFAULT 'SHIPROCKET'");
+    addColumn(db, 'order_items', 'pickup_location_id', 'TEXT');
+    addColumn(db, 'order_items', 'package_weight_g', 'INTEGER');
+    addColumn(db, 'order_items', 'package_length_cm', 'REAL');
+    addColumn(db, 'order_items', 'package_breadth_cm', 'REAL');
+    addColumn(db, 'order_items', 'package_height_cm', 'REAL');
+    addColumn(db, 'order_items', 'shipping_snapshot_json', 'TEXT');
+    addColumn(db, 'order_items', 'fulfilment_id', 'TEXT');
+  }
+  if (tableExists(db, 'shipments')) {
+    addColumn(db, 'shipments', 'fulfilment_id', 'TEXT');
   }
   // Migration 8 columns must exist before schema.sql runs: its unique index on
   // refunds(dedupe_key) would otherwise fail on a database created at v7.
@@ -365,7 +390,119 @@ export function openDatabase(filename: string): Db {
 
   migrateBrowserHandoffTokens(db);
   markMigration(db, 16);
+
+  migrateProductFulfilmentShipping(db);
+  markMigration(db, 17);
   return db;
+}
+
+/**
+ * Migration 17: Product-wise shipping/fulfilment methods, verified seller pickup
+ * locations, immutable order-item shipping snapshots, order fulfilment routing,
+ * Shiprocket durable sync outbox, and shipping webhook logs.
+ */
+function migrateProductFulfilmentShipping(db: Db): void {
+  addColumn(
+    db,
+    'products',
+    'fulfilment_method',
+    "TEXT NOT NULL DEFAULT 'SHIPROCKET' CHECK (fulfilment_method IN ('SHIPROCKET','OWN_DELIVERY','EXTERNAL_SUPPLIER'))",
+  );
+  addColumn(db, 'products', 'pickup_location_id', 'TEXT');
+  addColumn(db, 'products', 'package_length_cm', 'REAL');
+  addColumn(db, 'products', 'package_breadth_cm', 'REAL');
+  addColumn(db, 'products', 'package_height_cm', 'REAL');
+  addColumn(db, 'products', 'handling_days', 'INTEGER NOT NULL DEFAULT 2');
+  addColumn(db, 'products', 'shipping_config_json', 'TEXT');
+
+  addColumn(db, 'order_items', 'fulfilment_method', "TEXT NOT NULL DEFAULT 'SHIPROCKET'");
+  addColumn(db, 'order_items', 'pickup_location_id', 'TEXT');
+  addColumn(db, 'order_items', 'package_weight_g', 'INTEGER');
+  addColumn(db, 'order_items', 'package_length_cm', 'REAL');
+  addColumn(db, 'order_items', 'package_breadth_cm', 'REAL');
+  addColumn(db, 'order_items', 'package_height_cm', 'REAL');
+  addColumn(db, 'order_items', 'shipping_snapshot_json', 'TEXT');
+  addColumn(db, 'order_items', 'fulfilment_id', 'TEXT');
+
+  addColumn(db, 'shipments', 'fulfilment_id', 'TEXT');
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_products_fulfilment_method ON products(fulfilment_method);
+    CREATE INDEX IF NOT EXISTS idx_order_items_fulfilment ON order_items(fulfilment_id);
+  `);
+
+  // Safely copy legacy pickup addresses from seller_profiles into seller_pickup_locations
+  // as unverified/unapproved records so existing sellers have a starting entry to verify
+  // without ever auto-approving unverified Shiprocket addresses.
+  if (tableExists(db, 'seller_profiles') && tableExists(db, 'seller_pickup_locations')) {
+    const sellers = db
+      .prepare(
+        `SELECT sp.id, sp.business_name, sp.pickup_address, sp.operating_address, p.phone, u.email
+           FROM seller_profiles sp
+           JOIN users u ON u.id = sp.user_id
+           LEFT JOIN profiles p ON p.id = sp.user_id
+          WHERE sp.id NOT IN (SELECT seller_id FROM seller_pickup_locations)`,
+      )
+      .all() as Array<{
+      id: string;
+      business_name: string;
+      pickup_address: string | null;
+      operating_address: string | null;
+      phone: string | null;
+      email: string | null;
+    }>;
+
+    const insertPickup = db.prepare(`
+      INSERT OR IGNORE INTO seller_pickup_locations
+        (id, seller_id, nickname, shiprocket_location_name, contact_name, phone, email,
+         line1, line2, city, state, pincode, is_verified, is_approved, is_default, is_active, verification_note)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 1, 1, ?)
+    `);
+
+    for (const seller of sellers) {
+      const raw = seller.pickup_address || seller.operating_address;
+      if (!raw) continue;
+      let parsed: Record<string, unknown> | null = null;
+      try {
+        parsed = JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      const line1 = typeof parsed?.line1 === 'string' ? parsed.line1.trim() : '';
+      const city = typeof parsed?.city === 'string' ? parsed.city.trim() : '';
+      const state = typeof parsed?.state === 'string' ? parsed.state.trim() : '';
+      const pincode = typeof parsed?.pincode === 'string' ? parsed.pincode.trim() : '';
+      if (line1.length < 4 || city.length < 2 || state.length < 2 || !/^\d{6}$/.test(pincode)) continue;
+      const cleanName = seller.business_name.replace(/[^A-Za-z0-9 ]+/g, '').trim().slice(0, 18) || 'Maker';
+      const srName = `${cleanName}_${seller.id.slice(-6)}`.replace(/\s+/g, '_').slice(0, 36);
+      const locId = `pkl_${seller.id.replace(/[^a-zA-Z0-9]/g, '').slice(-12)}_${pincode}`;
+      const contactPhone =
+        typeof parsed?.phone === 'string' && /^[6-9]\d{9}$/.test(parsed.phone.trim())
+          ? parsed.phone.trim()
+          : seller.phone && /^[6-9]\d{9}$/.test(seller.phone.trim())
+            ? seller.phone.trim()
+            : '9876543210';
+      const contactName =
+        typeof parsed?.fullName === 'string' && parsed.fullName.trim().length >= 2
+          ? parsed.fullName.trim()
+          : seller.business_name;
+      insertPickup.run(
+        locId,
+        seller.id,
+        `${seller.business_name.slice(0, 24)} Primary`,
+        srName,
+        contactName,
+        contactPhone,
+        seller.email ?? null,
+        line1,
+        typeof parsed?.line2 === 'string' ? parsed.line2.trim() || null : null,
+        city,
+        state,
+        pincode,
+        'Migrated from seller profile; verify with Shiprocket and approve before enabling Shiprocket shipping.',
+      );
+    }
+  }
 }
 
 /**

@@ -110,8 +110,14 @@ const SellerInventoryPage = lazy(() =>
 const SellerNotificationsPage = lazy(() =>
   import('@/pages/SellerPages').then((module) => ({ default: module.SellerNotificationsPage })),
 );
+const SellerShippingPage = lazy(() =>
+  import('@/pages/SellerShippingPage').then((module) => ({ default: module.SellerShippingPage })),
+);
 
 const AdminLayout = lazy(() => import('@/pages/AdminPages').then((module) => ({ default: module.AdminLayout })));
+const AdminShippingPage = lazy(() =>
+  import('@/pages/AdminShippingPage').then((module) => ({ default: module.AdminShippingPage })),
+);
 const AdminOverviewPage = lazy(() =>
   import('@/pages/AdminPages').then((module) => ({ default: module.AdminOverviewPage })),
 );
@@ -264,7 +270,7 @@ export function App() {
             <Route path="requests" element={<SellerRequestsPage />} />
             <Route path="profile" element={<SellerProfilePage />} />
             <Route path="analytics" element={<SellerDashboardPage />} />
-            <Route path="shipping" element={<SellerOrdersPage />} />
+            <Route path="shipping" element={<SellerShippingPage />} />
           </Route>
         </Route>
 
@@ -278,6 +284,7 @@ export function App() {
             <Route path="categories" element={<AdminCategoriesPage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
             <Route path="orders/:orderNumber" element={<AdminOrderDetailPage />} />
+            <Route path="shipping" element={<AdminShippingPage />} />
             <Route path="payments" element={<AdminPaymentsPage />} />
             <Route path="refunds" element={<AdminRefundsPage />} />
             <Route path="returns" element={<AdminReturnsPage />} />

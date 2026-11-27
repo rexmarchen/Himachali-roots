@@ -585,7 +585,7 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
       const valid = verifyShippingWebhook({
         rawBody: raw,
         signature: req.get('x-shipping-signature') ?? req.get('x-shiprocket-signature'),
-        token: req.get('x-shipping-token') ?? req.get('x-api-key'),
+        token: req.get('x-shipping-token') ?? req.get('x-shiprocket-token') ?? req.get('x-api-key'),
       });
       if (!valid) {
         res.status(401).json({ error: 'Invalid shipping webhook credentials.' });
@@ -598,8 +598,8 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
       return;
     }
     try {
-      const { processShippingWebhook } = await import('../lib/shipping.js');
-      const result = await processShippingWebhook(db, req.body as Record<string, unknown>);
+      const { processHardenedShippingWebhook } = await import('../lib/fulfilmentRouter.js');
+      const result = await processHardenedShippingWebhook(db, req.body as Record<string, unknown>);
       res.json(result);
     } catch (err: unknown) {
       if (err instanceof AppError) {

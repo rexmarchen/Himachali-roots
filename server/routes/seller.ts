@@ -1,4 +1,20 @@
-import { checkCourierServiceability, bookCourierShipment, type ShippingAddressInfo } from '../lib/shipping.js';
+import { checkCourierServiceability, type ShippingAddressInfo } from '../lib/shipping.js';
+import {
+  cancelShiprocketFulfilmentPickup,
+  cancelSingleFulfilment,
+  getFulfilmentsForSellerOrder,
+  listSellerPickupLocations,
+  mapPickupLocationRow,
+  markFulfilmentReadyToShip,
+  pickupLocationSchema,
+  refreshShiprocketFulfilmentTracking,
+  syncShiprocketFulfilment,
+  updateExternalSupplierFulfilment,
+  updateOwnDeliveryFulfilment,
+  validateAndBuildProductShipping,
+  type PickupLocationRow,
+} from '../lib/fulfilmentRouter.js';
+import { listShiprocketPickupLocations, registerShiprocketPickupLocation } from '../lib/shiprocketService.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Router, type Request, type Response } from 'express';
@@ -197,6 +213,13 @@ const productSchema = z.object({
   estimatedCostPaise: z.number().int().min(0).max(10_000_000).optional().default(0),
   packagingCostPaise: z.number().int().min(0).max(10_000_000).optional().default(0),
   attributes: z.record(z.string().max(40), z.string().max(200)).optional(),
+  fulfilmentMethod: z.enum(['SHIPROCKET', 'OWN_DELIVERY', 'EXTERNAL_SUPPLIER']).optional(),
+  pickupLocationId: z.string().trim().max(80).nullable().optional(),
+  packageLengthCm: z.number().min(1).max(200).nullable().optional(),
+  packageBreadthCm: z.number().min(1).max(200).nullable().optional(),
+  packageHeightCm: z.number().min(1).max(200).nullable().optional(),
+  handlingDays: z.number().int().min(0).max(60).nullable().optional(),
+  shippingConfig: z.record(z.string(), z.unknown()).nullable().optional(),
   compliance: z
     .object({
       ingredients: z.string().trim().max(1000).optional(),
@@ -1296,10 +1319,12 @@ export function sellerRouter(db: Db): Router {
       changes_requested_at: string | null;
       updated_at: string;
       is_demo: number;
+      fulfilment_method: string | null;
+      pickup_location_id: string | null;
     }>(
       db,
       `SELECT p.id, p.name, p.slug, p.status, p.price_paise, p.sku, p.rejection_reason, p.moderation_note,
-              p.changes_requested_at, p.updated_at, p.is_demo,
+              p.changes_requested_at, p.updated_at, p.is_demo, p.fulfilment_method, p.pickup_location_id,
               c.name AS category_name, i.quantity AS stock, i.reserved_quantity AS reserved,
               (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url
          FROM products p JOIN categories c ON c.id = p.category_id
@@ -1332,6 +1357,8 @@ export function sellerRouter(db: Db): Router {
         moderationNote: row.moderation_note,
         updatedAt: row.updated_at,
         isDemo: row.is_demo === 1,
+        fulfilmentMethod: (row.fulfilment_method as 'SHIPROCKET' | 'OWN_DELIVERY' | 'EXTERNAL_SUPPLIER' | null) ?? 'SHIPROCKET',
+        pickupLocationId: row.pickup_location_id ?? null,
       })),
     });
   });
@@ -1413,6 +1440,15 @@ export function sellerRouter(db: Db): Router {
         },
         taxRateBp: product.tax_rate_bp,
         isDemo: product.is_demo === 1,
+        fulfilmentMethod: (product.fulfilment_method as string | null) ?? 'SHIPROCKET',
+        pickupLocationId: (product.pickup_location_id as string | null) ?? null,
+        packageLengthCm: (product.package_length_cm as number | null) ?? null,
+        packageBreadthCm: (product.package_breadth_cm as number | null) ?? null,
+        packageHeightCm: (product.package_height_cm as number | null) ?? null,
+        handlingDays: (product.handling_days as number | null) ?? 2,
+        shippingConfig: product.shipping_config_json
+          ? parseJson<Record<string, unknown> | null>(String(product.shipping_config_json), null)
+          : null,
       },
       commissionNote: COMMISSION_BASIS_NOTE,
     });
@@ -1450,17 +1486,63 @@ export function sellerRouter(db: Db): Router {
     const slug = uniqueSlug(input.name, (candidate) => Boolean(queryOne(db, 'SELECT 1 FROM products WHERE slug = ?', candidate)));
     const resolvedRegionSlug = input.regionSlug?.trim() ? slugifyValue(input.regionSlug) : input.region?.trim() ? slugifyValue(input.region) : null;
     const resolvedCraftSlug = input.craftSlug?.trim() ? slugifyValue(input.craftSlug) : input.craftType?.trim() ? slugifyValue(input.craftType) : null;
+
+    let shippingValues: {
+      fulfilmentMethod: 'SHIPROCKET' | 'OWN_DELIVERY' | 'EXTERNAL_SUPPLIER';
+      pickupLocationId: string | null;
+      weightG: number;
+      packageLengthCm: number | null;
+      packageBreadthCm: number | null;
+      packageHeightCm: number | null;
+      handlingDays: number;
+      dimensionsText: string | null;
+      shippingConfigJson: string | null;
+    };
+
+    if (input.fulfilmentMethod !== undefined || input.shippingConfig !== undefined) {
+      shippingValues = validateAndBuildProductShipping(db, id, {
+        fulfilmentMethod: input.fulfilmentMethod ?? 'SHIPROCKET',
+        pickupLocationId: input.pickupLocationId,
+        weightG: input.weightG,
+        packageLengthCm: input.packageLengthCm,
+        packageBreadthCm: input.packageBreadthCm,
+        packageHeightCm: input.packageHeightCm,
+        handlingDays: input.handlingDays,
+        shippingConfig: input.shippingConfig,
+      });
+    } else {
+      const defaultVerifiedPickup = queryOne<{ id: string }>(
+        db,
+        `SELECT id FROM seller_pickup_locations
+          WHERE seller_id = ? AND is_active = 1 AND is_verified = 1 AND is_approved = 1
+          ORDER BY is_default DESC, created_at ASC LIMIT 1`,
+        id,
+      );
+      shippingValues = {
+        fulfilmentMethod: 'SHIPROCKET',
+        pickupLocationId: input.pickupLocationId ?? defaultVerifiedPickup?.id ?? null,
+        weightG: input.weightG ?? 500,
+        packageLengthCm: input.packageLengthCm ?? null,
+        packageBreadthCm: input.packageBreadthCm ?? null,
+        packageHeightCm: input.packageHeightCm ?? null,
+        handlingDays: input.handlingDays ?? 2,
+        dimensionsText: emptyToNull(input.dimensions),
+        shippingConfigJson: null,
+      };
+    }
+
     tx(db, () => {
       execute(
         db,
         `INSERT INTO products
            (id, seller_id, category_id, name, slug, short_description, description, price_paise, compare_at_price_paise,
-            sku, unit, weight_g, dimensions, materials, care_instructions, food_info, compliance_json,
+            sku, unit, weight_g, dimensions, fulfilment_method, pickup_location_id, package_length_cm, package_breadth_cm,
+            package_height_cm, handling_days, shipping_config_json, materials, care_instructions, food_info, compliance_json,
             origin_place, region, region_slug, district_village, craft_type, craft_slug, technique,
             gi_tagged, gi_requested, gi_name, gi_registration_ref, made_to_order,
             variety_grade, harvest_info, dispatch_conditions, estimated_cost_paise, packaging_cost_paise,
             attributes, status, is_demo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0)`,
         productId,
         id,
         input.categoryId,
@@ -1472,8 +1554,15 @@ export function sellerRouter(db: Db): Router {
         input.compareAtPricePaise ?? null,
         sku,
         input.unit,
-        input.weightG ?? null,
-        emptyToNull(input.dimensions),
+        shippingValues.weightG,
+        emptyToNull(input.dimensions) ?? shippingValues.dimensionsText,
+        shippingValues.fulfilmentMethod,
+        shippingValues.pickupLocationId,
+        shippingValues.packageLengthCm,
+        shippingValues.packageBreadthCm,
+        shippingValues.packageHeightCm,
+        shippingValues.handlingDays,
+        shippingValues.shippingConfigJson,
         emptyToNull(input.materials),
         emptyToNull(input.careInstructions),
         emptyToNull(input.foodInfo),
@@ -1618,12 +1707,62 @@ export function sellerRouter(db: Db): Router {
         : existing.status === 'rejected'
           ? 'draft'
           : existing.status;
+    const existingShippingCfg = existing.shipping_config_json
+      ? parseJson<Record<string, unknown> | null>(String(existing.shipping_config_json), null)
+      : null;
+    const shippingTouched =
+      input.fulfilmentMethod !== undefined ||
+      input.pickupLocationId !== undefined ||
+      input.shippingConfig !== undefined;
+
+    let nextFulfilmentMethod = ((existing.fulfilment_method as string | null) ?? 'SHIPROCKET') as
+      | 'SHIPROCKET'
+      | 'OWN_DELIVERY'
+      | 'EXTERNAL_SUPPLIER';
+    let nextPickupLocationId = (existing.pickup_location_id as string | null) ?? null;
+    let nextWeightG = input.weightG !== undefined ? input.weightG : existing.weight_g;
+    let nextDimensions = input.dimensions !== undefined ? emptyToNull(input.dimensions) : existing.dimensions;
+    let nextLengthCm = input.packageLengthCm !== undefined ? input.packageLengthCm : ((existing.package_length_cm as number | null) ?? null);
+    let nextBreadthCm = input.packageBreadthCm !== undefined ? input.packageBreadthCm : ((existing.package_breadth_cm as number | null) ?? null);
+    let nextHeightCm = input.packageHeightCm !== undefined ? input.packageHeightCm : ((existing.package_height_cm as number | null) ?? null);
+    let nextHandlingDays = input.handlingDays !== undefined && input.handlingDays !== null ? input.handlingDays : Number(existing.handling_days ?? 2);
+    let nextShippingConfigJson = (existing.shipping_config_json as string | null) ?? null;
+
+    if (shippingTouched) {
+      const targetMethod = input.fulfilmentMethod ?? nextFulfilmentMethod;
+      const mergedConfig =
+        input.shippingConfig !== undefined
+          ? input.shippingConfig
+          : existingShippingCfg;
+      const validated = validateAndBuildProductShipping(db, id, {
+        fulfilmentMethod: targetMethod,
+        pickupLocationId: input.pickupLocationId !== undefined ? input.pickupLocationId : nextPickupLocationId,
+        weightG: nextWeightG,
+        packageLengthCm: nextLengthCm,
+        packageBreadthCm: nextBreadthCm,
+        packageHeightCm: nextHeightCm,
+        handlingDays: nextHandlingDays,
+        shippingConfig: mergedConfig,
+      });
+      nextFulfilmentMethod = validated.fulfilmentMethod;
+      nextPickupLocationId = validated.pickupLocationId;
+      nextWeightG = validated.weightG;
+      nextDimensions = input.dimensions !== undefined ? emptyToNull(input.dimensions) : validated.dimensionsText;
+      nextLengthCm = validated.packageLengthCm;
+      nextBreadthCm = validated.packageBreadthCm;
+      nextHeightCm = validated.packageHeightCm;
+      nextHandlingDays = validated.handlingDays;
+      nextShippingConfigJson = validated.shippingConfigJson;
+    }
+
     tx(db, () => {
       execute(
         db,
         `UPDATE products SET category_id = ?, name = ?, short_description = ?, description = ?, price_paise = ?,
-                compare_at_price_paise = ?, sku = ?, unit = ?, weight_g = ?, dimensions = ?, materials = ?,
-                care_instructions = ?, food_info = ?, compliance_json = ?, origin_place = ?, region = ?,
+                compare_at_price_paise = ?, sku = ?, unit = ?, weight_g = ?, dimensions = ?,
+                fulfilment_method = ?, pickup_location_id = ?, package_length_cm = ?, package_breadth_cm = ?,
+                package_height_cm = ?, handling_days = ?, shipping_config_json = ?,
+                materials = ?, care_instructions = ?, food_info = ?, compliance_json = ?, origin_place = ?, region = ?,
                 region_slug = ?, district_village = ?, craft_type = ?, craft_slug = ?, technique = ?,
                 gi_requested = ?, gi_name = ?, gi_registration_ref = ?, made_to_order = ?,
                 variety_grade = ?, harvest_info = ?, dispatch_conditions = ?,
@@ -1638,8 +1777,15 @@ export function sellerRouter(db: Db): Router {
         nextCompareAtPaise ?? null,
         effectiveSku,
         input.unit ?? existing.unit,
-        input.weightG !== undefined ? input.weightG : existing.weight_g,
-        input.dimensions !== undefined ? emptyToNull(input.dimensions) : existing.dimensions,
+        nextWeightG,
+        nextDimensions,
+        nextFulfilmentMethod,
+        nextPickupLocationId,
+        nextLengthCm,
+        nextBreadthCm,
+        nextHeightCm,
+        nextHandlingDays,
+        nextShippingConfigJson,
         nextMaterials,
         input.careInstructions !== undefined ? emptyToNull(input.careInstructions) : existing.care_instructions,
         input.foodInfo !== undefined ? emptyToNull(input.foodInfo) : existing.food_info,
@@ -1990,6 +2136,7 @@ export function sellerRouter(db: Db): Router {
     res.json({
       orders: rows.map((row) => {
         const address = JSON.parse(row.shipping_address) as { fullName: string; city: string; pincode: string; state: string };
+        const fulfilments = getFulfilmentsForSellerOrder(db, row.id);
         return {
           id: row.id,
           reference: row.reference,
@@ -2003,6 +2150,11 @@ export function sellerRouter(db: Db): Router {
           itemCount: row.item_count ?? 0,
           customerName: address.fullName,
           destination: `${address.city}, ${address.state} ${address.pincode}`,
+          fulfilmentMethods: [...new Set(fulfilments.map((f) => f.fulfilmentMethod))],
+          hasFailedSync: fulfilments.some((f) => f.shiprocketSyncStatus === 'failed'),
+          awaitingReadyToShip: fulfilments.some(
+            (f) => f.fulfilmentMethod === 'SHIPROCKET' && f.status === 'shiprocket_order_created',
+          ),
         };
       }),
     });
@@ -2056,9 +2208,11 @@ export function sellerRouter(db: Db): Router {
       line_subtotal_paise: number;
       status: string;
       image_url: string | null;
+      fulfilment_method: string | null;
+      fulfilment_id: string | null;
     }>(
       db,
-      'SELECT id, name, sku, quantity, unit_price_paise, line_subtotal_paise, status, image_url FROM order_items WHERE seller_order_id = ?',
+      'SELECT id, name, sku, quantity, unit_price_paise, line_subtotal_paise, status, image_url, fulfilment_method, fulfilment_id FROM order_items WHERE seller_order_id = ?',
       row.id,
     );
     const shipment = queryOne<{
@@ -2077,6 +2231,7 @@ export function sellerRouter(db: Db): Router {
           shipment.id,
         )
       : [];
+    const fulfilments = getFulfilmentsForSellerOrder(db, row.id);
     const address = JSON.parse(row.shipping_address) as {
       fullName: string;
       phone: string;
@@ -2121,6 +2276,8 @@ export function sellerRouter(db: Db): Router {
           lineSubtotalPaise: item.line_subtotal_paise,
           status: item.status,
           imageUrl: item.image_url,
+          fulfilmentMethod: item.fulfilment_method ?? 'SHIPROCKET',
+          fulfilmentId: item.fulfilment_id ?? null,
         })),
         shipment: shipment
           ? {
@@ -2137,6 +2294,7 @@ export function sellerRouter(db: Db): Router {
               })),
             }
           : null,
+        fulfilments,
         commissionNote: COMMISSION_BASIS_NOTE,
       },
     });
@@ -2316,13 +2474,10 @@ export function sellerRouter(db: Db): Router {
     const id = sellerId(req);
     const input = parse(
       z.object({
-        lengthCm: z.number().min(1).max(200).default(10),
-        breadthCm: z.number().min(1).max(200).default(10),
-        heightCm: z.number().min(1).max(200).default(10),
-        weightG: z.number().min(10).max(50000).default(500),
-        preferredCourierId: z.number().optional(),
+        preferredCourierId: z.number().int().positive().optional(),
+        fulfilmentId: z.string().trim().max(80).optional(),
       }),
-      req.body,
+      req.body ?? {},
     );
 
     const so = queryOne<{
@@ -2330,124 +2485,73 @@ export function sellerRouter(db: Db): Router {
       order_id: string;
       seller_id: string;
       status: string;
-      subtotal_paise: number;
-      shipping_paise: number;
     }>(
       db,
-      'SELECT id, order_id, seller_id, status, subtotal_paise, shipping_paise FROM seller_orders WHERE id = ? AND seller_id = ?',
+      'SELECT id, order_id, seller_id, status FROM seller_orders WHERE id = ? AND seller_id = ?',
       req.params.id,
       id,
     );
     if (!so) throw notFound('Seller order not found.');
-    if (['shipped', 'delivered', 'cancelled', 'returned'].includes(so.status)) {
-      throw conflict(`Cannot arrange shipping for an order that is already ${so.status}.`);
-    }
 
-    const order = queryOne<{ order_number: string; shipping_address: string; status: string; email: string; user_id: string }>(
+    const order = queryOne<{ order_number: string; paid_at: string | null }>(
       db,
-      'SELECT order_number, shipping_address, status, email, user_id FROM orders WHERE id = ?',
+      'SELECT order_number, paid_at FROM orders WHERE id = ?',
       so.order_id,
     );
-    if (!order) throw notFound('Parent order not found.');
-    if (order.status !== 'paid') {
-      throw badRequest('Cannot book shipping for an unpaid order.');
+    if (!order || !order.paid_at) {
+      throw badRequest('Cannot arrange shipping for an unpaid order.');
     }
 
-    let deliveryAddress: ShippingAddressInfo;
-    try {
-      deliveryAddress = JSON.parse(order.shipping_address);
-    } catch {
-      throw badRequest('Customer shipping address is corrupted or invalid.');
+    const fulfilments = getFulfilmentsForSellerOrder(db, so.id);
+    const target = input.fulfilmentId
+      ? fulfilments.find((f) => f.id === input.fulfilmentId)
+      : fulfilments.find((f) => f.fulfilmentMethod === 'SHIPROCKET');
+
+    if (!target) {
+      throw conflict(
+        'No Shiprocket fulfilment exists for this order. Own Delivery and External Supplier orders do not use Shiprocket.',
+        'shipping_method_mismatch',
+      );
     }
 
-    const seller = queryOne<{
-      business_name: string;
-      pickup_address: string;
-      operating_address: string;
-      phone: string | null;
-    }>(
-      db,
-      'SELECT sp.business_name, sp.pickup_address, sp.operating_address, p.phone FROM seller_profiles sp JOIN profiles p ON p.id = sp.user_id WHERE sp.id = ?',
-      id,
-    );
-
-    let pickupAddress: ShippingAddressInfo = {
-      fullName: seller?.business_name || 'Maker Dispatch',
-      phone: seller?.phone || '9876543210',
-      line1: 'Artisan Workshop Hub',
-      city: 'Kullu',
-      state: 'Himachal Pradesh',
-      pincode: '175125',
-    };
-
-    if (seller?.pickup_address) {
-      try {
-        const parsed = JSON.parse(seller.pickup_address);
-        if (parsed.line1 && parsed.pincode) {
-          pickupAddress = {
-            fullName: parsed.fullName || seller.business_name,
-            phone: parsed.phone || seller.phone || '9876543210',
-            line1: parsed.line1,
-            line2: parsed.line2,
-            city: parsed.city || 'Kullu',
-            state: parsed.state || 'Himachal Pradesh',
-            pincode: parsed.pincode,
-          };
-        }
-      } catch {
-        // Fallback
-      }
-    }
-
-    const items = queryAll<{ name: string; sku: string; quantity: number; unit_price_paise: number }>(
-      db,
-      'SELECT name, sku, quantity, unit_price_paise FROM order_items WHERE seller_order_id = ?',
-      so.id,
-    );
-
-    const bookingResult = await bookCourierShipment(
-      db,
-      {
-        sellerOrderId: so.id,
-        pickupAddress,
-        deliveryAddress,
-        package: {
-          lengthCm: input.lengthCm,
-          breadthCm: input.breadthCm,
-          heightCm: input.heightCm,
-          weightG: input.weightG,
-        },
-        orderNumber: order.order_number,
-        items: items.map((i) => ({
-          name: i.name,
-          sku: i.sku,
-          quantity: i.quantity,
-          pricePaise: i.unit_price_paise,
-        })),
-        declaredValuePaise: so.subtotal_paise,
-        preferredCourierId: input.preferredCourierId,
-      },
-      req.user!,
-    );
-
-    void notify(db, {
-      userId: order.user_id,
-      email: order.email,
-      type: 'order_dispatched',
-      subject: `Your Dear Hills order ${order.order_number} has been dispatched`,
-      body: `<p>Your items have been packed and handed over to <strong>${escapeHtml(bookingResult.carrier)}</strong>.</p><p><strong>AWB / Tracking Number:</strong> ${escapeHtml(bookingResult.trackingNumber)}</p><p><a href="${escapeHtml(bookingResult.trackingUrl)}">Track Your Parcel</a></p>`,
-      dedupeKey: `dispatch:${so.id}:${bookingResult.trackingNumber}`,
+    const result = await markFulfilmentReadyToShip(db, {
+      fulfilmentId: target.id,
+      ownerSellerId: id,
+      actor: req.user!,
+      preferredCourierId: input.preferredCourierId,
     });
 
     res.json({
       ok: true,
-      shipment: bookingResult,
-      message: `Shipping booked with ${bookingResult.carrier} (AWB: ${bookingResult.trackingNumber}). Pickup scheduled.`,
+      shipment: {
+        provider: 'shiprocket',
+        carrier: result.courierName,
+        trackingNumber: result.awbCode,
+        trackingUrl: result.trackingUrl,
+        labelUrl: result.labelUrl,
+        pickupScheduledAt: result.pickupScheduledAt,
+        pickupToken: result.pickupToken,
+      },
+      message: `Courier assigned (${result.courierName}, AWB: ${result.awbCode}) and Shiprocket pickup scheduled.`,
     });
   });
 
   router.get('/orders/:id/shipping/label', (req, res) => {
     const id = sellerId(req);
+    const fulfilments = getFulfilmentsForSellerOrder(db, String(req.params.id));
+    const owned = fulfilments.find((f) => f.sellerId === id && f.fulfilmentMethod === 'SHIPROCKET' && f.awbCode);
+    if (owned) {
+      res.json({
+        fulfilmentId: owned.id,
+        carrier: owned.courierName,
+        trackingNumber: owned.awbCode,
+        trackingUrl: owned.trackingUrl,
+        labelUrl: owned.labelUrl,
+        pickupScheduledAt: owned.pickupScheduledAt,
+        pickupToken: owned.pickupToken,
+      });
+      return;
+    }
     const shipment = queryOne<{
       id: string;
       carrier: string;
@@ -2863,6 +2967,367 @@ export function sellerRouter(db: Db): Router {
         upiId: cleanDetails.upiId,
       },
     });
+  });
+
+  router.get('/pickup-locations', (req, res) => {
+    const id = sellerId(req);
+    res.json({
+      pickupLocations: listSellerPickupLocations(db, id),
+      shiprocketConfigured: env.shiprocket.configured,
+    });
+  });
+
+  router.post('/pickup-locations', async (req, res) => {
+    const id = sellerId(req);
+    const input = parse(pickupLocationSchema, req.body);
+    const seller = queryOne<{ business_name: string; status: string }>(
+      db,
+      'SELECT business_name, status FROM seller_profiles WHERE id = ?',
+      id,
+    );
+    if (!seller) throw notFound('Seller profile not found.');
+
+    const rawSrName =
+      input.shiprocketLocationName?.trim() ||
+      `${seller.business_name.replace(/[^A-Za-z0-9]/g, '').slice(0, 12) || 'Maker'}_${input.nickname.replace(/[^A-Za-z0-9]/g, '').slice(0, 10) || 'Hub'}_${id.slice(-4)}`;
+    const shiprocketLocationName = rawSrName.replace(/\s+/g, '_').slice(0, 36);
+
+    const locId = newId('pkl_');
+    const nowIso = new Date().toISOString();
+    let shiprocketPickupId: string | null = null;
+    let isVerified = 0;
+    let isApproved = 0;
+    let verificationNote = 'Pending Shiprocket registration & verification.';
+
+    if ((input.registerWithShiprocket ?? true) && env.shiprocket.configured) {
+      try {
+        const reg = await registerShiprocketPickupLocation({
+          pickupLocation: shiprocketLocationName,
+          name: input.contactName,
+          email: input.email || req.user!.email,
+          phone: input.phone,
+          address: input.line1,
+          address2: input.line2 ?? '',
+          city: input.city,
+          state: input.state,
+          pinCode: input.pincode,
+        });
+        shiprocketPickupId = reg.shiprocketPickupId;
+        if (reg.verified) {
+          isVerified = 1;
+          isApproved = seller.status === 'approved' ? 1 : 0;
+          verificationNote = reg.note;
+        }
+      } catch (err) {
+        if (input.registerWithShiprocket === true) throw err;
+        verificationNote = `Saved locally; Shiprocket registration pending: ${err instanceof Error ? err.message : String(err)}`.slice(0, 300);
+      }
+    }
+
+    const existingCount =
+      queryOne<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM seller_pickup_locations WHERE seller_id = ?', id)
+        ?.count ?? 0;
+    const makeDefault = Boolean(input.isDefault) || existingCount === 0;
+
+    tx(db, () => {
+      if (makeDefault) {
+        execute(db, 'UPDATE seller_pickup_locations SET is_default = 0 WHERE seller_id = ?', id);
+      }
+      execute(
+        db,
+        `INSERT INTO seller_pickup_locations
+           (id, seller_id, nickname, shiprocket_location_name, shiprocket_pickup_id, contact_name, phone, email,
+            line1, line2, city, state, pincode, is_verified, is_approved, is_default, is_active, verification_note, verified_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+        locId,
+        id,
+        input.nickname,
+        shiprocketLocationName,
+        shiprocketPickupId,
+        input.contactName,
+        input.phone,
+        input.email || req.user!.email,
+        input.line1,
+        emptyToNull(input.line2),
+        input.city,
+        input.state,
+        input.pincode,
+        isVerified,
+        isApproved,
+        makeDefault ? 1 : 0,
+        verificationNote,
+        isVerified ? nowIso : null,
+        nowIso,
+        nowIso,
+      );
+      audit(db, req.user!, 'seller.pickup_location_created', 'seller_pickup_location', locId, null, {
+        nickname: input.nickname,
+        shiprocketLocationName,
+        pincode: input.pincode,
+        isVerified: Boolean(isVerified),
+      });
+    });
+
+    const created = queryOne<PickupLocationRow>(db, 'SELECT * FROM seller_pickup_locations WHERE id = ?', locId)!;
+    res.status(201).json({ pickupLocation: mapPickupLocationRow(created) });
+  });
+
+  router.post('/pickup-locations/:locId/verify', async (req, res) => {
+    const id = sellerId(req);
+    const row = queryOne<PickupLocationRow>(
+      db,
+      'SELECT * FROM seller_pickup_locations WHERE id = ? AND seller_id = ?',
+      String(req.params.locId),
+      id,
+    );
+    if (!row) throw notFound('Pickup location not found.');
+
+    const seller = queryOne<{ status: string }>(db, 'SELECT status FROM seller_profiles WHERE id = ?', id);
+    if (!env.shiprocket.configured) {
+      throw badRequest('Shiprocket credentials are not configured on the backend.');
+    }
+
+    const remoteList = await listShiprocketPickupLocations();
+    const matched = remoteList.find(
+      (r) =>
+        r.pickupLocation.toLowerCase() === row.shiprocket_location_name.toLowerCase() ||
+        (r.pinCode === row.pincode && r.address.toLowerCase().includes(row.line1.slice(0, 12).toLowerCase())),
+    );
+
+    let pickupId = matched?.id ? String(matched.id) : row.shiprocket_pickup_id;
+    let locationName = matched?.pickupLocation ?? row.shiprocket_location_name;
+    let note = 'Matched existing Shiprocket pickup address.';
+
+    if (!matched) {
+      const reg = await registerShiprocketPickupLocation({
+        pickupLocation: row.shiprocket_location_name,
+        name: row.contact_name,
+        email: row.email || req.user!.email,
+        phone: row.phone,
+        address: row.line1,
+        address2: row.line2 ?? '',
+        city: row.city,
+        state: row.state,
+        pinCode: row.pincode,
+      });
+      pickupId = reg.shiprocketPickupId;
+      locationName = reg.pickupLocation;
+      note = reg.note;
+    }
+
+    const nowIso = new Date().toISOString();
+    const approve = seller?.status === 'approved' ? 1 : row.is_approved;
+    execute(
+      db,
+      `UPDATE seller_pickup_locations
+          SET shiprocket_pickup_id = ?, shiprocket_location_name = ?, is_verified = 1,
+              is_approved = ?, verified_at = ?, verification_note = ?, updated_at = ?
+        WHERE id = ?`,
+      pickupId,
+      locationName,
+      approve,
+      nowIso,
+      note,
+      nowIso,
+      row.id,
+    );
+    audit(db, req.user!, 'seller.pickup_location_verified', 'seller_pickup_location', row.id, null, {
+      locationName,
+      pickupId,
+    });
+    const updated = queryOne<PickupLocationRow>(db, 'SELECT * FROM seller_pickup_locations WHERE id = ?', row.id)!;
+    res.json({ ok: true, pickupLocation: mapPickupLocationRow(updated) });
+  });
+
+  router.post('/pickup-locations/:locId/default', (req, res) => {
+    const id = sellerId(req);
+    const row = queryOne<PickupLocationRow>(
+      db,
+      'SELECT * FROM seller_pickup_locations WHERE id = ? AND seller_id = ?',
+      String(req.params.locId),
+      id,
+    );
+    if (!row) throw notFound('Pickup location not found.');
+    tx(db, () => {
+      execute(db, 'UPDATE seller_pickup_locations SET is_default = 0 WHERE seller_id = ?', id);
+      execute(db, 'UPDATE seller_pickup_locations SET is_default = 1, updated_at = ? WHERE id = ?', new Date().toISOString(), row.id);
+    });
+    res.json({ ok: true });
+  });
+
+  router.delete('/pickup-locations/:locId', (req, res) => {
+    const id = sellerId(req);
+    const row = queryOne<PickupLocationRow>(
+      db,
+      'SELECT * FROM seller_pickup_locations WHERE id = ? AND seller_id = ?',
+      String(req.params.locId),
+      id,
+    );
+    if (!row) throw notFound('Pickup location not found.');
+    const inUse = queryOne<{ count: number }>(
+      db,
+      "SELECT COUNT(*) AS count FROM products WHERE pickup_location_id = ? AND fulfilment_method = 'SHIPROCKET' AND status NOT IN ('archived','rejected')",
+      row.id,
+    );
+    if ((inUse?.count ?? 0) > 0) {
+      throw conflict('Cannot delete a pickup location referenced by active Shiprocket products. Reassign those products first.');
+    }
+    execute(db, 'DELETE FROM seller_pickup_locations WHERE id = ? AND seller_id = ?', row.id, id);
+    res.json({ ok: true });
+  });
+
+  router.post('/fulfilments/:fulfilmentId/sync-shiprocket', async (req, res) => {
+    const id = sellerId(req);
+    const existing = queryOne<{ seller_id: string }>(
+      db,
+      'SELECT seller_id FROM order_fulfilments WHERE id = ?',
+      String(req.params.fulfilmentId),
+    );
+    if (!existing || existing.seller_id !== id) throw notFound('Fulfilment not found.');
+    const result = await syncShiprocketFulfilment(db, String(req.params.fulfilmentId), {
+      forceRetry: true,
+      actor: req.user!,
+    });
+    res.json({ ok: result.synced, ...result });
+  });
+
+  router.post('/fulfilments/:fulfilmentId/ready-to-ship', async (req, res) => {
+    const id = sellerId(req);
+    const input = parse(
+      z.object({ preferredCourierId: z.number().int().positive().optional() }),
+      req.body ?? {},
+    );
+    const result = await markFulfilmentReadyToShip(db, {
+      fulfilmentId: String(req.params.fulfilmentId),
+      ownerSellerId: id,
+      actor: req.user!,
+      preferredCourierId: input.preferredCourierId,
+    });
+    res.json({ ok: true, ...result });
+  });
+
+  router.post('/fulfilments/:fulfilmentId/cancel-pickup', async (req, res) => {
+    const id = sellerId(req);
+    const input = parse(z.object({ note: z.string().trim().max(400).optional() }), req.body ?? {});
+    const result = await cancelShiprocketFulfilmentPickup(db, {
+      fulfilmentId: String(req.params.fulfilmentId),
+      ownerSellerId: id,
+      actor: req.user!,
+      note: input.note,
+    });
+    res.json(result);
+  });
+
+  router.post('/fulfilments/:fulfilmentId/refresh-tracking', async (req, res) => {
+    const id = sellerId(req);
+    const result = await refreshShiprocketFulfilmentTracking(db, {
+      fulfilmentId: String(req.params.fulfilmentId),
+      ownerSellerId: id,
+      actor: req.user!,
+    });
+    res.json({ ok: true, ...result });
+  });
+
+  router.get('/fulfilments/:fulfilmentId/label', (req, res) => {
+    const id = sellerId(req);
+    const row = queryOne<{
+      id: string;
+      seller_id: string;
+      fulfilment_method: string;
+      courier_name: string | null;
+      awb_code: string | null;
+      tracking_url: string | null;
+      label_url: string | null;
+      pickup_scheduled_at: string | null;
+      pickup_token: string | null;
+    }>(
+      db,
+      'SELECT id, seller_id, fulfilment_method, courier_name, awb_code, tracking_url, label_url, pickup_scheduled_at, pickup_token FROM order_fulfilments WHERE id = ?',
+      String(req.params.fulfilmentId),
+    );
+    if (!row || row.seller_id !== id) throw notFound('Fulfilment not found.');
+    if (row.fulfilment_method !== 'SHIPROCKET' || !row.awb_code) {
+      throw notFound('Shipping label is not generated yet. Mark Ready to Ship first.');
+    }
+    res.json({
+      fulfilmentId: row.id,
+      carrier: row.courier_name,
+      trackingNumber: row.awb_code,
+      trackingUrl: row.tracking_url,
+      labelUrl: row.label_url,
+      pickupScheduledAt: row.pickup_scheduled_at,
+      pickupToken: row.pickup_token,
+    });
+  });
+
+  router.post('/fulfilments/:fulfilmentId/own-delivery', (req, res) => {
+    const id = sellerId(req);
+    const input = parse(
+      z.object({
+        action: z.enum(['accept', 'preparing', 'out_for_delivery', 'delivered', 'delivery_failed']),
+        recipientName: z.string().trim().max(120).optional(),
+        note: z.string().trim().max(500).optional(),
+        proofUrl: safeTrackingUrlSchema,
+        failedReason: z.string().trim().max(300).optional(),
+      }),
+      req.body,
+    );
+    const result = updateOwnDeliveryFulfilment(db, {
+      fulfilmentId: String(req.params.fulfilmentId),
+      ownerSellerId: id,
+      actor: req.user!,
+      action: input.action,
+      recipientName: input.recipientName,
+      note: input.note,
+      proofUrl: input.proofUrl || undefined,
+      failedReason: input.failedReason,
+    });
+    res.json({ ok: true, ...result });
+  });
+
+  router.post('/fulfilments/:fulfilmentId/external', (req, res) => {
+    const id = sellerId(req);
+    const input = parse(
+      z.object({
+        action: z.enum(['confirm_supplier', 'place_external_order', 'update_tracking', 'delivered', 'delivery_exception']),
+        supplierName: z.string().trim().max(140).optional(),
+        externalOrderRef: z.string().trim().max(120).optional(),
+        courierName: z.string().trim().max(100).optional(),
+        trackingId: z.string().trim().max(120).optional(),
+        trackingUrl: safeTrackingUrlSchema,
+        dispatchDate: z.string().trim().max(40).optional(),
+        deliveryStatus: z.enum(['in_transit', 'out_for_delivery']).optional(),
+        note: z.string().trim().max(500).optional(),
+      }),
+      req.body,
+    );
+    const result = updateExternalSupplierFulfilment(db, {
+      fulfilmentId: String(req.params.fulfilmentId),
+      ownerSellerId: id,
+      actor: req.user!,
+      action: input.action,
+      supplierName: input.supplierName,
+      externalOrderRef: input.externalOrderRef,
+      courierName: input.courierName,
+      trackingId: input.trackingId,
+      trackingUrl: input.trackingUrl || undefined,
+      dispatchDate: input.dispatchDate,
+      deliveryStatus: input.deliveryStatus,
+      note: input.note,
+    });
+    res.json({ ok: true, ...result });
+  });
+
+  router.post('/fulfilments/:fulfilmentId/cancel', async (req, res) => {
+    const id = sellerId(req);
+    const input = parse(z.object({ reason: z.string().trim().max(400).optional() }), req.body ?? {});
+    const result = await cancelSingleFulfilment(db, {
+      fulfilmentId: String(req.params.fulfilmentId),
+      ownerSellerId: id,
+      actor: req.user!,
+      reason: input.reason,
+    });
+    res.json(result);
   });
 
   return router;

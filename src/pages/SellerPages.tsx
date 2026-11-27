@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Category, ProductStatus, SellerProduct } from '@shared/types';
+import type { Category, FulfilmentMethod, OrderFulfilmentView, ProductStatus, SellerProduct } from '@shared/types';
+import {
+  DEFAULT_PRODUCT_SHIPPING_STATE,
+  ProductShippingMethodSection,
+  SellerFulfilmentCard,
+  SellerPickupLocationsCard,
+  type ProductShippingFormState,
+} from '@/components/shipping/FulfilmentComponents';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
 import { COMPLIANCE_GUIDES, complianceGroupFor } from '@shared/productCompliance';
 import { buildProductFallbackDescription, buildProductShortFallback } from '@shared/seo';
@@ -2859,6 +2866,13 @@ interface ProductEditorResponse {
     inventory: { quantity: number; reserved: number; lowStockThreshold: number };
     taxRateBp: number;
     isDemo: boolean;
+    fulfilmentMethod?: FulfilmentMethod;
+    pickupLocationId?: string | null;
+    packageLengthCm?: number | null;
+    packageBreadthCm?: number | null;
+    packageHeightCm?: number | null;
+    handlingDays?: number | null;
+    shippingConfig?: Record<string, unknown> | null;
   };
   commissionNote: string;
 }
@@ -2917,6 +2931,7 @@ export function SellerProductEditorPage() {
   const queryClient = useQueryClient();
 
   const [form, setForm] = useState(EMPTY_PRODUCT);
+  const [shipping, setShipping] = useState<ProductShippingFormState>(DEFAULT_PRODUCT_SHIPPING_STATE);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [prefilledProductId, setPrefilledProductId] = useState<string | null>(null);
@@ -3054,6 +3069,34 @@ export function SellerProductEditorPage() {
       quantity: String(loadedProduct.inventory.quantity),
       lowStockThreshold: String(loadedProduct.inventory.lowStockThreshold),
       note: '',
+    });
+    const cfg = (loadedProduct.shippingConfig ?? {}) as Record<string, unknown>;
+    const method: FulfilmentMethod = loadedProduct.fulfilmentMethod ?? 'OWN_DELIVERY';
+    setShipping({
+      ...DEFAULT_PRODUCT_SHIPPING_STATE,
+      fulfilmentMethod: method,
+      pickupLocationId: loadedProduct.pickupLocationId ?? (typeof cfg.pickupLocationId === 'string' ? cfg.pickupLocationId : ''),
+      packageWeightG: String(loadedProduct.weightG ?? (typeof cfg.packageWeightG === 'number' ? cfg.packageWeightG : 500)),
+      packageLengthCm: String(loadedProduct.packageLengthCm ?? (typeof cfg.packageLengthCm === 'number' ? cfg.packageLengthCm : 18)),
+      packageBreadthCm: String(loadedProduct.packageBreadthCm ?? (typeof cfg.packageBreadthCm === 'number' ? cfg.packageBreadthCm : 14)),
+      packageHeightCm: String(loadedProduct.packageHeightCm ?? (typeof cfg.packageHeightCm === 'number' ? cfg.packageHeightCm : 10)),
+      handlingDays: String(loadedProduct.handlingDays ?? (typeof cfg.handlingDays === 'number' ? cfg.handlingDays : 2)),
+      shippingNotes: typeof cfg.shippingNotes === 'string' ? cfg.shippingNotes : '',
+      deliveryArea: typeof cfg.deliveryArea === 'string' ? cfg.deliveryArea : '',
+      serviceablePincodes: Array.isArray(cfg.serviceablePincodes) ? cfg.serviceablePincodes.join(', ') : '',
+      deliveryRadiusKm: typeof cfg.deliveryRadiusKm === 'number' ? String(cfg.deliveryRadiusKm) : '',
+      deliveryChargeRupees: typeof cfg.deliveryChargePaise === 'number' ? String(Math.round(cfg.deliveryChargePaise / 100)) : '0',
+      estimatedDeliveryDaysOwn:
+        method === 'OWN_DELIVERY' && typeof cfg.estimatedDeliveryDays === 'string' ? cfg.estimatedDeliveryDays : '2–4 days',
+      contactName: typeof cfg.contactName === 'string' ? cfg.contactName : '',
+      contactPhone: typeof cfg.contactPhone === 'string' ? cfg.contactPhone : '',
+      deliveryInstructions: typeof cfg.deliveryInstructions === 'string' ? cfg.deliveryInstructions : '',
+      supplierName: typeof cfg.supplierName === 'string' ? cfg.supplierName : '',
+      supplierReference: typeof cfg.supplierReference === 'string' ? cfg.supplierReference : '',
+      processingTimeDays: typeof cfg.processingTimeDays === 'number' ? String(cfg.processingTimeDays) : '2',
+      estimatedDeliveryDaysExternal:
+        method === 'EXTERNAL_SUPPLIER' && typeof cfg.estimatedDeliveryDays === 'string' ? cfg.estimatedDeliveryDays : '5–8 days',
+      fulfilmentInstructions: typeof cfg.fulfilmentInstructions === 'string' ? cfg.fulfilmentInstructions : '',
     });
   }
 
@@ -3239,6 +3282,46 @@ export function SellerProductEditorPage() {
       setForm((prev) => ({ ...prev, sku: effectiveSku }));
     }
 
+    const shippingConfigPayload =
+      shipping.fulfilmentMethod === 'SHIPROCKET'
+        ? {
+            pickupLocationId: shipping.pickupLocationId,
+            packageWeightG: Number(shipping.packageWeightG || form.weightG || 500),
+            packageLengthCm: Number(shipping.packageLengthCm || 18),
+            packageBreadthCm: Number(shipping.packageBreadthCm || 14),
+            packageHeightCm: Number(shipping.packageHeightCm || 10),
+            handlingDays: Number(shipping.handlingDays || 2),
+            shippingNotes: shipping.shippingNotes.trim() || undefined,
+          }
+        : shipping.fulfilmentMethod === 'OWN_DELIVERY'
+          ? {
+              deliveryArea: shipping.deliveryArea.trim(),
+              serviceablePincodes: shipping.serviceablePincodes
+                .split(/[\s,;]+/)
+                .map((p) => p.trim())
+                .filter(Boolean),
+              deliveryRadiusKm: shipping.deliveryRadiusKm.trim() ? Number(shipping.deliveryRadiusKm) : null,
+              deliveryChargePaise: Math.round(Number(shipping.deliveryChargeRupees || 0) * 100),
+              estimatedDeliveryDays: shipping.estimatedDeliveryDaysOwn.trim() || '2–4 days',
+              contactName: shipping.contactName.trim(),
+              contactPhone: shipping.contactPhone.trim(),
+              deliveryInstructions: shipping.deliveryInstructions.trim() || undefined,
+            }
+          : {
+              supplierName: shipping.supplierName.trim(),
+              supplierReference: shipping.supplierReference.trim() || undefined,
+              processingTimeDays: Number(shipping.processingTimeDays || 2),
+              estimatedDeliveryDays: shipping.estimatedDeliveryDaysExternal.trim() || '5–8 days',
+              fulfilmentInstructions: shipping.fulfilmentInstructions.trim() || undefined,
+            };
+
+    const resolvedWeightG =
+      shipping.fulfilmentMethod === 'SHIPROCKET' && shipping.packageWeightG
+        ? Number(shipping.packageWeightG)
+        : form.weightG
+          ? Number(form.weightG)
+          : 500;
+
     const payload = {
       name: form.name.trim(),
       categoryId: form.categoryId,
@@ -3269,8 +3352,17 @@ export function SellerProductEditorPage() {
       dispatchConditions: form.dispatchConditions || undefined,
       sku: effectiveSku,
       unit: form.unit.trim() || 'piece',
-      weightG: form.weightG ? Number(form.weightG) : 500,
+      weightG: resolvedWeightG,
       dimensions: form.dimensions || undefined,
+      fulfilmentMethod: shipping.fulfilmentMethod,
+      pickupLocationId: shipping.fulfilmentMethod === 'SHIPROCKET' ? shipping.pickupLocationId || null : null,
+      packageLengthCm: Number(shipping.packageLengthCm || 18),
+      packageBreadthCm: Number(shipping.packageBreadthCm || 14),
+      packageHeightCm: Number(shipping.packageHeightCm || 10),
+      handlingDays: Number(
+        shipping.fulfilmentMethod === 'EXTERNAL_SUPPLIER' ? shipping.processingTimeDays || 2 : shipping.handlingDays || 2,
+      ),
+      shippingConfig: shippingConfigPayload,
       materials: form.materials || undefined,
       careInstructions: form.careInstructions || undefined,
       foodInfo: form.foodInfo || undefined,
@@ -4412,6 +4504,7 @@ export function SellerProductEditorPage() {
                 />
               </Field>
             </div>
+            <ProductShippingMethodSection shipping={shipping} setShipping={setShipping} fields={fields} />
           </section>
         )}
 
@@ -4889,6 +4982,7 @@ interface SellerOrderDetail {
     address: { fullName: string; phone: string; line1: string; line2?: string; city: string; state: string; pincode: string };
     items: { id: string; name: string; sku: string; quantity: number; unitPricePaise: number; lineSubtotalPaise: number; status: string; imageUrl: string | null }[];
     shipment: { carrier: string; trackingNumber: string; trackingUrl: string | null; status: string; shippedAt: string; deliveredAt: string | null; events: { status: string; description: string | null; occurredAt: string }[] } | null;
+    fulfilments?: OrderFulfilmentView[];
     commissionNote: string;
   };
 }
@@ -5007,6 +5101,18 @@ export function SellerOrderDetailPage() {
       </div>
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">
+          {data.fulfilments && data.fulfilments.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-serif font-bold text-[#172321]">
+                  Fulfilment &amp; Shipping Routing ({data.fulfilments.length})
+                </h2>
+              </div>
+              {data.fulfilments.map((f) => (
+                <SellerFulfilmentCard key={f.id} fulfilment={f} onUpdated={refresh} />
+              ))}
+            </div>
+          ) : null}
           <section className="border border-line bg-surface">
             <div className="border-b border-line px-5 py-4"><h2 className="text-lg">Items</h2></div>
             <ul className="divide-y divide-line">
@@ -5884,6 +5990,7 @@ export function SellerProfilePage() {
         </section>
         <Button type="submit" loading={saving}>Save store profile</Button>
       </form>
+      <SellerPickupLocationsCard />
       <section className="border border-line bg-surface p-5 sm:p-6">
         <h2 className="text-xl">Verification documents</h2>
         <p className="mt-1 text-[11px] leading-relaxed text-muted">Private files. Only you and administrators can open them.</p>

@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { releaseExpiredOrders } from './lib/orders.js';
 import { OutboxWorker } from './core/outbox/index.js';
 import { registerOutboxSubscribers } from './workers/subscribers.js';
+import { processPendingShippingOutboxBatch } from './lib/fulfilmentRouter.js';
 
 
 async function main(): Promise<void> {
@@ -63,9 +64,23 @@ async function main(): Promise<void> {
   const outboxWorker = new OutboxWorker(db, 3000, 25);
   outboxWorker.start();
 
+  const shippingSyncTimer = setInterval(() => {
+    void processPendingShippingOutboxBatch(db, 10).catch((err) => {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'shipping_sync_worker_failed',
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    });
+  }, 15_000);
+  shippingSyncTimer.unref();
+
   const shutdown = (signal: string) => {
     console.log(JSON.stringify({ level: 'info', msg: 'shutting_down', signal }));
     outboxWorker.stop();
+    clearInterval(shippingSyncTimer);
     server.close(() => {
       try {
         getDb().close();

@@ -3,6 +3,195 @@
 
 export type Role = 'customer' | 'seller' | 'admin';
 
+export type FulfilmentMethod = 'SHIPROCKET' | 'OWN_DELIVERY' | 'EXTERNAL_SUPPLIER';
+
+export const FULFILMENT_METHODS: readonly FulfilmentMethod[] = [
+  'SHIPROCKET',
+  'OWN_DELIVERY',
+  'EXTERNAL_SUPPLIER',
+] as const;
+
+export const FULFILMENT_METHOD_LABELS: Record<FulfilmentMethod, string> = {
+  SHIPROCKET: 'Shiprocket',
+  OWN_DELIVERY: 'Own Delivery',
+  EXTERNAL_SUPPLIER: 'External Supplier Direct Delivery',
+};
+
+export const FULFILMENT_METHOD_DESCRIPTIONS: Record<FulfilmentMethod, string> = {
+  SHIPROCKET:
+    'Ship orders through Shiprocket. Order details will automatically be sent to Shiprocket when the customer order is confirmed.',
+  OWN_DELIVERY: 'Deliver orders using your own delivery resources.',
+  EXTERNAL_SUPPLIER: 'Orders are fulfilled directly by an external supplier.',
+};
+
+export const FULFILMENT_STATUS_LABELS: Record<string, string> = {
+  pending_sync: 'Pending Shiprocket Sync',
+  shiprocket_order_created: 'Shiprocket Order Created — Waiting Seller Ready-to-Ship',
+  sync_failed: 'Shiprocket Sync Failed',
+  ready_to_ship: 'Ready to Ship',
+  awb_assigned: 'Courier & AWB Assigned',
+  pickup_scheduled: 'Pickup Scheduled',
+  picked_up: 'Picked Up',
+  in_transit: 'In Transit',
+  out_for_delivery: 'Out for Delivery',
+  delivered: 'Delivered',
+  rto_initiated: 'RTO Initiated',
+  rto_delivered: 'RTO Delivered',
+  order_confirmed: 'Order Confirmed',
+  accepted: 'Accepted by Seller',
+  preparing: 'Preparing Order',
+  delivery_failed: 'Delivery Failed',
+  supplier_confirmed: 'Supplier Availability Confirmed',
+  external_order_placed: 'External Supplier Order Placed',
+  delivery_exception: 'Delivery Exception',
+  cancelled: 'Cancelled',
+  partial_cancelled: 'Partially Cancelled',
+  flagged_admin_review: 'Flagged for Admin Review',
+};
+
+export interface SellerPickupLocation {
+  id: string;
+  sellerId: string;
+  nickname: string;
+  shiprocketLocationName: string;
+  shiprocketPickupId: string | null;
+  contactName: string;
+  phone: string;
+  email: string | null;
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+  isVerified: boolean;
+  isApproved: boolean;
+  isDefault: boolean;
+  isActive: boolean;
+  verificationNote: string | null;
+  verifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShiprocketProductConfig {
+  fulfilmentMethod: 'SHIPROCKET';
+  pickupLocationId: string;
+  packageWeightG: number;
+  packageLengthCm: number;
+  packageBreadthCm: number;
+  packageHeightCm: number;
+  handlingDays: number;
+  shippingNotes?: string;
+}
+
+export interface OwnDeliveryProductConfig {
+  fulfilmentMethod: 'OWN_DELIVERY';
+  deliveryArea: string;
+  serviceablePincodes: string[];
+  deliveryRadiusKm?: number | null;
+  deliveryChargePaise: number;
+  estimatedDeliveryDays: string;
+  contactName: string;
+  contactPhone: string;
+  deliveryInstructions?: string;
+}
+
+export interface ExternalSupplierProductConfig {
+  fulfilmentMethod: 'EXTERNAL_SUPPLIER';
+  supplierName: string;
+  supplierReference?: string;
+  processingTimeDays: number;
+  estimatedDeliveryDays: string;
+  fulfilmentInstructions?: string;
+}
+
+export type ProductShippingConfig =
+  | ShiprocketProductConfig
+  | OwnDeliveryProductConfig
+  | ExternalSupplierProductConfig;
+
+export interface OrderFulfilmentEventView {
+  id: string;
+  source: string;
+  status: string;
+  description: string | null;
+  actorRole: string | null;
+  occurredAt: string;
+}
+
+export interface OrderFulfilmentItemView {
+  id: string;
+  productId: string;
+  name: string;
+  sku: string;
+  imageUrl: string | null;
+  quantity: number;
+  unitPricePaise: number;
+  lineSubtotalPaise: number;
+  status: string;
+  fulfilmentMethod: FulfilmentMethod | string;
+}
+
+export interface OrderFulfilmentView {
+  id: string;
+  orderId: string;
+  orderNumber?: string;
+  sellerOrderId: string;
+  sellerOrderReference?: string;
+  sellerId: string;
+  sellerName: string;
+  fulfilmentMethod: FulfilmentMethod | 'UNKNOWN';
+  status: string;
+  provider: string;
+  pickupLocationId: string | null;
+  pickupLocationSummary: {
+    nickname?: string;
+    shiprocketLocationName?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+  } | null;
+  packageWeightG: number;
+  packageLengthCm: number;
+  packageBreadthCm: number;
+  packageHeightCm: number;
+  shiprocketOrderId: number | null;
+  shiprocketShipmentId: number | null;
+  shiprocketSyncStatus: string;
+  syncAttempts: number;
+  lastSyncError: string | null;
+  lastSyncedAt: string | null;
+  courierCompanyId: number | null;
+  courierName: string | null;
+  awbCode: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  labelUrl: string | null;
+  pickupScheduledAt: string | null;
+  pickupToken: string | null;
+  readyToShipAt: string | null;
+  dispatchedAt: string | null;
+  deliveredAt: string | null;
+  cancelledAt: string | null;
+  externalSupplierName: string | null;
+  externalOrderRef: string | null;
+  ownDeliveryEvidence: {
+    recipientName?: string;
+    note?: string;
+    proofUrl?: string;
+    failedReason?: string;
+    recordedAt?: string;
+  } | null;
+  estimatedDeliveryText: string | null;
+  adminReviewReason: string | null;
+  shippingConfigSnapshot?: Record<string, unknown> | null;
+  items: OrderFulfilmentItemView[];
+  events: OrderFulfilmentEventView[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ProductStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'paused' | 'archived';
 export type ProductWorkflowStatus = 'draft' | 'submitted' | 'changes_requested' | 'approved' | 'published' | 'rejected' | 'paused' | 'archived';
 export type SellerStatus =
@@ -189,6 +378,17 @@ export interface ProductDetail extends ProductSummary {
   related: ProductSummary[];
   returnPolicy: string;
   shippingEstimate: string;
+  fulfilmentMethod?: FulfilmentMethod;
+  handlingDays?: number;
+  shippingSummary?: {
+    fulfilmentMethod: FulfilmentMethod;
+    methodLabel: string;
+    estimatedDeliveryText: string | null;
+    deliveryArea?: string | null;
+    serviceablePincodes?: string[];
+    deliveryChargePaise?: number | null;
+    supplierName?: string | null;
+  };
 }
 
 export interface Review {
@@ -267,6 +467,8 @@ export interface OrderItemSummary {
   status: string;
   sellerName: string;
   sellerOrderId: string;
+  fulfilmentMethod?: FulfilmentMethod | string;
+  fulfilmentId?: string | null;
   canReview: boolean;
   reviewed: boolean;
 }
@@ -296,6 +498,7 @@ export interface SellerOrderView {
   sellerEarningPaise?: number;
   items: OrderItemSummary[];
   shipment: ShipmentView | null;
+  fulfilments?: OrderFulfilmentView[];
   dispatchBy: string | null;
   shippedAt: string | null;
   deliveredAt: string | null;
@@ -323,6 +526,7 @@ export interface OrderView {
   paidAt: string | null;
   shippingAddress: OrderAddress;
   sellerOrders: SellerOrderView[];
+  fulfilments?: OrderFulfilmentView[];
   payment: { provider: string; status: string; providerPaymentId: string | null } | null;
   canCancel: boolean;
   canRequestReturn: boolean;
@@ -360,6 +564,8 @@ export interface SellerProduct {
   rejectionReason: string | null;
   updatedAt: string;
   isDemo: boolean;
+  fulfilmentMethod?: FulfilmentMethod;
+  pickupLocationId?: string | null;
 }
 
 export interface Paged<T> {

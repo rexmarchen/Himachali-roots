@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Address, CartView, OrderView } from '@shared/types';
 import { formatINR } from '@shared/types';
+import { OrderFulfilmentsTrackCard } from '@/components/shipping/FulfilmentComponents';
 import { safeExternalUrl } from '@shared/urls';
 import { api, errorFields, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
@@ -428,6 +429,9 @@ export function OrderDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-6">
+          {data.fulfilments && data.fulfilments.length > 0 ? (
+            <OrderFulfilmentsTrackCard fulfilments={data.fulfilments} />
+          ) : null}
           {data.sellerOrders.map((sellerOrder) => (
             <section key={sellerOrder.id} className="border border-line bg-surface">
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">

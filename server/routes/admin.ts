@@ -13,6 +13,22 @@ import { getOrderView, decideRefund, createRefundForReturn, generateSettlement, 
 import { cleanupUploadedFile, imageUpload, hasValidFileSignature, resolvePrivateDocPath, sendPrivateDocument } from '../lib/uploads.js';
 import { decryptPayoutDetails } from '../lib/payoutCrypto.js';
 import { isSafeHttpUrl } from '../../shared/urls.js';
+import { safeTrackingUrlSchema } from '../lib/http.js';
+import {
+  cancelSingleFulfilment,
+  getFulfilmentsForOrder,
+  mapPickupLocationRow,
+  markFulfilmentReadyToShip,
+  refreshShiprocketFulfilmentTracking,
+  syncShiprocketFulfilment,
+  updateExternalSupplierFulfilment,
+  updateOwnDeliveryFulfilment,
+  type PickupLocationRow,
+} from '../lib/fulfilmentRouter.js';
+import {
+  listShiprocketPickupLocations,
+  registerShiprocketPickupLocation,
+} from '../lib/shiprocketService.js';
 import { getSiteContent, setSiteContent } from '../lib/site.js';
 import {
   assertProductNotInAnotherCampaign,
@@ -3568,7 +3584,8 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         (SELECT COUNT(*) FROM seller_profiles) AS sellers,
         (SELECT COUNT(*) FROM users) AS users,
         (SELECT COUNT(*) FROM audit_logs) AS audit_logs,
-        (SELECT COUNT(*) FROM notifications WHERE status = 'failed') AS failed_emails`,
+        (SELECT COUNT(*) FROM notifications WHERE status = 'failed') AS failed_emails,
+        (SELECT COUNT(*) FROM order_fulfilments WHERE shiprocket_sync_status = 'failed') AS failed_shiprocket_syncs`,
     );
     res.json({
       integrations: {
@@ -3588,7 +3605,8 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         shipping: {
           provider: env.shiprocket.configured ? 'shiprocket' : 'manual',
           configured: env.shiprocket.configured,
-          pickupLocation: env.shiprocket.pickupLocation || 'Primary',
+          webhookSecretConfigured: Boolean(env.shiprocket.webhookSecret),
+          pickupLocation: env.shiprocket.pickupLocation || 'Per-seller verified pickup locations',
         },
         monitoring: { sentryConfigured: Boolean(env.sentryDsn) },
       },
@@ -3600,6 +3618,366 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       settlementNote:
         'Settlements are recorded with a manual bank/UPI reference. Automated marketplace payouts require separate provider approval and are not enabled.',
     });
+  });
+
+  /* ------------------------ Shipping Management ----------------------- */
+
+  router.get('/shipping/overview', (_req, res) => {
+    const counts = queryOne<Record<string, number>>(
+      db,
+      `SELECT
+        COUNT(*) AS all_count,
+        SUM(CASE WHEN fulfilment_method = 'SHIPROCKET' THEN 1 ELSE 0 END) AS shiprocket,
+        SUM(CASE WHEN fulfilment_method = 'OWN_DELIVERY' THEN 1 ELSE 0 END) AS own_delivery,
+        SUM(CASE WHEN fulfilment_method = 'EXTERNAL_SUPPLIER' THEN 1 ELSE 0 END) AS external_supplier,
+        SUM(CASE WHEN fulfilment_method = 'SHIPROCKET' AND shiprocket_sync_status = 'pending' THEN 1 ELSE 0 END) AS pending_sync,
+        SUM(CASE WHEN fulfilment_method = 'SHIPROCKET' AND shiprocket_sync_status = 'failed' THEN 1 ELSE 0 END) AS failed_sync,
+        SUM(CASE WHEN fulfilment_method = 'SHIPROCKET' AND status IN ('shiprocket_order_created','ready_to_ship','awb_assigned','pickup_scheduled') THEN 1 ELSE 0 END) AS awaiting_pickup,
+        SUM(CASE WHEN status IN ('picked_up','in_transit','out_for_delivery','external_order_placed','preparing','accepted') THEN 1 ELSE 0 END) AS in_transit,
+        SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS delivered,
+        SUM(CASE WHEN status = 'flagged_admin_review' THEN 1 ELSE 0 END) AS flagged_review,
+        (SELECT COUNT(*) FROM seller_pickup_locations WHERE is_verified = 0 OR is_approved = 0) AS unverified_pickups
+       FROM order_fulfilments`,
+    );
+    res.json({
+      counts: {
+        all: counts?.all_count ?? 0,
+        shiprocket: counts?.shiprocket ?? 0,
+        own_delivery: counts?.own_delivery ?? 0,
+        external_supplier: counts?.external_supplier ?? 0,
+        pending_sync: counts?.pending_sync ?? 0,
+        failed_sync: counts?.failed_sync ?? 0,
+        awaiting_pickup: counts?.awaiting_pickup ?? 0,
+        in_transit: counts?.in_transit ?? 0,
+        delivered: counts?.delivered ?? 0,
+        flagged_review: counts?.flagged_review ?? 0,
+        unverified_pickups: counts?.unverified_pickups ?? 0,
+      },
+      shiprocketConfigured: env.shiprocket.configured,
+      webhookConfigured: Boolean(env.shiprocket.webhookSecret),
+    });
+  });
+
+  router.get('/shipping/fulfilments', (req, res) => {
+    const { page, pageSize, offset } = pageParams(req.query);
+    const filter = typeof req.query.filter === 'string' ? req.query.filter : 'all';
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (filter === 'shiprocket') conditions.push("f.fulfilment_method = 'SHIPROCKET'");
+    else if (filter === 'own_delivery') conditions.push("f.fulfilment_method = 'OWN_DELIVERY'");
+    else if (filter === 'external_supplier') conditions.push("f.fulfilment_method = 'EXTERNAL_SUPPLIER'");
+    else if (filter === 'pending_sync') {
+      conditions.push("f.fulfilment_method = 'SHIPROCKET' AND f.shiprocket_sync_status = 'pending'");
+    } else if (filter === 'failed_sync') {
+      conditions.push("f.fulfilment_method = 'SHIPROCKET' AND f.shiprocket_sync_status = 'failed'");
+    } else if (filter === 'awaiting_pickup') {
+      conditions.push("f.fulfilment_method = 'SHIPROCKET' AND f.status IN ('shiprocket_order_created','ready_to_ship','awb_assigned','pickup_scheduled')");
+    } else if (filter === 'in_transit') {
+      conditions.push("f.status IN ('picked_up','in_transit','out_for_delivery','external_order_placed','preparing','accepted')");
+    } else if (filter === 'delivered') {
+      conditions.push("f.status = 'delivered'");
+    } else if (filter === 'flagged') {
+      conditions.push("f.status = 'flagged_admin_review'");
+    }
+
+    if (q) {
+      const like = `%${q}%`;
+      conditions.push(
+        '(o.order_number LIKE ? OR sp.business_name LIKE ? OR COALESCE(f.awb_code,\'\') LIKE ? OR COALESCE(CAST(f.shiprocket_order_id AS TEXT),\'\') LIKE ? OR COALESCE(f.external_order_ref,\'\') LIKE ? OR COALESCE(f.tracking_number,\'\') LIKE ?)',
+      );
+      params.push(like, like, like, like, like, like);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const total =
+      queryOne<{ count: number }>(
+        db,
+        `SELECT COUNT(*) AS count
+           FROM order_fulfilments f
+           JOIN orders o ON o.id = f.order_id
+           JOIN seller_profiles sp ON sp.id = f.seller_id
+          ${where}`,
+        ...params,
+      )?.count ?? 0;
+
+    const orderIds = queryAll<{ id: string; order_id: string }>(
+      db,
+      `SELECT f.id, f.order_id
+         FROM order_fulfilments f
+         JOIN orders o ON o.id = f.order_id
+         JOIN seller_profiles sp ON sp.id = f.seller_id
+        ${where}
+        ORDER BY f.updated_at DESC
+        LIMIT ? OFFSET ?`,
+      ...params,
+      pageSize,
+      offset,
+    );
+
+    const byId = new Map<string, ReturnType<typeof getFulfilmentsForOrder>[number]>();
+    for (const oid of new Set(orderIds.map((r) => r.order_id))) {
+      for (const view of getFulfilmentsForOrder(db, oid, { includeInternal: true })) {
+        byId.set(view.id, view);
+      }
+    }
+
+    const fulfilments = orderIds
+      .map((r) => byId.get(r.id))
+      .filter((v): v is NonNullable<typeof v> => Boolean(v));
+
+    res.json({
+      fulfilments,
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    });
+  });
+
+  router.post('/shipping/fulfilments/:fulfilmentId/retry-sync', async (req, res) => {
+    const result = await syncShiprocketFulfilment(db, String(req.params.fulfilmentId), {
+      forceRetry: true,
+      actor: req.user!,
+    });
+    res.json({ ok: result.synced, ...result });
+  });
+
+  router.post('/shipping/fulfilments/:fulfilmentId/ready-to-ship', async (req, res) => {
+    const input = parse(
+      z.object({ preferredCourierId: z.number().int().positive().optional() }),
+      req.body ?? {},
+    );
+    const result = await markFulfilmentReadyToShip(db, {
+      fulfilmentId: String(req.params.fulfilmentId),
+      actor: req.user!,
+      preferredCourierId: input.preferredCourierId,
+    });
+    res.json({ ok: true, ...result });
+  });
+
+  router.post('/shipping/fulfilments/:fulfilmentId/refresh-tracking', async (req, res) => {
+    const result = await refreshShiprocketFulfilmentTracking(db, {
+      fulfilmentId: String(req.params.fulfilmentId),
+      actor: req.user!,
+    });
+    res.json({ ok: true, ...result });
+  });
+
+  router.post('/shipping/fulfilments/:fulfilmentId/external', (req, res) => {
+    const input = parse(
+      z.object({
+        action: z.enum(['confirm_supplier', 'place_external_order', 'update_tracking', 'delivered', 'delivery_exception']),
+        supplierName: z.string().trim().max(140).optional(),
+        externalOrderRef: z.string().trim().max(120).optional(),
+        courierName: z.string().trim().max(100).optional(),
+        trackingId: z.string().trim().max(120).optional(),
+        trackingUrl: safeTrackingUrlSchema,
+        dispatchDate: z.string().trim().max(40).optional(),
+        deliveryStatus: z.enum(['in_transit', 'out_for_delivery']).optional(),
+        note: z.string().trim().max(500).optional(),
+      }),
+      req.body,
+    );
+    const result = updateExternalSupplierFulfilment(db, {
+      fulfilmentId: String(req.params.fulfilmentId),
+      actor: req.user!,
+      action: input.action,
+      supplierName: input.supplierName,
+      externalOrderRef: input.externalOrderRef,
+      courierName: input.courierName,
+      trackingId: input.trackingId,
+      trackingUrl: input.trackingUrl || undefined,
+      dispatchDate: input.dispatchDate,
+      deliveryStatus: input.deliveryStatus,
+      note: input.note,
+    });
+    res.json({ ok: true, ...result });
+  });
+
+  router.post('/shipping/fulfilments/:fulfilmentId/own-delivery', (req, res) => {
+    const input = parse(
+      z.object({
+        action: z.enum(['accept', 'preparing', 'out_for_delivery', 'delivered', 'delivery_failed']),
+        recipientName: z.string().trim().max(120).optional(),
+        note: z.string().trim().max(500).optional(),
+        proofUrl: safeTrackingUrlSchema,
+        failedReason: z.string().trim().max(300).optional(),
+      }),
+      req.body,
+    );
+    const result = updateOwnDeliveryFulfilment(db, {
+      fulfilmentId: String(req.params.fulfilmentId),
+      actor: req.user!,
+      action: input.action,
+      recipientName: input.recipientName,
+      note: input.note,
+      proofUrl: input.proofUrl || undefined,
+      failedReason: input.failedReason,
+    });
+    res.json({ ok: true, ...result });
+  });
+
+  router.post('/shipping/fulfilments/:fulfilmentId/cancel', async (req, res) => {
+    const input = parse(z.object({ reason: z.string().trim().max(400).optional() }), req.body ?? {});
+    const result = await cancelSingleFulfilment(db, {
+      fulfilmentId: String(req.params.fulfilmentId),
+      actor: req.user!,
+      reason: input.reason,
+    });
+    res.json(result);
+  });
+
+  router.get('/shipping/webhooks', (_req, res) => {
+    const logs = queryAll<Record<string, unknown>>(
+      db,
+      'SELECT * FROM shipping_webhook_logs ORDER BY received_at DESC LIMIT 80',
+    );
+    res.json({
+      logs: logs.map((l) => ({
+        id: l.id,
+        provider: l.provider,
+        eventKey: l.event_key,
+        awbCode: l.awb_code,
+        shiprocketShipmentId: l.shiprocket_shipment_id,
+        shiprocketOrderId: l.shiprocket_order_id,
+        fulfilmentId: l.fulfilment_id,
+        rawStatus: l.raw_status,
+        mappedStatus: l.mapped_status,
+        outcome: l.outcome,
+        note: l.note,
+        receivedAt: l.received_at,
+      })),
+    });
+  });
+
+  router.get('/shipping/pickup-locations', (req, res) => {
+    const filter = typeof req.query.status === 'string' ? req.query.status : 'all';
+    const rows = queryAll<PickupLocationRow & { business_name: string }>(
+      db,
+      `SELECT spl.*, sp.business_name
+         FROM seller_pickup_locations spl
+         JOIN seller_profiles sp ON sp.id = spl.seller_id
+        ORDER BY spl.is_verified ASC, spl.is_approved ASC, spl.created_at DESC`,
+    );
+    const filtered = rows.filter((r) => {
+      if (filter === 'pending') return r.is_verified === 0 || r.is_approved === 0;
+      if (filter === 'verified') return r.is_verified === 1 && r.is_approved === 1;
+      return true;
+    });
+    res.json({
+      pickupLocations: filtered.map((r) => ({
+        ...mapPickupLocationRow(r),
+        sellerName: r.business_name,
+      })),
+      shiprocketConfigured: env.shiprocket.configured,
+    });
+  });
+
+  router.post('/shipping/pickup-locations/:locId/decision', async (req, res) => {
+    const input = parse(
+      z.object({
+        decision: z.enum(['approve', 'reject', 'verify_shiprocket']),
+        note: z.string().trim().max(400).optional(),
+      }),
+      req.body,
+    );
+    const row = queryOne<PickupLocationRow>(
+      db,
+      'SELECT * FROM seller_pickup_locations WHERE id = ?',
+      String(req.params.locId),
+    );
+    if (!row) throw notFound('Pickup location not found.');
+
+    const nowIso = new Date().toISOString();
+    if (input.decision === 'verify_shiprocket') {
+      if (!env.shiprocket.configured) {
+        throw badRequest('Shiprocket credentials are not configured on this server.');
+      }
+      const remoteList = await listShiprocketPickupLocations();
+      const matched = remoteList.find(
+        (r) =>
+          r.pickupLocation.toLowerCase() === row.shiprocket_location_name.toLowerCase() ||
+          (r.pinCode === row.pincode && r.address.toLowerCase().includes(row.line1.slice(0, 12).toLowerCase())),
+      );
+      let shiprocketPickupId = matched?.id ? String(matched.id) : row.shiprocket_pickup_id;
+      let shiprocketName = matched?.pickupLocation ?? row.shiprocket_location_name;
+
+      if (!matched) {
+        const reg = await registerShiprocketPickupLocation({
+          pickupLocation: row.shiprocket_location_name,
+          name: row.contact_name,
+          email: row.email || env.email.supportEmail,
+          phone: row.phone,
+          address: row.line1,
+          address2: row.line2 ?? '',
+          city: row.city,
+          state: row.state,
+          pinCode: row.pincode,
+        });
+        shiprocketPickupId = reg.shiprocketPickupId;
+        shiprocketName = reg.pickupLocation;
+      }
+
+      execute(
+        db,
+        `UPDATE seller_pickup_locations
+            SET shiprocket_pickup_id = ?,
+                shiprocket_location_name = ?,
+                is_verified = 1,
+                is_approved = 1,
+                is_active = 1,
+                verified_at = ?,
+                verification_note = ?,
+                updated_at = ?
+          WHERE id = ?`,
+        shiprocketPickupId,
+        shiprocketName,
+        nowIso,
+        input.note?.trim() || 'Verified against Shiprocket API and approved by Admin.',
+        nowIso,
+        row.id,
+      );
+      audit(db, req.user!, 'pickup_location.verified_shiprocket', 'seller_pickup_location', row.id, null, {
+        shiprocketLocationName: shiprocketName,
+      });
+    } else if (input.decision === 'approve') {
+      execute(
+        db,
+        `UPDATE seller_pickup_locations
+            SET is_verified = 1,
+                is_approved = 1,
+                is_active = 1,
+                verified_at = COALESCE(verified_at, ?),
+                verification_note = ?,
+                updated_at = ?
+          WHERE id = ?`,
+        nowIso,
+        input.note?.trim() || 'Approved by Admin.',
+        nowIso,
+        row.id,
+      );
+      audit(db, req.user!, 'pickup_location.approved', 'seller_pickup_location', row.id, null, { note: input.note });
+    } else {
+      execute(
+        db,
+        `UPDATE seller_pickup_locations
+            SET is_approved = 0,
+                is_verified = 0,
+                verification_note = ?,
+                updated_at = ?
+          WHERE id = ?`,
+        input.note?.trim() || 'Rejected by Admin; update pickup address details.',
+        nowIso,
+        row.id,
+      );
+      audit(db, req.user!, 'pickup_location.rejected', 'seller_pickup_location', row.id, null, { note: input.note });
+    }
+
+    const updated = queryOne<PickupLocationRow>(db, 'SELECT * FROM seller_pickup_locations WHERE id = ?', row.id)!;
+    res.json({ ok: true, pickupLocation: mapPickupLocationRow(updated) });
   });
 
   return router;

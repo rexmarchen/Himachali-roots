@@ -852,13 +852,25 @@ export function ProductPage() {
               {pincodeError ? (
                 <p className="mt-1.5 text-[11px] font-medium text-rose-600">{pincodeError}</p>
               ) : checkedPincode ? (
-                <p className="mt-2 text-[11.5px] font-medium text-emerald-800">
-                  🚚 {estimateDeliveryForPincode(checkedPincode, product.shippingEstimate)} ·{' '}
-                  {amountToFreeShipping === 0 ? 'Free Shipping' : `${formatINR(flatShipping)} flat shipping`}
-                </p>
+                product.shippingSummary?.fulfilmentMethod === 'OWN_DELIVERY' &&
+                product.shippingSummary.serviceablePincodes &&
+                product.shippingSummary.serviceablePincodes.length > 0 &&
+                !product.shippingSummary.serviceablePincodes.includes(checkedPincode) ? (
+                  <p className="mt-2 text-[11.5px] font-medium text-rose-600">
+                    Seller direct delivery covers: {product.shippingSummary.serviceablePincodes.slice(0, 6).join(', ')}. PIN {checkedPincode} is outside that local zone.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-[11.5px] font-medium text-emerald-800">
+                    🚚 {estimateDeliveryForPincode(checkedPincode, product.shippingEstimate)} ·{' '}
+                    {amountToFreeShipping === 0 ? 'Free Shipping' : `${formatINR(flatShipping)} flat shipping`}
+                  </p>
+                )
               ) : (
                 <p className="mt-1.5 text-[11px] text-slate-500">
-                  Dispatched directly from {product.seller.region ?? product.region ?? 'the Himalayas'}. Delivery across India.
+                  {product.shippingSummary
+                    ? `${product.shippingSummary.methodLabel}${product.shippingSummary.deliveryArea ? ` (${product.shippingSummary.deliveryArea})` : ''}. `
+                    : ''}
+                  Dispatched directly from {product.seller.region ?? product.region ?? 'the Himalayas'}.
                 </p>
               )}
             </div>
