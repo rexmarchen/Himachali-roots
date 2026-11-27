@@ -613,23 +613,25 @@
   }
 }
 
-.mobile-header-gradient {
-  background: linear-gradient(135deg, #0d4a3a 0%, #14634e 55%, #19785d 100%);
-}
+@layer components {
+  .mobile-header-gradient {
+    background: linear-gradient(135deg, #0d4a3a 0%, #14634e 55%, #19785d 100%);
+  }
 
-.mobile-deals-gradient {
-  background: linear-gradient(135deg, #fff4e5 0%, #ffe8cc 50%, #fffaf2 100%);
-}
+  .mobile-deals-gradient {
+    background: linear-gradient(135deg, #fff4e5 0%, #ffe8cc 50%, #fffaf2 100%);
+  }
 
-.mobile-emerald-wash {
-  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdfa 55%, #ffffff 100%);
-}
+  .mobile-emerald-wash {
+    background: linear-gradient(135deg, #ecfdf5 0%, #f0fdfa 55%, #ffffff 100%);
+  }
 
-.mobile-indigo-wash {
-  background: linear-gradient(135deg, #eef2ff 0%, #f0f9ff 55%, #ffffff 100%);
-}
+  .mobile-indigo-wash {
+    background: linear-gradient(135deg, #eef2ff 0%, #f0f9ff 55%, #ffffff 100%);
+  }
 
-.mobile-rose-wash {
-  background: linear-gradient(135deg, #fff1f2 0%, #fff7ed 55%, #ffffff 100%);
+  .mobile-rose-wash {
+    background: linear-gradient(135deg, #fff1f2 0%, #fff7ed 55%, #ffffff 100%);
+  }
 }
 

@@ -196,7 +196,7 @@ export function EcommerceSearchBar({
         <div
           className={`relative hidden h-full shrink-0 items-center rounded-l-full border-r ${
             light ? 'border-white/20 bg-white/10' : 'border-line bg-[#EAE2D5]'
-          } pl-3 pr-2 sm:flex`}
+          } pl-3 pr-2 sm:flex lg:hidden xl:flex`}
         >
           <select
             id={`${inputId}-category`}

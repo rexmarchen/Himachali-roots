@@ -301,7 +301,7 @@ export function CraftHubPage() {
         ]}
       />
 
-      <header className="mt-4 rounded-2xl sm:rounded-sm border border-emerald-900/20 sm:border-line mobile-header-gradient md:bg-none sm:bg-surface p-5 sm:p-8 text-white sm:text-forest shadow-md sm:shadow-none">
+      <header className="mt-4 rounded-2xl sm:rounded-sm border border-emerald-900/20 sm:border-line mobile-header-gradient sm:bg-none sm:bg-surface p-5 sm:p-8 text-white sm:text-forest shadow-md sm:shadow-none">
         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-200 sm:text-terra">Himalayan Craft Tradition</p>
         <h1 className="mt-1 font-serif text-3xl font-medium sm:font-normal text-white sm:text-forest sm:text-5xl">
           {craft.name} from the Himalayas
@@ -450,7 +450,7 @@ export function GiTaggedHubPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Verified GI-Tagged Products' }]} />
-      <header className="mt-4 rounded-2xl sm:rounded-sm border border-emerald-900/20 sm:border-line mobile-header-gradient md:bg-none sm:bg-surface p-5 sm:p-8 text-white sm:text-forest shadow-md sm:shadow-none">
+      <header className="mt-4 rounded-2xl sm:rounded-sm border border-emerald-900/20 sm:border-line mobile-header-gradient sm:bg-none sm:bg-surface p-5 sm:p-8 text-white sm:text-forest shadow-md sm:shadow-none">
         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200 sm:text-emerald-700">Verified Geographical Indication</p>
         <h1 className="mt-1 font-serif text-3xl font-medium sm:font-normal text-white sm:text-forest sm:text-5xl">
           GI-Tagged Products of the Indian Himalayas
@@ -506,7 +506,7 @@ export function HimalayanPillarPage() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Himalayan Handmade Products' }]} />
 
-      <header className="mt-4 rounded-2xl sm:rounded-sm border border-emerald-900/20 sm:border-line mobile-header-gradient md:bg-none sm:bg-surface p-5 sm:p-10 text-white sm:text-forest shadow-md sm:shadow-none">
+      <header className="mt-4 rounded-2xl sm:rounded-sm border border-emerald-900/20 sm:border-line mobile-header-gradient sm:bg-none sm:bg-surface p-5 sm:p-10 text-white sm:text-forest shadow-md sm:shadow-none">
         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-200 sm:text-terra">Pan-Himalayan Marketplace</p>
         <h1 className="mt-2 font-serif text-3xl font-medium sm:font-normal text-white sm:text-forest sm:text-5xl">
           Authentic Handmade Products from the Indian Himalayas

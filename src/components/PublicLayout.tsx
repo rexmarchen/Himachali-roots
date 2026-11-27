@@ -208,7 +208,7 @@ function HeritageAnnouncementBar({ customText, light = false }: { customText?: s
   return (
     <div
       className={`relative z-20 border-b overflow-hidden transition-colors duration-300 ${
-        light ? 'bg-black/50 text-white/90 border-white/10' : 'border-[#0F1614] bg-forest-deep text-paper'
+        light ? 'bg-black/50 text-white/90 border-white/10' : 'border-[#0A3B2E] bg-[#0D4A3A] text-[#FAF6EE]'
       }`}
       role="region"
       aria-label="Dear Hills announcements"
@@ -439,10 +439,10 @@ function Header() {
         <HeritageAnnouncementBar customText={announcement?.active && announcement.text ? announcement.text : undefined} />
       </div>
       <header
-        className="sticky top-0 z-40 border-b border-emerald-900/30 md:border-line mobile-header-gradient md:bg-none md:bg-paper/95 text-white md:text-ink shadow-md md:shadow-2xs md:backdrop-blur-md"
+        className="sticky top-0 z-40 border-b border-emerald-900/30 md:border-[#DFD5C6] mobile-header-gradient md:bg-none md:bg-[#FAF6EE]/95 text-white md:text-[#172321] shadow-md md:shadow-[0_2px_12px_rgba(13,74,58,0.06)] md:backdrop-blur-md"
       >
 
-        <div className="mx-auto flex h-12 sm:h-14 max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-4 px-3.5 sm:px-6 lg:px-8 xl:px-10">
+        <div className="mx-auto flex h-12 sm:h-14 md:h-16 max-w-[88rem] items-center gap-2 sm:gap-2.5 lg:gap-3 px-3.5 sm:px-5 lg:px-6 xl:px-8">
           <div className="shrink-0 hidden md:block">
             <Wordmark />
           </div>
@@ -453,21 +453,21 @@ function Header() {
             </span>
           </div>
 
-          <div className="mx-2 hidden flex-1 md:flex lg:mx-3 min-w-[200px] sm:min-w-[220px] lg:min-w-[260px] xl:min-w-[300px] max-w-lg lg:max-w-lg xl:max-w-xl">
+          <div className="mx-1.5 hidden flex-1 min-w-0 md:flex lg:mx-2 max-w-[340px]">
             <EcommerceSearchBar inputId="site-search-desktop" />
           </div>
 
-          <nav className="hidden items-center gap-2.5 xl:gap-3.5 2xl:gap-4 lg:flex" aria-label="Primary">
+          <nav className="hidden shrink-0 items-center gap-2 xl:gap-3 2xl:gap-4 lg:flex" aria-label="Primary">
             {NAV.map((item) => {
               const active = item.to === '/shop' ? location.pathname.startsWith('/shop') : location.pathname === item.to;
               return (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`border-b-2 py-1.5 text-[12px] lg:text-[12.5px] xl:text-[13px] font-medium transition-colors ${
+                  className={`shrink-0 whitespace-nowrap border-b-2 py-1.5 text-[11.5px] xl:text-[12px] 2xl:text-[13px] font-medium transition-colors ${
                     active
-                      ? 'border-terra text-forest font-semibold'
-                      : 'border-transparent text-ink/80 hover:border-line hover:text-forest'
+                      ? 'border-[#D98263] text-[#0D4A3A] font-semibold'
+                      : 'border-transparent text-[#172321]/85 hover:border-[#C6E3D5] hover:text-[#0D4A3A]'
                   }`}
                 >
                   {item.label}
@@ -476,10 +476,10 @@ function Header() {
             })}
           </nav>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5 lg:gap-2">
             <Link
               to="/account/wishlist"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-white md:text-ink transition-colors hover:bg-white/10 md:hover:bg-transparent md:hover:text-terra"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-white md:text-[#172321] transition-colors hover:bg-white/10 md:hover:bg-[#E7F4EE] md:hover:text-[#0D4A3A]"
               aria-label="Saved items"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-[19px] w-[19px] lg:h-[18px] lg:w-[18px]" aria-hidden>
@@ -493,14 +493,14 @@ function Header() {
             {user?.roles.includes('admin') ? (
               <Link
                 to="/admin"
-                className="hidden items-center gap-1.5 rounded border border-forest/25 bg-surface px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:bg-forest/5 xl:inline-flex"
+                className="hidden items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#BFE2D1] bg-[#E7F4EE] px-2.5 sm:px-3 py-1.5 text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-wider text-[#0D4A3A] transition-colors hover:bg-[#0D4A3A] hover:text-white xl:inline-flex"
               >
                 Admin
               </Link>
             ) : user?.roles.includes('seller') ? (
               <Link
                 to="/seller"
-                className="hidden items-center gap-1.5 rounded border border-terra/30 bg-terra/20 px-2.5 sm:px-3 py-1 lg:py-1.5 text-[10px] sm:text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-terra transition-colors hover:bg-terra/30 xl:inline-flex"
+                className="hidden items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#EBC3B4] bg-[#FDF0EB] px-2.5 sm:px-3 py-1.5 text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-wider text-[#9B3D2D] transition-colors hover:bg-[#9B3D2D] hover:text-white xl:inline-flex"
               >
                 Seller Studio
               </Link>
