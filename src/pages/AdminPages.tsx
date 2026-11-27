@@ -1,7 +1,7 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { createContext, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ApplicationStatus, CampaignSummary, Category, OrderView, Paged, ProductStatus, RegionEntity } from '@shared/types';
+import type { ApplicationStatus, CampaignSummary, Category, CraftEntity, OrderView, Paged, ProductStatus, RegionEntity } from '@shared/types';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
 import { api, ApiError, errorMessage } from '@/lib/api';
@@ -10,7 +10,7 @@ import { useToast } from '@/lib/toast';
 import { usePageMeta } from '@/lib/usePageMeta';
 import { dateInputToIso, daysAgoInput, formatDate, formatDateTime, humanise, orderStatusLabel, percentFromBp, sellerOrderStatusLabel, todayInput } from '@/lib/format';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { AdminMetric, AdminPage, AdminQueueRow, AdminSection, ConfirmDialog } from '@/components/admin';
+import { AdminMetric, AdminPage, AdminQueueRow, AdminSection, AdminTable, AdminToolbar, ConfirmDialog } from '@/components/admin';
 import {
   Alert,
   Badge,
@@ -38,6 +38,7 @@ interface MfaStatusResponse {
   recommendedForRole: boolean;
   required: boolean;
   adminSessionActive?: boolean;
+  stepUpActive?: boolean;
 }
 
 function AdminMfaGateCard({ pending }: { pending: boolean }) {
@@ -96,9 +97,11 @@ function AdminMfaGateCard({ pending }: { pending: boolean }) {
   };
 
   return (
-    <div className="mx-auto max-w-2xl border border-line bg-surface p-6 sm:p-8">
-      <p className="eyebrow">Administrator security</p>
-      <h1 className="mt-2 font-serif text-3xl leading-tight text-forest">
+    <div className="mx-auto max-w-2xl rounded-2xl border border-[#DFD5C6] bg-white p-6 shadow-[0_4px_20px_rgba(13,74,58,0.08)] sm:p-8">
+      <p className="inline-flex items-center rounded-full border border-[#C6E3D5] bg-[#E7F4EE] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#0D4A3A]">
+        Administrator security
+      </p>
+      <h1 className="mt-2 font-serif text-3xl font-semibold leading-tight text-[#0D4A3A]">
         Enable two-step verification to open the admin console
       </h1>
       <p className="mt-2 text-sm leading-relaxed text-muted">
@@ -371,6 +374,13 @@ function NavIcon({ type, className = 'h-4 w-4' }: { type: string; className?: st
           <path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0" />
         </svg>
       );
+    case 'shield':
+      return (
+        <svg {...common}>
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          <path d="m9 12 2 2 4-4" />
+        </svg>
+      );
     case 'close':
       return (
         <svg {...common}>
@@ -487,7 +497,12 @@ interface OverviewResponse {
   pendingSellers: { id: string; business_name: string; region: string | null; created_at: string; status: string }[];
   audits: { action: string; entity_type: string; entity_id: string; actor_email: string | null; created_at: string }[];
   lowStock: { name: string; seller_name: string; available: number; sku?: string }[];
-  integrations: { payments: { provider: string; configured: boolean; mode: string }; shipping: string; email: string };
+  integrations: {
+    payments: { provider: string; configured: boolean; webhookConfigured?: boolean; mode: string };
+    shipping: string;
+    email: string;
+    emailProvider?: string;
+  };
   notifications: { sent?: number; skipped?: number; failed?: number; pending?: number };
 }
 
@@ -516,10 +531,176 @@ function initials(name: string, email: string): string {
   return source.slice(0, 2).toUpperCase();
 }
 
+/* ============================ STEP-UP 2FA GUARD =========================== */
+
+interface AdminStepUpContextValue {
+  runWithStepUp: <T>(action: () => Promise<T>) => Promise<T>;
+  openStepUpModal: () => void;
+  stepUpActive: boolean;
+}
+
+const AdminStepUpContext = createContext<AdminStepUpContextValue | null>(null);
+
+function useAdminStepUp(): AdminStepUpContextValue {
+  const ctx = useContext(AdminStepUpContext);
+  if (!ctx) {
+    return {
+      runWithStepUp: (action) => action(),
+      openStepUpModal: () => undefined,
+      stepUpActive: false,
+    };
+  }
+  return ctx;
+}
+
+function AdminStepUpProvider({ children }: { children: ReactNode }) {
+  const { user, refresh } = useAuth();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [stepUpError, setStepUpError] = useState<string | null>(null);
+  const pendingRef = useRef<{ resolve: (verified: boolean) => void } | null>(null);
+
+  const closeAndCancel = () => {
+    setOpen(false);
+    setCode('');
+    setStepUpError(null);
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    pending?.resolve(false);
+  };
+
+  const requestStepUp = useCallback((): Promise<boolean> => {
+    setCode('');
+    setStepUpError(null);
+    setOpen(true);
+    return new Promise((resolve) => {
+      pendingRef.current = { resolve };
+    });
+  }, []);
+
+  const openStepUpModal = useCallback(() => {
+    setCode('');
+    setStepUpError(null);
+    setOpen(true);
+  }, []);
+
+  const runWithStepUp = useCallback(
+    async <T,>(action: () => Promise<T>): Promise<T> => {
+      try {
+        return await action();
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'mfa_step_up_required') {
+          const verified = await requestStepUp();
+          if (!verified) {
+            throw new ApiError(403, 'mfa_step_up_cancelled', 'Two-step verification cancelled. Enter a fresh 6-digit code to save this change.');
+          }
+          return await action();
+        }
+        throw error;
+      }
+    },
+    [requestStepUp],
+  );
+
+  const submitStepUp = async (event: FormEvent) => {
+    event.preventDefault();
+    const clean = code.trim();
+    if (!/^\d{6}$/.test(clean)) {
+      setStepUpError('Enter the current 6-digit code from your authenticator app.');
+      return;
+    }
+    setVerifying(true);
+    setStepUpError(null);
+    try {
+      const result = await api<{ ok: true; stepUpActive: boolean; validMinutes: number }>('/auth/mfa/step-up', {
+        method: 'POST',
+        body: { code: clean },
+      });
+      await refresh();
+      await queryClient.invalidateQueries({ queryKey: ['mfa-status'] });
+      toast.push(`Two-step check verified for ${result.validMinutes} minutes.`);
+      setOpen(false);
+      setCode('');
+      const pending = pendingRef.current;
+      pendingRef.current = null;
+      pending?.resolve(true);
+    } catch (error) {
+      setStepUpError(errorMessage(error));
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const stepUpActive = Boolean(user?.adminStepUpActive);
+
+  return (
+    <AdminStepUpContext.Provider value={{ runWithStepUp, openStepUpModal, stepUpActive }}>
+      {children}
+      <Modal
+        open={open}
+        onClose={closeAndCancel}
+        title="Verify 6-digit authenticator code"
+        footer={
+          <>
+            <Button variant="ghost" type="button" onClick={closeAndCancel}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="admin-step-up-form"
+              loading={verifying}
+              disabled={!/^\d{6}$/.test(code.trim())}
+            >
+              Verify &amp; continue
+            </Button>
+          </>
+        }
+      >
+        <form id="admin-step-up-form" onSubmit={(e) => void submitStepUp(e)} className="space-y-4">
+          <Alert tone="info" title="Sensitive marketplace action">
+            Payout verifications, refund decisions, settlement payouts and fee rules require a fresh 6-digit TOTP check every 15 minutes.
+          </Alert>
+          {!user?.mfaEnabled ? (
+            <Alert tone="warning" title="Authenticator not enabled">
+              Enable two-step verification in{' '}
+              <Link to="/account/profile" onClick={closeAndCancel} className="font-semibold underline underline-offset-2">
+                Profile &amp; security
+              </Link>{' '}
+              first.
+            </Alert>
+          ) : null}
+          {stepUpError ? <Alert tone="error">{stepUpError}</Alert> : null}
+          <Field label="6-digit authenticator code" required hint="Enter the active code shown in Google Authenticator, 1Password, or Authy.">
+            <Input
+              value={code}
+              onChange={(event) => {
+                setCode(event.target.value.replace(/\D+/g, '').slice(0, 6));
+                if (stepUpError) setStepUpError(null);
+              }}
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              placeholder="123456"
+              autoComplete="one-time-code"
+              autoFocus
+              className="text-center font-mono text-lg tracking-[0.35em]"
+              required
+            />
+          </Field>
+        </form>
+      </Modal>
+    </AdminStepUpContext.Provider>
+  );
+}
+
 /* ============================== ADMIN SHELL ============================== */
 
-export function AdminLayout() {
+function AdminLayoutInner() {
   const { user, signOut } = useAuth();
+  const { openStepUpModal, stepUpActive } = useAdminStepUp();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -544,6 +725,7 @@ export function AdminLayout() {
   });
   const adminSessionMissing = Boolean(mfaStatus.data && mfaStatus.data.adminSessionActive === false);
   const mfaBlocked = Boolean(mfaStatus.data?.required && !mfaStatus.data.enabled);
+  const resolvedStepUpActive = Boolean(mfaStatus.data?.stepUpActive ?? (mfaStatus.isLoading ? stepUpActive : false));
   const overview = useQuery({
     queryKey: ['admin-overview'],
     queryFn: () => api<OverviewResponse>('/admin/overview'),
@@ -750,10 +932,10 @@ export function AdminLayout() {
   const displayEmail = user?.email ?? '';
 
   return (
-    <div className="min-h-screen bg-paper text-ink antialiased lg:flex">
+    <div className="min-h-screen bg-[#F7F1E7] text-[#172321] antialiased lg:flex">
       <a
         href="#admin-main"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[90] focus:border focus:border-forest focus:bg-paper focus:px-4 focus:py-2 focus:text-sm focus:text-forest"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[90] focus:rounded-xl focus:border focus:border-[#0D4A3A] focus:bg-[#F7F1E7] focus:px-4 focus:py-2 focus:text-sm focus:text-[#0D4A3A]"
       >
         Skip to admin content
       </a>
@@ -768,34 +950,34 @@ export function AdminLayout() {
             closeMobileMenu();
           }
         }}
-        className={`fixed inset-y-0 left-0 z-50 flex w-[276px] flex-col bg-orchard-deep text-paper shadow-2xl transition-transform duration-300 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 lg:shadow-none ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[276px] flex-col border-r border-[#0B3E30] bg-gradient-to-b from-[#0D4A3A] via-[#125946] to-[#176853] text-white shadow-[4px_0_24px_rgba(13,74,58,0.2)] transition-transform duration-300 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-5">
+        <div className="flex items-center justify-between border-b border-white/15 px-5 py-5">
           <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 focus-visible:outline-offset-4">
             <MountainLogoSvg />
             <span>
-              <span className="block font-serif text-[17px] font-semibold tracking-[0.1em] text-paper">DEAR HILLS</span>
-              <span className="mt-0.5 block text-[9px] font-medium uppercase tracking-[0.24em] text-butter/45">Marketplace admin</span>
+              <span className="block font-serif text-[17px] font-semibold tracking-[0.1em] text-white">DEAR HILLS</span>
+              <span className="mt-0.5 block text-[9.5px] font-medium uppercase tracking-[0.22em] text-[#F4E8CE]/75">Marketplace admin</span>
             </span>
           </Link>
           <button
             ref={sidebarCloseRef}
             type="button"
             onClick={closeMobileMenu}
-            className="flex h-8 w-8 items-center justify-center text-butter/70 hover:bg-white/10 hover:text-paper lg:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded-xl text-[#F4E8CE]/80 hover:bg-white/15 hover:text-white lg:hidden"
             aria-label="Close navigation"
           >
             <NavIcon type="close" className="h-4 w-4" />
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-5" aria-label="Admin sections">
+        <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Admin sections">
           {ADMIN_NAV.map((group) => (
-            <div key={group.label} className="mb-5 last:mb-0">
-              <p className="px-3 pb-2 text-[9px] font-semibold uppercase tracking-[0.22em] text-butter/35">{group.label}</p>
-              <div className="space-y-0.5">
+            <div key={group.label} className="mb-4 last:mb-0">
+              <p className="px-3 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.2em] text-[#F4E8CE]/55">{group.label}</p>
+              <div className="space-y-1">
                 {group.items.map((item) => {
                   const count = queueCount(item.badge, metrics);
                   return (
@@ -805,21 +987,23 @@ export function AdminLayout() {
                       end={item.end}
                       onClick={() => setMobileMenuOpen(false)}
                       className={({ isActive }) =>
-                        `flex items-center gap-2.5 border-l-2 px-3 py-2 text-[12.5px] transition-colors ${
+                        `flex items-center gap-2.5 rounded-xl px-3 py-2 text-[12.5px] transition-all ${
                           isActive
-                            ? 'border-harvest bg-paper font-semibold text-forest shadow-sm'
-                            : 'border-transparent text-butter/75 hover:border-white/25 hover:bg-white/[0.05] hover:text-paper'
+                            ? 'bg-white font-semibold text-[#0D4A3A] shadow-[0_2px_10px_rgba(0,0,0,0.12)]'
+                            : 'text-[#F4E8CE]/85 hover:bg-white/10 hover:text-white'
                         }`
                       }
                     >
                       {({ isActive }) => (
                         <>
-                          <NavIcon type={item.icon} className={`h-[17px] w-[17px] shrink-0 ${isActive ? 'text-forest' : 'text-butter/55'}`} />
+                          <NavIcon type={item.icon} className={`h-[17px] w-[17px] shrink-0 ${isActive ? 'text-[#0D4A3A]' : 'text-[#F4E8CE]/70'}`} />
                           <span className="min-w-0 flex-1 truncate">{item.label}</span>
                           {count > 0 ? (
                             <span
-                              className={`min-w-5 border px-1 py-0.5 text-center text-[9.5px] font-semibold tabular-nums ${
-                                isActive ? 'border-forest/20 bg-forest/[0.06] text-forest' : 'border-white/15 bg-white/10 text-butter'
+                              className={`min-w-5 rounded-full border px-1.5 py-0.5 text-center text-[9.5px] font-semibold tabular-nums ${
+                                isActive
+                                  ? 'border-[#C6E3D5] bg-[#E7F4EE] text-[#0D4A3A]'
+                                  : 'border-[#D98263]/40 bg-[#D98263]/20 text-[#F4E8CE]'
                               }`}
                             >
                               {count > 99 ? '99+' : count}
@@ -835,10 +1019,10 @@ export function AdminLayout() {
           ))}
         </nav>
 
-        <div className="border-t border-white/10 p-4">
+        <div className="border-t border-white/15 bg-[#0A3D2F]/40 p-4">
           <Link
             to="/"
-            className="flex items-center justify-between gap-2 border border-white/15 px-3 py-2 text-[11.5px] text-butter/80 transition-colors hover:border-white/30 hover:bg-white/[0.05] hover:text-paper"
+            className="flex items-center justify-between gap-2 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2.5 text-[12px] font-medium text-white transition-colors hover:bg-white/20"
           >
             <span className="flex items-center gap-2">
               <NavIcon type="storefront" className="h-4 w-4" />
@@ -846,7 +1030,7 @@ export function AdminLayout() {
             </span>
             <span aria-hidden>↗</span>
           </Link>
-          <p className="mt-3 text-[9.5px] leading-relaxed text-butter/35">
+          <p className="mt-3 text-[9.5px] leading-relaxed text-[#F4E8CE]/55">
             Decisions, refunds and stock changes are written to the audit log with the signed-in administrator.
           </p>
         </div>
@@ -864,13 +1048,14 @@ export function AdminLayout() {
 
       {/* Main column */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-line bg-paper/95 backdrop-blur">
+        <header className="sticky top-0 z-30 border-b border-[#DFD5C6] bg-[#FAF6EE]/95 backdrop-blur-md">
+          <div className="h-[3px] w-full bg-gradient-to-r from-[#0D4A3A] via-[#19785D] to-[#D98263]" aria-hidden />
           <div className="flex h-16 items-center gap-2 px-4 sm:gap-3 sm:px-6 lg:px-8">
             <button
               ref={mobileMenuButtonRef}
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="flex h-9 w-9 shrink-0 items-center justify-center border border-line bg-surface text-ink hover:border-forest/40 lg:hidden"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#DFD5C6] bg-white text-[#172321] shadow-2xs hover:border-[#14634E]/45 lg:hidden"
               aria-label="Open navigation"
               aria-controls="admin-sidebar"
               aria-expanded={mobileMenuOpen}
@@ -881,36 +1066,52 @@ export function AdminLayout() {
             </button>
 
             <div className="min-w-0 flex-1">
-              <p className="hidden text-[9px] font-semibold uppercase tracking-[0.2em] text-muted sm:block">
+              <p className="hidden text-[9.5px] font-semibold uppercase tracking-[0.2em] text-[#14634E] sm:block">
                 {currentNav.group}
               </p>
-              <p className="truncate font-serif text-lg leading-tight text-forest">{currentNav.label}</p>
+              <p className="truncate font-serif text-lg font-semibold leading-tight text-[#0D4A3A] sm:text-xl">{currentNav.label}</p>
             </div>
 
             <button
               type="button"
               onClick={openPalette}
-              className="hidden h-9 w-full max-w-xs items-center gap-2 border border-line bg-surface px-3 text-left text-[11.5px] text-muted transition-colors hover:border-forest/40 md:flex"
+              className="hidden h-9 w-full max-w-xs items-center gap-2 rounded-xl border border-[#DFD5C6] bg-white px-3 text-left text-[12px] text-[#5C6662] shadow-2xs transition-colors hover:border-[#14634E]/45 md:flex"
               aria-label="Search admin sections"
             >
-              <NavIcon type="search" className="h-3.5 w-3.5 shrink-0" />
+              <NavIcon type="search" className="h-3.5 w-3.5 shrink-0 text-[#0D4A3A]" />
               <span className="flex-1 truncate">Search sections…</span>
-              <kbd className="border border-line bg-paper px-1.5 py-0.5 font-sans text-[9px] uppercase tracking-wider text-muted">Ctrl K</kbd>
+              <kbd className="rounded-md border border-[#E4DACE] bg-[#F7F1E7] px-1.5 py-0.5 font-sans text-[9px] font-medium uppercase tracking-wider text-[#5C6662]">Ctrl K</kbd>
             </button>
             <button
               type="button"
               onClick={openPalette}
-              className="flex h-9 w-9 shrink-0 items-center justify-center border border-line bg-surface text-muted hover:border-forest/40 md:hidden"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#DFD5C6] bg-white text-[#5C6662] shadow-2xs hover:border-[#14634E]/45 md:hidden"
               aria-label="Search admin sections"
             >
               <NavIcon type="search" className="h-4 w-4" />
             </button>
 
+            {user?.mfaEnabled ? (
+              <button
+                type="button"
+                onClick={openStepUpModal}
+                title={resolvedStepUpActive ? '2FA step-up active for sensitive payout & refund actions' : 'Verify 6-digit authenticator code for payout & refund actions'}
+                className={`hidden items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition-colors sm:inline-flex ${
+                  resolvedStepUpActive
+                    ? 'border-[#BFE2D1] bg-[#E7F4EE] text-[#0D4A3A] hover:bg-[#D8ECE2]'
+                    : 'border-[#E5C98B] bg-[#FBF4E4] text-[#7C5A1C] hover:bg-[#F5E7C4]'
+                }`}
+              >
+                <NavIcon type="shield" className="h-3.5 w-3.5 shrink-0" />
+                <span>{resolvedStepUpActive ? '2FA Verified' : 'Verify 2FA'}</span>
+              </button>
+            ) : null}
+
             <Link
               to="/"
-              className="hidden items-center gap-1.5 border border-line bg-surface px-3 py-2 text-[11px] font-medium text-ink transition-colors hover:border-forest/40 xl:flex"
+              className="hidden items-center gap-1.5 rounded-xl border border-[#DFD5C6] bg-white px-3 py-2 text-[11.5px] font-medium text-[#172321] shadow-2xs transition-colors hover:border-[#14634E]/45 hover:text-[#0D4A3A] xl:flex"
             >
-              <NavIcon type="storefront" className="h-3.5 w-3.5" />
+              <NavIcon type="storefront" className="h-3.5 w-3.5 text-[#0D4A3A]" />
               Storefront
             </Link>
 
@@ -922,7 +1123,7 @@ export function AdminLayout() {
                   setNotificationsOpen((open) => !open);
                   setUserMenuOpen(false);
                 }}
-                className="relative flex h-9 w-9 items-center justify-center border border-line bg-surface text-ink transition-colors hover:border-forest/40"
+                className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-[#DFD5C6] bg-white text-[#172321] shadow-2xs transition-colors hover:border-[#14634E]/45"
                 aria-label={
                   overview.isError
                     ? 'Queue counts unavailable'
@@ -933,9 +1134,9 @@ export function AdminLayout() {
                 aria-expanded={notificationsOpen}
                 aria-haspopup="dialog"
               >
-                <NavIcon type="bell" className="h-4 w-4" />
+                <NavIcon type="bell" className="h-4 w-4 text-[#0D4A3A]" />
                 {attentionTotal > 0 ? (
-                  <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-terra px-1 text-[9px] font-bold text-white">
+                  <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#D98263] px-1 text-[9px] font-bold text-white shadow-xs">
                     {attentionTotal > 99 ? '99+' : attentionTotal}
                   </span>
                 ) : null}
@@ -960,12 +1161,12 @@ export function AdminLayout() {
                         notificationsButtonRef.current?.focus();
                       }
                     }}
-                    className="fixed inset-x-4 top-16 z-50 border border-line bg-paper shadow-2xl sm:absolute sm:inset-auto sm:right-0 sm:top-11 sm:w-[21rem]"
+                    className="fixed inset-x-4 top-16 z-50 overflow-hidden rounded-2xl border border-[#DFD5C6] bg-white shadow-2xl sm:absolute sm:inset-auto sm:right-0 sm:top-12 sm:w-[22rem]"
                   >
-                    <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+                    <div className="flex items-start justify-between gap-3 border-b border-[#EFE7DA] bg-[#FAF6EE] px-4 py-3">
                       <div>
-                        <p className="eyebrow">Needs attention</p>
-                        <p className="mt-1 text-[12px] text-ink">
+                        <p className="eyebrow text-[#14634E]">Needs attention</p>
+                        <p className="mt-1 text-[12px] text-[#172321]">
                           {overview.isLoading
                             ? 'Checking live queue counts…'
                             : overview.isError
@@ -975,30 +1176,30 @@ export function AdminLayout() {
                                 : 'All operational queues are clear'}
                         </p>
                       </div>
-                      <span className="font-serif text-2xl text-forest">{attentionTotal}</span>
+                      <span className="font-serif text-2xl font-semibold text-[#0D4A3A]">{attentionTotal}</span>
                     </div>
                     {attention.length ? (
-                      <div className="max-h-80 overflow-y-auto">
+                      <div className="max-h-80 overflow-y-auto divide-y divide-[#EFE7DA]">
                         {attention.map((queue) => (
                           <button
                             key={queue.key}
                             type="button"
                             onClick={() => go(queue.to)}
-                            className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left last:border-b-0 hover:bg-surface"
+                            className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[#F7F1E7]"
                           >
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-terra/[0.08] text-terra">{queue.icon}</span>
+                            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FDF0EB] text-[#B85A3A] ring-1 ring-[#EBC3B4]">{queue.icon}</span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-[12px] font-medium text-ink">{queue.label}</span>
-                              <span className="block text-[10px] text-muted">{queue.note}</span>
+                              <span className="block text-[12px] font-semibold text-[#172321]">{queue.label}</span>
+                              <span className="block text-[10.5px] text-[#5C6662]">{queue.note}</span>
                             </span>
-                            <span className="border border-terra/25 bg-terra/[0.08] px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-[#8e4630]">
+                            <span className="rounded-full border border-[#EBC3B4] bg-[#FDF0EB] px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-[#8e4630]">
                               {queue.count}
                             </span>
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <p className="px-4 py-6 text-center text-sm text-muted">
+                      <p className="px-4 py-6 text-center text-sm text-[#5C6662]">
                         {overview.isLoading
                           ? 'Checking queues…'
                           : overview.isError
@@ -1006,11 +1207,11 @@ export function AdminLayout() {
                             : 'Nothing is waiting for review right now.'}
                       </p>
                     )}
-                    <div className="border-t border-line px-4 py-2.5">
+                    <div className="border-t border-[#EFE7DA] bg-[#FAF6EE] px-4 py-2.5">
                       <Link
                         to="/admin/audit"
                         onClick={() => setNotificationsOpen(false)}
-                        className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-forest hover:text-terra"
+                        className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#0D4A3A] hover:text-[#B85A3A]"
                       >
                         Open audit log →
                       </Link>
@@ -1028,19 +1229,19 @@ export function AdminLayout() {
                   setUserMenuOpen((open) => !open);
                   setNotificationsOpen(false);
                 }}
-                className="flex items-center gap-2 border border-transparent p-1 pr-1.5 transition-colors hover:border-line hover:bg-surface"
+                className="flex items-center gap-2 rounded-xl border border-transparent p-1 pr-2 transition-colors hover:border-[#DFD5C6] hover:bg-white"
                 aria-label="Account menu"
                 aria-expanded={userMenuOpen}
                 aria-haspopup="menu"
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-forest text-[10.5px] font-semibold text-paper">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#0D4A3A] to-[#19785D] text-[10.5px] font-semibold text-white shadow-2xs">
                   {initials(displayName, displayEmail)}
                 </span>
                 <span className="hidden text-left lg:block">
-                  <span className="block max-w-36 truncate text-[11.5px] font-medium leading-tight text-ink">{displayName}</span>
-                  <span className="block text-[9.5px] uppercase tracking-[0.12em] text-muted">Administrator</span>
+                  <span className="block max-w-36 truncate text-[12px] font-semibold leading-tight text-[#172321]">{displayName}</span>
+                  <span className="block text-[9.5px] uppercase tracking-[0.12em] text-[#5C6662]">Administrator</span>
                 </span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="hidden h-3 w-3 text-muted lg:block" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="hidden h-3 w-3 text-[#5C6662] lg:block" aria-hidden>
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
               </button>
@@ -1064,20 +1265,38 @@ export function AdminLayout() {
                         userMenuButtonRef.current?.focus();
                       }
                     }}
-                    className="fixed inset-x-4 top-16 z-50 border border-line bg-paper shadow-2xl sm:absolute sm:inset-auto sm:right-0 sm:top-11 sm:w-64"
+                    className="fixed inset-x-4 top-16 z-50 overflow-hidden rounded-2xl border border-[#DFD5C6] bg-white shadow-2xl sm:absolute sm:inset-auto sm:right-0 sm:top-12 sm:w-64"
                   >
-                    <div className="border-b border-line px-4 py-3">
-                      <p className="truncate text-[12.5px] font-medium text-ink">{displayName}</p>
-                      <p className="truncate text-[10.5px] text-muted">{displayEmail}</p>
-                      <p className="mt-1 inline-flex border border-forest/20 bg-forest/[0.06] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-forest">
-                        {user?.roles.includes('admin') ? 'Administrator access' : 'Restricted access'}
-                      </p>
+                    <div className="border-b border-[#EFE7DA] bg-[#FAF6EE] px-4 py-3">
+                      <p className="truncate text-[13px] font-semibold text-[#172321]">{displayName}</p>
+                      <p className="truncate text-[11px] text-[#5C6662]">{displayEmail}</p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        <span className="inline-flex rounded-full border border-[#C6E3D5] bg-[#E7F4EE] px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.1em] text-[#0D4A3A]">
+                          {user?.roles.includes('admin') ? 'Administrator access' : 'Restricted access'}
+                        </span>
+                        {user?.mfaEnabled ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUserMenuOpen(false);
+                              openStepUpModal();
+                            }}
+                            className={`inline-flex rounded-full border px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] ${
+                              resolvedStepUpActive
+                                ? 'border-[#C6E3D5] bg-[#E7F4EE] text-[#0D4A3A]'
+                                : 'border-[#E5C98B] bg-[#FBF4E4] text-[#7C5A1C]'
+                            }`}
+                          >
+                            {resolvedStepUpActive ? '2FA active' : 'Verify 2FA'}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                     <Link
                       to="/account"
                       role="menuitem"
                       onClick={() => setUserMenuOpen(false)}
-                      className="block px-4 py-2.5 text-[12px] text-ink hover:bg-surface"
+                      className="block px-4 py-2.5 text-[12.5px] font-medium text-[#172321] hover:bg-[#F7F1E7]"
                     >
                       Account profile
                     </Link>
@@ -1085,7 +1304,7 @@ export function AdminLayout() {
                       to="/"
                       role="menuitem"
                       onClick={() => setUserMenuOpen(false)}
-                      className="block px-4 py-2.5 text-[12px] text-ink hover:bg-surface"
+                      className="block px-4 py-2.5 text-[12.5px] font-medium text-[#172321] hover:bg-[#F7F1E7]"
                     >
                       Browse storefront
                     </Link>
@@ -1096,7 +1315,7 @@ export function AdminLayout() {
                         setUserMenuOpen(false);
                         await signOut();
                       }}
-                      className="block w-full border-t border-line px-4 py-2.5 text-left text-[12px] text-terra hover:bg-[#fff5f2]"
+                      className="block w-full border-t border-[#EFE7DA] px-4 py-2.5 text-left text-[12.5px] font-semibold text-[#9B3D2D] hover:bg-[#FDF0EB]"
                     >
                       Sign out
                     </button>
@@ -1167,9 +1386,9 @@ export function AdminLayout() {
           </div>
         </main>
 
-        <footer className="border-t border-line px-4 py-4 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-2 text-[10px] text-muted">
-            <p className="uppercase tracking-[0.16em]">DEAR HILLS · Marketplace operations console</p>
+        <footer className="border-t border-[#DFD5C6] bg-[#FAF6EE]/80 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-2 text-[10.5px] text-[#5C6662]">
+            <p className="font-medium uppercase tracking-[0.16em]">DEAR HILLS · Marketplace operations console</p>
             <p>Server-enforced access · decisions audited</p>
           </div>
         </footer>
@@ -1177,7 +1396,7 @@ export function AdminLayout() {
 
       {/* Command palette */}
       {paletteOpen ? (
-        <div className="fixed inset-0 z-[70] flex items-start justify-center bg-[#2b1a1f]/55 px-4 pt-[10vh] backdrop-blur-[2px]">
+        <div className="fixed inset-0 z-[70] flex items-start justify-center bg-[#0D4A3A]/40 px-4 pt-[10vh] backdrop-blur-xs">
           <button type="button" tabIndex={-1} aria-label="Close search" onClick={() => setPaletteOpen(false)} className="absolute inset-0 cursor-default" />
           <div
             ref={palettePanelRef}
@@ -1185,10 +1404,10 @@ export function AdminLayout() {
             aria-modal="true"
             aria-label="Search admin sections"
             onKeyDown={onPalettePanelKeyDown}
-            className="relative w-full max-w-xl border border-line bg-paper shadow-2xl"
+            className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-[#DFD5C6] bg-white shadow-2xl"
           >
-            <div className="flex items-center gap-3 border-b border-line px-4">
-              <NavIcon type="search" className="h-4 w-4 shrink-0 text-muted" />
+            <div className="flex items-center gap-3 border-b border-[#EFE7DA] bg-[#FAF6EE] px-4">
+              <NavIcon type="search" className="h-4 w-4 shrink-0 text-[#0D4A3A]" />
               <input
                 ref={paletteInputRef}
                 value={paletteQuery}
@@ -1199,12 +1418,12 @@ export function AdminLayout() {
                 onKeyDown={onPaletteKeyDown}
                 placeholder="Search admin sections…"
                 aria-label="Search admin sections"
-                className="h-14 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted/60"
+                className="h-14 flex-1 bg-transparent text-sm text-[#172321] outline-none placeholder:text-[#5C6662]/70"
               />
-              <kbd className="border border-line bg-surface px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-muted">Esc</kbd>
+              <kbd className="rounded-md border border-[#DFD5C6] bg-white px-2 py-0.5 text-[9.5px] font-medium uppercase tracking-wider text-[#5C6662]">Esc</kbd>
             </div>
             <div className="max-h-[55vh] overflow-y-auto py-2">
-              <p className="px-4 pb-1.5 pt-2 text-[9px] font-semibold uppercase tracking-[0.2em] text-muted">
+              <p className="px-4 pb-1.5 pt-2 text-[9.5px] font-semibold uppercase tracking-[0.2em] text-[#5C6662]">
                 {paletteQuery.trim() ? `${paletteResults.length} matching section${paletteResults.length === 1 ? '' : 's'}` : 'Jump to'}
               </p>
               {paletteResults.length ? (
@@ -1217,17 +1436,17 @@ export function AdminLayout() {
                       type="button"
                       onMouseEnter={() => setPaletteIndex(index)}
                       onClick={() => go(item.to)}
-                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left ${active ? 'bg-forest text-paper' : 'text-ink hover:bg-surface'}`}
+                      className={`mx-2 flex w-[calc(100%-1rem)] items-center gap-3 rounded-xl px-3.5 py-2.5 text-left transition-colors ${active ? 'bg-[#0D4A3A] text-white shadow-xs' : 'text-[#172321] hover:bg-[#F7F1E7]'}`}
                     >
-                      <NavIcon type={item.icon} className={`h-4 w-4 shrink-0 ${active ? 'text-butter' : 'text-muted'}`} />
+                      <NavIcon type={item.icon} className={`h-4 w-4 shrink-0 ${active ? 'text-[#F4E8CE]' : 'text-[#0D4A3A]'}`} />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[12.5px] font-medium">{item.label}</span>
-                        <span className={`block text-[10px] ${active ? 'text-paper/60' : 'text-muted'}`}>{item.group}</span>
+                        <span className="block text-[13px] font-medium">{item.label}</span>
+                        <span className={`block text-[10.5px] ${active ? 'text-white/75' : 'text-[#5C6662]'}`}>{item.group}</span>
                       </span>
                       {count > 0 ? (
                         <span
-                          className={`border px-1.5 py-0.5 text-[9.5px] font-semibold tabular-nums ${
-                            active ? 'border-white/20 bg-white/10 text-paper' : 'border-terra/25 bg-terra/[0.08] text-[#8e4630]'
+                          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold tabular-nums ${
+                            active ? 'border-white/25 bg-white/15 text-white' : 'border-[#EBC3B4] bg-[#FDF0EB] text-[#8E4630]'
                           }`}
                         >
                           {count}
@@ -1237,16 +1456,24 @@ export function AdminLayout() {
                   );
                 })
               ) : (
-                <p className="px-4 py-8 text-center text-sm text-muted">No admin section matches “{paletteQuery.trim()}”.</p>
+                <p className="px-4 py-8 text-center text-sm text-[#5C6662]">No admin section matches “{paletteQuery.trim()}”.</p>
               )}
             </div>
-            <p className="border-t border-line px-4 py-2 text-[10px] text-muted">
+            <p className="border-t border-[#EFE7DA] bg-[#FAF6EE] px-4 py-2.5 text-[10.5px] text-[#5C6662]">
               This searches console destinations only. Search marketplace records inside each section.
             </p>
           </div>
         </div>
       ) : null}
     </div>
+  );
+}
+
+export function AdminLayout() {
+  return (
+    <AdminStepUpProvider>
+      <AdminLayoutInner />
+    </AdminStepUpProvider>
   );
 }
 
@@ -1328,8 +1555,13 @@ export function AdminOverviewPage() {
   const attentionTotal = queues.reduce((sum, queue) => sum + queue.count, 0);
 
   const payments = data.integrations.payments;
-  const paymentLabel = payments.configured ? `${humanise(payments.provider)} · ${payments.mode}` : 'Not configured';
-  const emailLabel = data.integrations.email === 'configured' ? 'SMTP configured' : 'SMTP not configured';
+  const paymentLabel = payments.configured
+    ? `${humanise(payments.provider)} · ${payments.mode}${payments.webhookConfigured ? ' · webhook' : ''}`
+    : 'Not configured';
+  const emailConfigured = data.integrations.email === 'configured';
+  const emailLabel = emailConfigured
+    ? `${data.integrations.emailProvider ? humanise(data.integrations.emailProvider) : 'Provider'} active`
+    : 'Not configured';
   const shippingLabel = data.integrations.shipping === 'configured' ? 'Credentials present · manual workflow' : 'Manual workflow only';
   const notificationLabel = data.notifications
     ? `${data.notifications.sent ?? 0} sent · ${data.notifications.skipped ?? 0} skipped · ${data.notifications.failed ?? 0} failed`
@@ -1337,16 +1569,18 @@ export function AdminOverviewPage() {
 
   return (
     <AdminPage>
-      <div className="flex flex-col gap-4 border-b border-line pb-6 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-[#DFD5C6] bg-gradient-to-r from-white via-[#FDFBF7] to-[#F7F1E7] p-5 shadow-[0_2px_14px_rgba(13,74,58,0.05)] sm:flex-row sm:items-end sm:justify-between sm:p-6">
         <div>
-          <p className="eyebrow">Operations overview</p>
-          <h1 className="mt-2 text-3xl leading-tight sm:text-4xl">Marketplace overview</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
+          <p className="inline-flex items-center gap-1.5 rounded-full border border-[#C6E3D5] bg-[#E7F4EE] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#0D4A3A]">
+            Operations overview
+          </p>
+          <h1 className="mt-2 font-serif text-3xl font-semibold leading-tight text-[#0D4A3A] sm:text-4xl">Marketplace overview</h1>
+          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-[#5C6662]">
             Live trade, catalogue and review queues from this server. No placeholder totals or trend estimates are shown.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10.5px] text-muted">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="rounded-xl border border-[#DFD5C6] bg-white px-3 py-1.5 text-[11px] font-medium text-[#5C6662]">
             Updated {overview.dataUpdatedAt ? new Date(overview.dataUpdatedAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : '—'}
           </span>
           <Button variant="secondary" size="sm" loading={overview.isFetching} onClick={() => void overview.refetch()}>
@@ -1408,13 +1642,13 @@ export function AdminOverviewPage() {
           <AdminSection title="Catalogue composition" description="Every listing currently stored, grouped by moderation state.">
             {catalogueTotal > 0 ? (
               <>
-                <div className="flex h-3 w-full overflow-hidden border border-line bg-paper" aria-hidden>
-                  {catalogue.map((item) =>
-                    item.value > 0 ? (
-                      <span key={item.label} className={item.bar} style={{ width: `${(item.value / catalogueTotal) * 100}%` }} />
-                    ) : null,
-                  )}
-                </div>
+            <div className="flex h-3 w-full overflow-hidden rounded-full border border-[#DFD5C6] bg-[#F7F1E7]" aria-hidden>
+              {catalogue.map((item) =>
+                item.value > 0 ? (
+                  <span key={item.label} className={item.bar} style={{ width: `${(item.value / catalogueTotal) * 100}%` }} />
+                ) : null,
+              )}
+            </div>
                 <dl className="mt-4 space-y-2.5">
                   {catalogue.map((item) => (
                     <div key={item.label} className="flex items-center justify-between gap-3 text-[11.5px]">
@@ -1444,29 +1678,33 @@ export function AdminOverviewPage() {
           </AdminSection>
 
           <AdminSection title="Service readiness" description="Configuration reported by the server. Unconfigured providers are not presented as working.">
-            <dl className="space-y-2.5 text-[11.5px]">
+            <dl className="space-y-3 text-[12px]">
               <div className="flex items-start justify-between gap-3">
-                <dt className="text-muted">Payments</dt>
+                <dt className="text-[#5C6662]">Payments</dt>
                 <dd className="text-right">
-                  <span className={`inline-flex border px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.1em] ${payments.configured ? 'border-forest/20 bg-forest/[0.06] text-forest' : 'border-terra/25 bg-terra/[0.06] text-[#8e4630]'}`}>
+                  <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${payments.configured ? 'border-[#C6E3D5] bg-[#E7F4EE] text-[#0D4A3A]' : 'border-[#EBC3B4] bg-[#FDF0EB] text-[#8e4630]'}`}>
                     {paymentLabel}
                   </span>
                 </dd>
               </div>
               <div className="flex items-start justify-between gap-3">
-                <dt className="text-muted">Email</dt>
-                <dd className="text-right text-ink">{emailLabel}</dd>
+                <dt className="text-[#5C6662]">Email</dt>
+                <dd className="text-right">
+                  <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${emailConfigured ? 'border-[#C6E3D5] bg-[#E7F4EE] text-[#0D4A3A]' : 'border-[#EBC3B4] bg-[#FDF0EB] text-[#8e4630]'}`}>
+                    {emailLabel}
+                  </span>
+                </dd>
               </div>
               <div className="flex items-start justify-between gap-3">
-                <dt className="text-muted">Shipping</dt>
-                <dd className="text-right text-ink">{shippingLabel}</dd>
+                <dt className="text-[#5C6662]">Shipping</dt>
+                <dd className="text-right font-medium text-[#172321]">{shippingLabel}</dd>
               </div>
               <div className="flex items-start justify-between gap-3">
-                <dt className="text-muted">Notification queue</dt>
-                <dd className="max-w-[60%] text-right text-ink">{notificationLabel}</dd>
+                <dt className="text-[#5C6662]">Notification queue</dt>
+                <dd className="max-w-[60%] text-right font-medium text-[#172321]">{notificationLabel}</dd>
               </div>
             </dl>
-            <Link to="/admin/settings" className="mt-4 inline-block text-[10.5px] font-medium uppercase tracking-[0.14em] text-forest hover:text-terra">
+            <Link to="/admin/settings" className="mt-4 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#0D4A3A] hover:text-[#B85A3A]">
               View configuration →
             </Link>
           </AdminSection>
@@ -1600,7 +1838,7 @@ export function AdminOverviewPage() {
         </AdminSection>
 
         <AdminSection title="Operator shortcuts" description="Cross-checks worth running before launch and during daily operations.">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5">
             {[
               { label: 'Review sellers', to: '/admin/sellers?queue=review', icon: 'sellers' },
               { label: 'Moderate listings', to: '/admin/products?status=pending', icon: 'products' },
@@ -1612,9 +1850,9 @@ export function AdminOverviewPage() {
               <Link
                 key={item.to}
                 to={item.to}
-                className="flex items-center gap-2.5 border border-line bg-paper px-3 py-3 text-[11.5px] font-medium text-ink transition-colors hover:border-forest/35 hover:bg-surface"
+                className="flex items-center gap-2.5 rounded-xl border border-[#DFD5C6] bg-[#FAF6EE] px-3.5 py-3 text-[12px] font-semibold text-[#172321] transition-all hover:border-[#14634E]/45 hover:bg-white hover:text-[#0D4A3A]"
               >
-                <NavIcon type={item.icon} className="h-4 w-4 shrink-0 text-forest" />
+                <NavIcon type={item.icon} className="h-4 w-4 shrink-0 text-[#0D4A3A]" />
                 <span>{item.label}</span>
               </Link>
             ))}
@@ -1722,7 +1960,14 @@ export function AdminSellersPage() {
         actions={<LinkButton to="/admin/settlements" variant="secondary" size="sm">Seller settlements</LinkButton>}
       />
 
-      <div className="mt-5 flex flex-wrap items-end gap-3">
+      <AdminToolbar
+        meta={
+          <>
+            {total} seller{total === 1 ? '' : 's'} in this view
+            {sellers.data && sellers.data.totalPages > 1 ? ` · page ${page} of ${sellers.data.totalPages}` : ''}
+          </>
+        }
+      >
         <Field label="Search sellers" className="w-full sm:max-w-xs">
           <Input
             value={q}
@@ -1737,7 +1982,7 @@ export function AdminSellersPage() {
         <Field label="Application status">
           <Select value={status} onChange={(event) => setFilter({ status: event.target.value })} className="max-w-56">
             <option value="">All statuses</option>
-            {['draft', 'submitted', 'under_review', 'changes_requested', 'approved', 'rejected', 'suspended', 'withdrawn'].map((value) => (
+            {['draft', 'submitted', 'under_review', 'changes_requested', 'more_info_required', 'approved', 'rejected', 'suspended', 'withdrawn'].map((value) => (
               <option key={value} value={value}>{applicationLabel(value)}</option>
             ))}
           </Select>
@@ -1790,11 +2035,7 @@ export function AdminSellersPage() {
         >
           Needs review{reviewCount ? ` · ${reviewCount}` : ''}
         </Button>
-        <p className="pb-3 text-[11px] text-muted sm:ml-auto">
-          {total} seller{total === 1 ? '' : 's'} in this view
-          {sellers.data && sellers.data.totalPages > 1 ? ` · page ${page} of ${sellers.data.totalPages}` : ''}
-        </p>
-      </div>
+      </AdminToolbar>
 
       <div className="mt-5">
         {sellers.isLoading ? <LoadingBlock rows={4} /> : null}
@@ -1808,7 +2049,7 @@ export function AdminSellersPage() {
                 return (
                   <article
                     key={seller.id}
-                    className="rounded-xl border border-line bg-surface p-4 shadow-2xs transition-shadow hover:shadow-xs"
+                    className="rounded-2xl border border-[#DFD5C6] bg-white p-4 shadow-[0_2px_12px_rgba(13,74,58,0.04)] transition-shadow hover:shadow-[0_6px_18px_rgba(13,74,58,0.08)]"
                   >
                     <div className="flex items-start justify-between gap-2 border-b border-line/60 pb-3">
                       <div>
@@ -1861,10 +2102,10 @@ export function AdminSellersPage() {
                       </p>
                     ) : null}
 
-                    <div className="mt-3.5 pt-2">
+                    <div className="mt-3.5 pt-1">
                       <Link
                         to={`/admin/sellers/${seller.id}`}
-                        className="flex h-11 w-full items-center justify-center rounded-lg border border-forest/30 bg-forest/10 text-xs font-semibold text-forest hover:bg-forest hover:text-white transition-colors"
+                        className="flex h-11 w-full items-center justify-center rounded-xl border border-[#C6E3D5] bg-[#E7F4EE] text-xs font-semibold text-[#0D4A3A] hover:bg-[#0D4A3A] hover:text-white transition-colors"
                       >
                         Inspect &amp; Review File →
                       </Link>
@@ -1875,9 +2116,9 @@ export function AdminSellersPage() {
             </div>
 
             {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto border border-line bg-surface">
+            <div className="hidden md:block overflow-x-auto rounded-2xl border border-[#DFD5C6] bg-white shadow-[0_2px_14px_rgba(13,74,58,0.05)]">
               <table className="min-w-full text-left text-[12.5px]" aria-label="Seller applications">
-                <thead className="border-b border-line bg-paper text-[9.5px] uppercase tracking-[0.14em] text-muted">
+                <thead className="border-b border-[#EFE7DA] bg-[#FAF6EE] text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
                   <tr>
                     <th scope="col" className="px-4 py-3 font-semibold">Seller</th>
                     <th scope="col" className="px-4 py-3 font-semibold">Application</th>
@@ -1915,8 +2156,10 @@ export function AdminSellersPage() {
                           ) : null}
                         </td>
                         <td className="px-4 py-4">
-                          <span className="text-ink">{STORE_STATUS_LABELS[seller.store_status] ?? humanise(seller.store_status)}</span>
-                          <p className="text-[10.5px] text-muted">Payouts: {humanise(seller.payout_status)}</p>
+                          <span className="font-medium text-[#172321]">{STORE_STATUS_LABELS[seller.store_status] ?? humanise(seller.store_status)}</span>
+                          <div className="mt-1">
+                            <StatusBadge status={seller.payout_status} label={`Payouts: ${humanise(seller.payout_status)}`} />
+                          </div>
                         </td>
                         <td className="px-4 py-4 text-muted">
                           {seller.seller_category ? humanise(seller.seller_category) : '—'}
@@ -1939,7 +2182,7 @@ export function AdminSellersPage() {
                         <td className="px-4 py-4 text-right">
                           <Link
                             to={`/admin/sellers/${seller.id}`}
-                            className="inline-flex items-center gap-1 rounded-sm border border-forest/30 bg-forest/10 px-2.5 py-1 text-xs font-semibold text-forest hover:bg-forest hover:text-paper transition-colors"
+                            className="inline-flex items-center gap-1 rounded-xl border border-[#C6E3D5] bg-[#E7F4EE] px-3 py-1.5 text-xs font-semibold text-[#0D4A3A] hover:bg-[#0D4A3A] hover:text-white transition-colors"
                           >
                             Review file →
                           </Link>
@@ -2103,6 +2346,7 @@ export function AdminSellerDetailPage() {
   const { id = '' } = useParams();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { runWithStepUp } = useAdminStepUp();
   const [decision, setDecision] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -2157,10 +2401,10 @@ export function AdminSellerDetailPage() {
     setPayoutBusy(true);
     try {
       const path = payoutAction === 'verify' ? 'verify' : payoutAction === 'hold' ? 'hold' : 'release';
-      await api(`/admin/sellers/${id}/payouts/${path}`, {
-        method: 'POST',
-        body: payoutAction === 'hold' ? { reason: note } : { note: note || undefined },
-      });
+      const requestBody = payoutAction === 'hold' ? { reason: note } : { note: note || undefined };
+      await (payoutAction === 'verify'
+        ? runWithStepUp(() => api(`/admin/sellers/${id}/payouts/${path}`, { method: 'POST', body: requestBody }))
+        : api(`/admin/sellers/${id}/payouts/${path}`, { method: 'POST', body: requestBody }));
       toast.push(
         payoutAction === 'verify'
           ? 'Payout details marked verified. No payout was initiated.'
@@ -2205,7 +2449,9 @@ export function AdminSellerDetailPage() {
       return;
     }
     try {
-      await api(`/admin/sellers/${id}/adjustments`, { method: 'POST', body: { amountPaise: amount, note: adjustNote } });
+      await runWithStepUp(() =>
+        api(`/admin/sellers/${id}/adjustments`, { method: 'POST', body: { amountPaise: amount, note: adjustNote } }),
+      );
       toast.push('Ledger adjustment recorded.');
       setAdjustAmount('');
       setAdjustNote('');
@@ -2273,7 +2519,7 @@ export function AdminSellerDetailPage() {
       </div>
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg">Application</h2>
               <span className="text-[11px] text-muted">
@@ -2322,7 +2568,7 @@ export function AdminSellerDetailPage() {
           </section>
 
           {data.checklist?.length ? (
-            <section className="border border-line bg-surface p-5">
+            <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
               <h2 className="text-lg">Onboarding checklist</h2>
               <p className="mt-1 text-[11px] text-muted">Derived from the saved application and documents.</p>
               <ul className="mt-3 divide-y divide-line text-[12.5px]">
@@ -2342,7 +2588,7 @@ export function AdminSellerDetailPage() {
           ) : null}
 
           {data.requirements?.required?.length ? (
-            <section className="border border-line bg-surface p-5">
+            <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
               <h2 className="text-lg">Evidence requirements</h2>
               <p className="mt-1 text-[11px] text-muted">Required for this category and structure. Requirement sets are not a legal determination.</p>
               <ul className="mt-3 space-y-1.5 text-[12.5px]">
@@ -2360,7 +2606,7 @@ export function AdminSellerDetailPage() {
             </section>
           ) : null}
 
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Verification documents</h2>
             <p className="mt-1 text-[11px] text-muted">Identity evidence is private. Opening a file is recorded in the audit log.</p>
             {(data.documents ?? []).length ? (
@@ -2426,7 +2672,7 @@ export function AdminSellerDetailPage() {
             ) : <p className="mt-3 text-sm text-muted">No documents uploaded.</p>}
           </section>
 
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Review history</h2>
             {data.events?.length ? (
               <ol className="mt-3 space-y-3 border-l border-line pl-4 text-[12.5px]">
@@ -2446,7 +2692,7 @@ export function AdminSellerDetailPage() {
             ) : <p className="mt-3 text-sm text-muted">No application events recorded.</p>}
           </section>
 
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Audit trail</h2>
             <p className="mt-1 text-[11px] text-muted">Server-recorded administrator actions for this seller.</p>
             {data.auditTrail?.length ? (
@@ -2462,7 +2708,7 @@ export function AdminSellerDetailPage() {
             ) : <p className="mt-3 text-sm text-muted">No audit entries yet.</p>}
           </section>
 
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Recent orders</h2>
             {data.recentOrders?.length ? (
               <ul className="mt-3 divide-y divide-line text-[12.5px]">
@@ -2477,7 +2723,7 @@ export function AdminSellerDetailPage() {
           </section>
         </div>
         <aside className="space-y-5">
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <h2 className="text-lg">Payout details</h2>
               <StatusBadge status={payoutStatus} />
@@ -2518,7 +2764,7 @@ export function AdminSellerDetailPage() {
               )}
             </div>
           </section>
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Ledger</h2>
             <dl className="mt-3 space-y-2 text-[12.5px]">
               <div className="flex justify-between"><dt className="text-muted">Platform Fee</dt><dd>{formatINR(metrics?.commission ?? 0)}</dd></div>
@@ -2527,7 +2773,7 @@ export function AdminSellerDetailPage() {
               <div className="flex justify-between"><dt className="text-muted">Platform fee rule</dt><dd>{data.commissionRules?.rate_bp != null ? percentFromBp(data.commissionRules.rate_bp) : 'Default 12%'}</dd></div>
             </dl>
           </section>
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Record adjustment</h2>
             <p className="mt-1 text-[11px] leading-relaxed text-muted">Positive adds to seller balance; negative deducts. Creates an eligible ledger entry with your note.</p>
             <form onSubmit={recordAdjustment} className="mt-3 space-y-3">
@@ -3061,7 +3307,7 @@ export function AdminProductsPage() {
                 return (
                   <article
                     key={product.id}
-                    className="rounded-xl border border-line bg-surface p-4 shadow-2xs"
+                    className="rounded-2xl border border-[#DFD5C6] bg-white p-4 shadow-[0_2px_10px_rgba(13,74,58,0.04)]"
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/30">
@@ -3143,9 +3389,9 @@ export function AdminProductsPage() {
             </div>
 
             {/* Desktop Table */}
-            <div className="hidden md:block overflow-x-auto border border-line bg-surface">
+            <div className="hidden md:block overflow-x-auto rounded-2xl border border-[#DFD5C6] bg-white shadow-[0_2px_14px_rgba(13,74,58,0.05)]">
               <table className="min-w-full text-left text-[12.5px]" aria-label="Product listings">
-                <thead className="border-b border-line bg-paper text-[9.5px] uppercase tracking-[0.14em] text-muted">
+                <thead className="border-b border-[#EFE7DA] bg-[#FAF6EE] text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
                   <tr>
                     <th scope="col" className="px-4 py-3 font-semibold">Listing</th>
                     <th scope="col" className="px-4 py-3 font-semibold">Seller</th>
@@ -4698,7 +4944,7 @@ export function AdminCategoriesPage() {
         actions={editing ? <Button type="button" variant="secondary" size="sm" onClick={resetForm}>New category</Button> : undefined}
       />
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-        <form onSubmit={(event) => void save(event)} className="self-start border border-line bg-surface p-5">
+        <form onSubmit={(event) => void save(event)} className="self-start rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_14px_rgba(13,74,58,0.05)]">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-xl">{editing ? 'Edit category' : 'Add a category'}</h2>
@@ -4790,15 +5036,15 @@ export function AdminCategoriesPage() {
             </div>
           </div>
         </form>
-        <section className="border border-line bg-surface">
-          <div className="border-b border-line px-5 py-4">
-            <h2 className="text-xl">Taxonomy</h2>
-            <p className="mt-1 text-xs text-muted">{all.length} categories · {all.reduce((sum, category) => sum + category.active_product_count, 0)} live listings</p>
+        <section className="overflow-hidden rounded-2xl border border-[#DFD5C6] bg-white shadow-[0_2px_14px_rgba(13,74,58,0.05)]">
+          <div className="border-b border-[#EFE7DA] bg-[#FAF6EE] px-5 py-4">
+            <h2 className="font-serif text-xl font-semibold text-[#0D4A3A]">Taxonomy</h2>
+            <p className="mt-1 text-xs text-[#5C6662]">{all.length} categories · {all.reduce((sum, category) => sum + category.active_product_count, 0)} live listings</p>
           </div>
           {all.length ? (
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-[12.5px]">
-                <thead className="bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
+                <thead className="bg-[#FAF6EE]/70 text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
                   <tr>
                     <th className="px-4 py-2.5">Category</th>
                     <th className="px-4 py-2.5">Products</th>
@@ -4806,26 +5052,26 @@ export function AdminCategoriesPage() {
                     <th className="px-4 py-2.5"><span className="sr-only">Action</span></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line">
+                <tbody className="divide-y divide-[#EFE7DA]">
                   {all.map((category) => (
-                    <tr key={category.id}>
+                    <tr key={category.id} className="hover:bg-[#FAF6EE]/70">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           {category.image_url ? (
-                            <img src={category.image_url} alt="" className="h-9 w-9 border border-line object-cover" />
+                            <img src={category.image_url} alt="" className="h-9 w-9 rounded-lg border border-[#DFD5C6] object-cover" />
                           ) : (
-                            <span className="flex h-9 w-9 items-center justify-center border border-line bg-paper text-[10px] text-muted">—</span>
+                            <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#DFD5C6] bg-[#F7F1E7] text-[10px] text-[#5C6662]">—</span>
                           )}
                           <div>
-                            <p className="font-medium text-ink">{category.name}</p>
-                            <p className="text-[10.5px] text-muted">
+                            <p className="font-semibold text-[#172321]">{category.name}</p>
+                            <p className="text-[10.5px] text-[#5C6662]">
                               /{category.slug}
                               {category.parent_id ? ` · under ${all.find((item) => item.id === category.parent_id)?.name ?? 'parent'}` : ''}
                             </p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-muted">
+                      <td className="px-4 py-3 text-[#5C6662]">
                         {category.active_product_count} live / {category.product_count} total
                         {category.child_count ? <span className="block text-[10.5px]">{category.child_count} subcategories</span> : null}
                       </td>
@@ -4846,6 +5092,7 @@ export function AdminCategoriesPage() {
         </section>
       </div>
       <AdminRegionsManager />
+      <AdminCraftsManager />
     </div>
   );
 }
@@ -4861,6 +5108,7 @@ function AdminRegionsManager() {
   const [slug, setSlug] = useState('');
   const [introText, setIntroText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const createRegion = async (event: FormEvent) => {
     event.preventDefault();
@@ -4887,37 +5135,174 @@ function AdminRegionsManager() {
     }
   };
 
+  const toggleRegion = async (region: RegionEntity) => {
+    setTogglingId(region.id);
+    try {
+      await api(`/admin/regions/${region.id}`, {
+        method: 'PATCH',
+        body: { isActive: !region.isActive },
+      });
+      toast.push(`${region.name} is now ${!region.isActive ? 'active' : 'hidden'} on the storefront.`);
+      await queryClient.invalidateQueries({ queryKey: ['admin-regions'] });
+      await queryClient.invalidateQueries({ queryKey: ['public-regions-nav'] });
+    } catch (err) {
+      toast.push(errorMessage(err), 'error');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   return (
-    <div className="border-t border-line pt-7">
-      <h2 className="font-serif text-2xl text-forest">Himalayan Regions (SEO Hubs)</h2>
-      <p className="mt-1 text-xs text-muted">Add or review first-class mountain region hubs.</p>
+    <div className="border-t border-[#DFD5C6] pt-7">
+      <h2 className="font-serif text-2xl font-semibold text-[#0D4A3A]">Himalayan Regions (SEO Hubs)</h2>
+      <p className="mt-1 text-xs text-[#5C6662]">Add, activate or hide first-class mountain region hubs.</p>
       <div className="mt-4 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-        <form onSubmit={(e) => void createRegion(e)} className="border border-line bg-surface p-5 space-y-3">
-          <h3 className="font-serif text-lg">Add a Region</h3>
+        <form onSubmit={(e) => void createRegion(e)} className="self-start space-y-3 rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_14px_rgba(13,74,58,0.05)]">
+          <h3 className="font-serif text-lg font-semibold text-[#0D4A3A]">Add a Region</h3>
           <Field label="Region Name" required>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Spiti Valley" required />
           </Field>
           <Field label="Slug (optional)">
             <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="e.g. spiti-valley" />
           </Field>
-          <Field label="Intro Copy (150–300 words recommended)" required>
+          <Field label="Intro Copy (50+ chars, 150–300 words recommended)" required>
             <Textarea rows={4} value={introText} onChange={(e) => setIntroText(e.target.value)} required />
           </Field>
           <Button type="submit" size="sm" loading={saving}>Add region</Button>
         </form>
-        <div className="border border-line bg-surface p-5">
-          <h3 className="font-serif text-lg">Active Regions ({regionsQuery.data?.regions.length ?? 0})</h3>
+        <div className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_14px_rgba(13,74,58,0.05)]">
+          <h3 className="font-serif text-lg font-semibold text-[#0D4A3A]">Regions ({regionsQuery.data?.regions.length ?? 0})</h3>
           {regionsQuery.isLoading ? <div className="mt-3"><LoadingBlock rows={2} /></div> : null}
           {regionsQuery.isError ? <div className="mt-3"><ErrorState body={errorMessage(regionsQuery.error)} onRetry={() => void regionsQuery.refetch()} /></div> : null}
           {!regionsQuery.isLoading && !regionsQuery.isError && regionsQuery.data ? (
-            <ul className="mt-3 divide-y divide-line text-xs">
+            <ul className="mt-3 divide-y divide-[#EFE7DA] text-xs">
               {regionsQuery.data.regions.map((r) => (
-                <li key={r.id} className="flex items-center justify-between py-2.5">
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                   <div>
-                    <p className="font-semibold text-ink">{r.name}</p>
-                    <p className="text-muted">/regions/{r.slug} · {r.productCount ?? 0} real listings</p>
+                    <p className="font-semibold text-[#172321]">{r.name}</p>
+                    <p className="text-[#5C6662]">/regions/{r.slug} · {r.productCount ?? 0} real listings</p>
                   </div>
-                  <Badge tone={r.isActive ? 'forest' : 'neutral'}>{r.isActive ? 'Active' : 'Hidden'}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge tone={r.isActive ? 'forest' : 'neutral'}>{r.isActive ? 'Active' : 'Hidden'}</Badge>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      loading={togglingId === r.id}
+                      onClick={() => void toggleRegion(r)}
+                    >
+                      {r.isActive ? 'Hide' : 'Activate'}
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminCraftsManager() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const craftsQuery = useQuery({
+    queryKey: ['admin-crafts'],
+    queryFn: () => api<{ crafts: CraftEntity[] }>('/admin/crafts'),
+  });
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [introText, setIntroText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const createCraft = async (event: FormEvent) => {
+    event.preventDefault();
+    if (introText.trim().length < 40) {
+      toast.push('Write at least 40 characters describing this Himalayan craft tradition.', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api('/admin/crafts', {
+        method: 'POST',
+        body: {
+          name: name.trim(),
+          slug: slug.trim() || undefined,
+          introText: introText.trim(),
+        },
+      });
+      toast.push('Himalayan craft hub created.');
+      setName('');
+      setSlug('');
+      setIntroText('');
+      await queryClient.invalidateQueries({ queryKey: ['admin-crafts'] });
+    } catch (err) {
+      toast.push(errorMessage(err), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleCraft = async (craft: CraftEntity) => {
+    setTogglingId(craft.id);
+    try {
+      await api(`/admin/crafts/${craft.id}`, {
+        method: 'PATCH',
+        body: { isActive: !craft.isActive },
+      });
+      toast.push(`${craft.name} is now ${!craft.isActive ? 'active' : 'hidden'} on the storefront.`);
+      await queryClient.invalidateQueries({ queryKey: ['admin-crafts'] });
+    } catch (err) {
+      toast.push(errorMessage(err), 'error');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  return (
+    <div className="border-t border-[#DFD5C6] pt-7">
+      <h2 className="font-serif text-2xl font-semibold text-[#0D4A3A]">Himalayan Crafts (Heritage Hubs)</h2>
+      <p className="mt-1 text-xs text-[#5C6662]">Manage GI craft traditions showcased across craft &amp; artisan discovery routes.</p>
+      <div className="mt-4 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <form onSubmit={(e) => void createCraft(e)} className="self-start space-y-3 rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_14px_rgba(13,74,58,0.05)]">
+          <h3 className="font-serif text-lg font-semibold text-[#0D4A3A]">Add a Craft Hub</h3>
+          <Field label="Craft Name" required>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Chamba Rumal" required />
+          </Field>
+          <Field label="Slug (optional)">
+            <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="e.g. chamba-rumal" />
+          </Field>
+          <Field label="Craft Intro (40+ chars required)" required>
+            <Textarea rows={4} value={introText} onChange={(e) => setIntroText(e.target.value)} required />
+          </Field>
+          <Button type="submit" size="sm" loading={saving}>Add craft</Button>
+        </form>
+        <div className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_14px_rgba(13,74,58,0.05)]">
+          <h3 className="font-serif text-lg font-semibold text-[#0D4A3A]">Crafts ({craftsQuery.data?.crafts.length ?? 0})</h3>
+          {craftsQuery.isLoading ? <div className="mt-3"><LoadingBlock rows={2} /></div> : null}
+          {craftsQuery.isError ? <div className="mt-3"><ErrorState body={errorMessage(craftsQuery.error)} onRetry={() => void craftsQuery.refetch()} /></div> : null}
+          {!craftsQuery.isLoading && !craftsQuery.isError && craftsQuery.data ? (
+            <ul className="mt-3 divide-y divide-[#EFE7DA] text-xs">
+              {craftsQuery.data.crafts.map((craft) => (
+                <li key={craft.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div>
+                    <p className="font-semibold text-[#172321]">{craft.name}</p>
+                    <p className="text-[#5C6662]">/crafts/{craft.slug} · {craft.productCount ?? 0} real listings</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge tone={craft.isActive ? 'forest' : 'neutral'}>{craft.isActive ? 'Active' : 'Hidden'}</Badge>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      loading={togglingId === craft.id}
+                      onClick={() => void toggleCraft(craft)}
+                    >
+                      {craft.isActive ? 'Hide' : 'Activate'}
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -5001,39 +5386,39 @@ export function AdminOrdersPage() {
               {orders.data.orders.map((order) => (
                 <article
                   key={order.orderNumber}
-                  className="rounded-xl border border-line bg-surface p-4 shadow-2xs"
+                  className="rounded-2xl border border-[#DFD5C6] bg-white p-4 shadow-[0_2px_10px_rgba(13,74,58,0.04)]"
                 >
-                  <div className="flex items-start justify-between gap-2 border-b border-line/60 pb-2.5">
+                  <div className="flex items-start justify-between gap-2 border-b border-[#EFE7DA] pb-2.5">
                     <div>
                       <div className="flex items-center gap-1.5">
                         <Link
                           to={`/admin/orders/${order.orderNumber}`}
-                          className="font-serif text-base font-semibold text-forest hover:text-terra"
+                          className="font-serif text-base font-semibold text-[#0D4A3A] hover:text-[#B85A3A]"
                         >
                           {order.orderNumber}
                         </Link>
                         {order.isDemo ? <Badge tone="sand">DEMO</Badge> : null}
                       </div>
-                      <p className="mt-0.5 text-[11px] text-muted">{formatDate(order.placedAt)}</p>
+                      <p className="mt-0.5 text-[11px] text-[#5C6662]">{formatDate(order.placedAt)}</p>
                     </div>
                     <StatusBadge status={order.status} label={orderStatusLabel(order.status)} />
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <span className="text-[10px] uppercase tracking-wider text-muted">Customer</span>
-                      <p className="font-medium text-ink">{order.customerName}</p>
-                      <p className="text-[10.5px] text-muted truncate">{order.destination}</p>
+                      <span className="text-[10px] uppercase tracking-wider text-[#5C6662]">Customer</span>
+                      <p className="font-medium text-[#172321]">{order.customerName}</p>
+                      <p className="text-[10.5px] text-[#5C6662] truncate">{order.destination}</p>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] uppercase tracking-wider text-muted">Total Paid</span>
-                      <p className="font-semibold text-sm text-ink">{formatINR(order.totalPaise)}</p>
+                      <span className="text-[10px] uppercase tracking-wider text-[#5C6662]">Total Paid</span>
+                      <p className="font-semibold text-sm text-[#0D4A3A]">{formatINR(order.totalPaise)}</p>
                     </div>
                   </div>
 
                   {order.sellerStatuses.length ? (
-                    <div className="mt-3 border-t border-line/60 pt-2.5">
-                      <span className="text-[10px] uppercase tracking-wider text-muted block mb-1">
+                    <div className="mt-3 border-t border-[#EFE7DA] pt-2.5">
+                      <span className="text-[10px] uppercase tracking-wider text-[#5C6662] block mb-1">
                         Seller Shipments ({order.sellerStatuses.length}):
                       </span>
                       <div className="flex flex-wrap gap-1">
@@ -5049,15 +5434,15 @@ export function AdminOrdersPage() {
                   ) : null}
 
                   {order.refundCount ? (
-                    <p className="mt-2 text-[10.5px] text-terra font-medium">
-                      ⚠️ {order.refundCount} refund record{order.refundCount === 1 ? '' : 's'}
+                    <p className="mt-2 text-[10.5px] text-[#9B3D2D] font-medium">
+                      {order.refundCount} refund record{order.refundCount === 1 ? '' : 's'}
                     </p>
                   ) : null}
 
-                  <div className="mt-3.5 pt-2 border-t border-line/60">
+                  <div className="mt-3.5 pt-2 border-t border-[#EFE7DA]">
                     <Link
                       to={`/admin/orders/${order.orderNumber}`}
-                      className="flex h-10 w-full items-center justify-center rounded-lg border border-forest/30 bg-forest/5 text-xs font-semibold text-forest hover:bg-forest hover:text-white transition-colors"
+                      className="flex h-10 w-full items-center justify-center rounded-xl border border-[#C6E3D5] bg-[#E7F4EE] text-xs font-semibold text-[#0D4A3A] hover:bg-[#0D4A3A] hover:text-white transition-colors"
                     >
                       View Order &amp; Shipments →
                     </Link>
@@ -5067,30 +5452,30 @@ export function AdminOrdersPage() {
             </div>
 
             {/* Desktop Order Table */}
-            <div className="hidden md:block overflow-x-auto border border-line bg-surface">
-              <table className="min-w-full text-left text-[12.5px]">
-                <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
+            <div className="hidden md:block">
+              <AdminTable label="Marketplace orders">
+                <thead className="border-b border-[#EFE7DA] bg-[#FAF6EE] text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
                   <tr><th className="px-4 py-3">Order</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Seller shipments</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Placed</th></tr>
                 </thead>
-                <tbody className="divide-y divide-line">
+                <tbody className="divide-y divide-[#EFE7DA]">
                   {orders.data.orders.map((order) => (
-                    <tr key={order.orderNumber}>
+                    <tr key={order.orderNumber} className="hover:bg-[#FAF6EE]/70">
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-1.5">
-                          <Link to={`/admin/orders/${order.orderNumber}`} className="font-medium text-forest hover:text-terra">{order.orderNumber}</Link>
+                          <Link to={`/admin/orders/${order.orderNumber}`} className="font-semibold text-[#0D4A3A] hover:text-[#B85A3A]">{order.orderNumber}</Link>
                           {order.isDemo ? <Badge tone="sand">DEMO</Badge> : null}
                         </div>
-                        {order.refundCount ? <p className="text-[10.5px] text-terra">{order.refundCount} refund record{order.refundCount === 1 ? '' : 's'}</p> : null}
+                        {order.refundCount ? <p className="text-[10.5px] text-[#9B3D2D]">{order.refundCount} refund record{order.refundCount === 1 ? '' : 's'}</p> : null}
                       </td>
-                      <td className="px-4 py-4">{order.customerName}<p className="text-[10.5px] text-muted">{order.email} · {order.destination}</p></td>
+                      <td className="px-4 py-4">{order.customerName}<p className="text-[10.5px] text-[#5C6662]">{order.email} · {order.destination}</p></td>
                       <td className="px-4 py-4"><StatusBadge status={order.status} label={orderStatusLabel(order.status)} /></td>
                       <td className="px-4 py-4"><div className="flex flex-wrap gap-1">{order.sellerStatuses.map((sellerStatus, index) => <StatusBadge key={`${sellerStatus}-${index}`} status={sellerStatus} label={sellerOrderStatusLabel(sellerStatus)} />)}</div></td>
-                      <td className="px-4 py-4">{formatINR(order.totalPaise)}</td>
-                      <td className="px-4 py-4 text-muted">{formatDate(order.placedAt)}</td>
+                      <td className="px-4 py-4 font-semibold tabular-nums text-[#0D4A3A]">{formatINR(order.totalPaise)}</td>
+                      <td className="px-4 py-4 text-[#5C6662]">{formatDate(order.placedAt)}</td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </AdminTable>
             </div>
           </>
         ) : (
@@ -5270,7 +5655,7 @@ export function AdminOrderDetailPage() {
               </div>
             </section>
           ))}
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Order timeline</h2>
             {order.timeline.length ? (
               <ol className="mt-3 space-y-2 text-[12px]">
@@ -5283,7 +5668,7 @@ export function AdminOrderDetailPage() {
               </ol>
             ) : <p className="mt-3 text-sm text-muted">No order events recorded.</p>}
           </section>
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Payment events</h2>
             {data.events.length ? (
               <ul className="mt-3 divide-y divide-line text-[12px]">
@@ -5295,7 +5680,7 @@ export function AdminOrderDetailPage() {
           </section>
         </div>
         <aside className="space-y-5">
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Payment</h2>
             {data.payments.length ? (
               <ul className="mt-3 space-y-3 text-[11.5px]">
@@ -5309,7 +5694,7 @@ export function AdminOrderDetailPage() {
               </ul>
             ) : <p className="mt-3 text-sm text-muted">No payment record.</p>}
           </section>
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Delivery address</h2>
             <address className="mt-2 text-[12px] not-italic leading-relaxed text-ink/75">
               {order.shippingAddress.fullName}<br />{order.shippingAddress.line1}<br />
@@ -5317,7 +5702,7 @@ export function AdminOrderDetailPage() {
               {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.pincode}<br />{order.shippingAddress.phone}
             </address>
           </section>
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Refunds & returns</h2>
             <p className="mt-2 text-[12px] text-muted">{data.refunds.length} refund record(s) · {data.returns.length} return(s) · {data.cancellations.length} cancellation(s).</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -5390,69 +5775,262 @@ interface AdminPaymentRow {
   created_at: string;
   order_number: string;
   order_status: string;
+  email?: string;
+  is_demo?: number | boolean;
+  currency?: string;
+}
+
+interface PaymentsSummary {
+  totalPaidPaise: number;
+  demoPaidPaise: number;
+  paidCount: number;
+  realPaidCount: number;
+  demoPaidCount: number;
+  pendingCount: number;
+  failedCount: number;
+}
+
+interface PaymentProviderReadiness {
+  provider: string;
+  configured: boolean;
+  webhookConfigured: boolean;
+  mode: 'test' | 'live' | 'unconfigured';
+  devPaymentsEnabled: boolean;
 }
 
 const PAYMENT_STATUSES = ['created', 'pending', 'paid', 'failed', 'cancelled'];
 
 export function AdminPaymentsPage() {
   const [status, setStatus] = useState('');
+  const [isDemo, setIsDemo] = useState('');
+  const [q, setQ] = useState('');
+  const deferredQ = useDeferredValue(q.trim());
   const [page, setPage] = useState(1);
   const payments = useQuery({
-    queryKey: ['admin-payments', status, page],
-    queryFn: () =>
-      api<{ payments: AdminPaymentRow[]; page: number; total: number; totalPages: number }>(
-        `/admin/payments?page=${page}${status ? `&status=${encodeURIComponent(status)}` : ''}`,
-      ),
+    queryKey: ['admin-payments', status, isDemo, deferredQ, page],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(page) });
+      if (status) params.set('status', status);
+      if (isDemo) params.set('isDemo', isDemo);
+      if (deferredQ) params.set('q', deferredQ);
+      return api<{
+        payments: AdminPaymentRow[];
+        page: number;
+        total: number;
+        totalPages: number;
+        summary?: PaymentsSummary;
+        provider?: PaymentProviderReadiness;
+      }>(`/admin/payments?${params.toString()}`);
+    },
   });
 
+  const summary = payments.data?.summary;
+  const gateway = payments.data?.provider;
+
   return (
-    <div>
+    <AdminPage>
       <PageHeader
         eyebrow="Money movement"
         title="Payments"
-        lede="Provider records attached to orders. A payment is only treated as settled when it is verified by the server, not when the browser returns from checkout."
+        lede="Provider records attached to orders. A payment is only treated as settled when verified cryptographically by the server, never solely on browser return."
+        actions={<LinkButton to="/admin/settings" variant="secondary" size="sm">Payment gateway settings</LinkButton>}
       />
-      <Alert tone="info" title="What this view can and cannot confirm">
-        Real Razorpay captures appear only when live or test API keys are configured. Payments created by the development
-        simulator are marked as simulated in the payment reference and did not move money.
-      </Alert>
-      <div className="mt-5 flex flex-wrap items-end gap-3">
+
+      {gateway ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#DFD5C6] bg-white px-5 py-3.5 shadow-[0_2px_10px_rgba(13,74,58,0.04)]">
+          <div className="flex flex-wrap items-center gap-2.5 text-[12px]">
+            <span className="font-serif text-base font-semibold text-[#0D4A3A]">{humanise(gateway.provider)} Gateway</span>
+            <Badge tone={gateway.mode === 'live' ? 'forest' : gateway.mode === 'test' ? 'sand' : 'terra'}>
+              {gateway.mode === 'live' ? 'Live mode active' : gateway.mode === 'test' ? 'Test mode' : 'Unconfigured'}
+            </Badge>
+            <Badge tone={gateway.webhookConfigured ? 'forest' : 'sand'}>
+              {gateway.webhookConfigured ? 'Webhook secret set' : 'Webhook secret unset (callback verify active)'}
+            </Badge>
+            {gateway.devPaymentsEnabled ? <Badge tone="terra">Dev simulator active</Badge> : null}
+          </div>
+          <span className="text-[11px] text-[#5C6662]">Demo checkout payments are excluded from real revenue totals.</span>
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminMetric
+          label="Real captured revenue"
+          value={formatINR(summary?.totalPaidPaise ?? 0)}
+          note={`${summary?.realPaidCount ?? 0} verified real capture${(summary?.realPaidCount ?? 0) === 1 ? '' : 's'}`}
+          tone="accent"
+          icon={<NavIcon type="payments" className="h-4 w-4" />}
+        />
+        <AdminMetric
+          label="Demo captures (excluded)"
+          value={formatINR(summary?.demoPaidPaise ?? 0)}
+          note={`${summary?.demoPaidCount ?? 0} sandbox/demo capture${(summary?.demoPaidCount ?? 0) === 1 ? '' : 's'}`}
+          icon={<NavIcon type="orders" className="h-4 w-4" />}
+        />
+        <AdminMetric
+          label="Pending / created"
+          value={(summary?.pendingCount ?? 0).toLocaleString('en-IN')}
+          note="Started checkouts awaiting payment completion"
+          tone="gold"
+          icon={<NavIcon type="bell" className="h-4 w-4" />}
+        />
+        <AdminMetric
+          label="Failed payments"
+          value={(summary?.failedCount ?? 0).toLocaleString('en-IN')}
+          note="Declined or cancelled gateway attempts"
+          icon={<NavIcon type="cancellations" className="h-4 w-4" />}
+        />
+      </div>
+
+      <AdminToolbar
+        meta={
+          payments.data
+            ? `${payments.data.total.toLocaleString('en-IN')} payment record${payments.data.total === 1 ? '' : 's'}`
+            : 'Loading payments…'
+        }
+      >
+        <Field label="Search" className="w-full sm:max-w-xs">
+          <Input
+            value={q}
+            onChange={(event) => {
+              setQ(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Order #, Razorpay ID, email or method"
+            type="search"
+          />
+        </Field>
         <Field label="Status">
-          <Select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="max-w-52">
+          <Select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="max-w-44">
             <option value="">All statuses</option>
             {PAYMENT_STATUSES.map((value) => <option key={value} value={value}>{humanise(value)}</option>)}
           </Select>
         </Field>
-        <p className="pb-3 text-[11px] text-muted">{payments.data?.total ?? 0} payment records</p>
-      </div>
-      <div className="mt-5">
+        <Field label="Traffic">
+          <Select value={isDemo} onChange={(event) => { setIsDemo(event.target.value); setPage(1); }} className="max-w-44">
+            <option value="">All payments</option>
+            <option value="false">Real payments only</option>
+            <option value="true">Demo payments only</option>
+          </Select>
+        </Field>
+        {(status || isDemo || q) ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setStatus('');
+              setIsDemo('');
+              setQ('');
+              setPage(1);
+            }}
+          >
+            Clear filters
+          </Button>
+        ) : null}
+      </AdminToolbar>
+
+      <div>
         {payments.isLoading ? <LoadingBlock rows={4} /> : null}
         {payments.isError ? <ErrorState body={errorMessage(payments.error)} onRetry={() => void payments.refetch()} /> : null}
         {!payments.isLoading && !payments.isError && payments.data ? (
           payments.data.payments.length ? (
-          <div className="overflow-x-auto border border-line bg-surface">
-            <table className="min-w-full text-left text-[12.5px]">
-              <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
-                <tr><th className="px-4 py-3">Order</th><th className="px-4 py-3">Provider</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Reference</th><th className="px-4 py-3">Created</th></tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {payments.data.payments.map((payment) => (
-                  <tr key={payment.id}>
-                    <td className="px-4 py-4"><Link to={`/admin/orders/${payment.order_number}`} className="font-medium text-forest hover:text-terra">{payment.order_number}</Link><p className="text-[10.5px] text-muted">{orderStatusLabel(payment.order_status)}</p></td>
-                    <td className="px-4 py-4">{humanise(payment.provider)}<p className="text-[10.5px] text-muted">{payment.method ?? 'method not recorded'}</p></td>
-                    <td className="px-4 py-4"><StatusBadge status={payment.status} />{payment.failure_reason ? <p className="mt-1 max-w-48 text-[10.5px] text-terra">{payment.failure_reason}</p> : null}</td>
-                    <td className="px-4 py-4">{formatINR(payment.amount_paise)}</td>
-                    <td className="px-4 py-4"><span className="block max-w-52 break-all text-[11px] text-muted">{payment.provider_payment_id ?? payment.provider_order_id ?? 'No provider reference'}</span></td>
-                    <td className="px-4 py-4 text-muted">{formatDateTime(payment.created_at)}<p className="text-[10.5px]">{payment.verified_at ? `Verified ${formatDateTime(payment.verified_at)}` : 'Not verified'}</p></td>
+          <>
+            {/* Mobile Payment Cards */}
+            <div className="space-y-3 md:hidden">
+              {payments.data.payments.map((payment) => (
+                <article
+                  key={payment.id}
+                  className="rounded-2xl border border-[#DFD5C6] bg-white p-4 shadow-[0_2px_10px_rgba(13,74,58,0.04)]"
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-[#EFE7DA] pb-2.5">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Link to={`/admin/orders/${payment.order_number}`} className="font-serif text-base font-semibold text-[#0D4A3A] hover:underline">
+                          {payment.order_number}
+                        </Link>
+                        {payment.is_demo ? <Badge tone="sand">DEMO</Badge> : null}
+                      </div>
+                      <p className="truncate text-[11px] text-[#5C6662]">{payment.email ?? orderStatusLabel(payment.order_status)}</p>
+                    </div>
+                    <StatusBadge status={payment.status} />
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-[#5C6662]">Amount</span>
+                      <p className="font-semibold text-sm text-[#0D4A3A]">{formatINR(payment.amount_paise)}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase tracking-wider text-[#5C6662]">Provider · Method</span>
+                      <p className="font-medium text-[#172321]">{humanise(payment.provider)} · {payment.method ?? 'checkout'}</p>
+                    </div>
+                  </div>
+                  <p className="mt-2.5 break-all rounded-lg bg-[#FAF6EE] px-2.5 py-1.5 font-mono text-[10.5px] text-[#5C6662]">
+                    {payment.provider_payment_id ?? payment.provider_order_id ?? 'No provider reference'}
+                  </p>
+                  {payment.failure_reason ? <p className="mt-2 text-[11px] text-[#9B3D2D]">{payment.failure_reason}</p> : null}
+                  <p className="mt-2 text-[10.5px] text-[#5C6662]">
+                    {payment.verified_at ? `Verified ${formatDateTime(payment.verified_at)}` : `Created ${formatDateTime(payment.created_at)}`}
+                  </p>
+                </article>
+              ))}
+            </div>
+
+            {/* Desktop Payment Table */}
+            <div className="hidden md:block">
+              <AdminTable label="Payment records">
+                <thead className="border-b border-[#EFE7DA] bg-[#FAF6EE] text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
+                  <tr>
+                    <th className="px-4 py-3">Order</th>
+                    <th className="px-4 py-3">Provider &amp; Method</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Amount</th>
+                    <th className="px-4 py-3">Reference</th>
+                    <th className="px-4 py-3">Created &amp; Verification</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[#EFE7DA]">
+                  {payments.data.payments.map((payment) => (
+                    <tr key={payment.id} className="hover:bg-[#FAF6EE]/70">
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Link to={`/admin/orders/${payment.order_number}`} className="font-semibold text-[#0D4A3A] hover:text-[#B85A3A]">
+                            {payment.order_number}
+                          </Link>
+                          {payment.is_demo ? <Badge tone="sand">DEMO</Badge> : null}
+                        </div>
+                        <p className="text-[10.5px] text-[#5C6662]">
+                          {orderStatusLabel(payment.order_status)}
+                          {payment.email ? ` · ${payment.email}` : ''}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="font-medium text-[#172321]">{humanise(payment.provider)}</span>
+                        <p className="text-[10.5px] text-[#5C6662]">{payment.method ? humanise(payment.method) : 'method not recorded'}</p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <StatusBadge status={payment.status} />
+                        {payment.failure_reason ? <p className="mt-1 max-w-48 text-[10.5px] text-[#9B3D2D]">{payment.failure_reason}</p> : null}
+                      </td>
+                      <td className="px-4 py-4 font-semibold tabular-nums text-[#0D4A3A]">{formatINR(payment.amount_paise)}</td>
+                      <td className="px-4 py-4">
+                        <span className="block max-w-52 break-all font-mono text-[11px] text-[#5C6662]">
+                          {payment.provider_payment_id ?? payment.provider_order_id ?? 'No provider reference'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-[#5C6662]">
+                        {formatDateTime(payment.created_at)}
+                        <p className="text-[10.5px]">{payment.verified_at ? `Verified ${formatDateTime(payment.verified_at)}` : 'Not verified'}</p>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </AdminTable>
+            </div>
+          </>
         ) : <EmptyState title="No payment records in this view" body="Payments appear when checkout starts. No money has moved unless a provider reference is present and verified." />) : null}
         {!payments.isError && payments.data ? <Pagination page={page} totalPages={payments.data.totalPages} onChange={setPage} /> : null}
       </div>
-    </div>
+    </AdminPage>
   );
 }
 
@@ -5478,6 +6056,7 @@ interface AdminRefundRow {
 export function AdminRefundsPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { runWithStepUp } = useAdminStepUp();
   const [searchParams, setSearchParams] = useSearchParams();
   const status = searchParams.get('status') ?? '';
   const [refund, setRefund] = useState<AdminRefundRow | null>(null);
@@ -5513,20 +6092,22 @@ export function AdminRefundsPage() {
     }
     setBusy(true);
     try {
-      const result = completing
-        ? await api<{ status: string; message: string }>(`/admin/refunds/${refund.id}/complete-manual`, {
-            method: 'POST',
-            body: { manualReference: reference.trim(), note: note.trim() || undefined },
-          })
-        : await api<{ status: string; message: string }>(`/admin/refunds/${refund.id}/decide`, {
-            method: 'POST',
-            body: {
-              decision,
-              method: decision === 'approve' ? method : undefined,
-              manualReference: decision === 'approve' && method === 'manual' ? reference.trim() : undefined,
-              note: note.trim() || undefined,
-            },
-          });
+      const result = await runWithStepUp(() =>
+        completing
+          ? api<{ status: string; message: string }>(`/admin/refunds/${refund.id}/complete-manual`, {
+              method: 'POST',
+              body: { manualReference: reference.trim(), note: note.trim() || undefined },
+            })
+          : api<{ status: string; message: string }>(`/admin/refunds/${refund.id}/decide`, {
+              method: 'POST',
+              body: {
+                decision,
+                method: decision === 'approve' ? method : undefined,
+                manualReference: decision === 'approve' && method === 'manual' ? reference.trim() : undefined,
+                note: note.trim() || undefined,
+              },
+            }),
+      );
       toast.push(result.message);
       setRefund(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-refunds'] });
@@ -5569,32 +6150,30 @@ export function AdminRefundsPage() {
         {refunds.isError ? <ErrorState body={errorMessage(refunds.error)} onRetry={() => void refunds.refetch()} /> : null}
         {!refunds.isLoading && !refunds.isError && refunds.data ? (
           refunds.data.refunds.length ? (
-          <div className="overflow-x-auto border border-line bg-surface">
-            <table className="min-w-full text-left text-[12.5px]">
-              <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
-                <tr><th className="px-4 py-3">Order</th><th className="px-4 py-3">Seller shipment</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Reason</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Requested</th><th className="px-4 py-3" /></tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {refunds.data.refunds.map((row) => (
-                  <tr key={row.id}>
-                    <td className="px-4 py-4"><Link to={`/admin/orders/${row.order_number}`} className="font-medium text-forest hover:text-terra">{row.order_number}</Link><p className="text-[10.5px] text-muted">{row.email}</p></td>
-                    <td className="px-4 py-4">{row.seller_name ?? 'Order-level'}</td>
-                    <td className="px-4 py-4">{formatINR(row.amount_paise)}</td>
-                    <td className="px-4 py-4"><span className="block max-w-56 whitespace-pre-wrap text-[11.5px] text-muted">{row.reason}</span></td>
-                    <td className="px-4 py-4"><StatusBadge status={row.status} />{row.provider_refund_id ? <p className="mt-1 max-w-40 break-all text-[10px] text-muted">{row.provider_refund_id}</p> : null}</td>
-                    <td className="px-4 py-4 text-muted">{formatDateTime(row.created_at)}</td>
-                    <td className="px-4 py-4 text-right">
-                      {['requested', 'failed'].includes(row.status) ? (
-                        <Button size="sm" variant="secondary" onClick={() => open(row)}>Review</Button>
-                      ) : row.status === 'approved' ? (
-                        <Button size="sm" variant="secondary" onClick={() => open(row)}>Record transfer</Button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <AdminTable label="Refund requests">
+            <thead className="border-b border-[#EFE7DA] bg-[#FAF6EE] text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
+              <tr><th className="px-4 py-3">Order</th><th className="px-4 py-3">Seller shipment</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Reason</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Requested</th><th className="px-4 py-3" /></tr>
+            </thead>
+            <tbody className="divide-y divide-[#EFE7DA]">
+              {refunds.data.refunds.map((row) => (
+                <tr key={row.id} className="hover:bg-[#FAF6EE]/70">
+                  <td className="px-4 py-4"><Link to={`/admin/orders/${row.order_number}`} className="font-semibold text-[#0D4A3A] hover:text-[#B85A3A]">{row.order_number}</Link><p className="text-[10.5px] text-[#5C6662]">{row.email}</p></td>
+                  <td className="px-4 py-4">{row.seller_name ?? 'Order-level'}</td>
+                  <td className="px-4 py-4 font-semibold tabular-nums text-[#0D4A3A]">{formatINR(row.amount_paise)}</td>
+                  <td className="px-4 py-4"><span className="block max-w-56 whitespace-pre-wrap text-[11.5px] text-[#5C6662]">{row.reason}</span></td>
+                  <td className="px-4 py-4"><StatusBadge status={row.status} />{row.provider_refund_id ? <p className="mt-1 max-w-40 break-all text-[10px] text-[#5C6662]">{row.provider_refund_id}</p> : null}</td>
+                  <td className="px-4 py-4 text-[#5C6662]">{formatDateTime(row.created_at)}</td>
+                  <td className="px-4 py-4 text-right">
+                    {['requested', 'failed'].includes(row.status) ? (
+                      <Button size="sm" variant="secondary" onClick={() => open(row)}>Review</Button>
+                    ) : row.status === 'approved' ? (
+                      <Button size="sm" variant="secondary" onClick={() => open(row)}>Record transfer</Button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </AdminTable>
         ) : <EmptyState title="No refund requests" body="Refunds raised from a cancellation or return appear here for a recorded decision." />) : null}
       </div>
 
@@ -5753,7 +6332,7 @@ export function AdminReturnsPage() {
           returns.data.returns.length ? (
           <div className="space-y-3">
             {returns.data.returns.map((row) => (
-              <section key={row.id} className="border border-line bg-surface p-5">
+              <section key={row.id} className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <Link to={`/admin/orders/${row.order_number}`} className="font-medium text-forest hover:text-terra">{row.order_number}</Link>
@@ -5939,6 +6518,7 @@ interface CommissionEntryRow {
 export function AdminCommissionsPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { runWithStepUp } = useAdminStepUp();
   const [scope, setScope] = useState<'global' | 'category' | 'seller'>('global');
   const [rate, setRate] = useState('15');
   const [categoryId, setCategoryId] = useState('');
@@ -5978,16 +6558,18 @@ export function AdminCommissionsPage() {
     }
     setBusy(true);
     try {
-      await api('/admin/commissions', {
-        method: 'POST',
-        body: {
-          scope,
-          categoryId: scope === 'category' ? categoryId : undefined,
-          sellerId: scope === 'seller' ? sellerId : undefined,
-          rateBp,
-          effectiveFrom: dateInputToIso(effectiveFrom),
-        },
-      });
+      await runWithStepUp(() =>
+        api('/admin/commissions', {
+          method: 'POST',
+          body: {
+            scope,
+            categoryId: scope === 'category' ? categoryId : undefined,
+            sellerId: scope === 'seller' ? sellerId : undefined,
+            rateBp,
+            effectiveFrom: dateInputToIso(effectiveFrom),
+          },
+        }),
+      );
       toast.push('Commission rule saved. Earlier rules at the same scope are deactivated.');
       await queryClient.invalidateQueries({ queryKey: ['admin-commissions'] });
     } catch (error) {
@@ -6014,9 +6596,9 @@ export function AdminCommissionsPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-        <section className="border border-line bg-surface p-5">
-          <h2 className="text-lg">Set a rule</h2>
-          <p className="mt-1 text-[11.5px] leading-relaxed text-muted">Saving a rule deactivates the previous active rule at the same scope. Existing orders keep their snapshotted rate.</p>
+        <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_14px_rgba(13,74,58,0.05)]">
+          <h2 className="font-serif text-lg font-semibold text-[#0D4A3A]">Set a rule</h2>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-[#5C6662]">Saving a rule deactivates the previous active rule at the same scope. Existing orders keep their snapshotted rate.</p>
           <form onSubmit={submit} className="mt-4 space-y-3">
             <Field label="Scope">
               <Select value={scope} onChange={(event) => setScope(event.target.value as 'global' | 'category' | 'seller')}>
@@ -6051,20 +6633,20 @@ export function AdminCommissionsPage() {
           </form>
         </section>
 
-        <section className="border border-line bg-surface">
-          <div className="border-b border-line px-5 py-4"><h2 className="text-lg">Rules</h2></div>
+        <section className="overflow-hidden rounded-2xl border border-[#DFD5C6] bg-white shadow-[0_2px_14px_rgba(13,74,58,0.05)]">
+          <div className="border-b border-[#EFE7DA] bg-[#FAF6EE] px-5 py-4"><h2 className="font-serif text-lg font-semibold text-[#0D4A3A]">Rules</h2></div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-[12.5px]">
-              <thead className="bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
+              <thead className="bg-[#FAF6EE]/70 text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
                 <tr><th className="px-4 py-2.5">Scope</th><th className="px-4 py-2.5">Applies to</th><th className="px-4 py-2.5">Rate</th><th className="px-4 py-2.5">Effective</th><th className="px-4 py-2.5">State</th></tr>
               </thead>
-              <tbody className="divide-y divide-line">
+              <tbody className="divide-y divide-[#EFE7DA]">
                 {data.data?.rules.map((rule) => (
-                  <tr key={rule.id}>
-                    <td className="px-4 py-3">{humanise(rule.scope)}</td>
+                  <tr key={rule.id} className="hover:bg-[#FAF6EE]/70">
+                    <td className="px-4 py-3 font-medium">{humanise(rule.scope)}</td>
                     <td className="px-4 py-3">{rule.scope === 'category' ? rule.category_name ?? '—' : rule.scope === 'seller' ? rule.seller_name ?? '—' : 'All listings'}</td>
-                    <td className="px-4 py-3">{percentFromBp(rule.rate_bp)}</td>
-                    <td className="px-4 py-3 text-muted">{formatDate(rule.effective_from)}</td>
+                    <td className="px-4 py-3 font-semibold text-[#0D4A3A]">{percentFromBp(rule.rate_bp)}</td>
+                    <td className="px-4 py-3 text-[#5C6662]">{formatDate(rule.effective_from)}</td>
                     <td className="px-4 py-3"><StatusBadge status={rule.is_active ? 'active' : 'paused'} label={rule.is_active ? 'Active' : 'Inactive'} /></td>
                   </tr>
                 ))}
@@ -6075,29 +6657,29 @@ export function AdminCommissionsPage() {
         </section>
       </div>
 
-      <section className="border border-line bg-surface">
-        <div className="border-b border-line px-5 py-4"><h2 className="text-lg">Recent platform fee entries</h2><p className="mt-1 text-[11px] text-muted">Snapshotted when a payment is verified. Refund reversals are separate ledger entries.</p></div>
+      <section className="overflow-hidden rounded-2xl border border-[#DFD5C6] bg-white shadow-[0_2px_14px_rgba(13,74,58,0.05)]">
+        <div className="border-b border-[#EFE7DA] bg-[#FAF6EE] px-5 py-4"><h2 className="font-serif text-lg font-semibold text-[#0D4A3A]">Recent platform fee entries</h2><p className="mt-1 text-[11px] text-[#5C6662]">Snapshotted when a payment is verified. Refund reversals are separate ledger entries.</p></div>
         {data.data?.entries.length ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-[12.5px]">
-              <thead className="bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
+              <thead className="bg-[#FAF6EE]/70 text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
                 <tr><th className="px-4 py-2.5">Order</th><th className="px-4 py-2.5">Seller</th><th className="px-4 py-2.5">Basis</th><th className="px-4 py-2.5">Rate</th><th className="px-4 py-2.5">Platform Fee</th><th className="px-4 py-2.5">Created</th></tr>
               </thead>
-              <tbody className="divide-y divide-line">
+              <tbody className="divide-y divide-[#EFE7DA]">
                 {data.data.entries.map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="px-4 py-3">{entry.order_number}<p className="text-[10px] text-muted">{entry.reference}</p></td>
+                  <tr key={entry.id} className="hover:bg-[#FAF6EE]/70">
+                    <td className="px-4 py-3 font-medium text-[#172321]">{entry.order_number}<p className="text-[10px] text-[#5C6662]">{entry.reference}</p></td>
                     <td className="px-4 py-3">{entry.seller_name}</td>
                     <td className="px-4 py-3">{formatINR(entry.basis_paise)}</td>
                     <td className="px-4 py-3">{percentFromBp(entry.rate_bp)}</td>
-                    <td className="px-4 py-3">{formatINR(entry.amount_paise)}</td>
-                    <td className="px-4 py-3 text-muted">{formatDate(entry.created_at)}</td>
+                    <td className="px-4 py-3 font-semibold text-[#0D4A3A]">{formatINR(entry.amount_paise)}</td>
+                    <td className="px-4 py-3 text-[#5C6662]">{formatDate(entry.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        ) : <p className="px-5 py-8 text-center text-sm text-muted">No commission entries yet.</p>}
+        ) : <p className="px-5 py-8 text-center text-sm text-[#5C6662]">No commission entries yet.</p>}
       </section>
     </div>
   );
@@ -6136,9 +6718,40 @@ interface SettlementItem {
   order_number: string | null;
 }
 
+interface PayoutsOverviewResponse {
+  metrics: {
+    pendingAllocationsPaise: number;
+    ordersAwaitingDelivery: number;
+    ordersInReturnWindow: number;
+    eligibleReviewPaise: number;
+    approvedBatchesPaise: number;
+    settledPaise: number;
+    reversedPaise: number;
+    totalPlatformCommissionPaise: number;
+  };
+  eligibleQueue: {
+    id: string;
+    sellerId: string;
+    sellerName: string;
+    orderId: string;
+    orderNumber: string | null;
+    amountPaise: number;
+    availableAt: string | null;
+    createdAt: string;
+    isHeld: boolean;
+    holdReason: string | null;
+  }[];
+  policy: {
+    returnWindowDays: number;
+    standardCommissionBp: number;
+    payoutModel: string;
+  };
+}
+
 export function AdminSettlementsPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { runWithStepUp } = useAdminStepUp();
   const [sellerId, setSellerId] = useState('');
   const [periodStart, setPeriodStart] = useState(daysAgoInput(30));
   const [periodEnd, setPeriodEnd] = useState(todayInput());
@@ -6147,6 +6760,10 @@ export function AdminSettlementsPage() {
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
   const [paying, setPaying] = useState(false);
+  const overview = useQuery({
+    queryKey: ['admin-payouts-overview'],
+    queryFn: () => api<PayoutsOverviewResponse>('/admin/payouts/overview'),
+  });
   const settlements = useQuery({
     queryKey: ['admin-settlements'],
     queryFn: () => api<{ settlements: SettlementRow[] }>('/admin/settlements'),
@@ -6173,16 +6790,19 @@ export function AdminSettlementsPage() {
     }
     setCreating(true);
     try {
-      const result = await api<{ id: string; reference: string; netPaise: number }>('/admin/settlements', {
-        method: 'POST',
-        body: {
-          sellerId,
-          periodStart: dateInputToIso(periodStart),
-          periodEnd: dateInputToIso(periodEnd, true),
-        },
-      });
+      const result = await runWithStepUp(() =>
+        api<{ id: string; reference: string; netPaise: number }>('/admin/settlements', {
+          method: 'POST',
+          body: {
+            sellerId,
+            periodStart: dateInputToIso(periodStart),
+            periodEnd: dateInputToIso(periodEnd, true),
+          },
+        }),
+      );
       toast.push(`Settlement ${result.reference} created for ${formatINR(result.netPaise)}.`);
       await queryClient.invalidateQueries({ queryKey: ['admin-settlements'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-payouts-overview'] });
     } catch (error) {
       toast.push(errorMessage(error), 'error');
     } finally {
@@ -6198,15 +6818,18 @@ export function AdminSettlementsPage() {
     }
     setPaying(true);
     try {
-      await api(`/admin/settlements/${selectedId}/pay`, {
-        method: 'POST',
-        body: { providerReference: reference.trim(), note: note.trim() || undefined },
-      });
+      await runWithStepUp(() =>
+        api(`/admin/settlements/${selectedId}/pay`, {
+          method: 'POST',
+          body: { providerReference: reference.trim(), note: note.trim() || undefined },
+        }),
+      );
       toast.push('Settlement recorded as paid. No payout was initiated by this application.');
       setReference('');
       setNote('');
       await queryClient.invalidateQueries({ queryKey: ['admin-settlements'] });
       await queryClient.invalidateQueries({ queryKey: ['admin-settlement', selectedId] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-payouts-overview'] });
       await queryClient.invalidateQueries({ queryKey: ['admin-overview'] });
     } catch (error) {
       toast.push(errorMessage(error), 'error');
@@ -6215,18 +6838,101 @@ export function AdminSettlementsPage() {
     }
   };
 
+  const escrow = overview.data?.metrics;
+  const eligibleQueue = overview.data?.eligibleQueue ?? [];
+
   return (
-    <div className="space-y-7">
+    <AdminPage>
       <PageHeader
         eyebrow="Seller balances"
         title="Settlements"
         lede="Settlements group eligible ledger entries for a period. Marking one paid records a manual bank/UPI transfer you have actually made — this application does not initiate payouts."
       />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminMetric
+          label="Ready for settlement"
+          value={formatINR(escrow?.eligibleReviewPaise ?? 0)}
+          note={`${eligibleQueue.length} unsettled ledger row${eligibleQueue.length === 1 ? '' : 's'} queued`}
+          tone="accent"
+          icon={<NavIcon type="settlements" className="h-4 w-4" />}
+        />
+        <AdminMetric
+          label="Pending delivery / window"
+          value={formatINR(escrow?.pendingAllocationsPaise ?? 0)}
+          note={`${escrow?.ordersAwaitingDelivery ?? 0} in transit · ${escrow?.ordersInReturnWindow ?? 0} in ${overview.data?.policy.returnWindowDays ?? 7}-day window`}
+          tone="gold"
+          icon={<NavIcon type="orders" className="h-4 w-4" />}
+        />
+        <AdminMetric
+          label="Open payout batches"
+          value={formatINR(escrow?.approvedBatchesPaise ?? 0)}
+          note="Created batches awaiting manual transfer reference"
+          icon={<NavIcon type="payments" className="h-4 w-4" />}
+        />
+        <AdminMetric
+          label="Settled to makers"
+          value={formatINR(escrow?.settledPaise ?? 0)}
+          note={`Reversed / held adjustments: ${formatINR(escrow?.reversedPaise ?? 0)}`}
+          icon={<NavIcon type="shield" className="h-4 w-4" />}
+        />
+      </div>
+
+      {eligibleQueue.length ? (
+        <AdminSection
+          title="Eligible ledger entries"
+          description="Sellers with cleared ledger balance ready to group into a settlement batch."
+          bodyClassName="p-0"
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-[12.5px]">
+              <thead className="border-b border-[#EFE7DA] bg-[#FAF6EE] text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
+                <tr>
+                  <th className="px-4 py-2.5">Seller</th>
+                  <th className="px-4 py-2.5">Order</th>
+                  <th className="px-4 py-2.5">Payable</th>
+                  <th className="px-4 py-2.5">Available</th>
+                  <th className="px-4 py-2.5">State</th>
+                  <th className="px-4 py-2.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#EFE7DA]">
+                {eligibleQueue.slice(0, 12).map((entry) => (
+                  <tr key={entry.id} className="hover:bg-[#FAF6EE]/70">
+                    <td className="px-4 py-3 font-medium text-[#172321]">{entry.sellerName}</td>
+                    <td className="px-4 py-3 text-[#5C6662]">
+                      {entry.orderNumber ? (
+                        <Link to={`/admin/orders/${entry.orderNumber}`} className="font-medium text-[#0D4A3A] hover:underline">
+                          {entry.orderNumber}
+                        </Link>
+                      ) : (
+                        entry.id.slice(0, 10)
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-semibold tabular-nums text-[#0D4A3A]">{formatINR(entry.amountPaise)}</td>
+                    <td className="px-4 py-3 text-[#5C6662]">{entry.availableAt ? formatDate(entry.availableAt) : 'Immediately'}</td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={entry.isHeld ? 'blocked' : 'eligible'} label={entry.isHeld ? 'Held' : 'Eligible'} />
+                      {entry.holdReason ? <p className="mt-0.5 text-[10px] text-[#9B3D2D]">{entry.holdReason}</p> : null}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button size="sm" variant="secondary" type="button" onClick={() => setSellerId(entry.sellerId)}>
+                        Select seller
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </AdminSection>
+      ) : null}
+
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <section className="border border-line bg-surface p-5">
-          <h2 className="text-lg">Create a batch</h2>
-          <p className="mt-1 text-[11.5px] leading-relaxed text-muted">Only eligible, unsettled entries are included. Negative adjustments reduce the net amount. A batch cannot be created twice for the same entries.</p>
-          <form onSubmit={create} className="mt-4 space-y-3">
+        <AdminSection
+          title="Create a batch"
+          description="Only eligible, unsettled entries are included. Negative adjustments reduce the net amount. A batch cannot be created twice for the same entries."
+        >
+          <form onSubmit={create} className="space-y-3">
             <Field label="Seller" required>
               <Select value={sellerId} onChange={(event) => setSellerId(event.target.value)}>
                 <option value="">Choose a seller</option>
@@ -6237,26 +6943,25 @@ export function AdminSettlementsPage() {
             <Field label="Period end" required><Input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} /></Field>
             <Button type="submit" loading={creating}>Create settlement</Button>
           </form>
-        </section>
+        </AdminSection>
 
-        <section className="border border-line bg-surface">
-          <div className="border-b border-line px-5 py-4"><h2 className="text-lg">Batches</h2></div>
+        <AdminSection title="Batches" bodyClassName="p-0">
           {settlements.isLoading ? <div className="p-5"><LoadingBlock rows={3} /></div> : null}
           {settlements.isError ? <div className="p-5"><ErrorState body={errorMessage(settlements.error)} onRetry={() => void settlements.refetch()} /></div> : null}
           {!settlements.isLoading && !settlements.isError && settlements.data ? (
             settlements.data.settlements.length ? (
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-[12.5px]">
-                <thead className="bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
-                  <tr><th className="px-4 py-2.5">Reference</th><th className="px-4 py-2.5">Seller</th><th className="px-4 py-2.5">Period</th><th className="px-4 py-2.5">Net</th><th className="px-4 py-2.5">Status</th><th className="px-4 py-2.5" /></tr>
+                <thead className="border-b border-[#EFE7DA] bg-[#FAF6EE] text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
+                  <tr><th className="px-4 py-3">Reference</th><th className="px-4 py-3">Seller</th><th className="px-4 py-3">Period</th><th className="px-4 py-3">Net</th><th className="px-4 py-3">Status</th><th className="px-4 py-3" /></tr>
                 </thead>
-                <tbody className="divide-y divide-line">
+                <tbody className="divide-y divide-[#EFE7DA]">
                   {settlements.data.settlements.map((row) => (
-                    <tr key={row.id}>
-                      <td className="px-4 py-3 font-medium text-ink">{row.reference}<p className="text-[10px] text-muted">{row.entry_count} ledger entries</p></td>
+                    <tr key={row.id} className="hover:bg-[#FAF6EE]/70">
+                      <td className="px-4 py-3 font-medium text-[#172321]">{row.reference}<p className="text-[10px] text-[#5C6662]">{row.entry_count} ledger entries</p></td>
                       <td className="px-4 py-3">{row.seller_name}</td>
-                      <td className="px-4 py-3 text-muted">{formatDate(row.period_start)} – {formatDate(row.period_end)}</td>
-                      <td className="px-4 py-3">{formatINR(row.net_paise)}</td>
+                      <td className="px-4 py-3 text-[#5C6662]">{formatDate(row.period_start)} – {formatDate(row.period_end)}</td>
+                      <td className="px-4 py-3 font-semibold tabular-nums">{formatINR(row.net_paise)}</td>
                       <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
                       <td className="px-4 py-3 text-right"><Button size="sm" variant="secondary" onClick={() => { setSelectedId(row.id); setReference(''); setNote(''); }}>Open</Button></td>
                     </tr>
@@ -6264,8 +6969,8 @@ export function AdminSettlementsPage() {
                 </tbody>
               </table>
             </div>
-          ) : <p className="px-5 py-8 text-center text-sm text-muted">No settlement batches yet.</p>) : null}
-        </section>
+          ) : <p className="px-5 py-8 text-center text-sm text-[#5C6662]">No settlement batches yet.</p>) : null}
+        </AdminSection>
       </div>
 
       <Modal
@@ -6319,11 +7024,19 @@ export function AdminSettlementsPage() {
           </div>
         ) : null}
       </Modal>
-    </div>
+    </AdminPage>
   );
 }
 
 /* -------------------------------- Customers ------------------------------- */
+
+interface CustomerSummary {
+  totalAccounts: number;
+  verifiedCount: number;
+  sellerCount: number;
+  adminCount: number;
+  buyersWithOrders: number;
+}
 
 interface CustomerRow {
   id: string;
@@ -6340,51 +7053,222 @@ interface CustomerRow {
 export function AdminCustomersPage() {
   const [q, setQ] = useState('');
   const deferredQ = useDeferredValue(q.trim());
+  const [role, setRole] = useState('');
+  const [verified, setVerified] = useState('');
   const [page, setPage] = useState(1);
   const customers = useQuery({
-    queryKey: ['admin-customers', deferredQ, page],
-    queryFn: () => api<{ customers: CustomerRow[]; page: number; total: number; totalPages: number }>(`/admin/customers?page=${page}${deferredQ ? `&q=${encodeURIComponent(deferredQ)}` : ''}`),
+    queryKey: ['admin-customers', deferredQ, role, verified, page],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(page) });
+      if (deferredQ) params.set('q', deferredQ);
+      if (role) params.set('role', role);
+      if (verified) params.set('verified', verified);
+      return api<{
+        customers: CustomerRow[];
+        page: number;
+        total: number;
+        totalPages: number;
+        summary?: CustomerSummary;
+      }>(`/admin/customers?${params.toString()}`);
+    },
   });
 
+  const summary = customers.data?.summary;
+
   return (
-    <div>
+    <AdminPage>
       <PageHeader
         eyebrow="People"
         title="Customers"
         lede="Registered accounts, roles and paid order history. Identity data is minimised; there is deliberately no impersonation control."
       />
-      <div className="mt-5 flex flex-wrap items-end gap-3">
-        <Field label="Search"><Input value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Email or name" /></Field>
-        <p className="pb-3 text-[11px] text-muted">{customers.data?.total ?? 0} accounts</p>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminMetric
+          label="Total accounts"
+          value={(summary?.totalAccounts ?? customers.data?.total ?? 0).toLocaleString('en-IN')}
+          note="Registered storefront & maker accounts"
+          tone="accent"
+          icon={<NavIcon type="customers" className="h-4 w-4" />}
+        />
+        <AdminMetric
+          label="Verified emails"
+          value={(summary?.verifiedCount ?? 0).toLocaleString('en-IN')}
+          note={summary?.totalAccounts ? `${Math.round(((summary.verifiedCount ?? 0) / summary.totalAccounts) * 100)}% verified on server` : 'Email ownership confirmed'}
+          icon={<NavIcon type="shield" className="h-4 w-4" />}
+        />
+        <AdminMetric
+          label="Paying buyers"
+          value={(summary?.buyersWithOrders ?? 0).toLocaleString('en-IN')}
+          note="Accounts with paid real orders (demo excluded)"
+          tone="gold"
+          icon={<NavIcon type="orders" className="h-4 w-4" />}
+        />
+        <AdminMetric
+          label="Maker / admin roles"
+          value={(summary?.sellerCount ?? 0).toLocaleString('en-IN')}
+          note={`${summary?.adminCount ?? 0} administrator role${(summary?.adminCount ?? 0) === 1 ? '' : 's'}`}
+          icon={<NavIcon type="sellers" className="h-4 w-4" />}
+        />
       </div>
-      <div className="mt-5">
+
+      <AdminToolbar
+        meta={
+          customers.data
+            ? `${customers.data.total.toLocaleString('en-IN')} matching account${customers.data.total === 1 ? '' : 's'}`
+            : 'Loading accounts…'
+        }
+      >
+        <Field label="Search" className="w-full sm:max-w-xs">
+          <Input
+            value={q}
+            onChange={(event) => {
+              setQ(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Email or customer name"
+            type="search"
+          />
+        </Field>
+        <Field label="Role">
+          <Select
+            value={role}
+            onChange={(event) => {
+              setRole(event.target.value);
+              setPage(1);
+            }}
+            className="max-w-44"
+          >
+            <option value="">All roles</option>
+            <option value="customer">Customer</option>
+            <option value="seller">Seller</option>
+            <option value="admin">Admin</option>
+          </Select>
+        </Field>
+        <Field label="Email status">
+          <Select
+            value={verified}
+            onChange={(event) => {
+              setVerified(event.target.value);
+              setPage(1);
+            }}
+            className="max-w-44"
+          >
+            <option value="">All accounts</option>
+            <option value="true">Verified only</option>
+            <option value="false">Unverified only</option>
+          </Select>
+        </Field>
+        {(q || role || verified) ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setQ('');
+              setRole('');
+              setVerified('');
+              setPage(1);
+            }}
+          >
+            Clear filters
+          </Button>
+        ) : null}
+      </AdminToolbar>
+
+      <div>
         {customers.isLoading ? <LoadingBlock rows={4} /> : null}
         {customers.isError ? <ErrorState body={errorMessage(customers.error)} onRetry={() => void customers.refetch()} /> : null}
         {!customers.isLoading && !customers.isError && customers.data ? (
           customers.data.customers.length ? (
-          <div className="overflow-x-auto border border-line bg-surface">
-            <table className="min-w-full text-left text-[12.5px]">
-              <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
-                <tr><th className="px-4 py-3">Account</th><th className="px-4 py-3">Roles</th><th className="px-4 py-3">Orders</th><th className="px-4 py-3">Paid total</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Joined</th></tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {customers.data.customers.map((customer) => (
-                  <tr key={customer.id}>
-                    <td className="px-4 py-4"><span className="font-medium text-ink">{customer.fullName || 'No name recorded'}</span><p className="text-[10.5px] text-muted">{customer.email}{customer.disabled ? ' · disabled' : ''}</p></td>
-                    <td className="px-4 py-4"><div className="flex flex-wrap gap-1">{customer.roles.map((role) => <Badge key={role} tone={role === 'admin' ? 'terra' : role === 'seller' ? 'forest' : 'neutral'}>{role}</Badge>)}</div></td>
-                    <td className="px-4 py-4">{customer.orderCount}</td>
-                    <td className="px-4 py-4">{formatINR(customer.paidTotalPaise)}</td>
-                    <td className="px-4 py-4"><StatusBadge status={customer.emailVerified ? 'verified' : 'pending'} label={customer.emailVerified ? 'Verified' : 'Unverified'} /></td>
-                    <td className="px-4 py-4 text-muted">{formatDate(customer.createdAt)}</td>
+          <>
+            {/* Mobile Customer Cards */}
+            <div className="space-y-3 md:hidden">
+              {customers.data.customers.map((customer) => (
+                <article
+                  key={customer.id}
+                  className="rounded-2xl border border-[#DFD5C6] bg-white p-4 shadow-[0_2px_10px_rgba(13,74,58,0.04)]"
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-[#EFE7DA] pb-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate font-serif text-base font-semibold text-[#0D4A3A]">{customer.fullName || 'No name recorded'}</p>
+                      <p className="truncate text-[11.5px] text-[#5C6662]">{customer.email}</p>
+                    </div>
+                    <StatusBadge status={customer.emailVerified ? 'verified' : 'pending'} label={customer.emailVerified ? 'Verified' : 'Unverified'} />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {customer.roles.map((r) => (
+                      <Badge key={r} tone={r === 'admin' ? 'terra' : r === 'seller' ? 'forest' : 'neutral'}>
+                        {r}
+                      </Badge>
+                    ))}
+                    {customer.disabled ? <Badge tone="terra">Disabled</Badge> : null}
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[#EFE7DA] pt-2.5 text-xs">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-[#5C6662]">Real orders</span>
+                      <p className="font-semibold text-[#172321]">{customer.orderCount}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-[#5C6662]">Paid spend</span>
+                      <p className="font-semibold text-[#0D4A3A]">{formatINR(customer.paidTotalPaise)}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase tracking-wider text-[#5C6662]">Joined</span>
+                      <p className="text-[#5C6662]">{formatDate(customer.createdAt)}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {/* Desktop Customer Table */}
+            <div className="hidden md:block">
+              <AdminTable label="Customer accounts">
+                <thead className="border-b border-[#EFE7DA] bg-[#FAF6EE] text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
+                  <tr>
+                    <th className="px-4 py-3">Account</th>
+                    <th className="px-4 py-3">Roles</th>
+                    <th className="px-4 py-3">Real orders</th>
+                    <th className="px-4 py-3">Paid total</th>
+                    <th className="px-4 py-3">Email status</th>
+                    <th className="px-4 py-3">Joined</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <EmptyState title="No accounts in this view" />) : null}
+                </thead>
+                <tbody className="divide-y divide-[#EFE7DA]">
+                  {customers.data.customers.map((customer) => (
+                    <tr key={customer.id} className="hover:bg-[#FAF6EE]/70">
+                      <td className="px-4 py-4">
+                        <span className="font-semibold text-[#172321]">{customer.fullName || 'No name recorded'}</span>
+                        <p className="text-[11px] text-[#5C6662]">
+                          {customer.email}
+                          {customer.disabled ? ' · disabled' : ''}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-1.5">
+                          {customer.roles.map((r) => (
+                            <Badge key={r} tone={r === 'admin' ? 'terra' : r === 'seller' ? 'forest' : 'neutral'}>
+                              {r}
+                            </Badge>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 tabular-nums">{customer.orderCount}</td>
+                      <td className="px-4 py-4 font-semibold tabular-nums text-[#0D4A3A]">{formatINR(customer.paidTotalPaise)}</td>
+                      <td className="px-4 py-4">
+                        <StatusBadge status={customer.emailVerified ? 'verified' : 'pending'} label={customer.emailVerified ? 'Verified' : 'Unverified'} />
+                      </td>
+                      <td className="px-4 py-4 text-[#5C6662]">{formatDate(customer.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </AdminTable>
+            </div>
+          </>
+        ) : <EmptyState title="No accounts in this view" body="Try clearing the search query or role filter." />) : null}
         {!customers.isError && customers.data ? <Pagination page={page} totalPages={customers.data.totalPages} onChange={setPage} /> : null}
       </div>
-    </div>
+    </AdminPage>
   );
 }
 
@@ -6460,7 +7344,7 @@ export function AdminReviewsPage() {
         {reviews.isError ? <ErrorState body={errorMessage(reviews.error)} onRetry={() => void reviews.refetch()} /> : null}
         {!reviews.isLoading && !reviews.isError && reviews.data ? (
           reviews.data.reviews.length ? reviews.data.reviews.map((review) => (
-          <section key={review.id} className="border border-line bg-surface p-5">
+          <section key={review.id} className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="font-medium text-ink">{review.rating} / 5 · {review.title || 'Untitled review'}</p>
@@ -6574,7 +7458,7 @@ export function AdminContentPage() {
           </button>
         ))}
       </div>
-      <section className="border border-line bg-surface p-5">
+      <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-lg">{CONTENT_META[active].label}</h2>
@@ -6697,26 +7581,24 @@ export function AdminCouponsPage() {
         {coupons.isError ? <ErrorState body={errorMessage(coupons.error)} onRetry={() => void coupons.refetch()} /> : null}
         {!coupons.isLoading && !coupons.isError && coupons.data ? (
           coupons.data.coupons.length ? (
-          <div className="overflow-x-auto border border-line bg-surface">
-            <table className="min-w-full text-left text-[12.5px]">
-              <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
-                <tr><th className="px-4 py-3">Code</th><th className="px-4 py-3">Discount</th><th className="px-4 py-3">Conditions</th><th className="px-4 py-3">Used</th><th className="px-4 py-3">Window</th><th className="px-4 py-3">State</th><th className="px-4 py-3" /></tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {coupons.data.coupons.map((coupon) => (
-                  <tr key={coupon.id}>
-                    <td className="px-4 py-4"><span className="font-medium text-ink">{coupon.code}</span>{coupon.description ? <p className="text-[10.5px] text-muted">{coupon.description}</p> : null}</td>
-                    <td className="px-4 py-4">{coupon.type === 'percent' ? `${coupon.value}%` : formatINR(coupon.value)}{coupon.max_discount_paise ? <p className="text-[10.5px] text-muted">Max {formatINR(coupon.max_discount_paise)}</p> : null}</td>
-                    <td className="px-4 py-4 text-muted">{coupon.min_order_paise ? `Min ${formatINR(coupon.min_order_paise)}` : 'No minimum'}<p className="text-[10.5px]">{coupon.per_user_limit} per customer</p></td>
-                    <td className="px-4 py-4">{coupon.used_count}{coupon.usage_limit ? ` / ${coupon.usage_limit}` : ''}</td>
-                    <td className="px-4 py-4 text-muted">{coupon.starts_at ? formatDate(coupon.starts_at) : 'Any time'}<p className="text-[10.5px]">{coupon.ends_at ? `to ${formatDate(coupon.ends_at)}` : 'No end'}</p></td>
-                    <td className="px-4 py-4"><StatusBadge status={coupon.is_active ? 'active' : 'paused'} label={coupon.is_active ? 'Active' : 'Paused'} /></td>
-                    <td className="px-4 py-4 text-right"><Button size="sm" variant="ghost" onClick={() => void toggle(coupon)}>{coupon.is_active ? 'Pause' : 'Activate'}</Button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <AdminTable label="Promotional coupons">
+            <thead className="border-b border-[#EFE7DA] bg-[#FAF6EE] text-[10px] uppercase tracking-[0.12em] text-[#5C6662]">
+              <tr><th className="px-4 py-3">Code</th><th className="px-4 py-3">Discount</th><th className="px-4 py-3">Conditions</th><th className="px-4 py-3">Used</th><th className="px-4 py-3">Window</th><th className="px-4 py-3">State</th><th className="px-4 py-3" /></tr>
+            </thead>
+            <tbody className="divide-y divide-[#EFE7DA]">
+              {coupons.data.coupons.map((coupon) => (
+                <tr key={coupon.id} className="hover:bg-[#FAF6EE]/70">
+                  <td className="px-4 py-4"><span className="font-semibold text-[#0D4A3A]">{coupon.code}</span>{coupon.description ? <p className="text-[10.5px] text-[#5C6662]">{coupon.description}</p> : null}</td>
+                  <td className="px-4 py-4 font-semibold">{coupon.type === 'percent' ? `${coupon.value}%` : formatINR(coupon.value)}{coupon.max_discount_paise ? <p className="text-[10.5px] font-normal text-[#5C6662]">Max {formatINR(coupon.max_discount_paise)}</p> : null}</td>
+                  <td className="px-4 py-4 text-[#5C6662]">{coupon.min_order_paise ? `Min ${formatINR(coupon.min_order_paise)}` : 'No minimum'}<p className="text-[10.5px]">{coupon.per_user_limit} per customer</p></td>
+                  <td className="px-4 py-4 tabular-nums">{coupon.used_count}{coupon.usage_limit ? ` / ${coupon.usage_limit}` : ''}</td>
+                  <td className="px-4 py-4 text-[#5C6662]">{coupon.starts_at ? formatDate(coupon.starts_at) : 'Any time'}<p className="text-[10.5px]">{coupon.ends_at ? `to ${formatDate(coupon.ends_at)}` : 'No end'}</p></td>
+                  <td className="px-4 py-4"><StatusBadge status={coupon.is_active ? 'active' : 'paused'} label={coupon.is_active ? 'Active' : 'Paused'} /></td>
+                  <td className="px-4 py-4 text-right"><Button size="sm" variant="ghost" onClick={() => void toggle(coupon)}>{coupon.is_active ? 'Pause' : 'Activate'}</Button></td>
+                </tr>
+              ))}
+            </tbody>
+          </AdminTable>
         ) : <EmptyState title="No coupons" body="Create a coupon only when the margin supports it." action={<Button size="sm" onClick={() => setOpen(true)}>Create coupon</Button>} />) : null}
       </div>
 
@@ -7534,7 +8416,7 @@ export function AdminSupportPage() {
           tickets.data.tickets.length ? tickets.data.tickets.map((ticket) => {
           const replySubject = encodeURIComponent(`Re: ${ticket.subject}${ticket.order_number ? ` (${ticket.order_number})` : ''}`);
           return (
-            <section key={ticket.id} className="border border-line bg-surface p-5">
+            <section key={ticket.id} className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-base">{ticket.subject}</h2>
@@ -7633,7 +8515,7 @@ export function AdminAuditPage() {
           logs.data.logs.length ? (
           <div className="space-y-2">
             {logs.data.logs.map((log) => (
-              <details key={log.id} className="border border-line bg-surface">
+              <details key={log.id} className="overflow-hidden rounded-2xl border border-[#DFD5C6] bg-white shadow-[0_1px_8px_rgba(13,74,58,0.04)]">
                 <summary className="cursor-pointer px-4 py-3 text-[12.5px]">
                   <span className="font-medium text-ink">{log.action}</span>
                   <span className="text-muted"> · {log.entity_type} · {log.actor_email ?? 'system'} · {formatDateTime(log.created_at)}</span>
@@ -7661,8 +8543,8 @@ interface SettingsResponse {
   integrations: {
     payments: { provider: string; configured: boolean; webhookConfigured: boolean; mode: string; devPaymentsEnabled: boolean };
     razorpay: { keyIdConfigured: boolean; keySecretConfigured: boolean; webhookSecretConfigured: boolean };
-    email: { configured: boolean; from: string; supportEmail: string };
-    shipping: { provider: string; shiprocketConfigured: boolean };
+    email: { configured: boolean; provider?: string; from: string; supportEmail: string; adminNotificationEmail?: string };
+    shipping: { provider: string; configured: boolean; pickupLocation?: string };
     monitoring: { sentryConfigured: boolean };
   };
   configIssues: string[];
@@ -7679,9 +8561,10 @@ export function AdminSettingsPage() {
   if (settings.isError || !settings.data) return <ErrorState body={settings.error ? errorMessage(settings.error) : undefined} onRetry={() => void settings.refetch()} />;
   const data = settings.data;
   const payments = data.integrations.payments;
+  const emailProviderLabel = data.integrations.email.provider ? humanise(data.integrations.email.provider) : 'Email';
 
   return (
-    <div className="space-y-7">
+    <AdminPage>
       <PageHeader
         eyebrow="Configuration"
         title="Settings"
@@ -7692,64 +8575,88 @@ export function AdminSettingsPage() {
           <ul className="mt-1 list-disc space-y-1 pl-4">{data.configIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
         </Alert>
       ) : (
-        <Alert tone="success" title="No blocking configuration issues reported">This does not prove that live payments, email or shipping have been exercised. Test each provider with real sandbox credentials before launch.</Alert>
+        <Alert tone="success" title="No blocking configuration issues reported">This does not prove that live payments, email or shipping have been exercised. Test each provider with real credentials before launch.</Alert>
       )}
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <section className="border border-line bg-surface p-5">
-          <div className="flex items-center justify-between gap-3"><h2 className="text-lg">Payments</h2><Badge tone={payments.configured ? 'forest' : 'terra'}>{payments.configured ? `${payments.mode} mode` : 'Unconfigured'}</Badge></div>
-          <dl className="mt-3 space-y-2 text-[12.5px]">
-            <div className="flex justify-between gap-3"><dt className="text-muted">Provider</dt><dd>{humanise(payments.provider)}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-muted">Key ID</dt><dd>{data.integrations.razorpay.keyIdConfigured ? 'Present' : 'Missing'}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-muted">Key secret</dt><dd>{data.integrations.razorpay.keySecretConfigured ? 'Present' : 'Missing'}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-muted">Webhook secret</dt><dd>{data.integrations.razorpay.webhookSecretConfigured ? 'Present' : 'Missing'}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-muted">Development simulator</dt><dd>{payments.devPaymentsEnabled ? 'Enabled (non-production)' : 'Disabled'}</dd></div>
+        <AdminSection
+          title="Payments"
+          action={<Badge tone={payments.configured ? 'forest' : 'terra'}>{payments.configured ? `${payments.mode} mode` : 'Unconfigured'}</Badge>}
+        >
+          <dl className="space-y-2.5 text-[12.5px]">
+            <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Provider</dt><dd className="font-medium text-[#172321]">{humanise(payments.provider)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Key ID</dt><dd className="font-medium text-[#172321]">{data.integrations.razorpay.keyIdConfigured ? 'Present' : 'Missing'}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Key secret</dt><dd className="font-medium text-[#172321]">{data.integrations.razorpay.keySecretConfigured ? 'Present' : 'Missing'}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Webhook secret</dt><dd className="font-medium text-[#172321]">{data.integrations.razorpay.webhookSecretConfigured ? 'Present' : 'Missing'}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Development simulator</dt><dd className="font-medium text-[#172321]">{payments.devPaymentsEnabled ? 'Enabled (non-production)' : 'Disabled'}</dd></div>
           </dl>
-          <p className="mt-3 text-[11px] leading-relaxed text-muted">To accept money, add Razorpay keys, register the webhook endpoint and complete merchant onboarding. Until then checkout can only be simulated in development.</p>
-        </section>
+          <p className="mt-3 text-[11px] leading-relaxed text-[#5C6662]">To accept money, configure Razorpay keys, register the webhook endpoint and complete merchant onboarding.</p>
+        </AdminSection>
 
-        <section className="border border-line bg-surface p-5">
-          <div className="flex items-center justify-between gap-3"><h2 className="text-lg">Email</h2><Badge tone={data.integrations.email.configured ? 'forest' : 'terra'}>{data.integrations.email.configured ? 'Configured' : 'Not configured'}</Badge></div>
-          <dl className="mt-3 space-y-2 text-[12.5px]">
-            <div className="flex justify-between gap-3"><dt className="text-muted">From</dt><dd className="break-all text-right">{data.integrations.email.from}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-muted">Support address</dt><dd className="break-all text-right">{data.integrations.email.supportEmail}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-muted">Queue</dt><dd>{data.notifications.sent ?? 0} sent · {data.notifications.skipped ?? 0} skipped · {data.notifications.failed ?? 0} failed</dd></div>
+        <AdminSection
+          title="Email"
+          action={<Badge tone={data.integrations.email.configured ? 'forest' : 'terra'}>{data.integrations.email.configured ? `${emailProviderLabel} configured` : 'Not configured'}</Badge>}
+        >
+          <dl className="space-y-2.5 text-[12.5px]">
+            <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Provider</dt><dd className="font-medium text-[#172321]">{emailProviderLabel}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">From</dt><dd className="break-all text-right font-medium text-[#172321]">{data.integrations.email.from}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Support address</dt><dd className="break-all text-right font-medium text-[#172321]">{data.integrations.email.supportEmail}</dd></div>
+            {data.integrations.email.adminNotificationEmail ? (
+              <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Admin alerts</dt><dd className="break-all text-right font-medium text-[#172321]">{data.integrations.email.adminNotificationEmail}</dd></div>
+            ) : null}
+            <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Queue</dt><dd className="font-medium text-[#172321]">{data.notifications.sent ?? 0} sent · {data.notifications.skipped ?? 0} skipped · {data.notifications.failed ?? 0} failed</dd></div>
           </dl>
-          <p className="mt-3 text-[11px] leading-relaxed text-muted">Without SMTP, notifications are recorded as skipped rather than falsely reported as sent.</p>
-        </section>
+          <p className="mt-3 text-[11px] leading-relaxed text-[#5C6662]">When no provider key is set, notifications are recorded as skipped rather than falsely reported as sent.</p>
+        </AdminSection>
 
-        <section className="border border-line bg-surface p-5">
-          <div className="flex items-center justify-between gap-3"><h2 className="text-lg">Shipping</h2><Badge tone="sand">{humanise(data.integrations.shipping.provider)}</Badge></div>
-          <p className="mt-3 text-[12px] leading-relaxed text-muted">Dispatch is a manual workflow: the operator records a real carrier and tracking number against each seller shipment. Shiprocket credentials are {data.integrations.shipping.shiprocketConfigured ? 'present, but the adapter is not implemented in this build' : 'not configured; the adapter is not implemented in this build'}.</p>
-        </section>
+        <AdminSection
+          title="Shipping"
+          action={<Badge tone={data.integrations.shipping.configured ? 'forest' : 'sand'}>{data.integrations.shipping.configured ? 'Credentials set' : 'Manual workflow'}</Badge>}
+        >
+          <dl className="space-y-2.5 text-[12.5px]">
+            <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Provider mode</dt><dd className="font-medium text-[#172321]">{humanise(data.integrations.shipping.provider)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Shiprocket credentials</dt><dd className="font-medium text-[#172321]">{data.integrations.shipping.configured ? 'Present' : 'Not configured'}</dd></div>
+            {data.integrations.shipping.pickupLocation ? (
+              <div className="flex justify-between gap-3"><dt className="text-[#5C6662]">Pickup location</dt><dd className="font-medium text-[#172321]">{data.integrations.shipping.pickupLocation}</dd></div>
+            ) : null}
+          </dl>
+          <p className="mt-3 text-[11.5px] leading-relaxed text-[#5C6662]">
+            Dispatch records a real carrier and tracking number against each seller shipment. Automated courier label generation is manual in this release.
+          </p>
+        </AdminSection>
 
-        <section className="border border-line bg-surface p-5">
-          <div className="flex items-center justify-between gap-3"><h2 className="text-lg">Monitoring</h2><Badge tone={data.integrations.monitoring.sentryConfigured ? 'forest' : 'terra'}>{data.integrations.monitoring.sentryConfigured ? 'DSN present' : 'Not configured'}</Badge></div>
-          <p className="mt-3 text-[12px] leading-relaxed text-muted">The application writes structured JSON logs. Error tracking is optional and must be configured at deployment.</p>
-          <p className="mt-3 text-[11px] text-muted">Environment: {data.environment}</p>
-        </section>
+        <AdminSection
+          title="Monitoring"
+          action={<Badge tone={data.integrations.monitoring.sentryConfigured ? 'forest' : 'terra'}>{data.integrations.monitoring.sentryConfigured ? 'DSN present' : 'Not configured'}</Badge>}
+        >
+          <p className="text-[12px] leading-relaxed text-[#5C6662]">The application writes structured JSON logs. Error tracking is optional and must be configured at deployment.</p>
+          <p className="mt-3 text-[11.5px] font-medium text-[#172321]">Environment: <span className="rounded-full bg-[#E7F4EE] px-2.5 py-0.5 text-[#0D4A3A]">{data.environment}</span></p>
+        </AdminSection>
       </div>
 
-      <section className="border border-line bg-surface p-5">
-        <h2 className="text-lg">Policy status</h2>
-        <div className="mt-3 flex flex-wrap gap-2">
+      <AdminSection title="Policy status" description="Draft policies display a notice until reviewed and published.">
+        <div className="flex flex-wrap gap-2">
           {Object.entries(data.policies).map(([key, status]) => (
-            <span key={key} className="inline-flex items-center gap-2 border border-line px-2.5 py-1 text-[11px]">{humanise(key)}<StatusBadge status={status} /></span>
+            <span key={key} className="inline-flex items-center gap-2 rounded-xl border border-[#DFD5C6] bg-[#FAF6EE] px-3 py-1.5 text-[11.5px] font-medium text-[#172321]">
+              {humanise(key)}
+              <StatusBadge status={status} />
+            </span>
           ))}
         </div>
-        <p className="mt-3 text-[11px] leading-relaxed text-muted">Draft policies are visible with a draft notice. Publish them only after review by a qualified legal adviser.</p>
-      </section>
+      </AdminSection>
 
-      <section className="border border-line bg-surface p-5">
-        <h2 className="text-lg">Database counts</h2>
-        <dl className="mt-3 grid grid-cols-2 gap-3 text-[12.5px] sm:grid-cols-3 lg:grid-cols-6">
+      <AdminSection title="Database counts" description="Live record totals read directly from SQLite.">
+        <dl className="grid grid-cols-2 gap-3 text-[12.5px] sm:grid-cols-3 lg:grid-cols-6">
           {Object.entries(data.counts).map(([key, value]) => (
-            <div key={key} className="border border-line bg-paper p-3"><dt className="text-[10px] uppercase tracking-[0.12em] text-muted">{humanise(key)}</dt><dd className="mt-1 font-serif text-xl text-forest">{value}</dd></div>
+            <div key={key} className="rounded-xl border border-[#DFD5C6] bg-[#FAF6EE] p-3.5">
+              <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#5C6662]">{humanise(key)}</dt>
+              <dd className="mt-1 font-serif text-2xl font-semibold text-[#0D4A3A]">{value.toLocaleString('en-IN')}</dd>
+            </div>
           ))}
         </dl>
-      </section>
+      </AdminSection>
 
       <Alert tone="info" title="Settlements">{data.settlementNote}</Alert>
-    </div>
+    </AdminPage>
   );
 }

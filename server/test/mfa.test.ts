@@ -176,6 +176,7 @@ describe('TOTP two-step verification', () => {
       recommendedForRole: true,
       required: true,
       adminSessionActive: true,
+      stepUpActive: true,
     });
 
     const verifiedRow = queryOne<{ count: number }>(
@@ -197,5 +198,6 @@ describe('TOTP two-step verification', () => {
     const expiredAdminMfa = await admin.get('/api/auth/mfa');
     expect(expiredAdminMfa.status).toBe(200);
     expect(expiredAdminMfa.body.adminSessionActive).toBe(false);
+    expect(expiredAdminMfa.body.stepUpActive).toBe(false);
   });
 });

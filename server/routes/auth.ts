@@ -519,7 +519,8 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
     );
     const enabled = mfaEnabled(user ?? {});
     const isAdmin = req.user!.roles.includes('admin');
-    const adminSessionActive = isAdmin ? Boolean(loadSessionUser(db, adminSessionToken(req), 'admin')) : false;
+    const adminUser = isAdmin ? loadSessionUser(db, adminSessionToken(req), 'admin') : null;
+    const adminSessionActive = Boolean(adminUser);
     res.json({
       enabled,
       pending: Boolean(user?.mfa_secret && !user.mfa_enabled_at),
@@ -527,6 +528,7 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
       recommendedForRole: isAdmin,
       required: requireAdminMfa && isAdmin,
       adminSessionActive,
+      stepUpActive: Boolean(adminUser?.adminStepUpActive),
     });
   });
 

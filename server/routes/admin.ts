@@ -175,6 +175,7 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         payments,
         shipping: env.shiprocket.configured ? 'configured' : 'manual-only',
         email: env.email.configured ? 'configured' : 'unconfigured',
+        emailProvider: env.email.provider,
       },
       notifications: notificationQueueSummary(db),
     });
@@ -1723,19 +1724,79 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
   router.get('/payments', (req, res) => {
     const { page, pageSize, offset } = pageParams(req.query);
     const status = typeof req.query.status === 'string' && req.query.status ? req.query.status : undefined;
-    const where = status ? 'WHERE p.status = ?' : '';
-    const total = queryOne<{ count: number }>(db, `SELECT COUNT(*) AS count FROM payments p ${where}`, ...(status ? [status] : []))?.count ?? 0;
+    const isDemo = typeof req.query.isDemo === 'string' && req.query.isDemo ? req.query.isDemo : undefined;
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+
+    const clauses: string[] = [];
+    const params: string[] = [];
+    if (status) {
+      clauses.push('p.status = ?');
+      params.push(status);
+    }
+    if (isDemo === 'true') clauses.push('o.is_demo = 1');
+    else if (isDemo === 'false') clauses.push('o.is_demo = 0');
+    if (q) {
+      clauses.push(
+        "(o.order_number LIKE ? OR o.email LIKE ? OR COALESCE(p.provider_order_id, '') LIKE ? OR COALESCE(p.provider_payment_id, '') LIKE ? OR COALESCE(p.method, '') LIKE ?)",
+      );
+      const pattern = `%${q}%`;
+      params.push(pattern, pattern, pattern, pattern, pattern);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const total =
+      queryOne<{ count: number }>(
+        db,
+        `SELECT COUNT(*) AS count FROM payments p JOIN orders o ON o.id = p.order_id ${where}`,
+        ...params,
+      )?.count ?? 0;
     const rows = queryAll<Record<string, unknown>>(
       db,
       `SELECT p.id, p.provider, p.status, p.amount_paise, p.provider_order_id, p.provider_payment_id, p.method,
-              p.verified_at, p.failure_reason, p.created_at, o.order_number, o.status AS order_status
+              p.verified_at, p.failure_reason, p.created_at, p.currency,
+              o.order_number, o.status AS order_status, o.email, o.is_demo, o.total_paise AS order_total_paise
          FROM payments p JOIN orders o ON o.id = p.order_id ${where}
         ORDER BY p.created_at DESC LIMIT ? OFFSET ?`,
-      ...(status ? [status] : []),
+      ...params,
       pageSize,
       offset,
     );
-    res.json({ payments: rows, page, pageSize, total, totalPages: Math.ceil(total / pageSize) });
+    const summary = queryOne<{
+      totalPaidPaise: number;
+      demoPaidPaise: number;
+      paidCount: number;
+      realPaidCount: number;
+      demoPaidCount: number;
+      pendingCount: number;
+      failedCount: number;
+    }>(
+      db,
+      `SELECT COALESCE(SUM(CASE WHEN p.status = 'paid' AND o.is_demo = 0 THEN p.amount_paise ELSE 0 END), 0) AS totalPaidPaise,
+              COALESCE(SUM(CASE WHEN p.status = 'paid' AND o.is_demo = 1 THEN p.amount_paise ELSE 0 END), 0) AS demoPaidPaise,
+              COUNT(CASE WHEN p.status = 'paid' THEN 1 END) AS paidCount,
+              COUNT(CASE WHEN p.status = 'paid' AND o.is_demo = 0 THEN 1 END) AS realPaidCount,
+              COUNT(CASE WHEN p.status = 'paid' AND o.is_demo = 1 THEN 1 END) AS demoPaidCount,
+              COUNT(CASE WHEN p.status IN ('created', 'pending') THEN 1 END) AS pendingCount,
+              COUNT(CASE WHEN p.status = 'failed' THEN 1 END) AS failedCount
+         FROM payments p
+         JOIN orders o ON o.id = p.order_id`,
+    );
+    res.json({
+      payments: rows,
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+      summary: summary ?? {
+        totalPaidPaise: 0,
+        demoPaidPaise: 0,
+        paidCount: 0,
+        realPaidCount: 0,
+        demoPaidCount: 0,
+        pendingCount: 0,
+        failedCount: 0,
+      },
+      provider: paymentProviderStatus(),
+    });
   });
 
   /* ------------------------------- Refunds ----------------------------- */
@@ -2778,8 +2839,23 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
   router.get('/customers', (req, res) => {
     const { page, pageSize, offset } = pageParams(req.query);
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-    const where = q ? 'WHERE u.email LIKE ? OR p.full_name LIKE ?' : '';
-    const params = q ? [`%${q}%`, `%${q}%`] : [];
+    const role = typeof req.query.role === 'string' && ['customer', 'seller', 'admin'].includes(req.query.role) ? req.query.role : '';
+    const verified = typeof req.query.verified === 'string' ? req.query.verified : '';
+
+    const clauses: string[] = [];
+    const params: string[] = [];
+    if (q) {
+      clauses.push('(u.email LIKE ? OR p.full_name LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`);
+    }
+    if (role) {
+      clauses.push('EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = ?)');
+      params.push(role);
+    }
+    if (verified === 'true') clauses.push('u.email_verified = 1');
+    else if (verified === 'false') clauses.push('u.email_verified = 0');
+
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const total = queryOne<{ count: number }>(
       db,
       `SELECT COUNT(*) AS count FROM users u LEFT JOIN profiles p ON p.id = u.id ${where}`,
@@ -2798,8 +2874,8 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
     }>(
       db,
       `SELECT u.id, u.email, p.full_name, u.email_verified, u.is_disabled, u.created_at,
-              (SELECT COUNT(*) FROM orders WHERE user_id = u.id) AS order_count,
-              (SELECT COALESCE(SUM(total_paise),0) FROM orders WHERE user_id = u.id AND paid_at IS NOT NULL) AS paid_total,
+              (SELECT COUNT(*) FROM orders WHERE user_id = u.id AND is_demo = 0) AS order_count,
+              (SELECT COALESCE(SUM(total_paise), 0) FROM orders WHERE user_id = u.id AND paid_at IS NOT NULL AND is_demo = 0) AS paid_total,
               (SELECT GROUP_CONCAT(role) FROM user_roles WHERE user_id = u.id) AS roles
          FROM users u LEFT JOIN profiles p ON p.id = u.id ${where}
         ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
@@ -2807,6 +2883,17 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       pageSize,
       offset,
     );
+    const summary = {
+      totalAccounts: queryOne<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM users')?.count ?? 0,
+      verifiedCount: queryOne<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM users WHERE email_verified = 1')?.count ?? 0,
+      sellerCount: queryOne<{ count: number }>(db, "SELECT COUNT(DISTINCT user_id) AS count FROM user_roles WHERE role = 'seller'")?.count ?? 0,
+      adminCount: queryOne<{ count: number }>(db, "SELECT COUNT(DISTINCT user_id) AS count FROM user_roles WHERE role = 'admin'")?.count ?? 0,
+      buyersWithOrders:
+        queryOne<{ count: number }>(
+          db,
+          'SELECT COUNT(DISTINCT user_id) AS count FROM orders WHERE user_id IS NOT NULL AND paid_at IS NOT NULL AND is_demo = 0',
+        )?.count ?? 0,
+    };
     res.json({
       customers: rows.map((row) => ({
         id: row.id,
@@ -2823,6 +2910,7 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       pageSize,
       total,
       totalPages: Math.ceil(total / pageSize),
+      summary,
     });
   });
 
