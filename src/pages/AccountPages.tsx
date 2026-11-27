@@ -24,7 +24,6 @@ import {
   PageHeader,
   Pagination,
   Select,
-  Stat,
   StatusBadge,
   Textarea,
 } from '@/components/ui';
@@ -57,17 +56,17 @@ export function AccountLayout() {
         </div>
       </div>
       <div className="mt-6 grid gap-8 lg:grid-cols-[210px_1fr]">
-        <nav className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line/70 lg:flex-col lg:border-b-0" aria-label="Account sections">
+        <nav className="no-scrollbar flex gap-2 lg:gap-1 overflow-x-auto pb-2 lg:pb-0 lg:flex-col lg:border-b-0" aria-label="Account sections">
           {ACCOUNT_TABS.map((tab) => (
             <NavLink
               key={tab.to}
               to={tab.to}
               end={tab.end}
               className={({ isActive }) =>
-                `flex min-h-11 items-center whitespace-nowrap border-b-2 px-3 py-2.5 text-left text-[13px] transition-colors lg:border-b-0 lg:border-l-2 ${
+                `flex min-h-10 lg:min-h-11 items-center whitespace-nowrap rounded-full lg:rounded-none border lg:border-0 lg:border-l-2 px-3.5 lg:px-3 py-2 lg:py-2.5 text-left text-xs lg:text-[13px] transition-colors ${
                   isActive
-                    ? 'border-forest font-medium text-forest'
-                    : 'border-transparent text-muted hover:border-sand hover:text-ink'
+                    ? 'border-[#0F766E] bg-[#0F766E] text-white font-semibold lg:bg-transparent lg:border-forest lg:font-medium lg:text-forest'
+                    : 'border-slate-200 bg-white text-slate-700 lg:bg-transparent lg:border-transparent lg:text-muted hover:border-sand hover:text-ink'
                 }`
               }
             >
@@ -123,13 +122,25 @@ export function AccountOverviewPage() {
         </Alert>
       ) : null}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Orders" value={overview.data.counts.orders} />
-        <Stat label="Saved items" value={overview.data.counts.wishlist} />
-        <Stat label="Addresses" value={overview.data.counts.addresses} />
-        <Stat label="Requests" value={overview.data.counts.returns} />
+        <Link to="/account/orders" className="rounded-2xl md:rounded-none border border-emerald-200 bg-emerald-50/70 md:bg-surface md:border-line p-4 transition-transform active:scale-[0.99]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-800 md:text-muted">Orders</p>
+          <p className="mt-1.5 font-serif text-2xl font-bold md:font-normal text-forest tabular-nums">{overview.data.counts.orders}</p>
+        </Link>
+        <Link to="/account/wishlist" className="rounded-2xl md:rounded-none border border-rose-200 bg-rose-50/70 md:bg-surface md:border-line p-4 transition-transform active:scale-[0.99]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-rose-800 md:text-muted">Saved items</p>
+          <p className="mt-1.5 font-serif text-2xl font-bold md:font-normal text-forest tabular-nums">{overview.data.counts.wishlist}</p>
+        </Link>
+        <Link to="/account/addresses" className="rounded-2xl md:rounded-none border border-amber-200 bg-amber-50/70 md:bg-surface md:border-line p-4 transition-transform active:scale-[0.99]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-900 md:text-muted">Addresses</p>
+          <p className="mt-1.5 font-serif text-2xl font-bold md:font-normal text-forest tabular-nums">{overview.data.counts.addresses}</p>
+        </Link>
+        <Link to="/account/requests" className="rounded-2xl md:rounded-none border border-indigo-200 bg-indigo-50/70 md:bg-surface md:border-line p-4 transition-transform active:scale-[0.99]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-900 md:text-muted">Requests</p>
+          <p className="mt-1.5 font-serif text-2xl font-bold md:font-normal text-forest tabular-nums">{overview.data.counts.returns}</p>
+        </Link>
       </div>
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <section className="border border-line bg-surface">
+        <section className="rounded-2xl md:rounded-none border border-slate-200 md:border-line bg-white md:bg-surface shadow-2xs md:shadow-none overflow-hidden">
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h2 className="text-lg">Recent orders</h2>
             <Link to="/account/orders" className="text-[11px] text-muted underline underline-offset-2 hover:text-forest">View all</Link>
@@ -157,7 +168,7 @@ export function AccountOverviewPage() {
             <div className="p-5 text-sm text-muted">No orders yet. <Link to="/shop" className="link-underline text-forest">Browse the catalogue.</Link></div>
           )}
         </section>
-        <section className="border border-line bg-surface p-5">
+        <section className="rounded-2xl md:rounded-none border border-slate-200 md:border-line bg-white md:bg-surface p-5 shadow-2xs md:shadow-none">
           <h2 className="text-lg">Account details</h2>
           <dl className="mt-4 space-y-3 text-[12.5px]">
             <div className="flex justify-between gap-4"><dt className="text-muted">Name</dt><dd className="text-right text-ink">{overview.data.profile.fullName}</dd></div>
@@ -206,10 +217,10 @@ export function OrdersPage() {
           <EmptyState title="No orders yet" body="When you place an order it will appear here with its seller shipments and tracking." action={<LinkButton to="/shop">Browse the shop</LinkButton>} />
         ) : null}
         {orders.data?.items.length ? (
-          <ul className="divide-y divide-line border-y border-line">
+          <ul className="space-y-3 md:space-y-0 md:divide-y md:divide-line md:border-y md:border-line">
             {orders.data.items.map((order) => (
               <li key={order.id}>
-                <Link to={`/account/orders/${order.orderNumber}`} className="grid gap-4 py-5 hover:bg-surface/70 sm:grid-cols-[80px_1fr_auto] sm:items-center">
+                <Link to={`/account/orders/${order.orderNumber}`} className="grid gap-3 md:gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs md:rounded-none md:border-0 md:bg-transparent md:px-0 md:py-5 md:shadow-none hover:bg-surface/70 sm:grid-cols-[80px_1fr_auto] sm:items-center">
                   <div className="h-20 w-20 overflow-hidden bg-sand/40">
                     {order.imageUrl ? <img src={order.imageUrl} alt="" className="h-full w-full object-cover" /> : null}
                   </div>
@@ -261,6 +272,7 @@ export function OrderDetailPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [cancelSeller, setCancelSeller] = useState<string | null>(null);
+  const [cancelPendingOpen, setCancelPendingOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState(CANCEL_REASONS[0]);
   const [cancelNote, setCancelNote] = useState('');
   const [returnSeller, setReturnSeller] = useState<string | null>(null);
@@ -286,7 +298,7 @@ export function OrderDetailPage() {
   };
 
   const submitCancel = async () => {
-    if (!cancelSeller) return;
+    if (!cancelSeller && !cancelPendingOpen) return;
     const reason = `${cancelReason}${cancelNote.trim() ? ` — ${cancelNote.trim()}` : ''}`;
     if (reason.trim().length < 10) {
       toast.push('Add a little more detail (at least 10 characters).', 'error');
@@ -296,11 +308,16 @@ export function OrderDetailPage() {
     try {
       await api(`/account/orders/${encodeURIComponent(orderNumber)}/cancel`, {
         method: 'POST',
-        body: { sellerOrderId: cancelSeller, reason },
+        body: cancelPendingOpen ? { reason } : { sellerOrderId: cancelSeller, reason },
       });
       setCancelSeller(null);
+      setCancelPendingOpen(false);
       setCancelNote('');
-      toast.push('Cancellation request recorded. The seller shipment has been cancelled where eligible.');
+      toast.push(
+        cancelPendingOpen
+          ? 'Unpaid order cancelled and reserved stock released.'
+          : 'Cancellation request recorded. The seller shipment has been cancelled where eligible.',
+      );
       await refresh();
     } catch (error) {
       toast.push(errorMessage(error), 'error');
@@ -388,7 +405,10 @@ export function OrderDetailPage() {
           <StatusBadge status={data.status} label={orderStatusLabel(data.status, data.sellerOrders)} />
           {data.payment ? <Badge tone={data.payment.status === 'paid' ? 'forest' : 'sand'}>Payment: {data.payment.status}</Badge> : null}
           {data.status === 'pending_payment' ? (
-            <LinkButton to={`/checkout?resume=${encodeURIComponent(data.orderNumber)}`} size="sm">Complete payment</LinkButton>
+            <>
+              <LinkButton to={`/checkout?resume=${encodeURIComponent(data.orderNumber)}`} size="sm">Complete payment</LinkButton>
+              <Button size="sm" variant="secondary" onClick={() => setCancelPendingOpen(true)}>Cancel unpaid order</Button>
+            </>
           ) : null}
         </div>
       </div>
@@ -493,7 +513,7 @@ export function OrderDetailPage() {
           ))}
         </div>
         <aside className="space-y-5">
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl md:rounded-none border border-slate-200 md:border-line bg-white md:bg-surface p-5 shadow-2xs md:shadow-none">
             <h2 className="text-lg">Payment summary</h2>
             <dl className="mt-4 space-y-2 text-[12.5px]">
               <div className="flex justify-between gap-4"><dt className="text-muted">Product value</dt><dd>{formatINR(data.subtotalPaise)}</dd></div>
@@ -508,7 +528,7 @@ export function OrderDetailPage() {
               </p>
             ) : null}
           </section>
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl md:rounded-none border border-slate-200 md:border-line bg-white md:bg-surface p-5 shadow-2xs md:shadow-none">
             <h2 className="text-lg">Delivery address</h2>
             <address className="mt-3 text-[12.5px] not-italic leading-relaxed text-ink/75">
               {data.shippingAddress.fullName}<br />
@@ -518,7 +538,7 @@ export function OrderDetailPage() {
               {data.shippingAddress.phone}
             </address>
           </section>
-          <section className="border border-line bg-surface p-5">
+          <section className="rounded-2xl md:rounded-none border border-slate-200 md:border-line bg-white md:bg-surface p-5 shadow-2xs md:shadow-none">
             <h2 className="text-lg">Order timeline</h2>
             {data.timeline.length ? (
               <ol className="mt-3 space-y-2 text-[11.5px]">
@@ -540,13 +560,13 @@ export function OrderDetailPage() {
       </div>
 
       <Modal
-        open={Boolean(cancelSeller)}
-        onClose={() => setCancelSeller(null)}
-        title="Cancel this seller shipment"
-        footer={<><Button variant="ghost" onClick={() => setCancelSeller(null)}>Keep order</Button><Button variant="danger" loading={busy} onClick={submitCancel}>Request cancellation</Button></>}
+        open={Boolean(cancelSeller) || cancelPendingOpen}
+        onClose={() => { setCancelSeller(null); setCancelPendingOpen(false); }}
+        title={cancelPendingOpen ? 'Cancel unpaid order' : 'Cancel this seller shipment'}
+        footer={<><Button variant="ghost" onClick={() => { setCancelSeller(null); setCancelPendingOpen(false); }}>Keep order</Button><Button variant="danger" loading={busy} onClick={submitCancel}>{cancelPendingOpen ? 'Cancel order & release stock' : 'Request cancellation'}</Button></>}
       >
         <div className="space-y-4">
-          <Alert tone="warning">Cancellation is only possible before dispatch. Refund timing depends on the original payment method and is shown after review.</Alert>
+          <Alert tone="warning">{cancelPendingOpen ? 'Cancelling releases your reserved stock immediately and frees up your checkout slot.' : 'Cancellation is only possible before dispatch. Refund timing depends on the original payment method and is shown after review.'}</Alert>
           <Field label="Reason" required>
             <Select value={cancelReason} onChange={(event) => setCancelReason(event.target.value)}>
               {CANCEL_REASONS.map((reason) => <option key={reason}>{reason}</option>)}
@@ -827,19 +847,19 @@ export function WishlistPage() {
         {wishlist.data?.items.length === 0 ? (
           <EmptyState title="Nothing saved yet" body="Use the save control on a product page to keep it here." action={<LinkButton to="/shop">Browse the shop</LinkButton>} />
         ) : null}
-        <ul className="divide-y divide-line border-y border-line">
+        <ul className="space-y-3 md:space-y-0 md:divide-y md:divide-line md:border-y md:border-line">
           {wishlist.data?.items.map((item) => (
-            <li key={item.productId} className="grid gap-4 py-5 sm:grid-cols-[80px_1fr_auto] sm:items-center">
-              <Link to={`/shop/${item.slug}`} className="h-20 w-20 overflow-hidden bg-sand/40">
+            <li key={item.productId} className="grid gap-3.5 md:gap-4 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-2xs md:rounded-none md:border-0 md:bg-transparent md:px-0 md:py-5 md:shadow-none sm:grid-cols-[80px_1fr_auto] sm:items-center">
+              <Link to={`/shop/${item.slug}`} className="h-20 w-20 overflow-hidden rounded-xl md:rounded-none bg-sand/40">
                 {item.imageUrl ? <img src={item.imageUrl} alt={item.imageAlt ?? item.name} className="h-full w-full object-cover" /> : null}
               </Link>
               <div>
-                <p className="text-[10.5px] uppercase tracking-[0.13em] text-muted">{item.sellerName}</p>
-                <Link to={`/shop/${item.slug}`} className="font-serif text-lg text-forest hover:text-terra">{item.name}</Link>
-                <p className="mt-1 text-xs">{formatINR(item.pricePaise)} · {item.available ? 'In stock' : 'Unavailable'}</p>
+                <p className="text-[10.5px] font-bold md:font-normal uppercase tracking-[0.13em] text-[#0F766E] md:text-muted">{item.sellerName}</p>
+                <Link to={`/shop/${item.slug}`} className="font-serif text-lg font-medium text-forest hover:text-terra">{item.name}</Link>
+                <p className="mt-1 text-xs font-semibold md:font-normal">{formatINR(item.pricePaise)} · <span className={item.available ? 'text-emerald-700' : 'text-rose-600'}>{item.available ? 'In stock' : 'Unavailable'}</span></p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" disabled={!item.available} onClick={() => void addToBag(item.productId)}>Add to bag</Button>
+                <Button size="sm" disabled={!item.available} onClick={() => void addToBag(item.productId)} className="rounded-xl md:rounded-sm !border-[#F59E0B] !bg-[#FF9F00] !text-slate-950 md:!border-forest md:!bg-forest md:!text-paper font-bold md:font-medium">Add to bag</Button>
                 <Button size="sm" variant="ghost" onClick={() => void remove(item.productId)}>Remove</Button>
               </div>
             </li>

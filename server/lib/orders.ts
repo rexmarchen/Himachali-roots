@@ -244,7 +244,9 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
   const hasDemoLine = lines.some((l) => l.is_demo === 1);
   const isDemoOrder =
     hasDemoLine ||
-    (input.isDemo !== undefined ? input.isDemo : env.simulatedCheckoutEnabled || env.allowDevPayments)
+    (input.isDemo !== undefined
+      ? input.isDemo
+      : !env.razorpay.configured && (env.simulatedCheckoutEnabled || env.allowDevPayments))
       ? 1
       : 0;
 
@@ -432,12 +434,15 @@ export async function initializeOrderPayment(db: Db, orderId: string, userId: st
     };
   }
 
-  const payment = queryOne<{ id: string; provider_order_id: string | null }>(
+  const payment = queryOne<{ id: string; provider_order_id: string | null; status: string }>(
     db,
-    "SELECT id, provider_order_id FROM payments WHERE order_id = ? AND status IN ('created','pending') ORDER BY created_at DESC LIMIT 1",
+    "SELECT id, provider_order_id, status FROM payments WHERE order_id = ? AND status IN ('created','pending','failed') ORDER BY created_at DESC LIMIT 1",
     orderId,
   );
   if (payment?.provider_order_id) {
+    if (payment.status === 'failed') {
+      execute(db, "UPDATE payments SET status = 'pending', failure_reason = NULL WHERE id = ?", payment.id);
+    }
     return {
       provider: 'razorpay',
       keyId: env.razorpay.keyId,
@@ -452,7 +457,7 @@ export async function initializeOrderPayment(db: Db, orderId: string, userId: st
   const rzp = await createRazorpayOrder(order.total_paise, order.order_number, { order_id: orderId });
   execute(
     db,
-    'UPDATE payments SET provider_order_id = ?, status = ?, provider = ? WHERE id = ?',
+    'UPDATE payments SET provider_order_id = ?, status = ?, provider = ?, failure_reason = NULL WHERE id = ?',
     rzp.id,
     'pending',
     'razorpay',
@@ -605,7 +610,7 @@ export function markOrderPaid(db: Db, params: PaidParams): { alreadyProcessed: b
       execute(
         db,
         `UPDATE payments SET status = 'paid', provider = ?, provider_payment_id = COALESCE(?, provider_payment_id),
-                method = ?, verified_at = ?, provider_order_id = COALESCE(?, provider_order_id)
+                method = ?, verified_at = ?, failure_reason = NULL, provider_order_id = COALESCE(?, provider_order_id)
           WHERE id = ?`,
         params.provider,
         params.providerPaymentId,
@@ -617,10 +622,20 @@ export function markOrderPaid(db: Db, params: PaidParams): { alreadyProcessed: b
     }
 
     const isDev = params.provider === 'dev-simulation';
+    const hasDemoItem = !isDev
+      ? Boolean(
+          queryOne<{ found: number }>(
+            db,
+            'SELECT 1 AS found FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ? AND p.is_demo = 1 LIMIT 1',
+            order.id,
+          ),
+        )
+      : true;
     execute(
       db,
-      `UPDATE orders SET status = 'paid', paid_at = ? ${isDev ? ', is_demo = 1' : ''} WHERE id = ?`,
+      'UPDATE orders SET status = \'paid\', paid_at = ?, is_demo = ? WHERE id = ?',
       new Date().toISOString(),
+      isDev || hasDemoItem ? 1 : 0,
       order.id,
     );
 
@@ -1628,6 +1643,33 @@ export async function decideRefund(
     );
     throw error;
   }
+  if (providerRefund.status === 'processed') {
+    finalizeRefund(db, refund.id, providerRefund.id, providerRefund.status, params.actor);
+    return {
+      status: 'completed',
+      message: 'Refund processed and confirmed by Razorpay.',
+    };
+  }
+  if (providerRefund.status === 'failed') {
+    execute(
+      db,
+      `UPDATE refunds SET status = 'failed', decided_by = ?, decided_at = ?, provider_refund_id = ?,
+              provider_status = ? WHERE id = ?`,
+      params.actor.id,
+      new Date().toISOString(),
+      providerRefund.id,
+      providerRefund.status,
+      refund.id,
+    );
+    audit(db, params.actor, 'refund.provider_failed', 'refund', refund.id, { status: refund.status }, {
+      status: 'failed',
+      providerRefundId: providerRefund.id,
+    });
+    return {
+      status: 'failed',
+      message: 'Razorpay rejected this refund request.',
+    };
+  }
   execute(
     db,
     `UPDATE refunds SET status = 'processing', decided_by = ?, decided_at = ?, provider_refund_id = ?,
@@ -1695,6 +1737,93 @@ export function markManualRefundCompleted(
 /* ------------------------------------------------------------------ */
 /* Account requests                                                    */
 /* ------------------------------------------------------------------ */
+
+export function cancelPendingOrder(
+  db: Db,
+  params: { orderId: string; userId: string; actor: SessionUser; reason: string },
+): { status: string; message: string } {
+  return tx(db, () => {
+    const order = queryOne<{ id: string; user_id: string; order_number: string; status: string; paid_at: string | null }>(
+      db,
+      'SELECT id, user_id, order_number, status, paid_at FROM orders WHERE id = ?',
+      params.orderId,
+    );
+    if (!order || order.user_id !== params.userId) throw notFound('Order not found.');
+    if (order.status !== 'pending_payment' || order.paid_at) {
+      throw conflict('Only orders awaiting payment can be cancelled directly.');
+    }
+    const nowIso = new Date().toISOString();
+    const claimed = execute(
+      db,
+      "UPDATE orders SET status = 'cancelled', cancelled_at = ? WHERE id = ? AND status = 'pending_payment' AND paid_at IS NULL",
+      nowIso,
+      order.id,
+    );
+    if (Number(claimed.changes) !== 1) {
+      throw conflict('Order state changed before cancellation completed.');
+    }
+
+    const items = queryAll<{ product_id: string; quantity: number }>(
+      db,
+      'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
+      order.id,
+    );
+    for (const item of items) {
+      execute(
+        db,
+        `UPDATE inventory SET reserved_quantity = MAX(0, reserved_quantity - ?), updated_at = ?
+          WHERE product_id = ?`,
+        item.quantity,
+        nowIso,
+        item.product_id,
+      );
+      execute(
+        db,
+        `INSERT INTO inventory_movements (id, product_id, change, reason, reference, note)
+         VALUES (?, ?, ?, 'release', ?, 'Customer cancelled unpaid checkout')`,
+        newId('mov_'),
+        item.product_id,
+        -item.quantity,
+        order.order_number,
+      );
+    }
+
+    execute(
+      db,
+      "UPDATE seller_orders SET status = 'cancelled', updated_at = ? WHERE order_id = ? AND status IN ('pending','confirmed','packed')",
+      nowIso,
+      order.id,
+    );
+    execute(
+      db,
+      "UPDATE payments SET status = 'cancelled' WHERE order_id = ? AND status IN ('created','pending','failed')",
+      order.id,
+    );
+    const redemption = queryOne<{ coupon_id: string }>(
+      db,
+      'SELECT coupon_id FROM coupon_redemptions WHERE order_id = ?',
+      order.id,
+    );
+    if (redemption) {
+      execute(db, 'DELETE FROM coupon_redemptions WHERE order_id = ?', order.id);
+      execute(db, 'UPDATE coupons SET used_count = MAX(0, used_count - 1) WHERE id = ?', redemption.coupon_id);
+    }
+    recordOrderEvent(db, {
+      orderId: order.id,
+      type: 'order.cancelled',
+      description: `Customer cancelled unpaid order. Reason: ${params.reason.trim().slice(0, 200)}`,
+      actor: params.actor,
+    });
+    audit(db, params.actor, 'order.pending_cancelled', 'order', order.id, { status: 'pending_payment' }, {
+      status: 'cancelled',
+      reason: params.reason.trim().slice(0, 200),
+    });
+    return {
+      status: 'completed',
+      message: 'Pending order cancelled and stock reservation released.',
+    };
+  });
+}
 
 export function requestCancellation(
   db: Db,

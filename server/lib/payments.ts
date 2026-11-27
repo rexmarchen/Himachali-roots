@@ -81,8 +81,8 @@ export async function createRazorpayOrder(
   } catch (err: unknown) {
     const errorObj = err as { statusCode?: number; error?: { description?: string }; message?: string };
     const description = errorObj.error?.description ?? errorObj.message ?? 'Razorpay order creation failed.';
-    const status = errorObj.statusCode === 401 ? 401 : 502;
-    throw new AppError(status, 'payment_provider_error', description);
+    // Never forward 401 to the browser as a session failure; upstream gateway errors map to 502.
+    throw new AppError(502, 'payment_provider_error', description);
   }
 }
 

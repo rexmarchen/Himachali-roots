@@ -51,15 +51,19 @@ function trustProxySetting(): boolean | number {
 }
 
 function resolveStorageDirectory(configured: string | undefined, subdir: string): string {
-  if (configured && configured.trim()) {
-    return path.resolve(configured.trim());
-  }
-  // When running with persistent /data volume (e.g. Railway, Render, Fly), place uploads and docs inside /data
-  const dbDir = path.dirname(databasePath);
-  if (dbDir === '/data' || (process.platform !== 'win32' && fs.existsSync('/data'))) {
-    return path.join('/data', subdir);
-  }
-  return path.resolve(process.cwd(), 'storage', subdir);
+  const base =
+    configured && configured.trim()
+      ? path.resolve(configured.trim())
+      : (() => {
+          // When running with persistent /data volume (e.g. Railway, Render, Fly), place uploads and docs inside /data
+          const dbDir = path.dirname(databasePath);
+          if (dbDir === '/data' || (process.platform !== 'win32' && fs.existsSync('/data'))) {
+            return path.join('/data', subdir);
+          }
+          return path.resolve(process.cwd(), 'storage', subdir);
+        })();
+  const workerId = nodeEnv === 'test' ? (process.env.VITEST_WORKER_ID ?? '').trim() : '';
+  return workerId ? path.join(base, `worker-${workerId}`) : base;
 }
 
 const uploadDir = resolveStorageDirectory(process.env.UPLOAD_DIR, 'uploads');

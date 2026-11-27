@@ -1,9 +1,10 @@
 import type { Express } from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { closeDb, type Db } from '../db.js';
+import { createApp } from '../app.js';
+import { closeDb, queryOne, type Db } from '../db.js';
 import { MfaService } from '../core/security/MfaService.js';
-import { TEST_PASSWORD, login, mutate, resetDb, seedFixtures, setupTestApp } from './helpers.js';
+import { IDS, TEST_PASSWORD, login, mutate, resetDb, seedFixtures, setupTestApp } from './helpers.js';
 
 let app: Express;
 let db: Db;
@@ -134,5 +135,67 @@ describe('TOTP two-step verification', () => {
       code: '000000',
     });
     expect(locked.status).toBe(401);
+  });
+
+  it('reports required: true for administrators when requireAdminMfa is enabled and unlocks admin routes on confirm', async () => {
+    const strictApp = createApp(db, { requireAdminMfa: true });
+
+    const customer = await login(strictApp, 'customer@test.local');
+    const customerMfa = await customer.get('/api/auth/mfa');
+    expect(customerMfa.status).toBe(200);
+    expect(customerMfa.body).toMatchObject({
+      enabled: false,
+      pending: false,
+      recommendedForRole: false,
+      required: false,
+      adminSessionActive: false,
+    });
+
+    const admin = await login(strictApp, 'admin@test.local');
+    const beforeMfa = await admin.get('/api/auth/mfa');
+    expect(beforeMfa.status).toBe(200);
+    expect(beforeMfa.body).toMatchObject({
+      enabled: false,
+      pending: false,
+      recommendedForRole: true,
+      required: true,
+      adminSessionActive: true,
+    });
+
+    const blockedCustomers = await admin.get('/api/admin/customers');
+    expect(blockedCustomers.status).toBe(403);
+    expect(blockedCustomers.body.error.code).toBe('mfa_enrollment_required');
+
+    await enrolMfa(admin);
+
+    const afterMfa = await admin.get('/api/auth/mfa');
+    expect(afterMfa.status).toBe(200);
+    expect(afterMfa.body).toMatchObject({
+      enabled: true,
+      pending: false,
+      recommendedForRole: true,
+      required: true,
+      adminSessionActive: true,
+    });
+
+    const verifiedRow = queryOne<{ count: number }>(
+      db,
+      'SELECT COUNT(*) AS count FROM sessions WHERE user_id = ? AND mfa_verified_at IS NOT NULL',
+      IDS.admin,
+    );
+    expect(verifiedRow?.count ?? 0).toBeGreaterThanOrEqual(1);
+
+    const overviewRes = await admin.get('/api/admin/overview');
+    expect(overviewRes.status).toBe(200);
+    const customersRes = await admin.get('/api/admin/customers');
+    expect(customersRes.status).toBe(200);
+    expect(Array.isArray(customersRes.body.customers)).toBe(true);
+    expect(customersRes.body.customers.length).toBeGreaterThan(0);
+
+    // Simulates an admin returning days later with standard session active but expired elevated admin session.
+    db.prepare("DELETE FROM sessions WHERE user_id = ? AND scope = 'admin'").run(IDS.admin);
+    const expiredAdminMfa = await admin.get('/api/auth/mfa');
+    expect(expiredAdminMfa.status).toBe(200);
+    expect(expiredAdminMfa.body.adminSessionActive).toBe(false);
   });
 });

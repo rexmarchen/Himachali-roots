@@ -13,7 +13,7 @@ import {
 } from '../lib/auth.js';
 import { badRequest, clientIp, conflict, notFound, parse, unauthorized } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
-import { getOrderView, requestCancellation, requestReturn, validateAddress } from '../lib/orders.js';
+import { cancelPendingOrder, getOrderView, requestCancellation, requestReturn, validateAddress } from '../lib/orders.js';
 import { notify, escapeHtml } from '../lib/email.js';
 import { audit } from '../lib/audit.js';
 
@@ -344,15 +344,39 @@ export function accountRouter(db: Db): Router {
 
   router.post('/orders/:orderNumber/cancel', async (req, res) => {
     const input = parse(
-      z.object({ sellerOrderId: z.string().min(3).max(80), reason: z.string().trim().min(10, 'Tell us briefly why.').max(1000) }),
+      z.object({
+        sellerOrderId: z.string().min(3).max(80).optional(),
+        reason: z.string().trim().min(10, 'Tell us briefly why.').max(1000),
+      }),
       req.body,
     );
-    const order = queryOne<{ id: string; user_id: string; email: string; order_number: string }>(
+    const order = queryOne<{ id: string; user_id: string; email: string; order_number: string; status: string; paid_at: string | null }>(
       db,
-      'SELECT id, user_id, email, order_number FROM orders WHERE order_number = ?',
+      'SELECT id, user_id, email, order_number, status, paid_at FROM orders WHERE order_number = ?',
       req.params.orderNumber,
     );
     if (!order || order.user_id !== req.user!.id) throw notFound('Order not found.');
+    if (order.status === 'pending_payment' && !order.paid_at) {
+      const result = cancelPendingOrder(db, {
+        orderId: order.id,
+        userId: req.user!.id,
+        actor: req.user!,
+        reason: input.reason,
+      });
+      await notify(db, {
+        userId: order.user_id,
+        email: order.email,
+        type: 'order_cancelled',
+        subject: `Order ${order.order_number} cancelled`,
+        body: `<p>Your unpaid order was cancelled and reserved stock has been released.</p><p><strong>Reason:</strong> ${escapeHtml(input.reason)}</p>`,
+        dedupeKey: `cust-cancel-pending:${order.id}`,
+      });
+      res.json(result);
+      return;
+    }
+    if (!input.sellerOrderId) {
+      throw badRequest('Select the seller shipment to cancel.', { sellerOrderId: 'Required for paid orders.' });
+    }
     const result = requestCancellation(db, {
       orderId: order.id,
       sellerOrderId: input.sellerOrderId,

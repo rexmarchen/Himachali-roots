@@ -2578,7 +2578,7 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
     );
     if (input.periodStart >= input.periodEnd) throw badRequest('The period start must be before the end.');
     const result = generateSettlement(db, req.user!, input.sellerId, input.periodStart, input.periodEnd);
-    res.status(201).json(result);
+    res.status(201).json({ id: result.batchId, ...result });
   });
 
   router.post('/settlements/:id/pay', stepUp, async (req, res) => {

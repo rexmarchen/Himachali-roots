@@ -52,6 +52,13 @@ function loadScript(): Promise<void> {
   return scriptPromise;
 }
 
+export interface RazorpayFailure {
+  code?: string;
+  description?: string;
+  reason?: string;
+  metadata?: { order_id?: string; payment_id?: string };
+}
+
 export async function openRazorpay(options: {
   keyId: string;
   providerOrderId: string;
@@ -60,6 +67,7 @@ export async function openRazorpay(options: {
   customer: { name?: string; email?: string; phone?: string };
   onSuccess: (response: RazorpaySuccess) => void;
   onDismiss: () => void;
+  onFailed?: (error: RazorpayFailure) => void;
 }): Promise<void> {
   await loadScript();
   if (!window.Razorpay) throw new Error('Razorpay Checkout did not initialise.');
@@ -80,6 +88,12 @@ export async function openRazorpay(options: {
     handler: options.onSuccess,
     modal: { ondismiss: options.onDismiss },
   });
+  if (options.onFailed && typeof instance.on === 'function') {
+    instance.on('payment.failed', (payload: unknown) => {
+      const err = (payload as { error?: RazorpayFailure } | null)?.error ?? {};
+      options.onFailed?.(err);
+    });
+  }
   instance.open();
 }
 

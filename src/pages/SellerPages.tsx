@@ -840,7 +840,7 @@ export function SellerApplicationPage() {
 
   if (application.isLoading) return <LoadingBlock rows={4} />;
   if (application.isError || !application.data) {
-    return <ErrorState onRetry={() => void application.refetch()} />;
+    return <ErrorState body={application.error ? errorMessage(application.error) : undefined} onRetry={() => void application.refetch()} />;
   }
   if (!application.data.exists || !application.data.seller) {
     return (
@@ -1255,7 +1255,7 @@ export function SellerInventoryPage() {
   });
 
   if (inventory.isLoading) return <LoadingBlock rows={4} />;
-  if (inventory.isError) return <ErrorState onRetry={() => void inventory.refetch()} />;
+  if (inventory.isError) return <ErrorState body={errorMessage(inventory.error)} onRetry={() => void inventory.refetch()} />;
 
   const items = inventory.data?.inventory ?? [];
   const low = items.filter((item) => item.available <= item.lowStockThreshold).length;
@@ -1340,7 +1340,7 @@ export function SellerNotificationsPage() {
   };
 
   if (notifications.isLoading) return <LoadingBlock rows={3} />;
-  if (notifications.isError) return <ErrorState onRetry={() => void notifications.refetch()} />;
+  if (notifications.isError) return <ErrorState body={errorMessage(notifications.error)} onRetry={() => void notifications.refetch()} />;
 
   const rows = notifications.data?.notifications ?? [];
   const unread = notifications.data?.unread ?? 0;
@@ -1443,7 +1443,7 @@ export function SellerDashboardPage() {
 
   if (dashboard.isLoading) return <LoadingBlock rows={5} />;
   if (dashboard.isError || !dashboard.data) {
-    return <ErrorState onRetry={() => void dashboard.refetch()} />;
+    return <ErrorState body={dashboard.error ? errorMessage(dashboard.error) : undefined} onRetry={() => void dashboard.refetch()} />;
   }
 
   const data = dashboard.data;
@@ -2319,8 +2319,8 @@ export function SellerProductsPage() {
       {/* Main Content Listings Area */}
       <div className="mt-4 md:mt-6">
         {products.isLoading ? <LoadingBlock rows={4} /> : null}
-        {products.isError ? <ErrorState onRetry={() => void products.refetch()} /> : null}
-        {!products.isLoading && displayedProducts.length === 0 ? (
+        {products.isError ? <ErrorState body={errorMessage(products.error)} onRetry={() => void products.refetch()} /> : null}
+        {!products.isLoading && !products.isError && products.data && displayedProducts.length === 0 ? (
           <EmptyState
             title="No products found"
             body={searchQuery ? 'No products match your search term. Try clearing the search or choosing a different filter.' : 'Create a draft, add at least one photograph and stock, then submit it for review.'}
@@ -2328,7 +2328,7 @@ export function SellerProductsPage() {
           />
         ) : null}
 
-        {displayedProducts.length > 0 ? (
+        {!products.isLoading && !products.isError && displayedProducts.length > 0 ? (
           <>
             {/* C. REDESIGNED MOBILE PRODUCT CARDS (md:hidden) */}
             <div className="space-y-3.5 md:hidden">
@@ -4768,9 +4768,9 @@ export function SellerOrdersPage() {
       </div>
       <div className="mt-6">
         {orders.isLoading ? <LoadingBlock rows={4} /> : null}
-        {orders.isError ? <ErrorState onRetry={() => void orders.refetch()} /> : null}
-        {orders.data?.orders.length === 0 ? <EmptyState title="No orders in this view" body="Paid orders from customers will appear here for confirmation." /> : null}
-        {orders.data?.orders.length ? (
+        {orders.isError ? <ErrorState body={errorMessage(orders.error)} onRetry={() => void orders.refetch()} /> : null}
+        {!orders.isLoading && !orders.isError && orders.data?.orders.length === 0 ? <EmptyState title="No orders in this view" body="Paid orders from customers will appear here for confirmation." /> : null}
+        {!orders.isLoading && !orders.isError && orders.data?.orders.length ? (
           <>
             {/* Mobile Card-Based Order View */}
             <div className="space-y-3 md:hidden">
@@ -5336,7 +5336,7 @@ function SellerPayoutSection() {
   };
 
   if (payout.isLoading) return <LoadingBlock rows={2} />;
-  if (payout.isError || !payout.data) return <ErrorState onRetry={() => void payout.refetch()} />;
+  if (payout.isError || !payout.data) return <ErrorState body={payout.error ? errorMessage(payout.error) : undefined} onRetry={() => void payout.refetch()} />;
   const data = payout.data;
   const details = data.details;
 
@@ -5465,7 +5465,7 @@ export function SellerEarningsPage() {
     queryFn: () => api<EarningsResponse>(`/seller/earnings?page=${page}`),
   });
   if (earnings.isLoading) return <LoadingBlock rows={4} />;
-  if (earnings.isError || !earnings.data) return <ErrorState onRetry={() => void earnings.refetch()} />;
+  if (earnings.isError || !earnings.data) return <ErrorState body={earnings.error ? errorMessage(earnings.error) : undefined} onRetry={() => void earnings.refetch()} />;
   const data = earnings.data;
 
   return (
@@ -5598,7 +5598,7 @@ interface RequestsResponse {
 export function SellerRequestsPage() {
   const requests = useQuery({ queryKey: ['seller-requests'], queryFn: () => api<RequestsResponse>('/seller/requests') });
   if (requests.isLoading) return <LoadingBlock rows={3} />;
-  if (requests.isError || !requests.data) return <ErrorState onRetry={() => void requests.refetch()} />;
+  if (requests.isError || !requests.data) return <ErrorState body={requests.error ? errorMessage(requests.error) : undefined} onRetry={() => void requests.refetch()} />;
   return (
     <div className="space-y-8">
       <PageHeader
@@ -5768,7 +5768,7 @@ export function SellerProfilePage() {
   };
 
   if (application.isLoading) return <LoadingBlock rows={3} />;
-  if (application.isError || !application.data) return <ErrorState onRetry={() => void application.refetch()} />;
+  if (application.isError || !application.data) return <ErrorState body={application.error ? errorMessage(application.error) : undefined} onRetry={() => void application.refetch()} />;
   if (!savedSeller) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16">

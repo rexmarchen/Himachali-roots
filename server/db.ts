@@ -362,7 +362,28 @@ export function openDatabase(filename: string): Db {
 
   migratePanHimalayanSeo(db);
   markMigration(db, 15);
+
+  migrateBrowserHandoffTokens(db);
+  markMigration(db, 16);
   return db;
+}
+
+/**
+ * Migration 16: Adds single-use, short-lived browser handoff tokens so native mobile
+ * sessions can transition securely into web Razorpay checkout or account management.
+ */
+function migrateBrowserHandoffTokens(db: Db): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS auth_handoff_tokens (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      target_path TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_handoff_expires ON auth_handoff_tokens(expires_at);
+  `);
 }
 
 /**

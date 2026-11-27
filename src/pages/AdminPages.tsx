@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ApplicationStatus, CampaignSummary, Category, OrderView, Paged, ProductStatus, RegionEntity } from '@shared/types';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
-import { api, errorMessage } from '@/lib/api';
+import { api, ApiError, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
 import { useToast } from '@/lib/toast';
 import { usePageMeta } from '@/lib/usePageMeta';
@@ -30,6 +30,154 @@ import {
   StatusBadge,
   Textarea,
 } from '@/components/ui';
+
+interface MfaStatusResponse {
+  enabled: boolean;
+  pending: boolean;
+  enrolledAt: string | null;
+  recommendedForRole: boolean;
+  required: boolean;
+  adminSessionActive?: boolean;
+}
+
+function AdminMfaGateCard({ pending }: { pending: boolean }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [enrolData, setEnrolData] = useState<{ secret: string; otpauthUri: string } | null>(null);
+  const [code, setCode] = useState('');
+  const [enrolling, setEnrolling] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const startEnrol = async () => {
+    setFormError(null);
+    setEnrolling(true);
+    try {
+      const res = await api<{ secret: string; otpauthUri: string; message: string }>('/auth/mfa/enrol', {
+        method: 'POST',
+      });
+      setEnrolData({ secret: res.secret, otpauthUri: res.otpauthUri });
+      toast.push(res.message);
+    } catch (error) {
+      setFormError(errorMessage(error));
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  const confirmEnrol = async (event: FormEvent) => {
+    event.preventDefault();
+    setFormError(null);
+    setConfirming(true);
+    try {
+      const res = await api<{ ok: true; enabled: true; message: string }>('/auth/mfa/confirm', {
+        method: 'POST',
+        body: { code: code.trim() },
+      });
+      toast.push(res.message);
+      setCode('');
+      await queryClient.invalidateQueries({ queryKey: ['mfa-status'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-overview'] });
+      await queryClient.invalidateQueries();
+    } catch (error) {
+      setFormError(errorMessage(error));
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const copyText = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.push(`${label} copied.`);
+    } catch {
+      toast.push(`Select and copy the ${label.toLowerCase()} manually.`, 'error');
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-2xl border border-line bg-surface p-6 sm:p-8">
+      <p className="eyebrow">Administrator security</p>
+      <h1 className="mt-2 font-serif text-3xl leading-tight text-forest">
+        Enable two-step verification to open the admin console
+      </h1>
+      <p className="mt-2 text-sm leading-relaxed text-muted">
+        Production administrator actions require a TOTP authenticator app because admins approve sellers, process
+        refunds, and manage settlements. Complete setup below to unlock all admin views right away.
+      </p>
+
+      {formError ? (
+        <div className="mt-4">
+          <Alert tone="error" title="Could not complete two-step setup">
+            {formError}
+          </Alert>
+        </div>
+      ) : null}
+
+      <div className="mt-6 space-y-5 border-t border-line pt-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-ink">1. Generate an authenticator setup key</p>
+            <p className="text-xs text-muted">
+              {pending && !enrolData
+                ? 'A previous setup key has not been confirmed yet. Generate a fresh key or enter a code from that authenticator.'
+                : 'Add this key in Google Authenticator, 1Password, Authy, or Apple Passwords.'}
+            </p>
+          </div>
+          <Button type="button" variant={enrolData ? 'secondary' : 'primary'} size="sm" loading={enrolling} onClick={() => void startEnrol()}>
+            {enrolData ? 'Generate new key' : 'Generate setup key'}
+          </Button>
+        </div>
+
+        {enrolData ? (
+          <div className="space-y-3 border border-line bg-paper p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Manual setup key</p>
+                <code className="mt-1 block break-all font-mono text-sm text-ink">{enrolData.secret}</code>
+              </div>
+              <Button type="button" size="sm" variant="secondary" onClick={() => void copyText(enrolData.secret, 'Setup key')}>
+                Copy key
+              </Button>
+            </div>
+            <details className="text-xs text-muted">
+              <summary className="cursor-pointer font-medium text-ink">Provisioning URI (otpauth://)</summary>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <code className="min-w-0 flex-1 break-all font-mono text-[11px] text-ink">{enrolData.otpauthUri}</code>
+                <Button type="button" size="sm" variant="ghost" onClick={() => void copyText(enrolData.otpauthUri, 'Provisioning URI')}>
+                  Copy URI
+                </Button>
+              </div>
+            </details>
+          </div>
+        ) : null}
+
+        <form onSubmit={(event) => void confirmEnrol(event)} className="space-y-4 border-t border-line pt-5">
+          <Field label="2. Enter the 6-digit code from your authenticator" required>
+            <Input
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              placeholder="123456"
+              autoComplete="one-time-code"
+              required
+            />
+          </Field>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" loading={confirming} disabled={!/^\d{6}$/.test(code.trim())}>
+              Verify and unlock admin console
+            </Button>
+            <LinkButton to="/account/profile" variant="secondary" size="sm">
+              Open Profile &amp; security
+            </LinkButton>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 /* ============================ ADMIN ICONOGRAPHY ============================ */
 
@@ -388,16 +536,28 @@ export function AdminLayout() {
   const palettePanelRef = useRef<HTMLDivElement>(null);
   const paletteReturnFocusRef = useRef<HTMLElement | null>(null);
 
+  const mfaStatus = useQuery({
+    queryKey: ['mfa-status'],
+    queryFn: () => api<MfaStatusResponse>('/auth/mfa'),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const adminSessionMissing = Boolean(mfaStatus.data && mfaStatus.data.adminSessionActive === false);
+  const mfaBlocked = Boolean(mfaStatus.data?.required && !mfaStatus.data.enabled);
   const overview = useQuery({
     queryKey: ['admin-overview'],
     queryFn: () => api<OverviewResponse>('/admin/overview'),
+    enabled: Boolean(mfaStatus.data) && !adminSessionMissing && !mfaBlocked,
     staleTime: 30_000,
+    retry: false,
   });
-  const mfaStatus = useQuery({
-    queryKey: ['mfa-status'],
-    queryFn: () => api<{ enabled: boolean }>('/auth/mfa'),
-    staleTime: 60_000,
-  });
+  const overviewBlockedByMfa =
+    !adminSessionMissing &&
+    (mfaBlocked ||
+      (overview.isError && overview.error instanceof ApiError && overview.error.code === 'mfa_enrollment_required'));
+  const overviewBlockedBy401 =
+    adminSessionMissing ||
+    (overview.isError && overview.error instanceof ApiError && overview.error.status === 401);
   const metrics = overview.data?.metrics;
 
   const currentNav = useMemo(() => {
@@ -949,21 +1109,61 @@ export function AdminLayout() {
 
         <main id="admin-main" tabIndex={-1} className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-[1440px]">
-            {mfaStatus.data && !mfaStatus.data.enabled ? (
-              <div className="mb-4">
-                <Alert tone="warning" title="Protect this administrator account">
-                  Two-step verification is not enabled. Administrators can verify payouts, issue refunds and change settlement
-                  state; enable a TOTP authenticator in{' '}
-                  <Link to="/account/profile" className="underline underline-offset-2">
-                    Profile &amp; security
-                  </Link>
-                  .
-                </Alert>
+            {mfaStatus.isLoading ? (
+              <LoadingBlock rows={4} />
+            ) : mfaStatus.isError ? (
+              mfaStatus.error instanceof ApiError && mfaStatus.error.status === 401 ? (
+                <div className="mx-auto max-w-xl py-8">
+                  <ErrorState
+                    title="Administrator session expired"
+                    body="Sign in again to open the marketplace admin console."
+                  />
+                  <div className="mt-4 flex justify-center">
+                    <LinkButton to={`/login?next=${encodeURIComponent(pathname || '/admin')}`}>
+                      Sign in again
+                    </LinkButton>
+                  </div>
+                </div>
+              ) : (
+                <ErrorState
+                  title="Could not verify administrator security"
+                  body={errorMessage(mfaStatus.error)}
+                  onRetry={() => void mfaStatus.refetch()}
+                />
+              )
+            ) : overviewBlockedBy401 ? (
+              <div className="mx-auto max-w-xl py-8">
+                <ErrorState
+                  title="Administrator session expired"
+                  body="Elevated admin sessions expire after 30 minutes of inactivity or 12 hours. Sign in again to open the admin console."
+                />
+                <div className="mt-4 flex justify-center">
+                  <LinkButton to={`/login?next=${encodeURIComponent(pathname || '/admin')}`}>
+                    Sign in again
+                  </LinkButton>
+                </div>
               </div>
-            ) : null}
-            <ErrorBoundary>
-              <Outlet />
-            </ErrorBoundary>
+            ) : overviewBlockedByMfa ? (
+              <AdminMfaGateCard pending={Boolean(mfaStatus.data?.pending)} />
+            ) : (
+              <>
+                {mfaStatus.data && mfaStatus.data.recommendedForRole && !mfaStatus.data.required && !mfaStatus.data.enabled ? (
+                  <div className="mb-4">
+                    <Alert tone="warning" title="Protect this administrator account">
+                      Two-step verification is not enabled. Administrators can verify payouts, issue refunds and change settlement
+                      state; enable a TOTP authenticator in{' '}
+                      <Link to="/account/profile" className="underline underline-offset-2">
+                        Profile &amp; security
+                      </Link>
+                      .
+                    </Alert>
+                  </div>
+                ) : null}
+                <ErrorBoundary>
+                  <Outlet />
+                </ErrorBoundary>
+              </>
+            )}
           </div>
         </main>
 
@@ -1060,7 +1260,7 @@ export function AdminOverviewPage() {
   });
 
   if (overview.isLoading) return <LoadingBlock rows={6} />;
-  if (overview.isError || !overview.data) return <ErrorState title="Overview could not load" onRetry={() => void overview.refetch()} />;
+  if (overview.isError || !overview.data) return <ErrorState title="Overview could not load" body={overview.error ? errorMessage(overview.error) : undefined} onRetry={() => void overview.refetch()} />;
 
   const data = overview.data;
   const m = data.metrics;
@@ -1598,8 +1798,8 @@ export function AdminSellersPage() {
 
       <div className="mt-5">
         {sellers.isLoading ? <LoadingBlock rows={4} /> : null}
-        {sellers.isError ? <ErrorState onRetry={() => void sellers.refetch()} /> : null}
-        {sellers.data && rows.length ? (
+        {sellers.isError ? <ErrorState body={errorMessage(sellers.error)} onRetry={() => void sellers.refetch()} /> : null}
+        {!sellers.isLoading && !sellers.isError && sellers.data && rows.length ? (
           <>
             {/* Mobile Cards View */}
             <div className="space-y-3.5 md:hidden">
@@ -1752,7 +1952,7 @@ export function AdminSellersPage() {
             </div>
           </>
         ) : null}
-        {sellers.data && !rows.length ? (
+        {!sellers.isLoading && !sellers.isError && sellers.data && !rows.length ? (
           <EmptyState
             eyebrow={queue === 'review' ? 'Queue clear' : undefined}
             title={queue === 'review' ? 'No applications need review' : 'No sellers match this view'}
@@ -2016,7 +2216,7 @@ export function AdminSellerDetailPage() {
   };
 
   if (detail.isLoading) return <LoadingBlock rows={4} />;
-  if (detail.isError || !detail.data) return <ErrorState title="Seller not found" onRetry={() => void detail.refetch()} />;
+  if (detail.isError || !detail.data) return <ErrorState title="Seller not found" body={detail.error ? errorMessage(detail.error) : undefined} onRetry={() => void detail.refetch()} />;
   const data = detail.data;
   const seller = data.seller;
   const metrics = data.metrics;
@@ -2850,8 +3050,8 @@ export function AdminProductsPage() {
 
       <div>
         {products.isLoading ? <LoadingBlock rows={4} /> : null}
-        {products.isError ? <ErrorState title="Listings could not load" onRetry={() => void products.refetch()} /> : null}
-        {products.data && rows.length ? (
+        {products.isError ? <ErrorState title="Listings could not load" body={errorMessage(products.error)} onRetry={() => void products.refetch()} /> : null}
+        {!products.isLoading && !products.isError && products.data && rows.length ? (
           <>
             {/* Mobile Product Moderation Cards */}
             <div className="space-y-3.5 md:hidden">
@@ -3052,7 +3252,7 @@ export function AdminProductsPage() {
             </div>
           </>
         ) : null}
-        {products.data && !rows.length ? (
+        {!products.isLoading && !products.isError && products.data && !rows.length ? (
           <EmptyState
             eyebrow={lowStock ? 'Stock healthy' : undefined}
             title={lowStock ? 'No low-stock listings' : 'No listings in this view'}
@@ -3664,7 +3864,7 @@ export function AdminProductDetailPage() {
 
   if (detail.isLoading) return <LoadingBlock rows={4} />;
   if (detail.isError || !detail.data || !product)
-    return <ErrorState title="Listing not found" onRetry={() => void detail.refetch()} />;
+    return <ErrorState title="Listing not found" body={detail.error ? errorMessage(detail.error) : undefined} onRetry={() => void detail.refetch()} />;
 
   const workflow = { status: String(product.status), changes_requested_at: product.changes_requested_at as string | null };
   const available = Number(product.stock ?? 0) - Number(product.reserved ?? 0);
@@ -4487,7 +4687,7 @@ export function AdminCategoriesPage() {
   }
 
   if (categories.isLoading) return <LoadingBlock rows={4} />;
-  if (categories.isError || !categories.data) return <ErrorState onRetry={() => void categories.refetch()} />;
+  if (categories.isError || !categories.data) return <ErrorState body={categories.error ? errorMessage(categories.error) : undefined} onRetry={() => void categories.refetch()} />;
 
   return (
     <div className="space-y-7">
@@ -4707,17 +4907,21 @@ function AdminRegionsManager() {
         </form>
         <div className="border border-line bg-surface p-5">
           <h3 className="font-serif text-lg">Active Regions ({regionsQuery.data?.regions.length ?? 0})</h3>
-          <ul className="mt-3 divide-y divide-line text-xs">
-            {(regionsQuery.data?.regions ?? []).map((r) => (
-              <li key={r.id} className="flex items-center justify-between py-2.5">
-                <div>
-                  <p className="font-semibold text-ink">{r.name}</p>
-                  <p className="text-muted">/regions/{r.slug} · {r.productCount ?? 0} real listings</p>
-                </div>
-                <Badge tone={r.isActive ? 'forest' : 'neutral'}>{r.isActive ? 'Active' : 'Hidden'}</Badge>
-              </li>
-            ))}
-          </ul>
+          {regionsQuery.isLoading ? <div className="mt-3"><LoadingBlock rows={2} /></div> : null}
+          {regionsQuery.isError ? <div className="mt-3"><ErrorState body={errorMessage(regionsQuery.error)} onRetry={() => void regionsQuery.refetch()} /></div> : null}
+          {!regionsQuery.isLoading && !regionsQuery.isError && regionsQuery.data ? (
+            <ul className="mt-3 divide-y divide-line text-xs">
+              {regionsQuery.data.regions.map((r) => (
+                <li key={r.id} className="flex items-center justify-between py-2.5">
+                  <div>
+                    <p className="font-semibold text-ink">{r.name}</p>
+                    <p className="text-muted">/regions/{r.slug} · {r.productCount ?? 0} real listings</p>
+                  </div>
+                  <Badge tone={r.isActive ? 'forest' : 'neutral'}>{r.isActive ? 'Active' : 'Hidden'}</Badge>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </div>
     </div>
@@ -4788,8 +4992,9 @@ export function AdminOrdersPage() {
       </div>
       <div className="mt-5">
         {orders.isLoading ? <LoadingBlock rows={4} /> : null}
-        {orders.isError ? <ErrorState onRetry={() => void orders.refetch()} /> : null}
-        {orders.data?.orders.length ? (
+        {orders.isError ? <ErrorState body={errorMessage(orders.error)} onRetry={() => void orders.refetch()} /> : null}
+        {!orders.isLoading && !orders.isError && orders.data ? (
+          orders.data.orders.length ? (
           <>
             {/* Mobile Order Cards */}
             <div className="space-y-3.5 md:hidden">
@@ -4910,8 +5115,8 @@ export function AdminOrdersPage() {
               </Button>
             }
           />
-        )}
-        {orders.data ? <Pagination page={page} totalPages={orders.data.totalPages} onChange={setPage} /> : null}
+        )) : null}
+        {!orders.isError && orders.data ? <Pagination page={page} totalPages={orders.data.totalPages} onChange={setPage} /> : null}
       </div>
     </div>
   );
@@ -5010,7 +5215,7 @@ export function AdminOrderDetailPage() {
   };
 
   if (detail.isLoading) return <LoadingBlock rows={4} />;
-  if (detail.isError || !detail.data) return <ErrorState title="Order not found" onRetry={() => void detail.refetch()} />;
+  if (detail.isError || !detail.data) return <ErrorState title="Order not found" body={detail.error ? errorMessage(detail.error) : undefined} onRetry={() => void detail.refetch()} />;
   const data = detail.data;
   const order = data.order;
 
@@ -5222,8 +5427,9 @@ export function AdminPaymentsPage() {
       </div>
       <div className="mt-5">
         {payments.isLoading ? <LoadingBlock rows={4} /> : null}
-        {payments.isError ? <ErrorState onRetry={() => void payments.refetch()} /> : null}
-        {payments.data?.payments.length ? (
+        {payments.isError ? <ErrorState body={errorMessage(payments.error)} onRetry={() => void payments.refetch()} /> : null}
+        {!payments.isLoading && !payments.isError && payments.data ? (
+          payments.data.payments.length ? (
           <div className="overflow-x-auto border border-line bg-surface">
             <table className="min-w-full text-left text-[12.5px]">
               <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -5243,8 +5449,8 @@ export function AdminPaymentsPage() {
               </tbody>
             </table>
           </div>
-        ) : <EmptyState title="No payment records in this view" body="Payments appear when checkout starts. No money has moved unless a provider reference is present and verified." />}
-        {payments.data ? <Pagination page={page} totalPages={payments.data.totalPages} onChange={setPage} /> : null}
+        ) : <EmptyState title="No payment records in this view" body="Payments appear when checkout starts. No money has moved unless a provider reference is present and verified." />) : null}
+        {!payments.isError && payments.data ? <Pagination page={page} totalPages={payments.data.totalPages} onChange={setPage} /> : null}
       </div>
     </div>
   );
@@ -5360,8 +5566,9 @@ export function AdminRefundsPage() {
       </div>
       <div className="mt-5">
         {refunds.isLoading ? <LoadingBlock rows={4} /> : null}
-        {refunds.isError ? <ErrorState onRetry={() => void refunds.refetch()} /> : null}
-        {refunds.data?.refunds.length ? (
+        {refunds.isError ? <ErrorState body={errorMessage(refunds.error)} onRetry={() => void refunds.refetch()} /> : null}
+        {!refunds.isLoading && !refunds.isError && refunds.data ? (
+          refunds.data.refunds.length ? (
           <div className="overflow-x-auto border border-line bg-surface">
             <table className="min-w-full text-left text-[12.5px]">
               <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -5388,7 +5595,7 @@ export function AdminRefundsPage() {
               </tbody>
             </table>
           </div>
-        ) : <EmptyState title="No refund requests" body="Refunds raised from a cancellation or return appear here for a recorded decision." />}
+        ) : <EmptyState title="No refund requests" body="Refunds raised from a cancellation or return appear here for a recorded decision." />) : null}
       </div>
 
       <Modal
@@ -5541,8 +5748,9 @@ export function AdminReturnsPage() {
       </div>
       <div className="mt-5">
         {returns.isLoading ? <LoadingBlock rows={4} /> : null}
-        {returns.isError ? <ErrorState onRetry={() => void returns.refetch()} /> : null}
-        {returns.data?.returns.length ? (
+        {returns.isError ? <ErrorState body={errorMessage(returns.error)} onRetry={() => void returns.refetch()} /> : null}
+        {!returns.isLoading && !returns.isError && returns.data ? (
+          returns.data.returns.length ? (
           <div className="space-y-3">
             {returns.data.returns.map((row) => (
               <section key={row.id} className="border border-line bg-surface p-5">
@@ -5568,7 +5776,7 @@ export function AdminReturnsPage() {
             title={status === 'requested' ? 'No returns waiting for review' : 'No return requests in this view'}
             body="Customers can request a return from a delivered order in their account."
           />
-        )}
+        )) : null}
       </div>
 
       <Modal
@@ -5656,8 +5864,9 @@ export function AdminCancellationsPage() {
       />
       <div className="mt-5">
         {cancellations.isLoading ? <LoadingBlock rows={4} /> : null}
-        {cancellations.isError ? <ErrorState onRetry={() => void cancellations.refetch()} /> : null}
-        {cancellations.data?.cancellations.length ? (
+        {cancellations.isError ? <ErrorState body={errorMessage(cancellations.error)} onRetry={() => void cancellations.refetch()} /> : null}
+        {!cancellations.isLoading && !cancellations.isError && cancellations.data ? (
+          cancellations.data.cancellations.length ? (
           <div className="overflow-x-auto border border-line bg-surface">
             <table className="min-w-full text-left text-[12.5px]">
               <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -5677,7 +5886,7 @@ export function AdminCancellationsPage() {
               </tbody>
             </table>
           </div>
-        ) : <EmptyState title="No cancellation requests" body="Customers can request cancellation while a shipment has not been dispatched." />}
+        ) : <EmptyState title="No cancellation requests" body="Customers can request cancellation while a shipment has not been dispatched." />) : null}
       </div>
 
       <Modal
@@ -5862,7 +6071,7 @@ export function AdminCommissionsPage() {
               </tbody>
             </table>
           </div>
-          {data.isError ? <div className="p-4"><ErrorState onRetry={() => void data.refetch()} /></div> : null}
+          {data.isError ? <div className="p-4"><ErrorState body={errorMessage(data.error)} onRetry={() => void data.refetch()} /></div> : null}
         </section>
       </div>
 
@@ -6033,8 +6242,9 @@ export function AdminSettlementsPage() {
         <section className="border border-line bg-surface">
           <div className="border-b border-line px-5 py-4"><h2 className="text-lg">Batches</h2></div>
           {settlements.isLoading ? <div className="p-5"><LoadingBlock rows={3} /></div> : null}
-          {settlements.isError ? <div className="p-5"><ErrorState onRetry={() => void settlements.refetch()} /></div> : null}
-          {settlements.data?.settlements.length ? (
+          {settlements.isError ? <div className="p-5"><ErrorState body={errorMessage(settlements.error)} onRetry={() => void settlements.refetch()} /></div> : null}
+          {!settlements.isLoading && !settlements.isError && settlements.data ? (
+            settlements.data.settlements.length ? (
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-[12.5px]">
                 <thead className="bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -6054,7 +6264,7 @@ export function AdminSettlementsPage() {
                 </tbody>
               </table>
             </div>
-          ) : <p className="px-5 py-8 text-center text-sm text-muted">No settlement batches yet.</p>}
+          ) : <p className="px-5 py-8 text-center text-sm text-muted">No settlement batches yet.</p>) : null}
         </section>
       </div>
 
@@ -6066,7 +6276,7 @@ export function AdminSettlementsPage() {
         footer={<Button variant="ghost" onClick={() => setSelectedId(null)}>Close</Button>}
       >
         {detail.isLoading ? <LoadingBlock rows={3} /> : null}
-        {detail.isError ? <ErrorState onRetry={() => void detail.refetch()} /> : null}
+        {detail.isError ? <ErrorState body={errorMessage(detail.error)} onRetry={() => void detail.refetch()} /> : null}
         {detail.data ? (
           <div className="space-y-5">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -6149,8 +6359,9 @@ export function AdminCustomersPage() {
       </div>
       <div className="mt-5">
         {customers.isLoading ? <LoadingBlock rows={4} /> : null}
-        {customers.isError ? <ErrorState onRetry={() => void customers.refetch()} /> : null}
-        {customers.data?.customers.length ? (
+        {customers.isError ? <ErrorState body={errorMessage(customers.error)} onRetry={() => void customers.refetch()} /> : null}
+        {!customers.isLoading && !customers.isError && customers.data ? (
+          customers.data.customers.length ? (
           <div className="overflow-x-auto border border-line bg-surface">
             <table className="min-w-full text-left text-[12.5px]">
               <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -6170,8 +6381,8 @@ export function AdminCustomersPage() {
               </tbody>
             </table>
           </div>
-        ) : <EmptyState title="No accounts in this view" />}
-        {customers.data ? <Pagination page={page} totalPages={customers.data.totalPages} onChange={setPage} /> : null}
+        ) : <EmptyState title="No accounts in this view" />) : null}
+        {!customers.isError && customers.data ? <Pagination page={page} totalPages={customers.data.totalPages} onChange={setPage} /> : null}
       </div>
     </div>
   );
@@ -6246,8 +6457,9 @@ export function AdminReviewsPage() {
       </div>
       <div className="mt-5 space-y-3">
         {reviews.isLoading ? <LoadingBlock rows={4} /> : null}
-        {reviews.isError ? <ErrorState onRetry={() => void reviews.refetch()} /> : null}
-        {reviews.data?.reviews.length ? reviews.data.reviews.map((review) => (
+        {reviews.isError ? <ErrorState body={errorMessage(reviews.error)} onRetry={() => void reviews.refetch()} /> : null}
+        {!reviews.isLoading && !reviews.isError && reviews.data ? (
+          reviews.data.reviews.length ? reviews.data.reviews.map((review) => (
           <section key={review.id} className="border border-line bg-surface p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -6267,7 +6479,7 @@ export function AdminReviewsPage() {
             title={status === 'published' ? 'No published reviews' : status === 'rejected' ? 'No removed reviews' : 'No reviews yet'}
             body="Reviews can only be written after an item has been delivered."
           />
-        )}
+        )) : null}
       </div>
 
       <ConfirmDialog
@@ -6371,7 +6583,7 @@ export function AdminContentPage() {
           <Button loading={saving} onClick={() => void save()}>Save {CONTENT_META[active].label.toLowerCase()}</Button>
         </div>
         {content.isLoading ? <div className="mt-4"><LoadingBlock rows={2} /></div> : null}
-        {content.isError ? <div className="mt-4"><ErrorState onRetry={() => void content.refetch()} /></div> : null}
+        {content.isError ? <div className="mt-4"><ErrorState body={errorMessage(content.error)} onRetry={() => void content.refetch()} /></div> : null}
         {content.data ? (
           <Textarea
             className="mt-4 font-mono text-[11.5px] leading-relaxed"
@@ -6482,8 +6694,9 @@ export function AdminCouponsPage() {
       />
       <div className="mt-5">
         {coupons.isLoading ? <LoadingBlock rows={4} /> : null}
-        {coupons.isError ? <ErrorState onRetry={() => void coupons.refetch()} /> : null}
-        {coupons.data?.coupons.length ? (
+        {coupons.isError ? <ErrorState body={errorMessage(coupons.error)} onRetry={() => void coupons.refetch()} /> : null}
+        {!coupons.isLoading && !coupons.isError && coupons.data ? (
+          coupons.data.coupons.length ? (
           <div className="overflow-x-auto border border-line bg-surface">
             <table className="min-w-full text-left text-[12.5px]">
               <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -6504,7 +6717,7 @@ export function AdminCouponsPage() {
               </tbody>
             </table>
           </div>
-        ) : <EmptyState title="No coupons" body="Create a coupon only when the margin supports it." action={<Button size="sm" onClick={() => setOpen(true)}>Create coupon</Button>} />}
+        ) : <EmptyState title="No coupons" body="Create a coupon only when the margin supports it." action={<Button size="sm" onClick={() => setOpen(true)}>Create coupon</Button>} />) : null}
       </div>
 
       <Modal
@@ -6881,8 +7094,9 @@ export function AdminCampaignsPage() {
 
       <div className="mt-5">
         {campaigns.isLoading ? <LoadingBlock rows={4} /> : null}
-        {campaigns.isError ? <ErrorState onRetry={() => void campaigns.refetch()} /> : null}
-        {campaigns.data?.campaigns.length ? (
+        {campaigns.isError ? <ErrorState body={errorMessage(campaigns.error)} onRetry={() => void campaigns.refetch()} /> : null}
+        {!campaigns.isLoading && !campaigns.isError && campaigns.data ? (
+          campaigns.data.campaigns.length ? (
           <div className="overflow-x-auto border border-line bg-surface">
             <table className="min-w-full text-left text-[12.5px]">
               <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -6976,7 +7190,7 @@ export function AdminCampaignsPage() {
             body="Create a campaign, then add the products that are genuinely part of the offer. Campaigns never change ordinary product prices."
             action={<Button size="sm" onClick={() => setCreateOpen(true)}>Create campaign</Button>}
           />
-        )}
+        )) : null}
       </div>
 
       <Modal
@@ -7124,9 +7338,10 @@ export function AdminCampaignsPage() {
             </div>
 
             {campaignProducts.isLoading ? <LoadingBlock rows={3} /> : null}
-            {campaignProducts.isError ? <ErrorState onRetry={() => void campaignProducts.refetch()} /> : null}
+            {campaignProducts.isError ? <ErrorState body={errorMessage(campaignProducts.error)} onRetry={() => void campaignProducts.refetch()} /> : null}
 
-            {campaignProducts.data?.products.length ? (
+            {!campaignProducts.isLoading && !campaignProducts.isError && campaignProducts.data ? (
+              campaignProducts.data.products.length ? (
               <div className="overflow-x-auto border border-line">
                 <table className="min-w-full text-left text-[12px]">
                   <thead className="border-b border-line bg-paper text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -7181,7 +7396,7 @@ export function AdminCampaignsPage() {
                 title="No eligible products yet"
                 body="Search the approved catalogue below and set a promotional price for each product that belongs in this offer."
               />
-            )}
+            )) : null}
 
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Add an eligible product</p>
@@ -7195,8 +7410,9 @@ export function AdminCampaignsPage() {
               </div>
               <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
                 {candidates.isLoading ? <LoadingBlock rows={3} /> : null}
-                {candidates.isError ? <ErrorState onRetry={() => void candidates.refetch()} /> : null}
-                {candidates.data?.candidates.length ? (
+                {candidates.isError ? <ErrorState body={errorMessage(candidates.error)} onRetry={() => void candidates.refetch()} /> : null}
+                {!candidates.isLoading && !candidates.isError && candidates.data ? (
+                  candidates.data.candidates.length ? (
                   candidates.data.candidates.map((candidate) => (
                     <div
                       key={candidate.id}
@@ -7224,11 +7440,11 @@ export function AdminCampaignsPage() {
                       </div>
                     </div>
                   ))
-                ) : !candidates.isLoading ? (
+                ) : (
                   <p className="border border-dashed border-sand bg-surface/60 px-3 py-6 text-center text-xs text-muted">
                     No matching approved products are left to add.
                   </p>
-                ) : null}
+                )) : null}
               </div>
             </div>
           </div>
@@ -7313,8 +7529,9 @@ export function AdminSupportPage() {
       </div>
       <div className="mt-5 space-y-3">
         {tickets.isLoading ? <LoadingBlock rows={4} /> : null}
-        {tickets.isError ? <ErrorState onRetry={() => void tickets.refetch()} /> : null}
-        {tickets.data?.tickets.length ? tickets.data.tickets.map((ticket) => {
+        {tickets.isError ? <ErrorState body={errorMessage(tickets.error)} onRetry={() => void tickets.refetch()} /> : null}
+        {!tickets.isLoading && !tickets.isError && tickets.data ? (
+          tickets.data.tickets.length ? tickets.data.tickets.map((ticket) => {
           const replySubject = encodeURIComponent(`Re: ${ticket.subject}${ticket.order_number ? ` (${ticket.order_number})` : ''}`);
           return (
             <section key={ticket.id} className="border border-line bg-surface p-5">
@@ -7368,7 +7585,7 @@ export function AdminSupportPage() {
             title={status === 'open' ? 'No open tickets' : 'No support tickets in this view'}
             body="Messages from the contact form appear here."
           />
-        )}
+        )) : null}
       </div>
     </div>
   );
@@ -7411,8 +7628,9 @@ export function AdminAuditPage() {
       </div>
       <div className="mt-5">
         {logs.isLoading ? <LoadingBlock rows={4} /> : null}
-        {logs.isError ? <ErrorState onRetry={() => void logs.refetch()} /> : null}
-        {logs.data?.logs.length ? (
+        {logs.isError ? <ErrorState body={errorMessage(logs.error)} onRetry={() => void logs.refetch()} /> : null}
+        {!logs.isLoading && !logs.isError && logs.data ? (
+          logs.data.logs.length ? (
           <div className="space-y-2">
             {logs.data.logs.map((log) => (
               <details key={log.id} className="border border-line bg-surface">
@@ -7430,8 +7648,8 @@ export function AdminAuditPage() {
               </details>
             ))}
           </div>
-        ) : <EmptyState title="No audit entries in this view" />}
-        {logs.data ? <Pagination page={page} totalPages={logs.data.totalPages} onChange={setPage} /> : null}
+        ) : <EmptyState title="No audit entries in this view" />) : null}
+        {!logs.isError && logs.data ? <Pagination page={page} totalPages={logs.data.totalPages} onChange={setPage} /> : null}
       </div>
     </div>
   );
@@ -7458,7 +7676,7 @@ interface SettingsResponse {
 export function AdminSettingsPage() {
   const settings = useQuery({ queryKey: ['admin-settings'], queryFn: () => api<SettingsResponse>('/admin/settings') });
   if (settings.isLoading) return <LoadingBlock rows={4} />;
-  if (settings.isError || !settings.data) return <ErrorState onRetry={() => void settings.refetch()} />;
+  if (settings.isError || !settings.data) return <ErrorState body={settings.error ? errorMessage(settings.error) : undefined} onRetry={() => void settings.refetch()} />;
   const data = settings.data;
   const payments = data.integrations.payments;
 

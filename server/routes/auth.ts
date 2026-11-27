@@ -13,6 +13,7 @@ import {
   getSessionUser,
   hasUsablePassword,
   hashPassword,
+  loadSessionUser,
   NO_PASSWORD_MARKER,
   normalizeEmail,
   requireAuth,
@@ -31,6 +32,7 @@ import { parse, unauthorized, badRequest, conflict, forbidden, AppError } from '
 import { newId, randomToken } from '../lib/ids.js';
 import { ensureCart, CART_COOKIE, setCartCookie } from '../lib/cart.js';
 import { escapeHtml, notify } from '../lib/email.js';
+import { isSafeInternalPath } from '../../shared/urls.js';
 
 const emailSchema = z.string().trim().toLowerCase().email('Enter a valid email address.').max(254);
 const passwordSchema = z
@@ -115,6 +117,8 @@ interface LinkChallengeRow {
 export interface AuthRouterDeps {
   /** Injected so the verification boundary can be tested without network calls. */
   verifyGoogleIdToken: (credential: string) => Promise<GoogleProfile>;
+  /** Mirrors the application setting so /api/auth/mfa reflects mandatory admin 2FA policy. */
+  requireAdminMfa: boolean;
 }
 
 function findUserByEmail(db: Db, email: string): AuthUserRow | undefined {
@@ -298,6 +302,7 @@ async function issueVerification(
 export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
   const router = Router();
   const verifyGoogle = deps.verifyGoogleIdToken ?? verifyGoogleIdTokenWithGoogle;
+  const requireAdminMfa = deps.requireAdminMfa ?? env.requireAdminMfa;
 
   router.post('/register', authLimiter(20), async (req, res) => {
     const input = parse(registerSchema, req.body);
@@ -513,12 +518,15 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
       req.user!.id,
     );
     const enabled = mfaEnabled(user ?? {});
+    const isAdmin = req.user!.roles.includes('admin');
+    const adminSessionActive = isAdmin ? Boolean(loadSessionUser(db, adminSessionToken(req), 'admin')) : false;
     res.json({
       enabled,
       pending: Boolean(user?.mfa_secret && !user.mfa_enabled_at),
       enrolledAt: user?.mfa_enabled_at ?? null,
-      recommendedForRole: req.user!.roles.includes('admin'),
-      required: enabled,
+      recommendedForRole: isAdmin,
+      required: requireAdminMfa && isAdmin,
+      adminSessionActive,
     });
   });
 
@@ -568,13 +576,18 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
     if (!MfaService.verifyToken(user.mfa_secret, input.code)) {
       throw badRequest('That code is not correct. Check the authenticator clock and try again.');
     }
+    const now = new Date().toISOString();
     execute(
       db,
       'UPDATE users SET mfa_enabled_at = ?, updated_at = ? WHERE id = ?',
-      new Date().toISOString(),
-      new Date().toISOString(),
+      now,
+      now,
       req.user!.id,
     );
+    const stdToken = sessionToken(req);
+    const admToken = adminSessionToken(req);
+    if (stdToken) execute(db, 'UPDATE sessions SET mfa_verified_at = ? WHERE token_hash = ?', now, sha256(stdToken));
+    if (admToken) execute(db, 'UPDATE sessions SET mfa_verified_at = ? WHERE token_hash = ?', now, sha256(admToken));
     audit(db, req.user!, 'auth.mfa.enabled', 'user', req.user!.id);
     res.json({ ok: true, enabled: true, message: 'Two-step verification is now required at sign-in.' });
   });
@@ -1223,6 +1236,93 @@ export function authRouter(db: Db, deps: Partial<AuthRouterDeps> = {}): Router {
       hasPendingToken: Boolean(row),
       tokenPreview: row ? `${crypto.createHash('sha1').update(row.token_hash).digest('hex').slice(0, 8)}…` : null,
     });
+  });
+
+  // Single-use, short-lived session handoff so native mobile sessions can open
+  // authenticated web Razorpay checkout or account pages in an in-app browser.
+  router.post('/browser-handoff', authLimiter(30), requireAuth, (req, res) => {
+    const input = parse(
+      z.object({
+        targetPath: z.string().trim().min(1).max(300).default('/checkout'),
+      }),
+      req.body ?? {},
+    );
+    if (!isSafeInternalPath(input.targetPath)) {
+      throw badRequest('Invalid redirect target.');
+    }
+    const token = randomToken(32);
+    const nowIso = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 120_000).toISOString();
+    execute(db, 'DELETE FROM auth_handoff_tokens WHERE expires_at <= ? OR used_at IS NOT NULL', nowIso);
+    execute(
+      db,
+      `INSERT INTO auth_handoff_tokens (token_hash, user_id, target_path, expires_at)
+       VALUES (?, ?, ?, ?)`,
+      sha256(token),
+      req.user!.id,
+      input.targetPath,
+      expiresAt,
+    );
+    const handoffPath = `/api/auth/browser-handoff?token=${encodeURIComponent(token)}`;
+    res.status(201).json({
+      handoffPath,
+      handoffUrl: `${env.appUrl}${handoffPath}`,
+      expiresAt,
+    });
+  });
+
+  router.get('/browser-handoff', authLimiter(30), (req, res) => {
+    const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
+    const nowIso = new Date().toISOString();
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Cache-Control', 'no-store');
+
+    const fail = (fallbackTarget = '/login') => {
+      if (req.accepts(['html', 'json']) === 'json') {
+        throw unauthorized('That browser handoff link has expired or already been used.');
+      }
+      res.redirect(302, fallbackTarget);
+    };
+
+    if (token.length < 20 || token.length > 200) {
+      fail();
+      return;
+    }
+
+    const tokenHash = sha256(token);
+    const consumed = tx(db, () => {
+      const row = queryOne<{ user_id: string; target_path: string; expires_at: string; used_at: string | null }>(
+        db,
+        `SELECT user_id, target_path, expires_at, used_at
+           FROM auth_handoff_tokens
+          WHERE token_hash = ?`,
+        tokenHash,
+      );
+      if (!row || row.used_at || row.expires_at <= nowIso) return null;
+      const upd = execute(
+        db,
+        'UPDATE auth_handoff_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL',
+        nowIso,
+        tokenHash,
+      );
+      if (Number(upd.changes) !== 1) return null;
+      return row;
+    });
+
+    if (!consumed) {
+      fail();
+      return;
+    }
+
+    const user = queryOne<{ is_disabled: number }>(db, 'SELECT is_disabled FROM users WHERE id = ?', consumed.user_id);
+    if (!user || user.is_disabled) {
+      fail();
+      return;
+    }
+
+    signInResponse(db, req, res, consumed.user_id);
+    const target = isSafeInternalPath(consumed.target_path) ? consumed.target_path : '/checkout';
+    res.redirect(302, target);
   });
 
   return router;

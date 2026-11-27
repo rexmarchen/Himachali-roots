@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Address, OrderView } from '@shared/types';
@@ -65,6 +65,8 @@ export function CheckoutPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const resumeOrderNumber = searchParams.get('resume');
+  const initialCouponCode = (searchParams.get('coupon') ?? '').trim().toUpperCase();
+  const autoAppliedCoupon = useRef(false);
 
   const cartQuery = useCartQuery();
   const addressesQuery = useQuery({
@@ -116,6 +118,20 @@ export function CheckoutPage() {
   const idempotencyKey = useRef(crypto.randomUUID());
 
   const cart = cartQuery.data?.cart;
+
+  useEffect(() => {
+    if (autoAppliedCoupon.current || !initialCouponCode || !cart || cart.lines.length === 0) return;
+    autoAppliedCoupon.current = true;
+    setCouponInput(initialCouponCode);
+    void api<AppliedCoupon>('/coupons/validate', { method: 'POST', body: { code: initialCouponCode } })
+      .then((res) => {
+        setCoupon(res);
+        setCouponInput(res.code);
+      })
+      .catch(() => {
+        setCouponError(`Coupon ${initialCouponCode} could not be applied automatically.`);
+      });
+  }, [initialCouponCode, cart]);
   const addressList = useMemo(() => addressesQuery.data?.addresses ?? [], [addressesQuery.data]);
   const preferredAddressId = addressList.find((address) => address.isDefault)?.id ?? addressList[0]?.id;
   const selectedAddress = addressList.find((address) => address.id === selectedAddressId);
@@ -644,18 +660,18 @@ export function CheckoutPage() {
             type="button"
             onClick={() => setMobileSummaryOpen((open) => !open)}
             aria-expanded={mobileSummaryOpen}
-            className="mt-5 flex min-h-12 w-full items-center justify-between gap-3 border border-line bg-surface px-4 py-2.5 text-left lg:hidden"
+            className="mt-4 flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-left shadow-2xs lg:hidden"
           >
-            <span className="text-xs font-medium text-forest">
+            <span className="text-xs font-semibold text-[#0F766E]">
               {mobileSummaryOpen
                 ? 'Hide order summary & promo code'
-                : `Order summary · ${cart.itemCount} item${cart.itemCount === 1 ? '' : 's'} · Promo code`}
+                : `Order summary · ${cart.itemCount} item${cart.itemCount === 1 ? '' : 's'} · Coupon`}
             </span>
-            <span className="flex items-center gap-2 font-serif text-lg text-forest tabular-nums">
+            <span className="flex items-center gap-2 font-serif text-lg font-bold text-slate-950 tabular-nums">
               {formatINR(totals.totalPaise)}
               <svg
                 viewBox="0 0 20 20"
-                className={`h-4 w-4 text-muted transition-transform ${mobileSummaryOpen ? 'rotate-180' : ''}`}
+                className={`h-4 w-4 text-[#0F766E] transition-transform ${mobileSummaryOpen ? 'rotate-180' : ''}`}
                 fill="none"
                 stroke="currentColor"
                 aria-hidden
@@ -748,23 +764,23 @@ export function CheckoutPage() {
         <div
           className={
             keyboardOpen
-              ? 'mx-auto w-full max-w-[1200px] border-t border-line bg-paper px-4 pb-8 pt-3 sm:px-6 lg:hidden'
-              : 'fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/97 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:hidden'
+              ? 'mx-auto w-full max-w-[1200px] border-t border-slate-200 bg-white px-4 pb-8 pt-3 sm:px-6 lg:hidden'
+              : 'fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/98 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-6px_24px_rgba(15,23,42,0.12)] backdrop-blur lg:hidden'
           }
         >
           <div className="mx-auto flex max-w-[1200px] items-center gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-[9.5px] uppercase tracking-[0.14em] text-muted">Total payable</p>
-              <p className="font-serif text-[21px] leading-tight text-forest">{formatINR(totals.totalPaise)}</p>
+              <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-emerald-700">Total payable</p>
+              <p className="font-serif text-[21px] font-bold leading-tight text-slate-950 tabular-nums">{formatINR(totals.totalPaise)}</p>
             </div>
             {stage === 1 ? (
               <CheckoutAction
                 type="button"
                 onClick={() => void continueFromDelivery()}
                 loading={savingAddress || addressesQuery.isLoading}
-                className="shrink-0"
+                className="shrink-0 !rounded-xl !border-[#F59E0B] !bg-gradient-to-r !from-[#FF9F00] !to-[#F59E0B] !text-slate-950 font-bold shadow-xs"
               >
-                Continue
+                Continue →
               </CheckoutAction>
             ) : stage === 2 ? (
               <CheckoutAction
@@ -772,9 +788,9 @@ export function CheckoutPage() {
                 onClick={() => void continueToReview()}
                 loading={couponChecking}
                 disabled={!effectiveMethod || unavailable}
-                className="shrink-0"
+                className="shrink-0 !rounded-xl !border-[#F59E0B] !bg-gradient-to-r !from-[#FF9F00] !to-[#F59E0B] !text-slate-950 font-bold shadow-xs"
               >
-                Review order
+                Review order →
               </CheckoutAction>
             ) : (
               <CheckoutAction
@@ -782,7 +798,7 @@ export function CheckoutPage() {
                 onClick={() => void placeOrder()}
                 loading={submitting}
                 disabled={unavailable}
-                className="shrink-0"
+                className="shrink-0 !rounded-xl !border-[#0F766E] !bg-[#0F766E] !text-white font-bold shadow-xs"
               >
                 Place order
               </CheckoutAction>

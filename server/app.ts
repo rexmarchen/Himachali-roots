@@ -159,7 +159,7 @@ export function createApp(db: Db, deps: AppDeps = {}): express.Express {
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
-  app.use('/api/auth', authRouter(db, deps));
+  app.use('/api/auth', authRouter(db, { ...deps, requireAdminMfa }));
   app.use('/api', publicRouter(db));
   app.use('/api', shopRouter(db, deps));
   app.use('/api/account', accountRouter(db));

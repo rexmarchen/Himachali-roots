@@ -98,6 +98,21 @@ export function CheckoutPaymentPanel({
             'The Razorpay window closed before payment completed. Your order is still saved. You can try again while the reservation is active.',
           );
         },
+        onFailed: (failure) => {
+          setWaiting(false);
+          setBusy(null);
+          const desc = failure.description || failure.reason || 'Payment was declined by the bank or UPI app.';
+          setError(`${desc} You can retry with UPI, card, or netbanking while your stock reservation is active.`);
+          void api('/payments/failed', {
+            method: 'POST',
+            body: {
+              razorpayOrderId: failure.metadata?.order_id || razorpay.providerOrderId,
+              razorpayPaymentId: failure.metadata?.payment_id,
+              reason: desc,
+              code: failure.code,
+            },
+          }).catch(() => undefined);
+        },
       });
       setBusy(null);
       setWaiting(true);

@@ -30,9 +30,9 @@ function AuthShell({
 }) {
   return (
     <div className="mx-auto grid min-h-[70vh] max-w-7xl lg:grid-cols-[0.95fr_1.05fr]">
-      <div className="flex items-center px-4 py-12 sm:px-8 lg:px-14 lg:py-20">
-        <div className="w-full max-w-md">
-          <p className="eyebrow">{eyebrow}</p>
+      <div className="flex items-center px-3.5 py-6 sm:px-8 sm:py-12 lg:px-14 lg:py-20">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+          <p className="eyebrow text-[#0F766E] md:text-muted">{eyebrow}</p>
           <h1 className="mt-3 text-3xl leading-tight sm:text-[2.4rem]">{title}</h1>
           <p className="mt-3 text-sm leading-relaxed text-muted">{lede}</p>
           <div className="mt-8">{children}</div>
@@ -278,6 +278,8 @@ export function LoginPage() {
 
   const completeSignIn = async (message = 'Signed in.') => {
     await queryClient.invalidateQueries({ queryKey: ['session'] });
+    await queryClient.invalidateQueries({ queryKey: ['mfa-status'] });
+    await queryClient.invalidateQueries({ queryKey: ['admin-overview'] });
     await queryClient.invalidateQueries({ queryKey: ['cart'] });
     toast.push(message);
     navigate(next, { replace: true });

@@ -6,6 +6,7 @@ import { execute, queryOne, type Db } from '../db.js';
 import { requireAuth } from '../lib/auth.js';
 import { addToCart, CART_COOKIE, ensureCart, getCartView, removeCartItem, setCartCookie, updateCartItem } from '../lib/cart.js';
 import { AppError, badRequest, clientIp, conflict, notFound, parse, unauthorized } from '../lib/http.js';
+import { newId } from '../lib/ids.js';
 import { createOrder, getOrderView, initializeOrderPayment, markOrderPaid, notifyOrderPaid, recordOrderEvent } from '../lib/orders.js';
 import { evaluateCoupon } from '../lib/pricing.js';
 import { fetchRazorpayPayment, type RazorpayPayment, verifyCheckoutSignature, verifyShippingWebhook, verifyWebhookSignature } from '../lib/payments.js';
@@ -125,7 +126,7 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
       couponCode: input.couponCode || undefined,
       customerNote: input.customerNote,
       idempotencyKey: input.idempotencyKey,
-      isDemo: env.simulatedCheckoutEnabled || env.allowDevPayments ? true : undefined,
+      isDemo: !env.razorpay.configured && (env.simulatedCheckoutEnabled || env.allowDevPayments) ? true : undefined,
     });
 
     let payment;
@@ -190,9 +191,9 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
     if (!verifyCheckoutSignature(input.razorpayOrderId, input.razorpayPaymentId, input.razorpaySignature)) {
       throw badRequest('Payment signature verification failed. No payment was recorded.');
     }
-    const payment = queryOne<{ order_id: string; amount_paise: number; status: string; provider: string }>(
+    const payment = queryOne<{ order_id: string; amount_paise: number; status: string; provider: string; provider_payment_id: string | null }>(
       db,
-      'SELECT order_id, amount_paise, status, provider FROM payments WHERE provider_order_id = ?',
+      'SELECT order_id, amount_paise, status, provider, provider_payment_id FROM payments WHERE provider_order_id = ?',
       input.razorpayOrderId,
     );
     if (!payment) throw notFound('Payment record not found for this order.');
@@ -206,7 +207,10 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
       res.json({ order: getOrderView(db, payment.order_id), alreadyProcessed: true });
       return;
     }
-    if (payment.status === 'failed' || payment.status === 'cancelled') {
+    if (payment.status === 'cancelled' || ['cancelled', 'refunded', 'partially_refunded'].includes(order.status)) {
+      throw conflict('That payment attempt was cancelled and can no longer be completed.');
+    }
+    if (payment.status === 'failed' && payment.provider_payment_id === input.razorpayPaymentId) {
       throw conflict('That payment attempt did not succeed. Start a new payment.');
     }
 
@@ -289,6 +293,45 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
     });
     await notifyOrderPaid(db, payment.order_id);
     res.json({ order: getOrderView(db, payment.order_id), alreadyProcessed: false });
+  });
+
+  // Records client-reported Razorpay failure metadata for diagnostics without blocking in-modal retries.
+  router.post('/payments/failed', requireAuth, (req, res) => {
+    const input = parse(
+      z.object({
+        razorpayOrderId: z.string().min(4).max(100),
+        razorpayPaymentId: z.string().min(4).max(100).optional(),
+        reason: z.string().trim().max(300).optional(),
+        code: z.string().trim().max(80).optional(),
+      }),
+      req.body,
+    );
+    const payment = queryOne<{ id: string; order_id: string; status: string }>(
+      db,
+      'SELECT id, order_id, status FROM payments WHERE provider_order_id = ?',
+      input.razorpayOrderId,
+    );
+    if (!payment) throw notFound('Payment record not found.');
+    const order = queryOne<{ user_id: string }>(db, 'SELECT user_id FROM orders WHERE id = ?', payment.order_id);
+    if (!order || order.user_id !== req.user!.id) throw unauthorized('This payment does not belong to your account.');
+    if (payment.status !== 'paid') {
+      execute(
+        db,
+        'UPDATE payments SET failure_reason = ? WHERE id = ?',
+        (input.reason ?? input.code ?? 'Checkout payment attempt failed').slice(0, 300),
+        payment.id,
+      );
+      execute(
+        db,
+        `INSERT OR IGNORE INTO payment_events (id, provider, provider_event_id, order_id, type, summary)
+         VALUES (?, 'razorpay', ?, ?, 'payment.client_failed', ?)`,
+        newId('pev_'),
+        `client_fail:${input.razorpayPaymentId ?? input.razorpayOrderId}:${Date.now()}`.slice(0, 120),
+        payment.order_id,
+        JSON.stringify({ paymentId: input.razorpayPaymentId ?? null, code: input.code ?? null, reason: input.reason ?? null }),
+      );
+    }
+    res.json({ ok: true });
   });
 
   // Development-only simulation. Explicitly gated; never available in production.
