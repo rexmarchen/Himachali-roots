@@ -189,16 +189,16 @@ export function BlogIndexPage() {
         </p>
 
         {/* Categories & Search Filter */}
-        <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+          <div className="no-scrollbar -mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold md:font-medium transition-all ${
                   selectedCategory === cat
-                    ? 'bg-forest text-paper shadow-xs'
-                    : 'bg-surface border border-line text-ink/70 hover:bg-paper hover:text-ink'
+                    ? 'bg-[#0F766E] md:bg-forest text-white md:text-paper shadow-xs'
+                    : 'bg-white md:bg-surface border border-slate-200 md:border-line text-ink/75 hover:bg-paper hover:text-ink'
                 }`}
               >
                 {cat}

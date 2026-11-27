@@ -172,8 +172,8 @@ export function OrderSummary({
       </dl>
 
       {totals.savingsPaise > 0 ? (
-        <p className="border-t border-line px-5 py-3 text-[11px] text-danger">
-          You save {formatINR(totals.savingsPaise)} on this order.
+        <p className="border-t border-emerald-200 bg-emerald-50 px-5 py-3 text-[11.5px] font-semibold text-emerald-800">
+          🎉 You save {formatINR(totals.savingsPaise)} on this order.
         </p>
       ) : null}
 

@@ -459,6 +459,7 @@ export function MakerDetailPage() {
 
 export function AboutPage() {
   const content = useSiteContent();
+  const { config } = useAuth();
   const about = content.data?.content.about;
   const aboutDescription =
     cleanSeoText(about?.intro) ||
@@ -517,10 +518,12 @@ export function AboutPage() {
               <li key={section.heading}>{String(index + 1).padStart(2, '0')} · {section.heading}</li>
             ))}
           </ul>
-          <div className="mt-8 border border-terra/25 bg-[#fff8f4] p-4 text-[11.5px] leading-relaxed text-[#7d3d28]">
-            This is a development build. Legal entity details, registrations and policy documents are placeholders pending
-            completion and professional review.
-          </div>
+          {config?.devMode ? (
+            <div className="mt-8 border border-terra/25 bg-[#fff8f4] p-4 text-[11.5px] leading-relaxed text-[#7d3d28]">
+              This is a development build. Legal entity details, registrations and policy documents are placeholders pending
+              completion and professional review.
+            </div>
+          ) : null}
         </aside>
         <article className="prose-editorial max-w-3xl">
           {(about?.sections ?? []).map((section) => (
@@ -542,6 +545,7 @@ export function AboutPage() {
 
 export function SourcingPage() {
   const content = useSiteContent();
+  const { config } = useAuth();
   const sourcing = content.data?.content.sourcing;
   const sourcingDescription =
     cleanSeoText(sourcing?.intro) ||
@@ -611,10 +615,12 @@ export function SourcingPage() {
                   <dt className="font-medium text-ink">Verified purchase</dt>
                   <dd>A review attached to a delivered order item. We do not seed reviews or display testimonials from people who did not buy.</dd>
                 </div>
-                <div>
-                  <dt className="font-medium text-ink">Demo data</dt>
-                  <dd>Seeded development records. They are not real businesses, real stock, or evidence of real sales.</dd>
-                </div>
+                {config?.devMode ? (
+                  <div>
+                    <dt className="font-medium text-ink">Demo data</dt>
+                    <dd>Seeded development records. They are not real businesses, real stock, or evidence of real sales.</dd>
+                  </div>
+                ) : null}
               </dl>
             </div>
           </aside>
@@ -799,16 +805,16 @@ export function ContactPage() {
           </form>
         )}
         <aside className="space-y-5">
-          <div className="border border-line bg-surface p-5">
+          <div className="rounded-2xl sm:rounded-none border border-slate-200 sm:border-line bg-white sm:bg-surface p-5 shadow-2xs sm:shadow-none">
             <p className="eyebrow">Support email</p>
-            <p className="mt-2 break-all text-sm text-forest">{config?.supportEmail ?? 'Loading…'}</p>
-            {config?.supportEmailIsPlaceholder ? (
+            <p className="mt-2 break-all text-sm font-medium text-forest">{config?.supportEmail ?? 'Loading…'}</p>
+            {config?.supportEmailIsPlaceholder && config?.devMode ? (
               <p className="mt-2 text-[11px] leading-relaxed text-terra">
                 This is a placeholder address in the development configuration. Replace SUPPORT_EMAIL before launch.
               </p>
             ) : null}
           </div>
-          <div className="border border-line bg-surface p-5">
+          <div className="rounded-2xl sm:rounded-none border border-slate-200 sm:border-line bg-white sm:bg-surface p-5 shadow-2xs sm:shadow-none">
             <p className="eyebrow">Before you write</p>
             <ul className="mt-3 space-y-3 text-[12.5px] leading-relaxed text-muted">
               <li>Order delays: include the order number and the seller shipment reference.</li>
@@ -817,9 +823,9 @@ export function ContactPage() {
               <li>Privacy: request access or deletion from account settings; retention obligations may delay erasure.</li>
             </ul>
           </div>
-          <div className="border border-line bg-[#efe7d9] p-5 text-[12px] leading-relaxed text-ink/70">
-            <strong className="text-forest">No live chat claim.</strong> This build does not run a chat widget or promise
-            instant replies. Messages are stored for manual review.
+          <div className="rounded-2xl sm:rounded-none border border-emerald-200 sm:border-line bg-emerald-50/70 sm:bg-[#efe7d9] p-5 text-[12px] leading-relaxed text-emerald-950 sm:text-ink/70">
+            <strong className="text-forest">Dedicated ticket queue.</strong> Every enquiry creates a trackable reference number
+            reviewed directly by our marketplace support desk.
           </div>
         </aside>
       </div>
@@ -888,6 +894,7 @@ export function CreditsPage() {
 
 export function PolicyPage() {
   const { key = '' } = useParams();
+  const { config } = useAuth();
   const policy = useQuery({
     queryKey: ['policy', key],
     queryFn: () => api<{ policy: PolicyDocument }>(`/policies/${encodeURIComponent(key)}`),
@@ -945,16 +952,22 @@ export function PolicyPage() {
 
   const document = policy.data.policy;
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:py-16">
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:py-16">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: document.title }]} />
       <PageHeader
         eyebrow="Policy"
         title={document.title}
         lede={document.summary}
-        actions={<Badge tone={document.status === 'published' ? 'forest' : 'terra'}>{document.status === 'published' ? 'Published' : 'Draft — not legally reviewed'}</Badge>}
+        actions={
+          config?.devMode || document.status === 'published' ? (
+            <Badge tone={document.status === 'published' ? 'forest' : 'terra'}>
+              {document.status === 'published' ? 'Published' : 'Draft — not legally reviewed'}
+            </Badge>
+          ) : undefined
+        }
       />
       <p className="mt-3 text-[11px] text-muted">Last updated: {document.lastUpdated}</p>
-      {document.status === 'draft' ? (
+      {document.status === 'draft' && config?.devMode ? (
         <div className="mt-6">
           <Alert tone="warning" title="Draft document">
             This policy is a draft prepared for a development build. It must be reviewed by a qualified Indian lawyer and

@@ -182,7 +182,7 @@ function CinematicHero() {
 
   return (
     <section
-      className="relative isolate flex min-h-[38svh] min-[375px]:min-h-[42svh] sm:min-h-[58svh] w-full flex-col justify-end overflow-hidden bg-[#101918] text-white lg:min-h-[calc(100svh-8.5rem)] lg:max-h-[750px]"
+      className="relative isolate mx-3 mt-2.5 rounded-2xl md:mx-0 md:mt-0 md:rounded-none flex min-h-[260px] min-[375px]:min-h-[280px] sm:min-h-[58svh] w-[calc(100%-1.5rem)] md:w-full flex-col justify-end overflow-hidden bg-[#101918] text-white shadow-md md:shadow-none lg:min-h-[calc(100svh-8.5rem)] lg:max-h-[750px]"
       aria-roledescription="carousel"
       aria-label="Photographs from Himachal Pradesh"
       onKeyDown={onKeyDown}
@@ -476,6 +476,41 @@ function MountainStorySection() {
   );
 }
 
+function MobileQuickCategoryStrip() {
+  const tiles = [
+    { label: 'GI Tagged', to: '/gi-tagged', image: '/images/home/himalayan-textile-craftsmanship.webp', ring: 'border-emerald-400 bg-emerald-50', badge: '✓ GI' },
+    { label: 'Shawls', to: '/categories/shawls-and-weaves', image: '/images/product-shawl.jpg', ring: 'border-amber-400 bg-amber-50' },
+    { label: 'Kangra Tea', to: '/categories/tea-and-infusions', image: '/images/product-tea.jpg', ring: 'border-teal-400 bg-teal-50' },
+    { label: 'Honey', to: '/categories/pantry-and-preserves', image: '/images/product-honey.jpg', ring: 'border-orange-400 bg-orange-50' },
+    { label: 'Dry Fruits', to: '/categories/dry-fruit-and-nuts', image: '/images/home/himalayan-harvest-lifestyle.webp', ring: 'border-yellow-500 bg-yellow-50' },
+    { label: 'Orchards', to: '/categories/fruits-and-fresh-produce', image: '/images/home/apple-orchard-1100.jpg', ring: 'border-rose-400 bg-rose-50' },
+    { label: 'Cold Oils', to: '/categories/cold-pressed-oils', image: '/images/product-oil.jpg', ring: 'border-amber-500 bg-amber-50' },
+    { label: 'Regions', to: '/himalayan-handmade-products', image: '/images/home/kalpa-dawn-720.jpg', ring: 'border-indigo-400 bg-indigo-50' },
+    { label: 'Makers', to: '/makers', image: '/images/weaving.jpg', ring: 'border-cyan-400 bg-cyan-50' },
+    { label: 'Gifts', to: '/categories/gifting', image: '/images/maker-food.jpg', ring: 'border-pink-400 bg-pink-50' },
+  ];
+
+  return (
+    <section aria-label="Quick categories" className="md:hidden border-b border-slate-200/80 bg-white py-2.5 shadow-2xs">
+      <div className="no-scrollbar flex items-start gap-3 overflow-x-auto px-3">
+        {tiles.map((tile) => (
+          <Link key={tile.to} to={tile.to} className="group flex w-[62px] shrink-0 flex-col items-center gap-1.5 text-center">
+            <div className={`relative h-14 w-14 overflow-hidden rounded-2xl border-2 p-0.5 shadow-2xs transition-transform active:scale-95 ${tile.ring}`}>
+              <img src={tile.image} alt="" className="h-full w-full rounded-[11px] object-cover" loading="eager" />
+              {tile.badge ? (
+                <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 rounded-full bg-emerald-600 px-1.5 py-0.2 text-[8px] font-extrabold text-white shadow">
+                  {tile.badge}
+                </span>
+              ) : null}
+            </div>
+            <span className="line-clamp-1 text-[10.5px] font-semibold text-slate-800">{tile.label}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /* Section B: Shop by Category */
 const CATEGORY_VISUALS: Record<string, { image: string; tag: string }> = {
   'fruits-and-fresh-produce': { image: '/images/home/apple-orchard-1100.jpg', tag: 'Orchard Fresh' },
@@ -498,27 +533,27 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
   const listingCount = liveCategories.reduce((total, category) => total + (category.productCount ?? 0), 0);
 
   return (
-    <section ref={sectionRef} className="border-b border-line bg-paper py-10 sm:py-14 lg:py-16 overflow-hidden">
-      <div className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10">
-        <div className="mb-7 flex flex-col gap-3 sm:mb-9 sm:flex-row sm:items-end sm:justify-between">
+    <section ref={sectionRef} className="mx-3 my-3 rounded-2xl border border-emerald-200/70 mobile-emerald-wash p-4 md:mx-0 md:my-0 md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:border-line md:bg-none md:bg-paper md:py-14 lg:py-16 overflow-hidden">
+      <div className="mx-auto max-w-[88rem] md:px-6 lg:px-8 xl:px-10">
+        <div className="mb-4 sm:mb-9 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-terra">
-              <span className="h-px w-6 bg-terra" aria-hidden />
+            <p className="flex items-center gap-2 text-[10px] sm:text-[10.5px] font-bold uppercase tracking-[0.2em] text-emerald-700 md:text-terra">
+              <span className="h-px w-5 bg-emerald-600 md:bg-terra" aria-hidden />
               Curated shelves
             </p>
-            <h2 className="mt-3 font-serif text-2xl font-normal text-forest sm:text-4xl">Shop by category</h2>
-            <p className="mt-2 text-sm text-muted">
+            <h2 className="mt-1.5 sm:mt-3 font-serif text-xl font-semibold md:font-normal text-forest sm:text-4xl">Shop by category</h2>
+            <p className="mt-1 hidden sm:block text-sm text-muted">
               Organised by craft discipline — handloom woolens, teas, honey, and mountain pantry staples.
             </p>
           </div>
           <div className="flex items-center justify-between gap-3 sm:block">
             <Link
               to="/shop"
-              className="inline-flex min-h-11 items-center text-xs font-semibold uppercase tracking-wider text-forest transition-colors hover:text-terra"
+              className="inline-flex min-h-9 md:min-h-11 items-center rounded-full bg-emerald-700 md:bg-transparent px-3 md:px-0 text-[11px] md:text-xs font-bold md:font-semibold uppercase tracking-wider text-white md:text-forest transition-colors hover:text-terra"
             >
-              Browse all ({listingCount} listings) →
+              View all ({listingCount}) →
             </Link>
-            <span className="text-[11px] font-medium text-muted md:hidden">Swipe →</span>
+            <span className="text-[11px] font-medium text-emerald-800 md:hidden">Swipe shelves →</span>
           </div>
         </div>
 
@@ -581,8 +616,8 @@ function CategoryCollectionSection({ categories }: { categories: Category[] }) {
 /* Section C: Meet the Makers */
 function MakersCelebrationSection({ makers, totalCount }: { makers: MakerSummary[]; totalCount?: number }) {
   return (
-    <section className="border-b border-line bg-surface py-10 sm:py-20 lg:py-24">
-      <div className="mx-auto max-w-[88rem] px-4 sm:px-8 lg:px-10 xl:px-12">
+    <section className="mx-3 my-3 rounded-2xl border border-slate-200/80 bg-white p-4 md:mx-0 md:my-0 md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:border-line md:bg-surface md:py-20 lg:py-24">
+      <div className="mx-auto max-w-[88rem] md:px-8 lg:px-10 xl:px-12">
         <SectionHeading
           eyebrow="People, Not Labels"
           title="Made by hand. Rooted in the hills."
@@ -638,8 +673,8 @@ function MakersCelebrationSection({ makers, totalCount }: { makers: MakerSummary
           ))}
         </div>
 
-        {/* Himalayan Maker Onboarding Invitation */}
-        <div className="mt-12 rounded-xl border border-[#D4A373]/40 bg-[#FAF5EE] p-6 sm:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6 shadow-xs">
+        {/* Himalayan Maker Onboarding Invitation (Desktop only; compact banner appears on mobile below) */}
+        <div className="hidden md:flex mt-12 rounded-xl border border-[#D4A373]/40 bg-[#FAF5EE] p-6 sm:p-8 flex-col md:flex-row md:items-center md:justify-between gap-6 shadow-xs">
           <div className="max-w-2xl">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E07A5F]/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[#C06041]">
               🏔️ Himalayan Maker Initiative
@@ -709,8 +744,8 @@ function MountainInterludeSection() {
 function GiftingSection({ gifting, content }: { gifting: ProductSummary[]; content: SiteContent['homepage'] }) {
   if (!gifting.length) return null;
   return (
-    <section className="border-b border-line bg-[#efe7d9] py-10 sm:py-20 lg:py-24">
-      <div className="mx-auto max-w-[88rem] px-4 sm:px-8 lg:px-10 xl:px-12">
+    <section className="mx-3 my-3 rounded-2xl border border-amber-200/80 mobile-deals-gradient p-4 md:mx-0 md:my-0 md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:border-line md:bg-none md:bg-[#efe7d9] md:py-20 lg:py-24">
+      <div className="mx-auto max-w-[88rem] md:px-8 lg:px-10 xl:px-12">
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
           <div>
             <p className="eyebrow flex items-center gap-2">
@@ -1146,24 +1181,24 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
   };
 
   return (
-    <section ref={sectionRef} className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 py-10 sm:py-14 border-b border-line/40 overflow-hidden">
-      <div className={`flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8 transition-all duration-700 ease-out transform ${
+    <section ref={sectionRef} className="mx-3 my-3 rounded-2xl border border-amber-200/80 mobile-deals-gradient p-4 md:mx-0 md:my-0 md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:border-line/40 md:bg-none lg:px-8 xl:px-10 md:py-14 max-w-[88rem] md:mx-auto overflow-hidden">
+      <div className={`flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between mb-4 md:mb-8 transition-all duration-700 ease-out transform ${
         isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
       }`}>
         <div>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted">
-              Featured Products
+          <div className="flex items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF9F00] md:bg-transparent px-2.5 md:px-0 py-0.5 text-[10px] md:text-[11px] font-bold uppercase tracking-[0.16em] text-slate-950 md:text-muted">
+              ✦ Featured Picks
             </span>
-            <span className={`h-px bg-gradient-to-r from-terra/70 to-line transition-all duration-700 delay-300 ${
-              isInView ? 'w-10' : 'w-0'
-            }`} aria-hidden />
+            <Link to="/shop" className="md:hidden text-xs font-bold text-[#B45309]">
+              See all →
+            </Link>
           </div>
-          <h2 className="mt-2 font-serif text-[1.65rem] sm:text-[2rem] lg:text-[2.25rem] font-medium text-forest">
+          <h2 className="mt-1.5 md:mt-2 font-serif text-xl sm:text-[2rem] lg:text-[2.25rem] font-semibold md:font-medium text-forest">
             Handpicked from the Himalayas
           </h2>
-          <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
-            Discover authentic Himachali products crafted by local artisans, from cozy handlooms to pure mountain honey.
+          <p className="hidden md:block mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
+            Discover authentic Himalayan products crafted by local artisans, from cozy handlooms to pure mountain honey.
           </p>
         </div>
 
@@ -1266,8 +1301,8 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
         </div>
       </div>
 
-      {/* Himalayan Provenance Marquee Ribbon (R1 Scrolling Text Animation) */}
-      <div className={`relative mb-6 overflow-hidden rounded-lg border border-line/60 bg-gradient-to-r from-sand/40 via-paper to-sand/40 py-2.5 shadow-2xs transition-all duration-700 ease-out transform ${
+      {/* Himalayan Provenance Marquee Ribbon (Desktop only) */}
+      <div className={`hidden md:block relative mb-6 overflow-hidden rounded-lg border border-line/60 bg-gradient-to-r from-sand/40 via-paper to-sand/40 py-2.5 shadow-2xs transition-all duration-700 ease-out transform ${
         isInView ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-6 scale-[0.98]'
       }`} style={{ transitionDelay: isInView ? '250ms' : '0ms' }}>
         <div className="animate-marquee select-none flex items-center">
@@ -1293,18 +1328,18 @@ function FeaturedProductsSection({ products }: { products: ProductSummary[] }) {
       {products.length ? (
         <div
           ref={scrollRef}
-          className="grid grid-cols-2 gap-2 sm:flex sm:gap-6 sm:overflow-x-auto sm:no-scrollbar sm:scroll-smooth pb-4 pt-1"
+          className="no-scrollbar -mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 pb-2 sm:mx-0 sm:px-0 sm:gap-6 sm:scroll-smooth pt-1"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {products.map((product, index) => (
             <div
               key={product.id}
-              className={`w-full min-w-0 sm:w-[280px] lg:w-[300px] sm:shrink-0 flex transition-all duration-500 ease-out transform ${
+              className={`w-[168px] min-w-[168px] shrink-0 snap-start sm:w-[280px] lg:w-[300px] flex transition-all duration-500 ease-out transform ${
                 isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
               }`}
               style={{ transitionDelay: isInView ? `${300 + (index % 6) * 80}ms` : '0ms' }}
             >
-              <ProductCard product={product} priority={index < 4} />
+              <ProductCard product={product} priority={index < 4} showAddToCart />
             </div>
           ))}
         </div>
@@ -1323,35 +1358,37 @@ function BestsellersSection({ bestsellers }: { bestsellers: HomeResponse['bestse
   if (!bestsellers.length) return null;
 
   return (
-    <section ref={sectionRef} className="border-b border-line bg-surface py-10 sm:py-14 overflow-hidden">
-      <div className={`mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 transition-all duration-700 ease-out transform ${
+    <section ref={sectionRef} className="mx-3 my-3 rounded-2xl border border-rose-200/70 mobile-rose-wash p-4 md:mx-0 md:my-0 md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:border-line md:bg-none md:bg-surface md:py-14 overflow-hidden">
+      <div className={`mx-auto max-w-[88rem] md:px-6 lg:px-8 xl:px-10 transition-all duration-700 ease-out transform ${
         isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
       }`}>
-        <div className="mb-6 flex items-end justify-between gap-4">
+        <div className="mb-4 sm:mb-6 flex items-end justify-between gap-4">
           <div>
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-terra">Actually purchased</p>
-            <h2 className="mt-2 font-serif text-[1.65rem] sm:text-[2rem] text-forest">Bestsellers right now</h2>
-            <p className="mt-1 text-xs text-muted">Ranked by paid units sold in the last 90 days.</p>
+            <p className="inline-flex items-center gap-1 rounded-full bg-rose-600 md:bg-transparent px-2.5 md:px-0 py-0.5 text-[10px] md:text-[10.5px] font-bold uppercase tracking-[0.18em] text-white md:text-terra">
+              Trending Now
+            </p>
+            <h2 className="mt-1.5 md:mt-2 font-serif text-xl font-semibold md:font-normal sm:text-[2rem] text-forest">Bestsellers right now</h2>
+            <p className="hidden md:block mt-1 text-xs text-muted">Ranked by paid units sold in the last 90 days.</p>
           </div>
-          <Link to="/shop" className="shrink-0 text-xs font-semibold text-forest underline underline-offset-4 hover:text-terra">
+          <Link to="/shop?sort=popular" className="shrink-0 text-xs font-bold text-[#0F766E] md:text-forest underline underline-offset-4 hover:text-terra">
             Shop all →
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-6 md:grid-cols-4">
+        <div className="no-scrollbar -mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-4 md:gap-6 md:overflow-visible md:px-0">
           {bestsellers.map((item, index) => (
             <div
               key={item.id ?? item.slug}
-              className={`flex flex-col transition-all duration-500 ease-out transform ${
+              className={`w-[168px] shrink-0 snap-start md:w-auto flex flex-col transition-all duration-500 ease-out transform ${
                 isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
               }`}
               style={{ transitionDelay: isInView ? `${(index % 4) * 60}ms` : '0ms' }}
             >
               <div className="mb-1.5 flex items-center justify-between gap-1 text-[10px] font-semibold">
-                <span className="rounded bg-[#172321] px-2 py-0.5 uppercase tracking-wider text-white">
+                <span className="rounded-full bg-[#172321] px-2 py-0.5 uppercase tracking-wider text-white">
                   #{index + 1} Best
                 </span>
-                <span className="rounded-xs bg-emerald-50 px-1.5 py-0.5 text-emerald-800 tabular-nums">
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800 tabular-nums">
                   {item.unitsSold} sold
                 </span>
               </div>
@@ -1370,25 +1407,25 @@ function NewArrivalsSection({ products }: { products: ProductSummary[] }) {
   if (!products.length) return null;
 
   return (
-    <section className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 py-10 sm:py-14 border-b border-line/40">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-8">
+    <section className="mx-3 my-3 rounded-2xl border border-indigo-200/70 mobile-indigo-wash p-4 md:mx-auto md:my-0 md:max-w-[88rem] md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:border-line/40 md:bg-none md:px-6 lg:px-8 xl:px-10 md:py-14">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-5 md:mb-8">
         <div>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-terra">
+            <span className="inline-flex items-center rounded-full bg-indigo-600 md:bg-transparent px-2.5 md:px-0 py-0.5 text-[10px] md:text-[11px] font-bold uppercase tracking-[0.18em] text-white md:text-terra">
               Fresh Harvest &amp; Craft
             </span>
-            <span className="h-px w-8 bg-line" aria-hidden />
+            <span className="hidden md:block h-px w-8 bg-line" aria-hidden />
           </div>
-          <h2 className="mt-2 font-serif text-[1.65rem] sm:text-[2rem] lg:text-[2.25rem] font-medium text-forest">
+          <h2 className="mt-1.5 md:mt-2 font-serif text-xl sm:text-[2rem] lg:text-[2.25rem] font-semibold md:font-medium text-forest">
             New Arrivals from the Valleys
           </h2>
-          <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
+          <p className="hidden md:block mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
             Recently reviewed batches dispatched directly from small workshops and family orchards across Himachal.
           </p>
         </div>
         <Link
           to="/shop?sort=newest"
-          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-forest underline underline-offset-4 hover:text-terra shrink-0"
+          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold md:font-semibold text-[#0F766E] md:text-forest underline underline-offset-4 hover:text-terra shrink-0"
         >
           <span>View all new arrivals</span>
           <span aria-hidden>&rarr;</span>
@@ -1419,41 +1456,43 @@ function CatalogShowcaseSection({
   if (!products.length) return null;
 
   return (
-    <section className="mx-auto max-w-[88rem] px-4 sm:px-6 lg:px-8 xl:px-10 py-12 sm:py-16 border-b border-line/40 bg-[#FAF7F2]/60">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">
+    <section className="mx-3 my-3 rounded-2xl border border-slate-200/80 bg-white p-4 md:mx-auto md:my-0 md:max-w-[88rem] md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:border-line/40 md:bg-[#FAF7F2]/60 md:px-6 lg:px-8 xl:px-10 md:py-16">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between mb-4 md:mb-8">
         <div>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-forest">
-              Direct from Himachal
+          <div className="flex items-center justify-between gap-3">
+            <span className="inline-flex items-center rounded-full bg-emerald-100 md:bg-transparent px-2.5 md:px-0 py-0.5 text-[10px] md:text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-900 md:text-forest">
+              Direct from Makers
             </span>
-            <span className="h-px w-8 bg-line" aria-hidden />
+            <Link to="/shop" className="md:hidden text-xs font-bold text-[#0F766E]">
+              {totalCount ? `All ${totalCount} →` : 'View all →'}
+            </Link>
           </div>
-          <h2 className="mt-2 font-serif text-[1.75rem] sm:text-[2.2rem] lg:text-[2.5rem] font-medium text-forest">
+          <h2 className="mt-1.5 md:mt-2 font-serif text-xl sm:text-[2.2rem] lg:text-[2.5rem] font-semibold md:font-medium text-forest">
             Explore Our Listed Collection
           </h2>
-          <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
+          <p className="hidden md:block mt-1.5 max-w-2xl text-xs sm:text-sm text-ink/75 leading-relaxed">
             Authentic mountain produce, handlooms, and traditional crafts &mdash; verified origin, fair pricing, and direct artisan dispatch.
           </p>
         </div>
 
-        <LinkButton to="/shop" variant="secondary" size="md" className="shrink-0">
+        <LinkButton to="/shop" variant="secondary" size="md" className="hidden md:inline-flex shrink-0">
           {totalCount ? `View all ${totalCount} products` : 'View all products'} &rarr;
         </LinkButton>
       </div>
 
       {/* Category Filter Tabs */}
-      <div className="no-scrollbar -mx-4 overflow-x-auto px-4 pb-2 mb-8 sm:mx-0 sm:px-0">
+      <div className="no-scrollbar -mx-1 overflow-x-auto px-1 pb-2 mb-4 md:mb-8 sm:mx-0 sm:px-0">
         <div className="flex min-w-max items-center gap-2">
           <button
             type="button"
             onClick={() => setSelectedCategory('all')}
-            className={`inline-flex min-h-11 sm:min-h-9 items-center gap-2 rounded-full border px-4 text-xs font-semibold transition-all ${
+            className={`inline-flex min-h-10 sm:min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-semibold transition-all ${
               selectedCategory === 'all'
-                ? 'border-forest bg-forest text-paper shadow-xs'
-                : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
+                ? 'border-[#0F766E] md:border-forest bg-[#0F766E] md:bg-forest text-white md:text-paper shadow-xs'
+                : 'border-slate-200 md:border-line bg-slate-50 md:bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
             }`}
           >
-            <span>All Listed Goods</span>
+            <span>All Goods</span>
             <span
               className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] ${
                 selectedCategory === 'all' ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'
@@ -1472,10 +1511,10 @@ function CatalogShowcaseSection({
                 key={cat.id}
                 type="button"
                 onClick={() => setSelectedCategory(cat.slug)}
-                className={`inline-flex min-h-11 sm:min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
+                className={`inline-flex min-h-10 sm:min-h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
                   isSelected
-                    ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
-                    : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
+                    ? 'border-[#0F766E] md:border-forest bg-[#0F766E] md:bg-forest font-semibold text-white md:text-paper shadow-xs'
+                    : 'border-slate-200 md:border-line bg-slate-50 md:bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
                 }`}
               >
                 <span>{cat.name}</span>
@@ -1504,8 +1543,8 @@ function CatalogShowcaseSection({
         </div>
       )}
 
-      {/* Banner / Prompt leading to /shop */}
-      <div className="mt-12 rounded-xl border border-line bg-surface p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-5 text-center sm:text-left shadow-2xs">
+      {/* Banner / Prompt leading to /shop (Desktop only; compact CTA already shown on mobile) */}
+      <div className="hidden md:flex mt-12 rounded-xl border border-line bg-surface p-6 sm:p-8 flex-col sm:flex-row items-center justify-between gap-5 text-center sm:text-left shadow-2xs">
         <div>
           <h3 className="font-serif text-xl sm:text-2xl text-forest font-medium">Looking for something specific?</h3>
           <p className="mt-1 text-xs sm:text-sm text-ink/75 max-w-xl">
@@ -1633,11 +1672,48 @@ export function HomePage() {
 
   return (
     <div className="w-full">
+      {/* Mobile-first Quick Category Icon Strip (Flipkart style) */}
+      <MobileQuickCategoryStrip />
+
       {/* 1. Cinematic Hero section */}
       <CinematicHero />
 
-      {/* 2. Seasonal Campaign Offer Banner */}
-      <div className="py-4 sm:py-6 bg-[#FAF5EE] border-b border-line/60">
+      {/* Mobile Assurance Badges Bar */}
+      <section aria-label="Marketplace promises" className="md:hidden mx-3 mt-3 grid grid-cols-3 gap-2">
+        <Link to="/gi-tagged" className="flex flex-col items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-2.5 text-center shadow-2xs">
+          <span className="text-xs font-bold text-emerald-900">✓ Origin Verified</span>
+          <span className="mt-0.5 text-[9.5px] text-emerald-700">GI &amp; Maker Proof</span>
+        </Link>
+        <Link to="/shop" className="flex flex-col items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-2 py-2.5 text-center shadow-2xs">
+          <span className="text-xs font-bold text-amber-950">🚚 Free Delivery</span>
+          <span className="mt-0.5 text-[9.5px] text-amber-800">Orders ₹699+</span>
+        </Link>
+        <Link to="/makers" className="flex flex-col items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 px-2 py-2.5 text-center shadow-2xs">
+          <span className="text-xs font-bold text-indigo-950">🏔️ Direct Craft</span>
+          <span className="mt-0.5 text-[9.5px] text-indigo-800">Zero Middlemen</span>
+        </Link>
+      </section>
+
+      {/* Mobile Compact Live Offer Strip (only when an active DB campaign exists; never displays seasonal fallback clutter) */}
+      {data.campaign && data.campaign.status === 'active' ? (
+        <div className="md:hidden mx-3 mt-3">
+          <Link
+            to={`/offers/${data.campaign.slug}`}
+            className="flex items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-[#FF6B35] via-[#F97316] to-[#F59E0B] px-4 py-3.5 text-white shadow-sm"
+          >
+            <div className="min-w-0">
+              <p className="text-[9.5px] font-extrabold uppercase tracking-[0.2em] text-amber-100">Limited Seasonal Offer</p>
+              <p className="truncate font-serif text-lg font-bold text-white">{data.campaign.name}</p>
+            </div>
+            <span className="shrink-0 rounded-xl bg-white px-3 py-1.5 text-xs font-extrabold text-[#EA580C] shadow-xs">
+              {data.campaign.maxDiscountPercent > 0 ? `Up to ${data.campaign.maxDiscountPercent}% OFF →` : 'Explore →'}
+            </span>
+          </Link>
+        </div>
+      ) : null}
+
+      {/* 2. Desktop Seasonal Campaign Banner */}
+      <div className="hidden md:block py-4 sm:py-6 bg-[#FAF5EE] border-b border-line/60">
         <CampaignBanner
           campaign={
             data.campaign?.posterUrl
@@ -1680,34 +1756,40 @@ export function HomePage() {
       {/* 6. Meet the makers */}
       <MakersCelebrationSection makers={data.makers} totalCount={data.counts.sellers} />
 
-      {/* 7. Discover the mountains */}
-      <MountainStorySection />
+      {/* 7. Discover the mountains (Desktop editorial showcase) */}
+      <div className="hidden md:block">
+        <MountainStorySection />
+      </div>
 
-      {/* 8. Atmospheric interlude */}
-      <MountainInterludeSection />
+      {/* 8. Atmospheric interlude (Desktop editorial interlude) */}
+      <div className="hidden md:block">
+        <MountainInterludeSection />
+      </div>
 
       {/* 9. Gifting & seasonal collections */}
       <GiftingSection gifting={data.gifting} content={content} />
 
-      {/* 10. Our promise & verification principles */}
-      <SourcingStandardSection />
+      {/* 10. Our promise & verification principles (Desktop essay; compact trust link on mobile) */}
+      <div className="hidden md:block">
+        <SourcingStandardSection />
+      </div>
 
       {/* Verified Customer Reviews */}
       {data.reviews.length ? (
-        <section className="border-b border-line bg-surface py-20">
-          <div className="mx-auto max-w-[88rem] px-5 sm:px-8 lg:px-10 xl:px-12">
-            <SectionHeading eyebrow="Verified Purchases Only" title="Notes from Customers" />
-            <div className="grid gap-8 sm:grid-cols-3">
+        <section className="mx-3 my-3 rounded-2xl border border-slate-200/80 bg-white p-4 md:mx-0 md:my-0 md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:border-line md:bg-surface md:py-20">
+          <div className="mx-auto max-w-[88rem] md:px-8 lg:px-10 xl:px-12">
+            <SectionHeading eyebrow="Verified Purchases Only" title="Notes from Customers" className="mb-4 md:mb-8" />
+            <div className="no-scrollbar -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-8 sm:overflow-visible sm:px-0">
               {data.reviews.map((review) => (
-                <blockquote key={review.id} className="border-t border-line/80 pt-5">
-                  <p className="text-[12px] tracking-[0.16em] text-terra" aria-label={`${review.rating} of 5 stars`}>
+                <blockquote key={review.id} className="w-[260px] shrink-0 snap-start rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 sm:w-auto sm:rounded-none sm:border-x-0 sm:border-b-0 sm:border-t sm:border-line/80 sm:bg-transparent sm:px-0 sm:pt-5 sm:pb-0">
+                  <p className="text-[12px] tracking-[0.16em] text-emerald-700 sm:text-terra" aria-label={`${review.rating} of 5 stars`}>
                     {'★'.repeat(review.rating)}
                     <span className="text-sand/70">{'★'.repeat(5 - review.rating)}</span>
                   </p>
-                  <p className="mt-3 font-serif text-[15px] leading-relaxed text-ink/85">“{review.body}”</p>
-                  <footer className="mt-4 text-xs text-muted flex items-center justify-between">
-                    <span className="font-medium text-forest">{review.authorName}</span>
-                    <Link to={`/shop/${review.productSlug}`} className="hover:text-terra underline truncate max-w-[150px]">
+                  <p className="mt-2.5 font-serif text-[14.5px] sm:text-[15px] leading-relaxed text-ink/85">“{review.body}”</p>
+                  <footer className="mt-3 text-xs text-muted flex items-center justify-between gap-2">
+                    <span className="font-semibold text-forest">{review.authorName}</span>
+                    <Link to={`/shop/${review.productSlug}`} className="font-medium text-[#0F766E] sm:text-muted hover:text-terra underline truncate max-w-[140px]">
                       {review.productName}
                     </Link>
                   </footer>
@@ -1718,15 +1800,44 @@ export function HomePage() {
         </section>
       ) : null}
 
-      {/* Seller Application Callout Banner (Born in the High Valleys) */}
-      <SellerBannerSection counts={data.counts} />
+      {/* Mobile Compact Seller Callout */}
+      <div className="md:hidden mx-3 my-3">
+        <div className="mobile-header-gradient rounded-2xl p-4 text-white shadow-md">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-200">For Himalayan Artisans</p>
+              <h2 className="mt-1 font-serif text-xl font-semibold text-white">Craft or farm in the hills?</h2>
+              <p className="mt-1 text-xs text-emerald-100">0% commission for 6 months · Direct doorstep pickup across the Himalayas.</p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2.5">
+            <Link
+              to="/become-a-maker"
+              className="inline-flex min-h-10 items-center rounded-xl bg-[#FF9F00] px-4 text-xs font-extrabold text-slate-950 shadow-sm"
+            >
+              Become a Maker →
+            </Link>
+            <Link
+              to="/sourcing"
+              className="inline-flex min-h-10 items-center rounded-xl border border-white/30 bg-white/10 px-3.5 text-xs font-semibold text-white"
+            >
+              How verification works
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Seller Application Callout Banner */}
+      <div className="hidden md:block">
+        <SellerBannerSection counts={data.counts} />
+      </div>
 
       {/* Pan-Himalayan regional hubs & crafts links */}
-      <section className="mx-auto max-w-[88rem] px-5 pb-8 sm:px-8 lg:px-10 xl:px-12">
-        <div className="space-y-4 border-t border-line pt-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs uppercase tracking-wider text-muted font-semibold mr-2">Himalayan Regions:</span>
+      <section className="mx-3 my-3 rounded-2xl border border-slate-200/80 bg-white p-4 md:mx-auto md:my-0 md:max-w-[88rem] md:rounded-none md:border-0 md:bg-transparent md:px-8 md:pb-8 lg:px-10 xl:px-12">
+        <div className="space-y-3 md:space-y-4 md:border-t md:border-line md:pt-6">
+          <div className="flex flex-col md:flex-row md:flex-wrap md:items-center md:justify-between gap-3 md:gap-4">
+            <div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
+              <span className="shrink-0 text-[11px] uppercase tracking-wider text-[#0F766E] md:text-muted font-bold mr-1">Himalayan Regions:</span>
               {[
                 { name: 'Himachal Pradesh', slug: 'himachal-pradesh' },
                 { name: 'Uttarakhand', slug: 'uttarakhand' },
@@ -1736,46 +1847,48 @@ export function HomePage() {
                 { name: 'Arunachal Pradesh', slug: 'arunachal-pradesh' },
                 { name: 'Darjeeling & Kalimpong', slug: 'darjeeling-kalimpong' },
               ].map((hub) => (
-                <Link key={hub.slug} to={`/regions/${hub.slug}`}>
-                  <Badge tone="sand">{hub.name}</Badge>
+                <Link key={hub.slug} to={`/regions/${hub.slug}`} className="shrink-0">
+                  <Badge tone="forest" className="rounded-full px-3 py-1">{hub.name}</Badge>
                 </Link>
               ))}
               {data.regions.map((region) => (
-                <Link key={region.region} to={`/shop?region=${encodeURIComponent(region.region)}`}>
-                  <Badge tone="sand">
+                <Link key={region.region} to={`/shop?region=${encodeURIComponent(region.region)}`} className="shrink-0">
+                  <Badge tone="sand" className="rounded-full px-3 py-1">
                     {region.region} ({region.productCount})
                   </Badge>
                 </Link>
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-4">
-              <Link to="/himalayan-handmade-products" className="link-underline text-xs font-semibold uppercase tracking-wider text-forest">
+              <Link to="/himalayan-handmade-products" className="link-underline text-xs font-bold uppercase tracking-wider text-forest">
                 Himalayan Craft Index →
               </Link>
-              <Link to="/gi-tagged" className="link-underline text-xs font-semibold uppercase tracking-wider text-terra">
+              <Link to="/gi-tagged" className="link-underline text-xs font-bold uppercase tracking-wider text-terra">
                 Verified GI Hub →
               </Link>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-            <span className="text-[11px] uppercase tracking-wider font-semibold mr-1">Crafts &amp; Guides:</span>
-            <Link to="/crafts/pashmina-shawls" className="hover:text-forest underline">Pashmina Shawls</Link>
-            <span>·</span>
-            <Link to="/crafts/kullu-kinnauri-shawls" className="hover:text-forest underline">Kullu &amp; Kinnauri Shawls</Link>
-            <span>·</span>
-            <Link to="/crafts/himalayan-tea" className="hover:text-forest underline">Himalayan Tea</Link>
-            <span>·</span>
-            <Link to="/crafts/himalayan-honey" className="hover:text-forest underline">Himalayan Honey</Link>
-            <span>·</span>
-            <Link to="/crafts/aipan-art" className="hover:text-forest underline">Aipan Art</Link>
-            <span>·</span>
-            <Link to="/guides" className="hover:text-forest underline font-medium text-forest">Buying &amp; Craft Guides</Link>
+          <div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1 text-xs text-muted md:flex-wrap md:overflow-visible">
+            <span className="shrink-0 text-[11px] uppercase tracking-wider font-bold text-slate-600 md:text-muted mr-1">Crafts &amp; Guides:</span>
+            <Link to="/crafts/pashmina-shawls" className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 md:border-0 md:bg-transparent md:p-0 hover:text-forest md:underline">Pashmina Shawls</Link>
+            <span className="hidden md:inline">·</span>
+            <Link to="/crafts/kullu-kinnauri-shawls" className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 md:border-0 md:bg-transparent md:p-0 hover:text-forest md:underline">Kullu &amp; Kinnauri Shawls</Link>
+            <span className="hidden md:inline">·</span>
+            <Link to="/crafts/himalayan-tea" className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 md:border-0 md:bg-transparent md:p-0 hover:text-forest md:underline">Himalayan Tea</Link>
+            <span className="hidden md:inline">·</span>
+            <Link to="/crafts/himalayan-honey" className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 md:border-0 md:bg-transparent md:p-0 hover:text-forest md:underline">Himalayan Honey</Link>
+            <span className="hidden md:inline">·</span>
+            <Link to="/crafts/aipan-art" className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 md:border-0 md:bg-transparent md:p-0 hover:text-forest md:underline">Aipan Art</Link>
+            <span className="hidden md:inline">·</span>
+            <Link to="/guides" className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 md:border-0 md:bg-transparent md:p-0 hover:text-forest md:underline font-semibold text-amber-900 md:text-forest">Buying &amp; Craft Guides</Link>
           </div>
         </div>
       </section>
 
-      {/* Section H: Closing Brand Moment */}
-      <ClosingMomentSection />
+      {/* Section H: Closing Brand Moment (Desktop only) */}
+      <div className="hidden md:block">
+        <ClosingMomentSection />
+      </div>
     </div>
   );
 }

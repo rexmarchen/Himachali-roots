@@ -91,16 +91,19 @@ function InternationalReadinessBanner() {
 function FaqSection({ title, faqs }: { title: string; faqs: Array<{ question: string; answer: string }> }) {
   if (!faqs.length) return null;
   return (
-    <section className="mt-12 rounded-sm border border-line bg-surface p-6 sm:p-8">
-      <h2 className="font-serif text-2xl text-forest">{title}</h2>
-      <dl className="mt-5 divide-y divide-line">
-        {faqs.map((faq) => (
-          <div key={faq.question} className="py-4 first:pt-0 last:pb-0">
-            <dt className="text-sm font-semibold text-forest">{faq.question}</dt>
-            <dd className="mt-1.5 text-sm leading-relaxed text-muted">{faq.answer}</dd>
-          </div>
+    <section className="mt-10 rounded-2xl sm:rounded-sm border border-slate-200 sm:border-line bg-white sm:bg-surface p-5 sm:p-8 shadow-2xs sm:shadow-none">
+      <h2 className="font-serif text-xl sm:text-2xl text-forest">{title}</h2>
+      <div className="mt-4 divide-y divide-slate-100 sm:divide-line">
+        {faqs.map((faq, idx) => (
+          <details key={faq.question} open={idx === 0} className="group py-3.5 first:pt-0 last:pb-0">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-forest">
+              <span>{faq.question}</span>
+              <span className="shrink-0 text-base text-[#0F766E] transition-transform group-open:rotate-45">+</span>
+            </summary>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{faq.answer}</p>
+          </details>
         ))}
-      </dl>
+      </div>
     </section>
   );
 }
@@ -242,7 +245,7 @@ export function RegionHubPage() {
             action={<LinkButton to="/shop">Explore all products</LinkButton>}
           />
         ) : (
-          <ProductGrid products={query.data.products.items} />
+          <ProductGrid products={query.data.products.items} showAddToCart />
         )}
       </section>
 
@@ -298,37 +301,37 @@ export function CraftHubPage() {
         ]}
       />
 
-      <header className="mt-4 rounded-sm border border-line bg-surface p-6 sm:p-8">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-terra">Himalayan Craft Tradition</p>
-        <h1 className="mt-1 font-serif text-3xl font-normal text-forest sm:text-5xl">
+      <header className="mt-4 rounded-2xl sm:rounded-sm border border-emerald-900/20 sm:border-line mobile-header-gradient md:bg-none sm:bg-surface p-5 sm:p-8 text-white sm:text-forest shadow-md sm:shadow-none">
+        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-200 sm:text-terra">Himalayan Craft Tradition</p>
+        <h1 className="mt-1 font-serif text-3xl font-medium sm:font-normal text-white sm:text-forest sm:text-5xl">
           {craft.name} from the Himalayas
         </h1>
-        <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-ink/85">{craft.introText}</p>
+        <p className="mt-3 max-w-3xl text-sm sm:text-[15px] leading-relaxed text-emerald-50/90 sm:text-ink/85">{craft.introText}</p>
 
-        <div className="mt-7 grid gap-6 border-t border-line pt-6 md:grid-cols-2">
+        <div className="mt-6 sm:mt-7 grid gap-5 sm:gap-6 border-t border-white/15 sm:border-line pt-5 sm:pt-6 md:grid-cols-2">
           {craft.history ? (
             <div>
-              <h2 className="font-serif text-xl text-forest">What makes {craft.name} unique?</h2>
-              <p className="mt-2 text-sm leading-relaxed text-muted">{craft.history}</p>
+              <h2 className="font-serif text-lg sm:text-xl text-white sm:text-forest">What makes {craft.name} unique?</h2>
+              <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm leading-relaxed text-emerald-100 sm:text-muted">{craft.history}</p>
             </div>
           ) : null}
           {craft.howToIdentify ? (
             <div>
-              <h2 className="font-serif text-xl text-forest">How to identify genuine {craft.name}</h2>
-              <p className="mt-2 text-sm leading-relaxed text-muted">{craft.howToIdentify}</p>
+              <h2 className="font-serif text-lg sm:text-xl text-white sm:text-forest">How to identify genuine {craft.name}</h2>
+              <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm leading-relaxed text-emerald-100 sm:text-muted">{craft.howToIdentify}</p>
             </div>
           ) : null}
         </div>
 
         {query.data.combos.length > 0 ? (
-          <div className="mt-6 border-t border-line pt-5">
-            <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Shop by Region</h3>
+          <div className="mt-5 sm:mt-6 border-t border-white/15 sm:border-line pt-4 sm:pt-5">
+            <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-amber-200 sm:text-muted">Shop by Region</h3>
             <div className="mt-2.5 flex flex-wrap gap-2">
               {query.data.combos.map((combo) => (
                 <Link
                   key={combo.regionSlug}
                   to={`/regions/${combo.regionSlug}/${craft.slug}`}
-                  className="rounded-sm border border-forest/20 bg-paper px-3 py-1.5 text-xs font-medium text-forest hover:border-terra hover:text-terra"
+                  className="rounded-full sm:rounded-sm border border-white/30 sm:border-forest/20 bg-white/15 sm:bg-paper px-3 py-1.5 text-xs font-semibold text-white sm:text-forest hover:border-terra hover:text-terra"
                 >
                   {combo.regionName} ({combo.productCount})
                 </Link>
@@ -348,7 +351,7 @@ export function CraftHubPage() {
             action={<LinkButton to="/shop">Browse all crafts</LinkButton>}
           />
         ) : (
-          <ProductGrid products={query.data.products.items} />
+          <ProductGrid products={query.data.products.items} showAddToCart />
         )}
       </section>
 
@@ -447,12 +450,12 @@ export function GiTaggedHubPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Verified GI-Tagged Products' }]} />
-      <header className="mt-4 rounded-sm border border-line bg-surface p-6 sm:p-8">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Verified Geographical Indication</p>
-        <h1 className="mt-1 font-serif text-3xl font-normal text-forest sm:text-5xl">
+      <header className="mt-4 rounded-2xl sm:rounded-sm border border-emerald-900/20 sm:border-line mobile-header-gradient md:bg-none sm:bg-surface p-5 sm:p-8 text-white sm:text-forest shadow-md sm:shadow-none">
+        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200 sm:text-emerald-700">Verified Geographical Indication</p>
+        <h1 className="mt-1 font-serif text-3xl font-medium sm:font-normal text-white sm:text-forest sm:text-5xl">
           GI-Tagged Products of the Indian Himalayas
         </h1>
-        <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-ink/85">
+        <p className="mt-3 max-w-3xl text-sm sm:text-[15px] leading-relaxed text-emerald-50/90 sm:text-ink/85">
           Geographical Indication (GI) tags legally protect traditional mountain crafts and harvests tied to specific Himalayan territories. On {BRAND_NAME}, a GI badge is enabled solely after administrators review supporting registration proof.
         </p>
       </header>
@@ -470,7 +473,7 @@ export function GiTaggedHubPage() {
             action={<LinkButton to="/policies/authenticity">Read our Authenticity Policy</LinkButton>}
           />
         ) : (
-          <ProductGrid products={query.data?.products.items ?? []} />
+          <ProductGrid products={query.data?.products.items ?? []} showAddToCart />
         )}
       </section>
     </div>
@@ -503,12 +506,12 @@ export function HimalayanPillarPage() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Himalayan Handmade Products' }]} />
 
-      <header className="mt-4 rounded-sm border border-line bg-surface p-6 sm:p-10">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-terra">Pan-Himalayan Marketplace</p>
-        <h1 className="mt-2 font-serif text-3xl font-normal text-forest sm:text-5xl">
+      <header className="mt-4 rounded-2xl sm:rounded-sm border border-emerald-900/20 sm:border-line mobile-header-gradient md:bg-none sm:bg-surface p-5 sm:p-10 text-white sm:text-forest shadow-md sm:shadow-none">
+        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-200 sm:text-terra">Pan-Himalayan Marketplace</p>
+        <h1 className="mt-2 font-serif text-3xl font-medium sm:font-normal text-white sm:text-forest sm:text-5xl">
           Authentic Handmade Products from the Indian Himalayas
         </h1>
-        <p className="mt-4 max-w-3xl text-[15px] leading-relaxed text-ink/85">
+        <p className="mt-3 sm:mt-4 max-w-3xl text-sm sm:text-[15px] leading-relaxed text-emerald-50/90 sm:text-ink/85">
           Explore living crafts, regional handlooms, and high-altitude organic harvests across Himachal Pradesh, Uttarakhand (Garhwal and Kumaon), Jammu &amp; Kashmir, Ladakh, Sikkim, Arunachal Pradesh, and the hills of Darjeeling and Kalimpong.
         </p>
       </header>

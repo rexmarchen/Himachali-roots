@@ -275,9 +275,9 @@ export function OfferPage() {
           </div>
         ) : null}
 
-        <aside className="flex flex-col justify-between border border-line bg-surface p-6 sm:p-7">
+        <aside className="flex flex-col justify-between rounded-2xl md:rounded-none border border-amber-200 md:border-line mobile-deals-gradient md:bg-none md:bg-surface p-5 sm:p-7 shadow-xs md:shadow-none">
           <div>
-            <p className="eyebrow text-terra">The offer</p>
+            <p className="inline-flex items-center rounded-full bg-[#FF9F00] md:bg-transparent px-2.5 md:px-0 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-950 md:text-terra">The offer</p>
             <p className="mt-2 font-serif text-[2.1rem] leading-[1.05] text-forest sm:text-[2.5rem]">{headline}</p>
             <p className="mt-2 text-sm leading-relaxed text-ink/75">{headlineDetail}</p>
 

@@ -46,25 +46,47 @@ export function CartPage() {
   const remainingForFreeShipping = cart ? Math.max(0, cart.freeShippingThresholdPaise - cart.subtotalPaise) : 0;
   const progress = cart ? Math.min(100, Math.round((cart.subtotalPaise / cart.freeShippingThresholdPaise) * 100)) : 0;
   const hasLines = Boolean(cart && cart.lines.length > 0);
+  const totalSavingsPaise = cart
+    ? cart.lines.reduce(
+        (sum, line) =>
+          line.originalUnitPricePaise && line.originalUnitPricePaise > line.unitPricePaise
+            ? sum + (line.originalUnitPricePaise - line.unitPricePaise) * line.quantity
+            : sum,
+        0,
+      )
+    : 0;
 
   usePageMeta({
     title: 'Your bag · Dear Hills',
-    description: 'Review the authentic Himachali products in your Dear Hills bag before checkout.',
+    description: 'Review the authentic Himalayan products in your Dear Hills bag before checkout.',
     canonicalPath: '/cart',
     noindex: true,
   });
 
   return (
-    <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12 ${hasLines ? 'pb-24 lg:pb-12' : ''}`}>
-      <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Bag' }]} />
-      <PageHeader eyebrow="Your selection" title="The bag" lede="Stock is not reserved until you place the order. You can review delivery and payment on the next step." />
+    <div className={`mx-auto max-w-7xl px-3.5 py-5 sm:px-6 lg:px-8 lg:py-12 ${hasLines ? 'pb-28 lg:pb-12' : ''}`}>
+      <div className="hidden sm:block">
+        <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Bag' }]} />
+      </div>
+      <div className="md:hidden mb-4 rounded-2xl bg-gradient-to-r from-[#0F4C3A] to-[#166D55] p-4 text-white shadow-sm">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200">Your Shopping Bag</p>
+        <h1 className="mt-1 font-serif text-2xl font-medium text-white">
+          {hasLines ? `${cart?.itemCount} Item${cart?.itemCount === 1 ? '' : 's'} Ready` : 'The Bag'}
+        </h1>
+        {totalSavingsPaise > 0 ? (
+          <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-emerald-950/40 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-200">
+            ✨ Saving {formatINR(totalSavingsPaise)} on festive pricing
+          </p>
+        ) : null}
+      </div>
+      <PageHeader className="hidden md:flex" eyebrow="Your selection" title="The bag" lede="Stock is not reserved until you place the order. You can review delivery and payment on the next step." />
 
       {cartQuery.isLoading ? (
-        <div className="mt-10"><LoadingBlock rows={3} /></div>
+        <div className="mt-8"><LoadingBlock rows={3} /></div>
       ) : cartQuery.isError ? (
-        <div className="mt-10"><ErrorState onRetry={() => void cartQuery.refetch()} /></div>
+        <div className="mt-8"><ErrorState onRetry={() => void cartQuery.refetch()} /></div>
       ) : !cart || cart.lines.length === 0 ? (
-        <div className="mt-10">
+        <div className="mt-8">
           <EmptyState
             eyebrow="Nothing here yet"
             title="Your bag is empty"
@@ -73,8 +95,24 @@ export function CartPage() {
           />
         </div>
       ) : (
-        <div className="mt-10 grid gap-10 lg:grid-cols-[1.4fr_0.6fr] lg:gap-14">
+        <div className="mt-5 md:mt-10 grid gap-6 md:gap-10 lg:grid-cols-[1.4fr_0.6fr] lg:gap-14">
           <div>
+            {remainingForFreeShipping === 0 && cart.freeShippingThresholdPaise > 0 ? (
+              <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-semibold text-emerald-900 md:hidden">
+                <span>🎉 Free delivery unlocked on this order!</span>
+              </div>
+            ) : remainingForFreeShipping > 0 ? (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 md:hidden">
+                <div className="flex items-center justify-between text-xs font-semibold text-amber-950">
+                  <span>Add {formatINR(remainingForFreeShipping)} for FREE shipping</span>
+                  <span className="tabular-nums">{progress}%</span>
+                </div>
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-amber-200/70">
+                  <div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${progress}%` }} />
+                </div>
+              </div>
+            ) : null}
+
             {cart.hasUnavailable ? (
               <div className="mb-5">
                 <Alert tone="warning" title="One item needs attention">
@@ -83,18 +121,18 @@ export function CartPage() {
               </div>
             ) : null}
 
-            <ul className="border-t border-line">
+            <ul className="space-y-3 md:space-y-0 md:border-t md:border-line">
               {cart.lines.map((line) => (
-                <li key={line.productId} className="flex gap-4 border-b border-line py-5 sm:gap-5">
-                  <Link to={`/shop/${line.slug}`} className="h-28 w-24 shrink-0 overflow-hidden bg-sand/40">
+                <li key={line.productId} className="flex gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-2xs md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:border-line md:bg-transparent md:px-0 md:py-5 md:shadow-none sm:gap-5">
+                  <Link to={`/shop/${line.slug}`} className="h-24 w-24 md:h-28 md:w-24 shrink-0 overflow-hidden rounded-xl md:rounded-none bg-sand/40">
                     {line.imageUrl ? (
                       <img src={line.imageUrl} alt={line.imageAlt ?? line.name} className="h-full w-full object-cover" />
                     ) : null}
                   </Link>
-                  <div className="flex min-w-0 flex-1 flex-col justify-between gap-3 sm:flex-row">
+                  <div className="flex min-w-0 flex-1 flex-col justify-between gap-2.5 sm:flex-row">
                     <div className="min-w-0">
-                      <p className="text-[10px] uppercase tracking-[0.13em] text-muted">{line.sellerName}</p>
-                      <h2 className="mt-1 font-serif text-lg leading-snug text-forest">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#0F766E] md:text-muted md:font-normal">{line.sellerName}</p>
+                      <h2 className="mt-0.5 font-serif text-base md:text-lg font-semibold md:font-normal leading-snug text-forest">
                         <Link to={`/shop/${line.slug}`} className="hover:text-terra">{line.name}</Link>
                       </h2>
                       <p className="mt-1 text-xs text-muted">
@@ -216,23 +254,23 @@ export function CartPage() {
       )}
 
       {hasLines && cart && !keyboardOpen ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-xl lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/98 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-6px_24px_rgba(15,23,42,0.12)] backdrop-blur-md lg:hidden">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
-                Estimated total · {cart.itemCount} item{cart.itemCount === 1 ? '' : 's'}
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700">
+                {cart.shippingEstimatePaise === 0 ? 'Free Shipping · ' : ''}{cart.itemCount} item{cart.itemCount === 1 ? '' : 's'}
               </p>
-              <p className="font-serif text-xl font-semibold text-forest">
+              <p className="font-serif text-xl font-bold text-slate-950 tabular-nums">
                 {formatINR(cart.subtotalPaise + cart.shippingEstimatePaise)}
               </p>
             </div>
             {user ? (
-              <LinkButton to="/checkout" size="md" className="shrink-0">
-                Checkout
+              <LinkButton to="/checkout" size="md" className="shrink-0 rounded-xl !border-[#F59E0B] !bg-gradient-to-r !from-[#FF9F00] !to-[#F59E0B] !text-slate-950 font-bold shadow-sm">
+                Continue to Checkout →
               </LinkButton>
             ) : (
-              <LinkButton to={`/login?next=${encodeURIComponent('/checkout')}`} size="md" className="shrink-0">
-                Sign in
+              <LinkButton to={`/login?next=${encodeURIComponent('/checkout')}`} size="md" className="shrink-0 rounded-xl !border-[#0F766E] !bg-[#0F766E] !text-white font-bold shadow-sm">
+                Sign in &amp; Checkout →
               </LinkButton>
             )}
           </div>

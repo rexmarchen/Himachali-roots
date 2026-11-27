@@ -200,37 +200,55 @@ export function ShopPage() {
   });
 
   return (
-    <div className="mx-auto max-w-[88rem] px-3.5 py-4 sm:px-6 lg:px-8 xl:px-10 sm:py-8 lg:py-12">
+    <div className="mx-auto max-w-[88rem] px-3 sm:px-6 lg:px-8 xl:px-10 py-4 sm:py-8 lg:py-12">
       <div className="hidden sm:block">
         <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Shop' }]} />
       </div>
+      <div className="md:hidden mb-3 rounded-2xl bg-gradient-to-r from-[#0F4C3A] via-[#14634E] to-[#1D7A60] p-4 text-white shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200">
+            {q ? `Search: “${q}”` : activeCategory ? 'Category Shelf' : 'Himalayan Catalogue'}
+          </p>
+          {products.data ? (
+            <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[10.5px] font-semibold text-white tabular-nums">
+              {products.data.total} item{products.data.total === 1 ? '' : 's'}
+            </span>
+          ) : null}
+        </div>
+        <h1 className="mt-1 font-serif text-2xl font-medium leading-tight text-white">
+          {q ? 'Search results' : activeCategory ? activeCategory.name : 'All Authentic Goods'}
+        </h1>
+        <p className="mt-1 text-xs leading-relaxed text-emerald-50/90 line-clamp-2">
+          {activeCategory?.description || 'Direct dispatch from verified makers across Himachal, Ladakh, Uttarakhand, Kashmir & Sikkim.'}
+        </p>
+      </div>
       <PageHeader
-        className="pb-4 sm:pb-8 pt-1 sm:pt-0"
+        className="hidden md:flex pb-4 sm:pb-8 pt-1 sm:pt-0"
         eyebrow={q ? `Search results for “${q}”` : activeCategory ? 'Category Collection' : 'The Catalogue'}
         title={q ? 'Search the shelves' : activeCategory ? activeCategory.name : 'All Products'}
         lede={
           activeCategory?.description
             ? activeCategory.description
-            : 'Small-batch goods from reviewed Himachali sellers. Prices include applicable taxes; shipping is calculated before checkout.'
+            : 'Small-batch goods from reviewed Himalayan sellers. Prices include applicable taxes; shipping is calculated before checkout.'
         }
       />
 
       {/* Category quick filters: mobile & tablet only (desktop already shows sidebar + nav) */}
       {liveCategories.length ? (
-        <div className="relative lg:hidden">
-          <div className="no-scrollbar -mx-3.5 mt-5 overflow-x-auto px-3.5 pr-8 pb-1 sm:mx-0 sm:px-0">
+        <div className="relative -mx-3 overflow-x-clip lg:hidden sm:mx-0">
+          <div className="no-scrollbar overflow-x-auto px-3 pr-8 pb-1 sm:px-0">
             <div className="flex min-w-max items-center gap-2 py-1">
               <button
                 type="button"
                 onClick={() => update('category', null)}
-                className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
+                className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-all ${
                   !category
-                    ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
-                    : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
+                    ? 'border-[#0F766E] bg-[#0F766E] text-white shadow-xs'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-forest/40'
                 }`}
               >
-                <span>All shelves</span>
-                <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10.5px] ${!category ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
+                <span>All</span>
+                <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] ${!category ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
                   {liveCategories.reduce((total, item) => total + (item.productCount ?? 0), 0)}
                 </span>
               </button>
@@ -242,14 +260,14 @@ export function ShopPage() {
                     key={item.id}
                     type="button"
                     onClick={() => update('category', isSelected ? null : item.slug)}
-                    className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-all ${
+                    className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3.5 text-xs font-medium transition-all ${
                       isSelected
-                        ? 'border-forest bg-forest font-semibold text-paper shadow-xs'
-                        : 'border-line bg-surface text-ink/80 hover:border-forest/40 hover:bg-paper'
+                        ? 'border-[#0F766E] bg-[#0F766E] font-semibold text-white shadow-xs'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-forest/40'
                     }`}
                   >
                     <span>{item.name}</span>
-                    <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10.5px] ${isSelected ? 'bg-white/20 text-white' : 'bg-forest/[0.06] text-muted'}`}>
+                    <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
                       {item.productCount ?? 0}
                     </span>
                   </button>
@@ -257,7 +275,7 @@ export function ShopPage() {
               })}
             </div>
           </div>
-          <div className="pointer-events-none absolute inset-y-0 -right-3.5 w-8 bg-gradient-to-l from-paper to-transparent sm:right-0" aria-hidden />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[#F4F6F8] to-transparent" aria-hidden />
         </div>
       ) : null}
 
@@ -396,10 +414,11 @@ export function ShopPage() {
           </div>
         </aside>
 
-        <div>
+        <div className="min-w-0">
           {/* Editorial Category Showcase Banner */}
+          {/* Desktop category showcase banner (kept for md+, hidden on mobile to keep catalogue fast) */}
           {activeCategory && !q ? (
-            <div className="mb-6 overflow-hidden rounded-xl border border-line bg-gradient-to-br from-[#FAF6F0] via-surface to-[#F3EDE2] p-5 sm:p-6 shadow-xs">
+            <div className="hidden md:block mb-6 overflow-hidden rounded-xl border border-line bg-gradient-to-br from-[#FAF6F0] via-surface to-[#F3EDE2] p-5 sm:p-6 shadow-xs">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
                 <div className="max-w-xl">
                   <div className="flex items-center gap-2 mb-1.5">
@@ -471,53 +490,85 @@ export function ShopPage() {
             </div>
           </div>
 
-          {/* Mobile high-converting action & filter bar (44px ergonomic touch height, zero clipped select text) */}
-          <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-line/70 bg-white/90 px-2 py-1.5 shadow-2xs backdrop-blur-xs lg:hidden">
+          {/* Mobile Flipkart-style filter & quick-toggle bar */}
+          <div className="sticky top-[102px] z-20 -mx-3 mb-3 flex items-center gap-2 overflow-x-auto no-scrollbar border-y border-slate-200 bg-white/95 px-3 py-2 shadow-2xs backdrop-blur-md md:mx-0 md:rounded-xl md:border md:static lg:hidden">
             <button
               type="button"
               onClick={() => setFiltersOpen(true)}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-forest/25 bg-paper px-3 text-xs font-semibold text-forest shadow-2xs active:scale-95 shrink-0"
+              className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-3 text-xs font-bold text-slate-800 active:scale-95"
               aria-haspopup="dialog"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 text-[#0F766E]" aria-hidden>
                 <path d="M4 6h16M7 12h10M10 18h4" strokeLinecap="round" />
               </svg>
               <span>Filters</span>
               {activeCount > 0 ? (
-                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-terra px-1 text-[10px] font-bold text-white">
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F97316] px-1 text-[10px] font-bold text-white">
                   {activeCount}
                 </span>
               ) : null}
             </button>
 
-            <div className="flex min-w-0 items-center justify-end gap-2">
-              <span className="hidden min-[360px]:inline text-[11px] font-semibold text-muted shrink-0 tabular-nums">
-                {products.data ? `${products.data.total} items` : '…'}
-              </span>
-              <Select
-                id="sort-mobile"
-                name="sortMobile"
-                aria-label="Sort products"
-                value={sort}
-                onChange={(event) => update('sort', event.target.value)}
-                className="!h-11 !min-h-11 !w-auto min-w-0 max-w-[148px] min-[360px]:min-w-[132px] min-[360px]:max-w-[175px] !py-1.5 !pl-2.5 !pr-8 !text-[13px] rounded-lg border-line bg-paper font-medium shadow-2xs"
-              >
-                {SORTS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <Select
+              id="sort-mobile"
+              name="sortMobile"
+              aria-label="Sort products"
+              value={sort}
+              onChange={(event) => update('sort', event.target.value)}
+              className="!h-9 !min-h-9 !w-auto min-w-[125px] max-w-[165px] shrink-0 !rounded-full !border-slate-300 !bg-slate-50 !py-1 !pl-3 !pr-7 !text-xs font-semibold text-slate-800"
+            >
+              {SORTS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+
+            <button
+              type="button"
+              onClick={() => update('giTagged', params.get('giTagged') === 'true' ? null : 'true')}
+              className={`inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full border px-3 text-xs font-semibold transition-colors ${
+                params.get('giTagged') === 'true'
+                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              <span>✓ GI Tagged</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => update('inStock', params.get('inStock') === 'true' ? null : 'true')}
+              className={`inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full border px-3 text-xs font-semibold transition-colors ${
+                params.get('inStock') === 'true'
+                  ? 'border-amber-500 bg-amber-500 text-slate-950'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              <span>In Stock</span>
+            </button>
           </div>
 
           {activeCount > 0 ? (
-            <div className="mb-5 flex flex-wrap gap-2">
+            <div className="mb-4 flex flex-wrap gap-2">
               {q ? <FilterChip label={`“${q}”`} onClear={() => update('q', null)} /> : null}
               {category ? <FilterChip label={filters?.categories.find((item) => item.slug === category)?.name ?? category} onClear={() => update('category', null)} /> : null}
               {region ? <FilterChip label={region} onClear={() => update('region', null)} /> : null}
+              {params.get('giTagged') === 'true' ? <FilterChip label="GI Tagged" onClear={() => update('giTagged', null)} /> : null}
               {seller ? <FilterChip label={filters?.sellers.find((item) => item.slug === seller)?.name ?? seller} onClear={() => update('seller', null)} /> : null}
               {params.get('inStock') ? <FilterChip label="In stock" onClear={() => update('inStock', null)} /> : null}
+              {params.get('minPrice') || params.get('maxPrice') ? (
+                <FilterChip
+                  label={`₹${params.get('minPrice') ? Number(params.get('minPrice')) / 100 : '0'}–${params.get('maxPrice') ? `₹${Number(params.get('maxPrice')) / 100}` : 'Any'}`}
+                  onClear={() => {
+                    const next = new URLSearchParams(params);
+                    next.delete('minPrice');
+                    next.delete('maxPrice');
+                    next.delete('page');
+                    setParams(next, { replace: true });
+                  }}
+                />
+              ) : null}
             </div>
           ) : null}
 
@@ -543,10 +594,15 @@ export function ShopPage() {
             />
           )}
 
-          <div className="mt-12 border-t border-line pt-5 text-[11px] leading-relaxed text-muted">
+          <div className="mt-10 border-t border-line pt-5 text-[11px] leading-relaxed text-muted">
+            {config?.devMode ? (
+              <p className="mb-1">
+                Listings marked <Badge tone="terra">Demo data</Badge> are seeded development records, not live commerce.
+              </p>
+            ) : null}
             <p>
-              Listings marked <Badge tone="terra">Demo data</Badge> are seeded development records, not live commerce.
-              Product photography is illustrative and credited on the <Link to="/credits" className="underline underline-offset-2">credits page</Link>.
+              All products are reviewed before publication. Image attributions are listed on the{' '}
+              <Link to="/credits" className="underline underline-offset-2 hover:text-forest">credits page</Link>.
             </p>
           </div>
         </div>
@@ -568,8 +624,8 @@ export function ShopPage() {
             >
               Reset
             </Button>
-            <Button className="flex-1 whitespace-nowrap" onClick={() => setFiltersOpen(false)}>
-              Show results
+            <Button className="flex-1 whitespace-nowrap !bg-[#0F766E] !border-[#0F766E]" onClick={() => setFiltersOpen(false)}>
+              Show {products.data?.total ?? ''} results
             </Button>
           </div>
         }
@@ -642,6 +698,42 @@ export function ShopPage() {
 
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Price (₹)</p>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {[
+                { label: 'Under ₹500', min: '', max: '50000' },
+                { label: '₹500 – ₹1,500', min: '50000', max: '150000' },
+                { label: '₹1,500 – ₹3,500', min: '150000', max: '350000' },
+                { label: 'Above ₹3,500', min: '350000', max: '' },
+              ].map((preset) => {
+                const activePreset =
+                  (params.get('minPrice') ?? '') === preset.min && (params.get('maxPrice') ?? '') === preset.max;
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      const next = new URLSearchParams(params);
+                      if (activePreset) {
+                        next.delete('minPrice');
+                        next.delete('maxPrice');
+                      } else {
+                        if (preset.min) next.set('minPrice', preset.min);
+                        else next.delete('minPrice');
+                        if (preset.max) next.set('maxPrice', preset.max);
+                        else next.delete('maxPrice');
+                      }
+                      next.delete('page');
+                      setParams(next, { replace: true });
+                    }}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      activePreset ? 'border-[#0F766E] bg-[#0F766E] text-white' : 'border-slate-200 bg-white text-slate-700'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
             <div className="flex items-center gap-2">
               <Input
                 id="mobile-min-price"

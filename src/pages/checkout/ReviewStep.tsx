@@ -183,7 +183,7 @@ export function ReviewStep({
       </div>
 
       <p className="mt-3 text-[10px] leading-relaxed text-muted">
-        By placing this order you accept the{' '}
+        By placing this order you accept our{' '}
         <Link to="/policies/terms" className="underline underline-offset-2 hover:text-forest">
           terms
         </Link>{' '}
@@ -191,7 +191,7 @@ export function ReviewStep({
         <Link to="/policies/returns" className="underline underline-offset-2 hover:text-forest">
           returns policy
         </Link>
-        . These documents are drafts pending legal review. Your order is confirmed only after the server records payment.
+        . Your order is confirmed after secure server payment verification.
       </p>
     </CheckoutPanel>
   );

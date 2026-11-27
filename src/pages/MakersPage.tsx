@@ -298,7 +298,7 @@ export function MakersPage() {
       {/* =========================================================================
           SECTION B: MAKER DISCOVERY CONTROLS & FILTERING
          ========================================================================= */}
-      <section className="sticky top-[88px] md:top-[128px] z-20 border-b border-sand bg-paper/98">
+      <section className="sticky top-[102px] md:top-[128px] z-20 border-b border-slate-200 md:border-sand bg-white/98 md:bg-paper/98 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             {/* Horizontal Category Chips with subtle scroll fade */}
@@ -311,10 +311,10 @@ export function MakersPage() {
                       key={cat.slug}
                       type="button"
                       onClick={() => updateParams({ category: cat.slug === 'all' ? null : cat.slug })}
-                      className={`min-h-11 sm:min-h-9 shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium tracking-wide transition-colors ${
+                      className={`min-h-10 sm:min-h-9 shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold md:font-medium tracking-wide transition-colors ${
                         isActive
-                          ? 'bg-forest text-paper shadow-sm'
-                          : 'border border-sand bg-surface/70 text-ink/80 hover:border-forest/40 hover:bg-surface'
+                          ? 'bg-[#0F766E] md:bg-forest text-white md:text-paper shadow-sm'
+                          : 'border border-slate-200 md:border-sand bg-slate-50 md:bg-surface/70 text-ink/80 hover:border-forest/40 hover:bg-surface'
                       }`}
                     >
                       {cat.label}

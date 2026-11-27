@@ -435,14 +435,22 @@ function Header() {
 
   return (
     <>
-      <HeritageAnnouncementBar customText={announcement?.active && announcement.text ? announcement.text : undefined} />
+      <div className="hidden md:block">
+        <HeritageAnnouncementBar customText={announcement?.active && announcement.text ? announcement.text : undefined} />
+      </div>
       <header
-        className="sticky top-0 z-40 border-b border-line bg-paper/95 text-ink shadow-2xs backdrop-blur-md"
+        className="sticky top-0 z-40 border-b border-emerald-900/30 md:border-line mobile-header-gradient md:bg-none md:bg-paper/95 text-white md:text-ink shadow-md md:shadow-2xs md:backdrop-blur-md"
       >
 
         <div className="mx-auto flex h-12 sm:h-14 max-w-[88rem] items-center gap-2 sm:gap-3 lg:gap-4 px-3.5 sm:px-6 lg:px-8 xl:px-10">
-          <div className="shrink-0">
+          <div className="shrink-0 hidden md:block">
             <Wordmark />
+          </div>
+          <div className="shrink-0 md:hidden flex items-center gap-2">
+            <Wordmark compact light />
+            <span className="rounded-full bg-amber-400/20 border border-amber-300/35 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-amber-200">
+              Himalayas
+            </span>
           </div>
 
           <div className="mx-2 hidden flex-1 md:flex lg:mx-3 min-w-[200px] sm:min-w-[220px] lg:min-w-[260px] xl:min-w-[300px] max-w-lg lg:max-w-lg xl:max-w-xl">
@@ -471,13 +479,13 @@ function Header() {
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5">
             <Link
               to="/account/wishlist"
-              className="hidden h-9.5 w-9.5 lg:h-10 lg:w-10 items-center justify-center text-ink transition-colors hover:text-terra sm:inline-flex"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-white md:text-ink transition-colors hover:bg-white/10 md:hover:bg-transparent md:hover:text-terra"
               aria-label="Saved items"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-[17px] w-[17px] lg:h-[18px] lg:w-[18px]" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-[19px] w-[19px] lg:h-[18px] lg:w-[18px]" aria-hidden>
                 <path
                   d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                  strokeWidth="1.6"
+                  strokeWidth="1.8"
                 />
               </svg>
             </Link>
@@ -502,12 +510,26 @@ function Header() {
               <AccountMenu />
             </div>
 
-            <CartLink count={cartCount} compact />
+            <Link
+              to="/cart"
+              aria-label={`Shopping bag (${cartCount} items)`}
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-white hover:bg-white/10 md:hidden"
+            >
+              <Icon name="bag" className="h-[19px] w-[19px]" />
+              {cartCount > 0 ? (
+                <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF9F00] px-1 text-[10px] font-extrabold text-slate-950 shadow-xs tabular-nums">
+                  {cartCount}
+                </span>
+              ) : null}
+            </Link>
+            <div className="hidden md:block">
+              <CartLink count={cartCount} compact />
+            </div>
 
             <button
               ref={menuButtonRef}
               type="button"
-              className="inline-flex h-11 w-11 items-center justify-center text-ink transition-colors hover:text-terra lg:hidden"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-white md:text-ink transition-colors hover:bg-white/10 md:hover:bg-transparent md:hover:text-terra lg:hidden"
               onClick={() => setMobileOpen(true)}
               aria-label="Open menu"
               aria-expanded={mobileOpen}
@@ -518,7 +540,7 @@ function Header() {
           </div>
         </div>
 
-        <div className="px-3 pb-2 md:hidden">
+        <div className="px-3 pb-2.5 md:hidden">
           <EcommerceSearchBar inputId="site-search-mobile" />
         </div>
 
@@ -609,34 +631,63 @@ function Header() {
           role="dialog"
           aria-modal="true"
           aria-label="Menu"
-          className="fixed inset-0 z-[70] flex flex-col bg-paper lg:hidden"
+          className="fixed inset-0 z-[70] flex flex-col bg-[#F4F6F8] md:bg-paper lg:hidden"
         >
-          <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
-            <Wordmark />
+          <div className="mobile-header-gradient flex shrink-0 items-center justify-between px-4 py-3.5 text-white shadow-sm">
+            <div className="min-w-0">
+              <Wordmark compact light />
+              <p className="mt-0.5 truncate text-[11px] text-emerald-100">
+                {user ? `Hello, ${user.fullName || user.email}` : 'Sign in for faster checkout & tracking'}
+              </p>
+            </div>
             <button
               type="button"
               data-menu-close
               onClick={() => setMobileOpen(false)}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-sand/40 hover:text-terra"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15"
               aria-label="Close menu"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden>
                 <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
               </svg>
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-4">
-            <nav aria-label="Mobile primary">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-4">
+            <div className="mb-4 grid grid-cols-3 gap-2">
+              <Link
+                to={user ? '/account/orders' : '/login?next=%2Faccount%2Forders'}
+                onClick={() => setMobileOpen(false)}
+                className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-2 text-center text-[11px] font-bold text-emerald-900"
+              >
+                <span>My Orders</span>
+              </Link>
+              <Link
+                to="/gi-tagged"
+                onClick={() => setMobileOpen(false)}
+                className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border border-amber-200 bg-amber-50 px-2 py-2 text-center text-[11px] font-bold text-amber-900"
+              >
+                <span>GI Tagged</span>
+              </Link>
+              <Link
+                to="/himalayan-handmade-products"
+                onClick={() => setMobileOpen(false)}
+                className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-2 py-2 text-center text-[11px] font-bold text-indigo-900"
+              >
+                <span>Regions</span>
+              </Link>
+            </div>
+
+            <nav aria-label="Mobile primary" className="rounded-2xl border border-slate-200/80 bg-white px-4 shadow-2xs">
               {NAV.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
                   onClick={() => setMobileOpen(false)}
-                  className="flex min-h-12 items-center justify-between border-b border-line/70 py-3 font-serif text-2xl text-forest transition-colors hover:text-terra"
+                  className="flex min-h-12 items-center justify-between border-b border-slate-100 py-3 font-serif text-xl font-medium text-forest transition-colors hover:text-terra"
                 >
                   <span>{item.label}</span>
-                  <span aria-hidden className="text-base text-muted">
+                  <span aria-hidden className="text-sm text-emerald-700 font-sans font-bold">
                     →
                   </span>
                 </Link>
@@ -644,17 +695,27 @@ function Header() {
               <Link
                 to="/shop"
                 onClick={() => setMobileOpen(false)}
-                className="flex min-h-12 items-center justify-between border-b border-line/70 py-3 font-serif text-2xl text-forest transition-colors hover:text-terra"
+                className="flex min-h-12 items-center justify-between border-b border-slate-100 py-3 font-serif text-xl font-medium text-forest transition-colors hover:text-terra"
               >
                 <span>All products</span>
-                <span aria-hidden className="text-base text-muted">
+                <span aria-hidden className="text-sm text-emerald-700 font-sans font-bold">
+                  →
+                </span>
+              </Link>
+              <Link
+                to="/guides"
+                onClick={() => setMobileOpen(false)}
+                className="flex min-h-12 items-center justify-between py-3 font-serif text-xl font-medium text-forest transition-colors hover:text-terra"
+              >
+                <span>Himalayan Craft Guides</span>
+                <span aria-hidden className="text-sm text-emerald-700 font-sans font-bold">
                   →
                 </span>
               </Link>
             </nav>
 
-            <div className="mt-5">
-              <p className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted">Browse by shelf</p>
+            <div className="mt-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
+              <p className="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-emerald-800">Browse by shelf</p>
               <div className="flex flex-wrap gap-2">
                 {[
                   { label: 'Fruits & Produce', to: '/categories/fruits-and-fresh-produce' },
@@ -668,7 +729,7 @@ function Header() {
                     key={cat.to}
                     to={cat.to}
                     onClick={() => setMobileOpen(false)}
-                    className="inline-flex min-h-9 items-center rounded-full border border-line bg-surface px-3 text-xs font-medium text-ink transition-colors hover:border-forest hover:text-forest"
+                    className="inline-flex min-h-9 items-center rounded-full border border-emerald-200 bg-emerald-50/70 px-3 text-xs font-semibold text-emerald-950 transition-colors hover:border-emerald-500"
                   >
                     {cat.label}
                   </Link>
@@ -676,40 +737,40 @@ function Header() {
               </div>
             </div>
 
-            <div className="mt-6 space-y-1">
-              <Link to="/account" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between py-2 text-sm font-medium text-ink">
+            <div className="mt-4 rounded-2xl border border-slate-200/80 bg-white px-4 py-1 shadow-2xs">
+              <Link to={user ? '/account' : '/login'} onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between border-b border-slate-100 py-2 text-sm font-semibold text-slate-900">
                 <span>{user ? 'Your account' : 'Sign in or create an account'}</span>
                 <span aria-hidden className="text-muted">→</span>
               </Link>
-              <Link to="/account/orders" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between py-2 text-sm text-ink/85">
+              <Link to="/account/orders" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between border-b border-slate-100 py-2 text-sm text-slate-700">
                 <span>Orders &amp; returns</span>
                 <span aria-hidden className="text-muted">→</span>
               </Link>
-              <Link to="/account/wishlist" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between py-2 text-sm text-ink/85">
+              <Link to="/account/wishlist" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between border-b border-slate-100 py-2 text-sm text-slate-700">
                 <span>Saved items</span>
                 <span aria-hidden className="text-muted">→</span>
               </Link>
-              <Link to="/contact" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between py-2 text-sm text-ink/85">
+              <Link to="/contact" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between py-2 text-sm text-slate-700">
                 <span>Help &amp; contact</span>
                 <span aria-hidden className="text-muted">→</span>
               </Link>
             </div>
 
-            <div className="mt-6 space-y-2 border-t border-line pt-5">
+            <div className="mt-4 space-y-2 pt-1">
               {user?.roles.includes('admin') ? (
-                <Link to="/admin" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between border border-forest/20 bg-forest/5 px-3 py-2 text-sm font-semibold text-forest">
+                <Link to="/admin" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-900">
                   <span>Administration</span>
                   <span aria-hidden>→</span>
                 </Link>
               ) : null}
               {user?.roles.includes('seller') && !user?.roles.includes('admin') ? (
-                <Link to="/seller" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between border border-terra/30 bg-terra/10 px-3 py-2 text-sm font-semibold text-terra">
+                <Link to="/seller" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900">
                   <span>Seller Studio</span>
                   <span aria-hidden>→</span>
                 </Link>
               ) : null}
               {!user?.roles.includes('seller') && !user?.roles.includes('admin') ? (
-                <Link to="/sell" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between px-1 py-2 text-sm font-medium text-terra">
+                <Link to="/sell" onClick={() => setMobileOpen(false)} className="flex min-h-11 items-center justify-between rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-900">
                   <span>Sell on Dear Hills</span>
                   <span aria-hidden>→</span>
                 </Link>
@@ -721,15 +782,15 @@ function Header() {
                     setMobileOpen(false);
                     await signOut();
                   }}
-                  className="flex min-h-11 w-full items-center px-1 py-2 text-left text-sm text-muted hover:text-ink"
+                  className="flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:text-ink"
                 >
                   Sign out
                 </button>
               ) : null}
             </div>
 
-            <p className="mt-8 border-t border-line pt-5 text-[11px] leading-relaxed text-muted">
-              Dear Hills · A curated marketplace for products made and grown in Himachal Pradesh.
+            <p className="mt-6 border-t border-slate-200 pt-4 text-[11px] leading-relaxed text-slate-500">
+              Dear Hills · Curated marketplace for crafts and harvests across the Indian Himalayas.
             </p>
           </div>
         </div>
@@ -746,22 +807,54 @@ function shouldShowTabBar(pathname: string): boolean {
   if (pathname.startsWith('/checkout') || pathname.startsWith('/seller') || pathname.startsWith('/admin')) return false;
   if (pathname === '/sell' || pathname.startsWith('/become-a-maker')) return false;
   if (AUTH_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) return false;
-  return ['/', '/shop', '/categories', '/category', '/makers', '/sellers', '/blog', '/about', '/sourcing', '/faq', '/contact', '/credits', '/offers', '/policies', '/account'].some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`),
-  );
+  return [
+    '/',
+    '/shop',
+    '/categories',
+    '/category',
+    '/himalayan-handmade-products',
+    '/gi-tagged',
+    '/regions',
+    '/crafts',
+    '/makers',
+    '/sellers',
+    '/blog',
+    '/guides',
+    '/about',
+    '/sourcing',
+    '/faq',
+    '/contact',
+    '/credits',
+    '/offers',
+    '/policies',
+    '/account',
+  ].some((path) => pathname === path || (path !== '/' && pathname.startsWith(`${path}/`)));
 }
 
-function MobileTabBar({ onOpenSearch }: { onOpenSearch: () => void }) {
+function MobileTabBar({ onOpenSearch: _onOpenSearch }: { onOpenSearch: () => void }) {
   const { pathname } = useLocation();
   const { user } = useAuth();
   const cartCount = useCartCount();
   const keyboardOpen = useKeyboardOpen();
   if (!shouldShowTabBar(pathname) || keyboardOpen) return null;
 
+  const isExplore =
+    pathname.startsWith('/himalayan-handmade-products') ||
+    pathname.startsWith('/regions') ||
+    pathname.startsWith('/crafts') ||
+    pathname.startsWith('/gi-tagged') ||
+    pathname.startsWith('/makers') ||
+    pathname.startsWith('/guides');
+
   const tabs = [
     { label: 'Home', to: '/', icon: 'home' as const, active: pathname === '/' },
-    { label: 'Shop', to: '/shop', icon: 'grid' as const, active: pathname === '/shop' || pathname.startsWith('/categories/') },
-    { label: 'Search', to: '/shop', icon: 'search' as const, active: false },
+    {
+      label: 'Shop',
+      to: '/shop',
+      icon: 'grid' as const,
+      active: pathname === '/shop' || pathname.startsWith('/categories/') || pathname.startsWith('/category/'),
+    },
+    { label: 'Explore', to: '/himalayan-handmade-products', icon: 'search' as const, active: isExplore },
     { label: 'Account', to: user ? '/account' : '/login', icon: 'user' as const, active: pathname.startsWith('/account') },
     { label: 'Bag', to: '/cart', icon: 'bag' as const, active: pathname === '/cart', count: cartCount },
   ];
@@ -769,48 +862,45 @@ function MobileTabBar({ onOpenSearch }: { onOpenSearch: () => void }) {
   return (
     <nav
       aria-label="Mobile shopping navigation"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/98 pb-[env(safe-area-inset-bottom)] backdrop-blur-md shadow-[0_-4px_16px_rgba(16,25,24,0.06)] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/98 pb-[env(safe-area-inset-bottom)] backdrop-blur-md shadow-[0_-4px_18px_rgba(15,23,42,0.08)] md:hidden"
     >
       <ul className="mx-auto grid max-w-lg grid-cols-5">
         {tabs.map((tab) => {
           const content = (
             <>
+              {tab.active ? <span className="absolute top-0 h-[3px] w-8 rounded-b-full bg-[#0F766E]" aria-hidden /> : null}
               <span
                 className={`relative flex h-7 w-11 items-center justify-center rounded-full transition-colors ${
-                  tab.active ? 'bg-terra/12' : ''
+                  tab.active ? 'bg-emerald-50 text-[#0F766E]' : ''
                 }`}
               >
-                <Icon name={tab.icon} className="h-5 w-5" />
+                {tab.label === 'Explore' ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-5 w-5" aria-hidden>
+                    <circle cx="12" cy="12" r="9" />
+                    <polygon points="15.5,8.5 13.5,13.5 8.5,15.5 10.5,10.5" fill={tab.active ? 'currentColor' : 'none'} />
+                  </svg>
+                ) : (
+                  <Icon name={tab.icon} className="h-5 w-5" />
+                )}
                 {'count' in tab && typeof tab.count === 'number' && tab.count > 0 ? (
-                  <span className="absolute right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-terra px-1 text-[10px] font-bold leading-none text-white shadow-2xs tabular-nums">
+                  <span className="absolute right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F97316] px-1 text-[10px] font-extrabold leading-none text-white shadow-2xs tabular-nums">
                     {tab.count}
                   </span>
                 ) : null}
               </span>
-              <span className={`text-[10.5px] leading-none ${tab.active ? 'font-semibold' : 'font-medium'}`}>
+              <span className={`text-[10.5px] leading-none ${tab.active ? 'font-bold text-[#0F766E]' : 'font-medium'}`}>
                 {tab.label}
               </span>
             </>
           );
-          const classes = `flex h-14 flex-col items-center justify-center gap-1 transition-colors ${
-            tab.active ? 'text-terra' : 'text-ink/75 hover:text-forest'
+          const classes = `relative flex h-14 flex-col items-center justify-center gap-1 transition-colors ${
+            tab.active ? 'text-[#0F766E]' : 'text-slate-600 hover:text-forest'
           }`;
           return (
             <li key={tab.label}>
-              {tab.label === 'Search' ? (
-                <button
-                  type="button"
-                  className={`w-full ${classes}`}
-                  onClick={onOpenSearch}
-                  aria-label="Search products"
-                >
-                  {content}
-                </button>
-              ) : (
-                <Link to={tab.to} className={classes} aria-current={tab.active ? 'page' : undefined} aria-label={tab.label}>
-                  {content}
-                </Link>
-              )}
+              <Link to={tab.to} className={classes} aria-current={tab.active ? 'page' : undefined} aria-label={tab.label}>
+                {content}
+              </Link>
             </li>
           );
         })}
@@ -974,7 +1064,7 @@ function Footer({ flushTop = false, extraBottomPad = false }: { flushTop?: boole
               Photography is authentic and illustrative of Himachal Pradesh, sourced under creative licences listed on the{' '}
               <Link to="/credits" className="underline underline-offset-2 hover:text-paper">credits page</Link>.
             </p>
-            {config?.supportEmailIsPlaceholder ? (
+            {config?.supportEmailIsPlaceholder && config?.devMode ? (
               <p className="text-terra/90">Support email is configured for development. Replace with live contact before public launch.</p>
             ) : null}
           </div>
@@ -994,7 +1084,7 @@ function CheckoutFooter() {
   return (
     <footer className="border-t border-[#E3D9C9] bg-[#F6F0E6]">
       <div className="mx-auto flex max-w-[1200px] flex-col gap-3 px-4 py-6 text-[10.5px] leading-relaxed text-[#7A8179] sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-        <p>© {new Date().getFullYear()} DEAR HILLS. Handmade and grown in Himachal Pradesh.</p>
+        <p>© {new Date().getFullYear()} DEAR HILLS. Handcrafted across the Indian Himalayas.</p>
         <nav aria-label="Checkout help" className="flex flex-wrap gap-x-5 gap-y-2">
           <Link to="/policies/shipping" className="transition-colors hover:text-[#234638]">
             Shipping

@@ -185,12 +185,12 @@ export function EcommerceSearchBar({
       <form
         onSubmit={handleSubmit}
         role="search"
-        className={`group flex h-11 sm:h-10 w-full items-center rounded-full border transition-all duration-200 ${
+        className={`group flex h-10 w-full items-center rounded-xl md:rounded-full border transition-all duration-200 ${
           isOpen
-            ? 'border-terra bg-white shadow-lg ring-2 ring-terra/25 text-ink'
+            ? 'border-amber-400 md:border-terra bg-white shadow-lg ring-2 ring-amber-400/30 md:ring-terra/25 text-ink'
             : light
               ? 'border-white/25 bg-white/15 text-white shadow-xs backdrop-blur-md hover:bg-white/25 hover:border-white/40'
-              : 'border-line bg-[#F2ECE1] text-ink shadow-xs hover:bg-[#ECE4D7]'
+              : 'border-white/90 md:border-line bg-white md:bg-[#F2ECE1] text-ink shadow-sm md:shadow-xs hover:bg-white md:hover:bg-[#ECE4D7]'
         }`}
       >
         <div
@@ -281,7 +281,7 @@ export function EcommerceSearchBar({
 
         <button
           type="submit"
-          className="flex h-full min-w-11 sm:min-w-9 shrink-0 items-center justify-center rounded-r-full border-l border-white/15 bg-terra px-3 sm:px-3.5 font-medium text-white transition-colors hover:bg-[#b9694c]"
+          className="flex h-full min-w-11 sm:min-w-9 shrink-0 items-center justify-center rounded-r-xl md:rounded-r-full border-l border-amber-400/40 md:border-white/15 bg-[#FF9F00] md:bg-terra px-3 sm:px-3.5 font-semibold text-slate-950 md:text-white transition-colors hover:bg-amber-400 md:hover:bg-[#b9694c]"
           aria-label="Submit search"
         >
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-3.5 w-3.5 lg:h-4 lg:w-4" aria-hidden>

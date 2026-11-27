@@ -95,6 +95,30 @@ function Stars({ rating, className = 'text-terra' }: { rating: number; className
 
 type DetailTab = 'story' | 'ingredients' | 'maker' | 'care' | 'shipping';
 
+const PINCODE_STORAGE_KEY = 'dear-hills-pincode';
+
+function readSavedPincode(): string {
+  try {
+    const val = window.localStorage.getItem(PINCODE_STORAGE_KEY) ?? '';
+    return /^\d{6}$/.test(val) ? val : '';
+  } catch {
+    return '';
+  }
+}
+
+function estimateDeliveryForPincode(pincode: string, baseEstimate: string | null | undefined) {
+  const firstTwo = Number(pincode.slice(0, 2));
+  const label =
+    firstTwo === 17
+      ? 'Himachal Express · Expected in 2–4 business days'
+      : firstTwo >= 11 && firstTwo <= 26
+        ? 'North India Priority · Expected in 3–5 business days'
+        : firstTwo >= 70 && firstTwo <= 79
+          ? 'Himalayan / East Route · Expected in 4–6 business days'
+          : 'Standard Insured Courier · Expected in 5–7 business days';
+  return `${label}${baseEstimate ? ` (${baseEstimate})` : ''}`;
+}
+
 export function ProductPage() {
   const { slug = '' } = useParams();
   const [selectedImage, setSelectedImage] = useState(0);
@@ -102,6 +126,9 @@ export function ProductPage() {
   const [activeTab, setActiveTab] = useState<DetailTab>('story');
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [pincodeInput, setPincodeInput] = useState<string>(readSavedPincode);
+  const [checkedPincode, setCheckedPincode] = useState<string>(readSavedPincode);
+  const [pincodeError, setPincodeError] = useState<string | null>(null);
   const buyBoxRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
 
@@ -477,7 +504,7 @@ export function ProductPage() {
   );
 
   return (
-    <div className={`mx-auto max-w-7xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8 lg:py-12 ${showStickyBar ? 'pb-28 md:pb-24' : ''}`}>
+    <div className={`mx-auto max-w-7xl px-3.5 py-4 sm:py-8 sm:px-6 lg:px-8 lg:py-12 ${!soldOut ? 'pb-28' : 'pb-10'} ${showStickyBar ? 'md:pb-24' : 'md:pb-12'}`}>
       <Breadcrumbs
         items={[
           { label: 'Home', to: '/' },
@@ -487,11 +514,11 @@ export function ProductPage() {
         ]}
       />
 
-      <div className="grid gap-8 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
+      <div className="grid gap-6 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
         {/* Left column: gallery and real listing facts */}
         <div>
           <div
-            className="group relative aspect-[4/3] sm:aspect-square lg:aspect-[4/5] lg:max-h-[540px] w-full overflow-hidden rounded-2xl sm:rounded-sm border border-line bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] shadow-xs"
+            className="group relative aspect-square sm:aspect-square lg:aspect-[4/5] lg:max-h-[540px] w-full overflow-hidden rounded-2xl sm:rounded-sm border border-slate-200/80 sm:border-line bg-gradient-to-b from-[#FAF7F2] to-[#F1E9DE] shadow-sm sm:shadow-xs"
             onTouchStart={(event) => {
               touchStartX.current = event.touches[0]?.clientX ?? null;
             }}
@@ -524,13 +551,52 @@ export function ProductPage() {
               <div className="flex h-full items-center justify-center text-sm text-muted">No photograph</div>
             )}
 
-            <div className="pointer-events-none absolute left-3.5 top-3.5 flex flex-wrap gap-2">
+            <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap gap-1.5">
+              {campaignOriginal && product.discountPercent ? (
+                <span className="sm:hidden inline-flex items-center rounded-md bg-gradient-to-r from-[#E11D48] to-[#F97316] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+                  {product.discountPercent}% OFF
+                </span>
+              ) : null}
               {product.originVerified ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-forest/25 bg-paper/95 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-forest shadow-sm backdrop-blur-sm">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 sm:border-forest/25 bg-white/95 sm:bg-paper/95 px-2.5 py-1 text-[10px] sm:text-[10.5px] font-bold sm:font-semibold uppercase tracking-[0.1em] text-emerald-800 sm:text-forest shadow-sm backdrop-blur-sm">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" aria-hidden />
                   Origin verified
                 </span>
               ) : null}
+            </div>
+
+            {/* Mobile top-right floating Wishlist + Share quick buttons (Flipkart style) */}
+            <div className="sm:hidden absolute right-3 top-3 z-10 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!user) {
+                    navigate(`/login?next=${encodeURIComponent(`/shop/${product.slug}`)}`);
+                    return;
+                  }
+                  toggleWishlist.mutate(isSaved);
+                }}
+                aria-label={isSaved ? 'Remove from saved items' : 'Save item to wishlist'}
+                className={`flex h-10 w-10 items-center justify-center rounded-full border shadow-md backdrop-blur-sm transition-transform active:scale-90 ${
+                  isSaved ? 'border-rose-500 bg-rose-500 text-white' : 'border-slate-200 bg-white/95 text-slate-700'
+                }`}
+              >
+                <span className="text-base leading-none">{isSaved ? '♥' : '♡'}</span>
+              </button>
+              <a
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`${product.name} (${formatINR(currentItemPrice)}) on Dear Hills — https://www.dearhills.in/shop/${product.slug}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Share on WhatsApp"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-[#0F766E] shadow-md backdrop-blur-sm"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden>
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" />
+                </svg>
+              </a>
             </div>
 
             {image ? (
@@ -677,16 +743,16 @@ export function ProductPage() {
             ) : null}
           </div>
 
-          <div className="mt-5 rounded-sm border border-line bg-surface p-5 shadow-xs">
+          <div className="mt-5 rounded-2xl sm:rounded-sm border border-emerald-200/80 sm:border-line bg-gradient-to-br from-white via-[#FBFDFC] to-emerald-50/40 sm:bg-none sm:bg-surface p-4 sm:p-5 shadow-xs">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-baseline gap-2.5">
-                  <span className="font-serif text-3xl font-medium text-forest tabular-nums">{formatINR(currentItemPrice)}</span>
+                  <span className="font-serif text-3xl font-bold sm:font-medium text-slate-950 sm:text-forest tabular-nums">{formatINR(currentItemPrice)}</span>
                   {strikeOriginalPrice ? (
-                    <span className="text-sm text-muted line-through tabular-nums">{formatINR(strikeOriginalPrice)}</span>
+                    <span className="text-sm text-slate-400 sm:text-muted line-through tabular-nums">{formatINR(strikeOriginalPrice)}</span>
                   ) : null}
                   {campaignOriginal && product.discountPercent ? (
-                    <span className="bg-terra px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
+                    <span className="rounded bg-gradient-to-r from-[#E11D48] to-[#F97316] sm:bg-none sm:bg-terra px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white">
                       {product.discountPercent}% off
                     </span>
                   ) : null}
@@ -696,7 +762,7 @@ export function ProductPage() {
                   {hasMeaningfulWeight ? ` · ${product.weightG} g` : ''} · Inclusive of applicable taxes
                 </p>
                 {product.campaignSlug && product.campaignName ? (
-                  <p className="mt-1.5 text-[11px] text-terra">
+                  <p className="mt-1.5 text-[11px] text-rose-600 sm:text-terra font-medium">
                     <Link to={`/offers/${product.campaignSlug}`} className="underline underline-offset-4 hover:text-forest">
                       {product.campaignName}
                     </Link>{' '}
@@ -706,34 +772,96 @@ export function ProductPage() {
               </div>
 
               <div className="shrink-0">
-                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-100/75 px-3 py-1 text-[11px] font-semibold text-emerald-800">
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${soldOut ? 'bg-muted' : 'bg-emerald-600'}`} />
+                <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-bold ${soldOut ? 'bg-slate-200 text-slate-700' : 'bg-emerald-600 sm:bg-emerald-100/75 text-white sm:text-emerald-800'}`}>
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${soldOut ? 'bg-slate-500' : 'bg-white sm:bg-emerald-600'}`} />
                   {soldOut ? 'Out of stock' : product.stock <= 3 ? `Only ${product.stock} left` : `${product.stock} in stock`}
                 </span>
               </div>
             </div>
 
             {showFreeShipping ? (
-              <div className="mt-5 rounded-sm border border-sand/70 bg-sand/25 p-3.5">
+              <div className="mt-4 rounded-xl sm:rounded-sm border border-emerald-200 sm:border-sand/70 bg-emerald-50/75 sm:bg-sand/25 p-3 sm:p-3.5">
                 <div className="flex items-center justify-between text-xs font-medium text-forest">
                   <span className="flex items-center gap-2">
-                    <TruckIcon className="h-4 w-4 shrink-0 text-forest/70" />
+                    <TruckIcon className="h-4 w-4 shrink-0 text-emerald-700 sm:text-forest/70" />
                     {amountToFreeShipping === 0 ? (
-                      <span className="font-semibold text-emerald-800">Qualified for free shipping</span>
+                      <span className="font-bold text-emerald-800">Free delivery unlocked on this order</span>
                     ) : (
-                      <span>Add {formatINR(amountToFreeShipping)} more to unlock <strong>free shipping</strong></span>
+                      <span>Add {formatINR(amountToFreeShipping)} more for <strong className="text-emerald-800">FREE delivery</strong></span>
                     )}
                   </span>
-                  <span className="text-[11px] text-muted tabular-nums">{shippingProgress}%</span>
+                  <span className="text-[11px] font-bold text-emerald-800 sm:text-muted tabular-nums">{shippingProgress}%</span>
                 </div>
-                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-sand/60">
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-200/70 sm:bg-sand/60">
                   <div
-                    className="h-full bg-forest transition-all duration-300"
+                    className="h-full bg-emerald-600 sm:bg-forest transition-all duration-300"
                     style={{ width: `${shippingProgress}%` }}
                   />
                 </div>
               </div>
             ) : null}
+
+            {/* Pincode Delivery Checker */}
+            <div className="mt-4 rounded-xl sm:rounded-sm border border-slate-200 sm:border-line bg-white p-3">
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="pdp-pincode-check" className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                  Check Delivery to PIN Code
+                </label>
+                {checkedPincode ? (
+                  <span className="text-[11px] font-semibold text-emerald-700">✓ {checkedPincode}</span>
+                ) : null}
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const clean = pincodeInput.replace(/\D/g, '').slice(0, 6);
+                  if (!/^\d{6}$/.test(clean)) {
+                    setPincodeError('Enter a valid 6-digit Indian PIN code.');
+                    return;
+                  }
+                  setPincodeError(null);
+                  setCheckedPincode(clean);
+                  try {
+                    window.localStorage.setItem(PINCODE_STORAGE_KEY, clean);
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                className="mt-2 flex gap-2"
+              >
+                <input
+                  id="pdp-pincode-check"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={pincodeInput}
+                  onChange={(e) => {
+                    setPincodeInput(e.target.value.replace(/\D/g, '').slice(0, 6));
+                    if (pincodeError) setPincodeError(null);
+                  }}
+                  placeholder="Enter 6-digit PIN (e.g. 175125)"
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:border-[#0F766E] focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="h-10 shrink-0 rounded-lg bg-[#0F766E] px-4 text-xs font-bold text-white transition-colors hover:bg-[#0D5C55]"
+                >
+                  Check
+                </button>
+              </form>
+              {pincodeError ? (
+                <p className="mt-1.5 text-[11px] font-medium text-rose-600">{pincodeError}</p>
+              ) : checkedPincode ? (
+                <p className="mt-2 text-[11.5px] font-medium text-emerald-800">
+                  🚚 {estimateDeliveryForPincode(checkedPincode, product.shippingEstimate)} ·{' '}
+                  {amountToFreeShipping === 0 ? 'Free Shipping' : `${formatINR(flatShipping)} flat shipping`}
+                </p>
+              ) : (
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  Dispatched directly from {product.seller.region ?? product.region ?? 'the Himalayas'}. Delivery across India.
+                </p>
+              )}
+            </div>
 
             {soldOut ? (
               <div className="mt-5">
@@ -967,23 +1095,23 @@ export function ProductPage() {
                 </div>
                 <dl className="divide-y divide-line text-xs">
                   {product.varietyGrade ? (
-                    <div className="grid grid-cols-3 px-4 py-2.5">
+                    <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                       <dt className="font-medium text-muted">Variety / grade</dt>
-                      <dd className="col-span-2 font-semibold text-ink">{product.varietyGrade}</dd>
+                      <dd className="sm:col-span-2 font-semibold text-ink">{product.varietyGrade}</dd>
                     </div>
                   ) : null}
                   {product.originPlace || product.districtVillage || product.region ? (
-                    <div className="grid grid-cols-3 px-4 py-2.5">
+                    <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                       <dt className="font-medium text-muted">Origin / region</dt>
-                      <dd className="col-span-2 text-ink">
+                      <dd className="sm:col-span-2 text-ink">
                         {[product.districtVillage || product.originPlace, product.region ?? 'Indian Himalayas'].filter(Boolean).join(', ')}
                       </dd>
                     </div>
                   ) : null}
                   {product.craftType ? (
-                    <div className="grid grid-cols-3 px-4 py-2.5">
+                    <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                       <dt className="font-medium text-muted">Craft &amp; technique</dt>
-                      <dd className="col-span-2 text-ink">
+                      <dd className="sm:col-span-2 text-ink">
                         {product.craftSlug ? (
                           <Link to={`/crafts/${product.craftSlug}`} className="font-medium text-terra hover:underline">
                             {product.craftType}
@@ -995,23 +1123,23 @@ export function ProductPage() {
                       </dd>
                     </div>
                   ) : null}
-                  <div className="grid grid-cols-3 px-4 py-2.5">
+                  <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                     <dt className="font-medium text-muted">GI tag status</dt>
-                    <dd className="col-span-2 text-ink">
+                    <dd className="sm:col-span-2 text-ink">
                       {product.giTagged && product.originVerified
                         ? `Verified GI Tagged${product.giName ? ` — ${product.giName}` : ''}${product.giRegistrationRef ? ` (Ref: ${product.giRegistrationRef})` : ''}`
                         : 'Not GI-verified on this listing'}
                     </dd>
                   </div>
                   {product.careInstructions ? (
-                    <div className="grid grid-cols-3 px-4 py-2.5">
+                    <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                       <dt className="font-medium text-muted">Care instructions</dt>
-                      <dd className="col-span-2 text-ink">{product.careInstructions}</dd>
+                      <dd className="sm:col-span-2 text-ink">{product.careInstructions}</dd>
                     </div>
                   ) : null}
-                  <div className="grid grid-cols-3 px-4 py-2.5">
+                  <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                     <dt className="font-medium text-muted">Shipping &amp; returns</dt>
-                    <dd className="col-span-2 text-ink">
+                    <dd className="sm:col-span-2 text-ink">
                       {product.shippingEstimate} {product.returnPolicy}{' '}
                       <Link to="/policies/authenticity" className="text-terra underline underline-offset-2">
                         Authenticity check
@@ -1019,40 +1147,40 @@ export function ProductPage() {
                     </dd>
                   </div>
                   {product.harvestInfo ? (
-                    <div className="grid grid-cols-3 px-4 py-2.5">
+                    <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                       <dt className="font-medium text-muted">Harvest / crafting</dt>
-                      <dd className="col-span-2 text-ink">{product.harvestInfo}</dd>
+                      <dd className="sm:col-span-2 text-ink">{product.harvestInfo}</dd>
                     </div>
                   ) : null}
                   {product.dispatchConditions ? (
-                    <div className="grid grid-cols-3 px-4 py-2.5">
+                    <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                       <dt className="font-medium text-muted">Dispatch conditions</dt>
-                      <dd className="col-span-2 text-ink">{product.dispatchConditions}</dd>
+                      <dd className="sm:col-span-2 text-ink">{product.dispatchConditions}</dd>
                     </div>
                   ) : null}
                   {product.materials ? (
-                    <div className="grid grid-cols-3 px-4 py-2.5">
+                    <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                       <dt className="font-medium text-muted">Materials / ingredients</dt>
-                      <dd className="col-span-2 text-ink">{product.materials}</dd>
+                      <dd className="sm:col-span-2 text-ink">{product.materials}</dd>
                     </div>
                   ) : null}
                   {product.dimensions ? (
-                    <div className="grid grid-cols-3 px-4 py-2.5">
+                    <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                       <dt className="font-medium text-muted">Dimensions / sizing</dt>
-                      <dd className="col-span-2 text-ink">{product.dimensions}</dd>
+                      <dd className="sm:col-span-2 text-ink">{product.dimensions}</dd>
                     </div>
                   ) : null}
-                  <div className="grid grid-cols-3 px-4 py-2.5">
+                  <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                     <dt className="font-medium text-muted">Artisan / producer</dt>
-                    <dd className="col-span-2 text-ink">
+                    <dd className="sm:col-span-2 text-ink">
                       <Link to={`/makers/${product.sellerSlug}`} className="font-medium text-terra hover:underline">
                         {product.sellerName}
                       </Link>
                     </dd>
                   </div>
-                  <div className="grid grid-cols-3 px-4 py-2.5">
+                  <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-3 px-4 py-2.5">
                     <dt className="font-medium text-muted">Unit / net quantity</dt>
-                    <dd className="col-span-2 text-ink">
+                    <dd className="sm:col-span-2 text-ink">
                       {product.unit}
                       {product.weightG && !(product.weightG === 1 && /\b1\s*g\b/i.test(product.unit))
                         ? ` · Packed weight: ${product.weightG} g`
@@ -1223,18 +1351,22 @@ export function ProductPage() {
         </section>
       ) : null}
 
-      {/* Sticky buy bar */}
-      {showStickyBar && !soldOut && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#E4DACE] bg-white/95 px-3.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl backdrop-blur-md transition-all duration-300 sm:px-4">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+      {/* Sticky Flipkart-style buy bar: always visible on mobile (< sm) when in stock, scroll-revealed on desktop */}
+      {!soldOut && (
+        <div
+          className={`fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 sm:border-[#E4DACE] bg-white/98 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-6px_24px_rgba(15,23,42,0.12)] backdrop-blur-md transition-all duration-300 sm:px-4 ${
+            showStickyBar ? 'block' : 'block sm:hidden'
+          }`}
+        >
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-2.5 sm:gap-3">
             <div className="flex min-w-0 items-center gap-2.5">
               {image && (
-                <img src={image.url} alt="" className="hidden min-[360px]:block h-10 w-10 rounded-lg border border-[#E4DACE] object-cover shrink-0" />
+                <img src={image.url} alt="" className="hidden min-[380px]:block h-10 w-10 rounded-lg border border-slate-200 object-cover shrink-0" />
               )}
               <div className="min-w-0">
-                <p className="line-clamp-1 text-xs font-semibold text-forest">{product.name}</p>
-                <p className="text-sm font-bold text-terra sm:text-[11px] sm:font-normal sm:text-muted">
-                  {formatINR(currentItemPrice)}
+                <p className="line-clamp-1 text-xs font-semibold text-slate-900 sm:text-forest">{product.name}</p>
+                <p className="text-sm font-extrabold text-slate-950 sm:text-[11px] sm:font-normal sm:text-muted tabular-nums">
+                  {formatINR(calculatedTotal)}
                   <span className="hidden sm:inline"> · {product.unit}{product.weightG ? ` · ${product.weightG} g` : ''}</span>
                 </p>
               </div>
@@ -1267,7 +1399,7 @@ export function ProductPage() {
                 size="sm"
                 loading={addToCart.isPending}
                 onClick={() => addToCart.mutate()}
-                className="flex h-11 items-center gap-1.5 rounded-xl sm:rounded-sm bg-forest font-medium text-paper hover:bg-forest-deep"
+                className="flex h-11 items-center gap-1.5 rounded-xl sm:rounded-sm !border-[#F59E0B] !bg-gradient-to-r !from-[#FF9F00] !to-[#F59E0B] sm:!bg-none sm:!border-forest sm:!bg-forest font-bold sm:font-medium !text-slate-950 sm:!text-paper px-3.5 sm:px-4"
               >
                 <ShoppingBagIcon className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Add to Bag</span>
@@ -1278,7 +1410,7 @@ export function ProductPage() {
                 type="button"
                 disabled={buyNow.isPending}
                 onClick={() => buyNow.mutate()}
-                className="flex h-11 items-center gap-1.5 rounded-xl sm:rounded-sm bg-terra px-4 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#b9694c] disabled:opacity-60"
+                className="flex h-11 items-center gap-1.5 rounded-xl sm:rounded-sm bg-gradient-to-r from-[#FB641B] to-[#E05A3B] sm:bg-none sm:bg-terra px-4 text-xs font-bold text-white shadow-sm transition-colors hover:brightness-95 disabled:opacity-60"
               >
                 {buyNow.isPending ? (
                   <Spinner className="h-3 w-3" />
@@ -1286,7 +1418,7 @@ export function ProductPage() {
                   <>
                     <FlashIcon className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Buy Now ({formatINR(calculatedTotal)})</span>
-                    <span className="sm:hidden">Buy</span>
+                    <span className="sm:hidden">Buy Now</span>
                   </>
                 )}
               </button>

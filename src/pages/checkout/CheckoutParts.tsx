@@ -64,7 +64,7 @@ export function CheckoutProgress({
                 <button
                   type="button"
                   onClick={() => onNavigate(item.stage)}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-forest bg-forest text-[11px] text-white transition-colors hover:bg-forest-deep"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#0F766E] md:border-forest bg-[#0F766E] md:bg-forest text-[11px] text-white transition-colors hover:bg-forest-deep"
                   aria-label={`Go back to ${item.label}`}
                 >
                   <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" aria-hidden>
@@ -76,7 +76,7 @@ export function CheckoutProgress({
                   aria-hidden
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${
                     current
-                      ? 'border-forest bg-white text-forest'
+                      ? 'border-[#0F766E] bg-emerald-50 text-[#0F766E] md:border-forest md:bg-white md:text-forest'
                       : 'border-line bg-transparent text-muted'
                   }`}
                 >
@@ -85,7 +85,7 @@ export function CheckoutProgress({
               )}
               <span
                 className={`truncate text-[11.5px] tracking-[0.02em] ${
-                  current ? 'font-semibold text-forest' : complete ? 'text-forest/80' : 'text-muted'
+                  current ? 'font-bold text-[#0F766E] md:text-forest md:font-semibold' : complete ? 'text-forest/80' : 'text-muted'
                 }`}
                 aria-current={current ? 'step' : undefined}
               >
@@ -101,7 +101,7 @@ export function CheckoutProgress({
 }
 
 export function CheckoutPanel({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`border border-line bg-white ${className}`}>{children}</section>;
+  return <section className={`rounded-2xl md:rounded-none border border-slate-200 md:border-line bg-white shadow-2xs md:shadow-none ${className}`}>{children}</section>;
 }
 
 export function SectionHeading({

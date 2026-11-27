@@ -598,3 +598,38 @@
   animation: heroFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Mobile-first Flipkart-inspired vibrant storefront tokens & polish (< 768px) */
+@media (max-width: 767px) {
+  body {
+    background-color: #f4f6f8;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-app-card {
+    background-color: #ffffff;
+    border-radius: 14px;
+    border: 1px solid #e6ebf0;
+    box-shadow: 0 2px 10px rgba(15, 76, 58, 0.05);
+  }
+}
+
+.mobile-header-gradient {
+  background: linear-gradient(135deg, #0d4a3a 0%, #14634e 55%, #19785d 100%);
+}
+
+.mobile-deals-gradient {
+  background: linear-gradient(135deg, #fff4e5 0%, #ffe8cc 50%, #fffaf2 100%);
+}
+
+.mobile-emerald-wash {
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdfa 55%, #ffffff 100%);
+}
+
+.mobile-indigo-wash {
+  background: linear-gradient(135deg, #eef2ff 0%, #f0f9ff 55%, #ffffff 100%);
+}
+
+.mobile-rose-wash {
+  background: linear-gradient(135deg, #fff1f2 0%, #fff7ed 55%, #ffffff 100%);
+}
+
