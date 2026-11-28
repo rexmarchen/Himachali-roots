@@ -78,7 +78,7 @@ describe('legacy database migrations', () => {
       const versions = queryAll<{ version: number }>(db, 'SELECT version FROM schema_migrations ORDER BY version').map(
         (row) => row.version,
       );
-      expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+      expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
 
       const userColumns = queryAll<{ name: string }>(db, 'PRAGMA table_info(users)').map((row) => row.name);
       expect(userColumns).toEqual(expect.arrayContaining(['mfa_secret', 'mfa_enabled_at']));
@@ -190,14 +190,19 @@ describe('legacy database migrations', () => {
     const db = openDatabase(file);
     try {
       const versions = queryAll<{ version: number }>(db, 'SELECT version FROM schema_migrations ORDER BY version');
-      expect(versions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+      expect(versions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
       for (const [table, column] of [
         ['refunds', 'dedupe_key'],
         ['refunds', 'return_request_id'],
         ['notifications', 'provider_message_id'],
         ['return_requests', 'requested_amount_paise'],
         ['products', 'fulfilment_method'],
+        ['products', 'is_select_curated'],
+        ['products', 'availability_policy'],
+        ['products', 'variants_json'],
         ['order_items', 'shipping_snapshot_json'],
+        ['order_items', 'variant_label'],
+        ['order_fulfilments', 'sourcing_exception_type'],
         ['orders', 'payment_method'],
         ['orders', 'cod_fee_paise'],
         ['orders', 'confirmed_at'],
@@ -219,7 +224,7 @@ describe('legacy database migrations', () => {
     const db = openDatabase(file);
     try {
       const versions = queryAll<{ version: number }>(db, 'SELECT version FROM schema_migrations ORDER BY version');
-      expect(versions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+      expect(versions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
       const orderItemColumns = queryAll<{ name: string }>(db, 'PRAGMA table_info(order_items)').map((row) => row.name);
       expect(orderItemColumns).toContain('original_unit_price_paise');
       const sessionColumns = queryAll<{ name: string }>(db, 'PRAGMA table_info(sessions)').map((row) => row.name);

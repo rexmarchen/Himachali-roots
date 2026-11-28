@@ -369,6 +369,15 @@ CREATE TABLE IF NOT EXISTS products (
   package_height_cm REAL,
   handling_days INTEGER NOT NULL DEFAULT 2,
   shipping_config_json TEXT,
+  is_select_curated INTEGER NOT NULL DEFAULT 0,
+  availability_policy TEXT NOT NULL DEFAULT 'stock_tracked'
+    CHECK (availability_policy IN ('stock_tracked','on_demand_external')),
+  max_order_quantity INTEGER NOT NULL DEFAULT 10,
+  variants_json TEXT,
+  return_policy_override TEXT,
+  return_window_days INTEGER,
+  return_shipping_bearer TEXT
+    CHECK (return_shipping_bearer IS NULL OR return_shipping_bearer IN ('customer','seller','partner_defective_only','non_returnable')),
   materials TEXT,
   care_instructions TEXT,
   food_info TEXT,
@@ -426,6 +435,34 @@ CREATE TABLE IF NOT EXISTS product_images (
 );
 CREATE INDEX IF NOT EXISTS idx_product_images_product ON product_images(product_id);
 
+CREATE TABLE IF NOT EXISTS product_sourcing (
+  product_id TEXT PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+  sourcing_channel TEXT NOT NULL DEFAULT 'external',
+  source_url TEXT,
+  supplier_name TEXT,
+  supplier_catalog_id TEXT,
+  supplier_sku_ref TEXT,
+  supplier_price_paise INTEGER NOT NULL DEFAULT 0 CHECK (supplier_price_paise >= 0),
+  supplier_shipping_paise INTEGER NOT NULL DEFAULT 0 CHECK (supplier_shipping_paise >= 0),
+  other_sourcing_cost_paise INTEGER NOT NULL DEFAULT 0 CHECK (other_sourcing_cost_paise >= 0),
+  landed_cost_paise INTEGER NOT NULL DEFAULT 0 CHECK (landed_cost_paise >= 0),
+  markup_paise INTEGER NOT NULL DEFAULT 10000 CHECK (markup_paise >= 0),
+  price_floor_locked INTEGER NOT NULL DEFAULT 1,
+  price_verified INTEGER NOT NULL DEFAULT 0,
+  last_price_verified_at TEXT,
+  supplier_available INTEGER NOT NULL DEFAULT 0,
+  availability_verified INTEGER NOT NULL DEFAULT 0,
+  last_availability_verified_at TEXT,
+  image_authorization_status TEXT NOT NULL DEFAULT 'pending_authorization'
+    CHECK (image_authorization_status IN ('pending_authorization','authorized','rejected')),
+  image_authorization_note TEXT,
+  supplier_return_policy_note TEXT,
+  internal_notes TEXT,
+  verified_by TEXT REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
 CREATE TABLE IF NOT EXISTS inventory (
   product_id TEXT PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
   quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
@@ -461,9 +498,11 @@ CREATE TABLE IF NOT EXISTS cart_items (
   id TEXT PRIMARY KEY,
   cart_id TEXT NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
   product_id TEXT NOT NULL REFERENCES products(id),
+  variant_id TEXT NOT NULL DEFAULT '',
+  variant_label TEXT,
   quantity INTEGER NOT NULL CHECK (quantity > 0 AND quantity <= 99),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  UNIQUE (cart_id, product_id)
+  UNIQUE (cart_id, product_id, variant_id)
 );
 
 CREATE TABLE IF NOT EXISTS wishlist_items (
@@ -585,6 +624,11 @@ CREATE TABLE IF NOT EXISTS order_fulfilments (
   own_delivery_evidence_json TEXT,
   estimated_delivery_text TEXT,
   admin_review_reason TEXT,
+  sourcing_exception_type TEXT
+    CHECK (sourcing_exception_type IS NULL OR sourcing_exception_type IN ('supplier_out_of_stock','supplier_price_increased','supplier_delayed')),
+  sourcing_exception_new_cost_paise INTEGER,
+  sourcing_exception_note TEXT,
+  sourcing_exception_resolved_action TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
@@ -623,6 +667,9 @@ CREATE TABLE IF NOT EXISTS order_items (
   package_height_cm REAL,
   shipping_snapshot_json TEXT,
   fulfilment_id TEXT REFERENCES order_fulfilments(id) ON DELETE SET NULL,
+  variant_id TEXT,
+  variant_label TEXT,
+  sourcing_cost_snapshot_paise INTEGER,
   status TEXT NOT NULL DEFAULT 'ordered'
     CHECK (status IN ('ordered','shipped','delivered','cancelled','returned','refunded')),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))

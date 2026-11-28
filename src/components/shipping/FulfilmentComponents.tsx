@@ -5,6 +5,7 @@ import {
   FULFILMENT_METHOD_DESCRIPTIONS,
   FULFILMENT_METHOD_LABELS,
   FULFILMENT_STATUS_LABELS,
+  PUBLIC_FULFILMENT_METHOD_LABELS,
   type FulfilmentMethod,
   type OrderFulfilmentView,
   type SellerPickupLocation,
@@ -736,8 +737,8 @@ function stepsForMethod(fulfilment: OrderFulfilmentView): Array<{ label: string;
   };
   const r = rankMap[s] ?? 1;
   return [
-    { label: 'Confirmed', active: r === 1, done: r > 1 },
-    { label: 'Supplier Ready', active: r === 2, done: r > 2 },
+    { label: 'Order Confirmed', active: r === 1, done: r > 1 },
+    { label: 'Preparing', active: r === 2, done: r > 2 },
     { label: 'Dispatched', active: r === 3, done: r > 3 },
     { label: 'In Transit', active: r === 4, done: r > 4 },
     { label: 'Delivered', active: r === 5, done: r >= 5 },
@@ -764,14 +765,14 @@ export function OrderFulfilmentsTrackCard({ fulfilments }: { fulfilments: OrderF
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
-                    {FULFILMENT_METHOD_LABELS[f.fulfilmentMethod as FulfilmentMethod] ?? f.fulfilmentMethod}
+                    {PUBLIC_FULFILMENT_METHOD_LABELS[f.fulfilmentMethod as FulfilmentMethod] ?? 'Partner Dispatch'}
                   </span>
                   {f.estimatedDeliveryText ? (
                     <span className="text-[11px] text-forest">· {f.estimatedDeliveryText}</span>
                   ) : null}
                 </div>
                 <p className="mt-1 font-medium text-sm text-ink">
-                  {f.items.map((item) => `${item.name} × ${item.quantity}`).join(', ')}
+                  {f.items.map((item) => `${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ''} × ${item.quantity}`).join(', ')}
                 </p>
               </div>
               <Badge tone={f.status === 'delivered' ? 'forest' : f.status === 'cancelled' || f.status.includes('fail') ? 'terra' : 'neutral'}>

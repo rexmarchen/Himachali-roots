@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { execute, queryAll, queryOne, tx, type Db } from '../db.js';
 import {
-  FULFILMENT_METHOD_LABELS,
+  PUBLIC_FULFILMENT_METHOD_LABELS,
   type FulfilmentMethod,
   type OrderAddress,
   type OrderFulfilmentEventView,
@@ -356,7 +356,6 @@ export function buildPublicProductShippingSummary(product: {
   deliveryArea?: string | null;
   serviceablePincodes?: string[];
   deliveryChargePaise?: number | null;
-  supplierName?: string | null;
 } {
   const rawMethod = product.fulfilment_method;
   const method: FulfilmentMethod =
@@ -370,7 +369,7 @@ export function buildPublicProductShippingSummary(product: {
     const charge = typeof cfg.deliveryChargePaise === 'number' ? cfg.deliveryChargePaise : null;
     return {
       fulfilmentMethod: method,
-      methodLabel: FULFILMENT_METHOD_LABELS[method],
+      methodLabel: PUBLIC_FULFILMENT_METHOD_LABELS[method],
       estimatedDeliveryText: etd ? `${etd}${area ? ` · ${area}` : ''}` : area,
       deliveryArea: area,
       serviceablePincodes: pins,
@@ -379,19 +378,17 @@ export function buildPublicProductShippingSummary(product: {
   }
   if (method === 'EXTERNAL_SUPPLIER') {
     const etd = typeof cfg.estimatedDeliveryDays === 'string' ? cfg.estimatedDeliveryDays : null;
-    const supplier = typeof cfg.supplierName === 'string' ? cfg.supplierName : null;
     return {
       fulfilmentMethod: method,
-      methodLabel: FULFILMENT_METHOD_LABELS[method],
+      methodLabel: PUBLIC_FULFILMENT_METHOD_LABELS[method],
       estimatedDeliveryText: etd,
-      supplierName: supplier,
     };
   }
   const handling = Number(product.handling_days ?? 2);
   return {
     fulfilmentMethod: 'SHIPROCKET',
-    methodLabel: FULFILMENT_METHOD_LABELS.SHIPROCKET,
-    estimatedDeliveryText: `Dispatched in ${handling}–${handling + 1} days via Shiprocket courier`,
+    methodLabel: PUBLIC_FULFILMENT_METHOD_LABELS.SHIPROCKET,
+    estimatedDeliveryText: `Dispatched in ${handling}–${handling + 1} days`,
   };
 }
 
@@ -770,7 +767,8 @@ export function routeOrderFulfilmentsOnConfirmation(db: Db, orderId: string): st
         eventId: `init:${fulfilmentId}`,
         source: 'system',
         status: 'order_confirmed',
-        description: `Routed to External Supplier Direct Delivery (${externalSupplierName}). Shiprocket integration intentionally bypassed.`,
+        description: 'Order confirmed for direct partner dispatch via Dear Hills Select.',
+        metadata: { internalMethod: 'EXTERNAL_SUPPLIER', externalSupplierName },
         occurredAt: now,
       });
     } else {
@@ -838,6 +836,10 @@ interface FulfilmentRow {
   own_delivery_evidence_json: string | null;
   estimated_delivery_text: string | null;
   admin_review_reason: string | null;
+  sourcing_exception_type: string | null;
+  sourcing_exception_new_cost_paise: number | null;
+  sourcing_exception_note: string | null;
+  sourcing_exception_resolved_action: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -2060,7 +2062,14 @@ export function updateExternalSupplierFulfilment(
     fulfilmentId: string;
     ownerSellerId?: string;
     actor: SessionUser;
-    action: 'confirm_supplier' | 'place_external_order' | 'update_tracking' | 'delivered' | 'delivery_exception';
+    action:
+      | 'confirm_supplier'
+      | 'place_external_order'
+      | 'update_tracking'
+      | 'delivered'
+      | 'delivery_exception'
+      | 'flag_sourcing_exception'
+      | 'resolve_sourcing_exception';
     supplierName?: string;
     externalOrderRef?: string;
     courierName?: string;
@@ -2068,11 +2077,14 @@ export function updateExternalSupplierFulfilment(
     trackingUrl?: string;
     dispatchDate?: string;
     deliveryStatus?: 'in_transit' | 'out_for_delivery';
+    exceptionType?: 'supplier_out_of_stock' | 'supplier_price_increased' | 'supplier_delayed';
+    newCostPaise?: number;
+    resolutionAction?: 'accept_updated_cost' | 'wait_for_restock';
     note?: string;
   },
 ): { status: string } {
   const row = queryOne<FulfilmentRow>(db, 'SELECT * FROM order_fulfilments WHERE id = ?', params.fulfilmentId);
-  if (!row) throw notFound('Fulfilment record not found.');
+  if (!row) throw notFound('Fulment record not found.');
   if (params.ownerSellerId && row.seller_id !== params.ownerSellerId) throw notFound('Fulfilment record not found.');
   if (row.fulfilment_method !== 'EXTERNAL_SUPPLIER') {
     throw conflict(
@@ -2089,6 +2101,11 @@ export function updateExternalSupplierFulfilment(
 
   const nowIso = new Date().toISOString();
   let nextStatus = row.status;
+  let nextExceptionType = row.sourcing_exception_type;
+  let nextExceptionNewCost = row.sourcing_exception_new_cost_paise;
+  let nextExceptionNote = row.sourcing_exception_note;
+  let nextExceptionResolved = row.sourcing_exception_resolved_action;
+
   if (params.action === 'confirm_supplier') {
     if (!['order_confirmed', 'delivery_exception'].includes(row.status)) {
       throw conflict(`Cannot confirm supplier from "${row.status}".`);
@@ -2116,6 +2133,30 @@ export function updateExternalSupplierFulfilment(
     nextStatus = 'delivered';
   } else if (params.action === 'delivery_exception') {
     nextStatus = 'delivery_exception';
+  } else if (params.action === 'flag_sourcing_exception') {
+    nextStatus = 'delivery_exception';
+    nextExceptionType = params.exceptionType ?? 'supplier_out_of_stock';
+    nextExceptionNewCost =
+      typeof params.newCostPaise === 'number' && Number.isFinite(params.newCostPaise)
+        ? Math.max(0, Math.round(params.newCostPaise))
+        : row.sourcing_exception_new_cost_paise;
+    nextExceptionNote = params.note?.trim() || row.sourcing_exception_note;
+    nextExceptionResolved = null;
+  } else if (params.action === 'resolve_sourcing_exception') {
+    if (!params.resolutionAction) {
+      throw badRequest('Select how to resolve the sourcing exception.', { resolutionAction: 'Required' });
+    }
+    nextExceptionResolved = params.resolutionAction;
+    if (params.resolutionAction === 'accept_updated_cost') {
+      if (typeof params.newCostPaise === 'number' && Number.isFinite(params.newCostPaise)) {
+        nextExceptionNewCost = Math.max(0, Math.round(params.newCostPaise));
+      }
+      nextExceptionNote = params.note?.trim() || row.sourcing_exception_note;
+      nextStatus = params.externalOrderRef?.trim() ? 'external_order_placed' : 'supplier_confirmed';
+    } else {
+      nextStatus = 'delivery_exception';
+      nextExceptionNote = params.note?.trim() || 'Waiting for supplier restock';
+    }
   }
 
   const order = queryOne<{ order_number: string; email: string; user_id: string }>(
@@ -2133,6 +2174,19 @@ export function updateExternalSupplierFulfilment(
       ? params.dispatchDate?.trim() || row.dispatched_at || nowIso
       : row.dispatched_at;
 
+  const publicEventMsg =
+    params.action === 'flag_sourcing_exception'
+      ? 'Dispatch schedule under partner review; our team will update you shortly.'
+      : nextStatus === 'in_transit' || nextStatus === 'out_for_delivery'
+        ? `Parcel dispatched${nextCourier ? ` via ${nextCourier}` : ''}${nextTrackingId ? ` (${nextTrackingId})` : ''}.`
+        : nextStatus === 'delivered'
+          ? 'Parcel delivered.'
+          : nextStatus === 'external_order_placed'
+            ? 'Partner preparation underway for dispatch.'
+            : nextStatus === 'supplier_confirmed'
+              ? 'Availability confirmed for partner dispatch.'
+              : 'Delivery status updated.';
+
   tx(db, () => {
     if (['in_transit', 'out_for_delivery', 'delivered'].includes(nextStatus)) {
       consumeInventoryForFulfilmentItems(
@@ -2140,7 +2194,7 @@ export function updateExternalSupplierFulfilment(
         row.id,
         order?.order_number ?? row.order_id,
         nextStatus === 'delivered' ? 'delivered' : 'shipped',
-        `External supplier ${nextStatus}`,
+        `Partner dispatch ${nextStatus}`,
       );
     }
 
@@ -2155,6 +2209,10 @@ export function updateExternalSupplierFulfilment(
               tracking_url = ?,
               dispatched_at = ?,
               delivered_at = CASE WHEN ? = 'delivered' THEN COALESCE(delivered_at, ?) ELSE delivered_at END,
+              sourcing_exception_type = ?,
+              sourcing_exception_new_cost_paise = ?,
+              sourcing_exception_note = ?,
+              sourcing_exception_resolved_action = ?,
               updated_at = ?
         WHERE id = ?`,
       nextStatus,
@@ -2166,6 +2224,10 @@ export function updateExternalSupplierFulfilment(
       nextDispatchedAt,
       nextStatus,
       nowIso,
+      nextExceptionType,
+      nextExceptionNewCost,
+      nextExceptionNote,
+      nextExceptionResolved,
       nowIso,
       row.id,
     );
@@ -2187,7 +2249,7 @@ export function updateExternalSupplierFulfilment(
         status: nextStatus === 'delivered' ? 'delivered' : nextStatus === 'out_for_delivery' ? 'out_for_delivery' : 'in_transit',
         shippedAt: nextDispatchedAt ?? nowIso,
         deliveredAt: nextStatus === 'delivered' ? nowIso : null,
-        eventDescription: params.note?.trim() || `External supplier dispatch via ${nextCourier} (${nextTrackingId})`,
+        eventDescription: `Parcel dispatched via ${nextCourier} (${nextTrackingId})`,
       });
     }
 
@@ -2195,15 +2257,17 @@ export function updateExternalSupplierFulfilment(
       fulfilmentId: row.id,
       source: params.actor.roles.includes('admin') ? 'admin' : 'seller',
       status: nextStatus,
-      description:
-        params.note?.trim() ||
-        `External supplier fulfilment updated to ${nextStatus.replaceAll('_', ' ')}${nextTrackingId ? ` (tracking ${nextTrackingId})` : ''}.`,
+      description: publicEventMsg,
       actor: params.actor,
       metadata: {
         externalSupplierName: nextSupplier,
         externalOrderRef: nextExtOrderRef,
         courierName: nextCourier,
         trackingId: nextTrackingId,
+        exceptionType: nextExceptionType,
+        newCostPaise: nextExceptionNewCost,
+        resolutionAction: nextExceptionResolved,
+        internalNote: params.note?.trim() || null,
       },
       occurredAt: nowIso,
     });
@@ -2211,16 +2275,19 @@ export function updateExternalSupplierFulfilment(
       orderId: row.order_id,
       sellerOrderId: row.seller_order_id,
       type: `fulfilment.external.${nextStatus}`,
-      description: `External supplier status: ${nextStatus.replaceAll('_', ' ')}${nextCourier && nextTrackingId ? ` (${nextCourier} · ${nextTrackingId})` : ''}.`,
+      description: publicEventMsg,
       actor: params.actor,
     });
 
     rollupSellerOrderAndParentOrderStatus(db, row.seller_order_id);
-    audit(db, params.actor, `fulfilment.external_${nextStatus}`, 'order_fulfilment', row.id, { status: row.status }, {
+    audit(db, params.actor, `fulfilment.external_${params.action}`, 'order_fulfilment', row.id, { status: row.status }, {
       status: nextStatus,
       externalOrderRef: nextExtOrderRef,
       courierName: nextCourier,
       trackingId: nextTrackingId,
+      exceptionType: nextExceptionType,
+      newCostPaise: nextExceptionNewCost,
+      resolutionAction: nextExceptionResolved,
     });
   });
 
@@ -2375,7 +2442,9 @@ export async function cancelSingleFulfilment(
       orderId: row.order_id,
       sellerOrderId: row.seller_order_id,
       type: 'fulfilment.cancelled',
-      description: params.reason?.trim() || `A package (${row.fulfilment_method}) in your order was cancelled.`,
+      description:
+        params.reason?.trim() ||
+        `A ${PUBLIC_FULFILMENT_METHOD_LABELS[(row.fulfilment_method as FulfilmentMethod)] ?? 'partner'} package in your order was cancelled.`,
       actor: params.actor,
     });
     rollupSellerOrderAndParentOrderStatus(db, row.seller_order_id);
@@ -2961,9 +3030,12 @@ function hydrateFulfilmentRows(db: Db, rows: FulfilmentRow[], includeInternal = 
       line_subtotal_paise: number;
       status: string;
       fulfilment_method: string;
+      variant_id: string | null;
+      variant_label: string | null;
     }>(
       db,
-      `SELECT id, product_id, name, sku, image_url, quantity, unit_price_paise, line_subtotal_paise, status, fulfilment_method
+      `SELECT id, product_id, name, sku, image_url, quantity, unit_price_paise, line_subtotal_paise,
+              status, fulfilment_method, variant_id, variant_label
          FROM order_items WHERE fulfilment_id = ? ORDER BY created_at`,
       row.id,
     );
@@ -3002,13 +3074,23 @@ function hydrateFulfilmentRows(db: Db, rows: FulfilmentRow[], includeInternal = 
       lineSubtotalPaise: i.line_subtotal_paise,
       status: i.status,
       fulfilmentMethod: i.fulfilment_method,
+      variantId: i.variant_id ?? null,
+      variantLabel: i.variant_label ?? null,
     }));
+
+    const sanitizePublicDesc = (desc: string | null): string | null => {
+      if (!desc || includeInternal) return desc;
+      if (/external supplier|meesho/i.test(desc)) {
+        return 'Order status updated for partner dispatch.';
+      }
+      return desc;
+    };
 
     const events: OrderFulfilmentEventView[] = eventRows.map((e) => ({
       id: e.id,
       source: e.source,
       status: e.status,
-      description: e.description,
+      description: sanitizePublicDesc(e.description),
       actorRole: e.actor_role,
       occurredAt: e.occurred_at,
     }));
@@ -3057,11 +3139,17 @@ function hydrateFulfilmentRows(db: Db, rows: FulfilmentRow[], includeInternal = 
       dispatchedAt: row.dispatched_at,
       deliveredAt: row.delivered_at,
       cancelledAt: row.cancelled_at,
-      externalSupplierName: row.external_supplier_name,
-      externalOrderRef: row.external_order_ref,
+      externalSupplierName: includeInternal ? row.external_supplier_name : null,
+      externalOrderRef: includeInternal ? row.external_order_ref : null,
       ownDeliveryEvidence: evidence,
       estimatedDeliveryText: row.estimated_delivery_text,
       adminReviewReason: includeInternal ? row.admin_review_reason : null,
+      sourcingExceptionType: includeInternal
+        ? (row.sourcing_exception_type as OrderFulfilmentView['sourcingExceptionType'])
+        : null,
+      sourcingExceptionNewCostPaise: includeInternal ? (row.sourcing_exception_new_cost_paise ?? null) : null,
+      sourcingExceptionNote: includeInternal ? (row.sourcing_exception_note ?? null) : null,
+      sourcingExceptionResolvedAction: includeInternal ? (row.sourcing_exception_resolved_action ?? null) : null,
       ...(includeInternal && cfgSnap ? { shippingConfigSnapshot: cfgSnap } : {}),
       items,
       events,

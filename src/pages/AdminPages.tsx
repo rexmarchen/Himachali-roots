@@ -1,7 +1,19 @@
 import { createContext, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ApplicationStatus, CampaignSummary, Category, CraftEntity, OrderView, Paged, ProductStatus, RegionEntity } from '@shared/types';
+import type {
+  ApplicationStatus,
+  CampaignSummary,
+  Category,
+  CraftEntity,
+  OrderView,
+  Paged,
+  ProductSourcingSummary,
+  ProductStatus,
+  ProductVariant,
+  RegionEntity,
+} from '@shared/types';
+import { ExternalSourcingPanel } from '@/components/products/ExternalSourcingPanel';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
 import type { SiteContent } from '@shared/content';
 import { api, ApiError, errorMessage } from '@/lib/api';
@@ -3026,6 +3038,11 @@ interface AdminProductRow {
   seller_name: string; seller_id: string;
   image_url: string | null; stock: number; reserved: number; low_stock_threshold: number;
   is_demo: number; origin_verified: number;
+  fulfilment_method?: string;
+  is_select_curated?: number;
+  price_verified?: number | null;
+  supplier_available?: number | null;
+  image_authorization_status?: string | null;
 }
 
 function productWorkflowStatus(row: { status: string; changes_requested_at?: string | null }): string {
@@ -3073,6 +3090,7 @@ export function AdminProductsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const status = searchParams.get('status') ?? '';
+  const sourcingFilter = searchParams.get('filter') ?? '';
   const lowStock = searchParams.get('lowStock') === 'true';
   const [q, setQ] = useState('');
   const deferredQ = useDeferredValue(q.trim());
@@ -3084,10 +3102,11 @@ export function AdminProductsPage() {
   const [createForm, setCreateForm] = useState({ ...EMPTY_PRODUCT_FORM });
 
   const products = useQuery({
-    queryKey: ['admin-products', status, lowStock, deferredQ, page],
+    queryKey: ['admin-products', status, sourcingFilter, lowStock, deferredQ, page],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page) });
       if (status) params.set('status', status);
+      if (sourcingFilter) params.set('filter', sourcingFilter);
       if (lowStock) params.set('lowStock', 'true');
       if (deferredQ) params.set('q', deferredQ);
       return api<Paged<AdminProductRow> & { products: AdminProductRow[] }>(`/admin/products?${params.toString()}`);
@@ -3109,11 +3128,15 @@ export function AdminProductsPage() {
     await queryClient.invalidateQueries({ queryKey: ['admin-overview'] });
   };
 
-  const setFilter = (next: { status?: string; lowStock?: boolean }) => {
+  const setFilter = (next: { status?: string; filter?: string; lowStock?: boolean }) => {
     const params = new URLSearchParams(searchParams);
     if (next.status !== undefined) {
       if (next.status) params.set('status', next.status);
       else params.delete('status');
+    }
+    if (next.filter !== undefined) {
+      if (next.filter) params.set('filter', next.filter);
+      else params.delete('filter');
     }
     if (next.lowStock !== undefined) {
       if (next.lowStock) params.set('lowStock', 'true');
@@ -3298,6 +3321,15 @@ export function AdminProductsPage() {
             ))}
           </Select>
         </Field>
+        <Field label="Sourcing &amp; Verification">
+          <Select value={sourcingFilter} onChange={(event) => setFilter({ filter: event.target.value })} className="max-w-56">
+            <option value="">All fulfilment</option>
+            <option value="external_fulfilment">External Fulfilment</option>
+            <option value="price_verification_required">Needs Price Verification</option>
+            <option value="image_authorization_required">Needs Image Auth</option>
+            <option value="supplier_unavailable">Supplier Unavailable</option>
+          </Select>
+        </Field>
         {lowStock ? (
           <button
             type="button"
@@ -3442,6 +3474,16 @@ export function AdminProductsPage() {
                                   {product.name}
                                 </Link>
                                 {product.is_demo ? <Badge tone="sand">Demo</Badge> : null}
+                                {product.fulfilment_method === 'EXTERNAL_SUPPLIER' ? (
+                                  <Badge tone="neutral">External</Badge>
+                                ) : null}
+                                {product.fulfilment_method === 'EXTERNAL_SUPPLIER' && !product.price_verified ? (
+                                  <Badge tone="terra">Verify Price</Badge>
+                                ) : null}
+                                {product.fulfilment_method === 'EXTERNAL_SUPPLIER' &&
+                                product.image_authorization_status !== 'authorized' ? (
+                                  <Badge tone="terra">Needs Img Auth</Badge>
+                                ) : null}
                               </div>
                               <p className="text-[10.5px] text-muted">
                                 {product.sku}
@@ -3765,6 +3807,7 @@ interface AdminProductDetail {
     id: string;
     name: string;
     status: string;
+    price_paise?: number;
     description: string;
     seller_id: string;
     seller_name: string;
@@ -3774,6 +3817,16 @@ interface AdminProductDetail {
     stock: number;
     reserved: number;
     low_stock_threshold: number;
+    fulfilment_method?: string;
+    is_select_curated?: number;
+    availability_policy?: 'stock_tracked' | 'on_demand_external';
+    max_order_quantity?: number;
+    return_window_days?: number | null;
+    return_shipping_bearer?: string | null;
+    return_policy_override?: string | null;
+    variants?: ProductVariant[];
+    sourcing?: ProductSourcingSummary | null;
+    externalReadiness?: { ready: boolean; blockers: string[] } | null;
     images: { id: string; url: string; alt: string; credit: string | null }[];
   };
 }
@@ -4376,6 +4429,28 @@ export function AdminProductDetailPage() {
               </div>
             </div>
           </AdminSection>
+
+          {product.fulfilment_method === 'EXTERNAL_SUPPLIER' ? (
+            <ExternalSourcingPanel
+              endpoint={`/admin/products/${id}/sourcing`}
+              product={{
+                id: product.id,
+                pricePaise: Number(product.price_paise ?? 0),
+                fulfilmentMethod: product.fulfilment_method ?? 'EXTERNAL_SUPPLIER',
+                isSelectCurated: Boolean(product.is_select_curated),
+                availabilityPolicy: product.availability_policy ?? 'on_demand_external',
+                maxOrderQuantity: product.max_order_quantity ?? 5,
+                returnWindowDays: product.return_window_days ?? null,
+                returnShippingBearer: product.return_shipping_bearer ?? null,
+                returnPolicyOverride: product.return_policy_override ?? null,
+                variants: product.variants ?? [],
+                sourcing: product.sourcing ?? null,
+                externalReadiness: product.externalReadiness ?? null,
+              }}
+              onSaved={refresh}
+              isAdmin
+            />
+          ) : null}
         </div>
 
         <aside className="space-y-5">

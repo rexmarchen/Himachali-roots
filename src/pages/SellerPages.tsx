@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Category, FulfilmentMethod, OrderFulfilmentView, ProductStatus, SellerProduct } from '@shared/types';
+import type {
+  Category,
+  FulfilmentMethod,
+  OrderFulfilmentView,
+  ProductSourcingSummary,
+  ProductStatus,
+  ProductVariant,
+  SellerProduct,
+} from '@shared/types';
+import { ExternalSourcingPanel } from '@/components/products/ExternalSourcingPanel';
 import {
   DEFAULT_PRODUCT_SHIPPING_STATE,
   ProductShippingMethodSection,
@@ -2030,6 +2039,7 @@ export function SellerDashboardPage() {
 
 export function SellerProductsPage() {
   const [status, setStatus] = useState('');
+  const [sourcingFilter, setSourcingFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeActionProduct, setActiveActionProduct] = useState<SellerProduct | null>(null);
   const [quickStockProduct, setQuickStockProduct] = useState<SellerProduct | null>(null);
@@ -2039,8 +2049,14 @@ export function SellerProductsPage() {
   const [savingQuick, setSavingQuick] = useState(false);
 
   const products = useQuery({
-    queryKey: ['seller-products', status],
-    queryFn: () => api<{ products: SellerProduct[] }>(`/seller/products${status && status !== 'low_stock' ? `?status=${encodeURIComponent(status)}` : ''}`),
+    queryKey: ['seller-products', status, sourcingFilter],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (status && status !== 'low_stock') qs.set('status', status);
+      if (sourcingFilter) qs.set('filter', sourcingFilter);
+      const qStr = qs.toString();
+      return api<{ products: SellerProduct[] }>(`/seller/products${qStr ? `?${qStr}` : ''}`);
+    },
   });
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -2161,6 +2177,13 @@ export function SellerProductsPage() {
             <option value="rejected">Rejected</option>
             <option value="paused">Paused</option>
             <option value="archived">Archived</option>
+          </Select>
+          <Select value={sourcingFilter} onChange={(event) => setSourcingFilter(event.target.value)} className="max-w-56">
+            <option value="">All fulfilment</option>
+            <option value="external_fulfilment">External Fulfilment</option>
+            <option value="price_verification_required">Needs Price Verification</option>
+            <option value="image_authorization_required">Needs Image Auth</option>
+            <option value="supplier_unavailable">Supplier Unavailable</option>
           </Select>
           <p className="text-[11px] text-muted">{totalCount} listing{totalCount === 1 ? '' : 's'}</p>
         </div>
@@ -2873,6 +2896,15 @@ interface ProductEditorResponse {
     packageHeightCm?: number | null;
     handlingDays?: number | null;
     shippingConfig?: Record<string, unknown> | null;
+    isSelectCurated?: boolean;
+    availabilityPolicy?: 'stock_tracked' | 'on_demand_external';
+    maxOrderQuantity?: number;
+    variants?: ProductVariant[];
+    returnPolicyOverride?: string | null;
+    returnWindowDays?: number | null;
+    returnShippingBearer?: string | null;
+    sourcing?: ProductSourcingSummary | null;
+    externalReadiness?: { ready: boolean; blockers: string[] } | null;
   };
   commissionNote: string;
 }
@@ -4449,6 +4481,30 @@ export function SellerProductEditorPage() {
             </div>
           </section>
         )}
+
+        {!isNew && id && shipping.fulfilmentMethod === 'EXTERNAL_SUPPLIER' && current ? (
+          <ExternalSourcingPanel
+            endpoint={`/seller/products/${id}/sourcing`}
+            product={{
+              id: current.id,
+              pricePaise: current.pricePaise,
+              fulfilmentMethod: shipping.fulfilmentMethod,
+              isSelectCurated: current.isSelectCurated,
+              availabilityPolicy: current.availabilityPolicy,
+              maxOrderQuantity: current.maxOrderQuantity,
+              returnWindowDays: current.returnWindowDays,
+              returnShippingBearer: current.returnShippingBearer,
+              returnPolicyOverride: current.returnPolicyOverride,
+              variants: current.variants,
+              sourcing: current.sourcing,
+              externalReadiness: current.externalReadiness,
+            }}
+            onSaved={async () => {
+              await queryClient.invalidateQueries({ queryKey: ['seller-product', id] });
+              await queryClient.invalidateQueries({ queryKey: ['seller-products'] });
+            }}
+          />
+        ) : null}
 
         {/* =========================================================================
             STEP 6: Inventory Stock & Dispatch Settings

@@ -463,7 +463,12 @@ export function OrderDetailPage() {
                       {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-full w-full object-cover" /> : null}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-ink">{item.name}</p>
+                      <p className="text-sm text-ink">
+                        {item.name}
+                        {item.variantLabel ? (
+                          <span className="ml-1.5 text-xs font-medium text-forest">({item.variantLabel})</span>
+                        ) : null}
+                      </p>
                       <p className="text-[11px] text-muted">
                         SKU {item.sku} · Qty {item.quantity} · {formatINR(item.unitPricePaise)} each
                         {item.originalUnitPricePaise ? (

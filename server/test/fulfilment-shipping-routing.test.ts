@@ -437,9 +437,13 @@ describe('Product-wise fulfilment routing & Shiprocket automatic integration (TE
     expect(calls).toHaveLength(0);
 
     const view = await customer.get(`/api/orders/${orderNumber}`);
-    expect(view.body.order.fulfilments[0].externalOrderRef).toBe('EXT-ORD-556677');
+    expect(view.body.order.fulfilments[0].externalSupplierName).toBeNull();
+    expect(view.body.order.fulfilments[0].externalOrderRef).toBeNull();
     expect(view.body.order.fulfilments[0].courierName).toBe('Shadowfax');
     expect(view.body.order.fulfilments[0].trackingNumber).toBe('SFX-TRACK-9900');
+
+    const sellerOrder = await seller.get(`/api/seller/orders/${fulfilment!.seller_order_id}`);
+    expect(sellerOrder.body.order.fulfilments[0].externalOrderRef).toBe('EXT-ORD-556677');
   });
 
   it('TEST 4: Mixed order routes A to Shiprocket, B to Own Delivery, C to External Supplier with partial cancellation & delivery', async () => {

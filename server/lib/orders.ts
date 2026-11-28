@@ -28,6 +28,7 @@ import {
   routeOrderFulfilmentsOnConfirmation,
   snapshotOrderItemShipping,
 } from './fulfilmentRouter.js';
+import { parseProductVariants } from './externalSourcing.js';
 
 export { recordOrderEvent, refreshOrderStatus };
 
@@ -45,6 +46,11 @@ interface CheckoutInput {
 
 interface RawLine {
   product_id: string;
+  variant_id: string;
+  variant_label: string | null;
+  variants_json: string | null;
+  max_order_quantity: number | null;
+  landed_cost_paise: number | null;
   name: string;
   sku: string;
   slug: string;
@@ -122,9 +128,10 @@ export function createOrder(
 
   validateAddress(input.address);
 
-  const lines = queryAll<RawLine>(
+  const rawLines = queryAll<RawLine>(
     db,
-    `SELECT ci.product_id, p.name, p.sku, p.slug,
+    `SELECT ci.product_id, ci.variant_id, ci.variant_label, p.variants_json, p.max_order_quantity,
+            ps.landed_cost_paise, p.name, p.sku, p.slug,
             COALESCE(acp.promo_price_paise, p.price_paise) AS unit_price_paise,
             p.price_paise AS base_price_paise, ci.quantity,
             p.tax_rate_bp, p.category_id, p.status AS product_status, p.fulfilment_method, p.is_demo,
@@ -135,13 +142,33 @@ export function createOrder(
        JOIN products p ON p.id = ci.product_id
        JOIN inventory i ON i.product_id = p.id
        JOIN seller_profiles s ON s.id = p.seller_id
+       LEFT JOIN product_sourcing ps ON ps.product_id = p.id
        LEFT JOIN active_campaign_prices acp ON acp.product_id = p.id
       WHERE ci.cart_id = ?
       ORDER BY ci.created_at`,
     input.cartId,
   );
 
-  if (lines.length === 0) throw badRequest('Your bag is empty.');
+  if (rawLines.length === 0) throw badRequest('Your bag is empty.');
+
+  const lines = rawLines.map((line) => {
+    const variants = parseProductVariants(line.variants_json);
+    const chosenVariant = line.variant_id ? variants.find((v) => v.id === line.variant_id) : undefined;
+    if (line.variant_id && variants.length > 0 && (!chosenVariant || !chosenVariant.available)) {
+      throw conflict(`The selected option for ${line.name} is no longer available.`, 'item_unavailable');
+    }
+    const maxOrderQty = Math.min(99, Math.max(1, Number(line.max_order_quantity ?? 10)));
+    if (line.quantity > maxOrderQty) {
+      throw conflict(`Maximum ${maxOrderQty} units allowed per order for ${line.name}.`, 'insufficient_stock');
+    }
+    const delta = chosenVariant?.priceDeltaPaise ?? 0;
+    return {
+      ...line,
+      variant_label: chosenVariant?.label ?? line.variant_label ?? null,
+      unit_price_paise: Math.max(100, line.unit_price_paise + delta),
+      base_price_paise: Math.max(100, line.base_price_paise + delta),
+    };
+  });
 
   for (const line of lines) {
     if (line.product_status !== 'approved' || line.seller_status !== 'approved') {
@@ -375,8 +402,9 @@ export function createOrder(
                                     unit_price_paise, original_unit_price_paise, quantity, line_subtotal_paise,
                                     discount_paise, tax_rate_bp, tax_paise, commission_rate_bp, commission_paise,
                                     seller_earning_paise, fulfilment_method, pickup_location_id, package_weight_g,
-                                    package_length_cm, package_breadth_cm, package_height_cm, shipping_snapshot_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                    package_length_cm, package_breadth_cm, package_height_cm, shipping_snapshot_json,
+                                    variant_id, variant_label, sourcing_cost_snapshot_paise)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           newId('oit_'),
           id,
           sellerOrderId,
@@ -402,6 +430,9 @@ export function createOrder(
           snap.breadthCm,
           snap.heightCm,
           snap.snapshotJson,
+          item.line.variant_id || null,
+          item.line.variant_label ?? null,
+          item.line.landed_cost_paise ?? null,
         );
       }
     }
@@ -1233,6 +1264,8 @@ export function getOrderView(
     status: string;
     fulfilment_method: string | null;
     fulfilment_id: string | null;
+    variant_id: string | null;
+    variant_label: string | null;
     review_id: string | null;
     seller_name: string;
   }>(
@@ -1290,6 +1323,8 @@ export function getOrderView(
         sellerOrderId: item.seller_order_id,
         fulfilmentMethod: item.fulfilment_method ?? undefined,
         fulfilmentId: item.fulfilment_id ?? undefined,
+        variantId: item.variant_id ?? null,
+        variantLabel: item.variant_label ?? null,
         canReview: item.status === 'delivered' && !item.review_id,
         reviewed: Boolean(item.review_id),
       }));

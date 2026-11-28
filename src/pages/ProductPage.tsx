@@ -122,6 +122,7 @@ function estimateDeliveryForPincode(pincode: string, baseEstimate: string | null
 export function ProductPage() {
   const { slug = '' } = useParams();
   const [selectedImage, setSelectedImage] = useState(0);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<DetailTab>('story');
   const [showStickyBar, setShowStickyBar] = useState(false);
@@ -150,6 +151,12 @@ export function ProductPage() {
     retry: false,
   });
 
+  useEffect(() => {
+    setSelectedVariantId(null);
+    setSelectedImage(0);
+    setQuantity(1);
+  }, [slug]);
+
   // Track scroll position to show/hide the sticky buy bar
   useEffect(() => {
     const handleScroll = () => {
@@ -163,11 +170,19 @@ export function ProductPage() {
   }, []);
 
   const addToCart = useMutation({
-    mutationFn: (qty?: number) =>
-      api('/cart/items', {
+    mutationFn: (qty?: number) => {
+      const variants = productQuery.data?.product.variants ?? [];
+      const activeVar =
+        variants.find((v) => v.id === selectedVariantId) ?? variants.find((v) => v.available) ?? variants[0];
+      return api('/cart/items', {
         method: 'POST',
-        body: { productId: productQuery.data?.product.id, quantity: qty ?? quantity },
-      }),
+        body: {
+          productId: productQuery.data?.product.id,
+          quantity: qty ?? quantity,
+          ...(activeVar ? { variantId: activeVar.id } : {}),
+        },
+      });
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['cart'] });
       toast.push(`${quantity} × ${productQuery.data?.product.name ?? 'item'} added to your bag.`);
@@ -177,9 +192,16 @@ export function ProductPage() {
 
   const buyNow = useMutation({
     mutationFn: async () => {
+      const variants = productQuery.data?.product.variants ?? [];
+      const activeVar =
+        variants.find((v) => v.id === selectedVariantId) ?? variants.find((v) => v.available) ?? variants[0];
       await api('/cart/items', {
         method: 'POST',
-        body: { productId: productQuery.data?.product.id, quantity },
+        body: {
+          productId: productQuery.data?.product.id,
+          quantity,
+          ...(activeVar ? { variantId: activeVar.id } : {}),
+        },
       });
     },
     onSuccess: async () => {
@@ -334,8 +356,13 @@ export function ProductPage() {
               hasMerchantReturnPolicy: {
                 '@type': 'MerchantReturnPolicy',
                 applicableCountry: 'IN',
-                returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
-                merchantReturnDays: 7,
+                returnPolicyCategory:
+                  metaProduct.returnShippingBearer === 'non_returnable' || metaProduct.returnWindowDays === 0
+                    ? 'https://schema.org/MerchantReturnNotPermitted'
+                    : 'https://schema.org/MerchantReturnFiniteReturnWindow',
+                ...(metaProduct.returnShippingBearer !== 'non_returnable' && metaProduct.returnWindowDays !== 0
+                  ? { merchantReturnDays: metaProduct.returnWindowDays ?? 7 }
+                  : {}),
                 returnMethod: 'https://schema.org/ReturnByMail',
                 returnFees: 'https://schema.org/ReturnFeesCustomerResponsibility',
               },
@@ -451,18 +478,19 @@ export function ProductPage() {
   }
 
   const product = productQuery.data.product;
+  const variants = product.variants ?? [];
+  const activeVariant =
+    variants.find((v) => v.id === selectedVariantId) ?? variants.find((v) => v.available) ?? variants[0] ?? null;
   const image = product.images[selectedImage] ?? product.images[0];
   const isSaved = wishlist.data?.items.some((item) => item.productId === product.id) ?? false;
-  const soldOut = product.stock <= 0;
-  const maxQuantity = Math.max(1, Math.min(10, product.stock));
+  const soldOut = product.stock <= 0 || (variants.length > 0 && variants.every((v) => !v.available));
+  const maxQuantity = Math.max(1, Math.min(product.maxOrderQuantity ?? 10, product.stock));
   const hasReviews = product.reviewSummary.count > 0 && product.reviewSummary.average !== null;
   const attributeEntries = Object.entries(product.attributes ?? {}).filter(
     ([key, value]) => key.trim() && value.trim(),
   );
 
-  // Cart lines are always the real listing; no invented pack variants or
-  // prices are shown here.
-  const currentItemPrice = product.pricePaise;
+  const currentItemPrice = Math.max(100, product.pricePaise + (activeVariant?.priceDeltaPaise ?? 0));
   const campaignOriginal =
     product.originalPricePaise && product.originalPricePaise > currentItemPrice ? product.originalPricePaise : null;
   const strikeOriginalPrice =
@@ -688,6 +716,11 @@ export function ProductPage() {
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-ink/75">{product.shortDescription}</p>
 
           <div className="mt-3.5 flex flex-wrap items-center gap-2">
+            {product.isSelectCurated ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#D4AF37]/45 bg-[#172321] px-2.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[#F7EEDB]">
+                Dear Hills Select
+              </span>
+            ) : null}
             {product.giTagged && product.originVerified ? (
               <Link
                 to="/gi-tagged"
@@ -774,10 +807,59 @@ export function ProductPage() {
               <div className="shrink-0">
                 <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-bold ${soldOut ? 'bg-slate-200 text-slate-700' : 'bg-emerald-600 sm:bg-emerald-100/75 text-white sm:text-emerald-800'}`}>
                   <span className={`h-2 w-2 shrink-0 rounded-full ${soldOut ? 'bg-slate-500' : 'bg-white sm:bg-emerald-600'}`} />
-                  {soldOut ? 'Out of stock' : product.stock <= 3 ? `Only ${product.stock} left` : `${product.stock} in stock`}
+                  {soldOut
+                    ? 'Out of stock'
+                    : product.availabilityPolicy === 'on_demand_external'
+                      ? 'Available to order'
+                      : product.stock <= 3
+                        ? `Only ${product.stock} left`
+                        : `${product.stock} in stock`}
                 </span>
               </div>
             </div>
+
+            {variants.length > 0 ? (
+              <div className="mt-4 border-t border-line/60 pt-3.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                  Option: <span className="font-semibold text-forest">{activeVariant?.label}</span>
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {variants.map((variant) => {
+                    const selected = activeVariant?.id === variant.id;
+                    return (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        disabled={!variant.available}
+                        onClick={() => setSelectedVariantId(variant.id)}
+                        className={`inline-flex min-h-9 items-center gap-2 rounded-sm border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          !variant.available
+                            ? 'cursor-not-allowed border-line/60 bg-sand/15 text-muted/60 line-through'
+                            : selected
+                              ? 'border-forest bg-forest text-paper'
+                              : 'border-sand bg-white text-forest hover:border-forest'
+                        }`}
+                      >
+                        {variant.colorHex ? (
+                          <span
+                            className="h-3 w-3 rounded-full border border-black/15"
+                            style={{ backgroundColor: variant.colorHex }}
+                            aria-hidden
+                          />
+                        ) : null}
+                        <span>{variant.label}</span>
+                        {variant.priceDeltaPaise ? (
+                          <span className="text-[10px] opacity-80">
+                            ({variant.priceDeltaPaise > 0 ? '+' : ''}
+                            {formatINR(variant.priceDeltaPaise)})
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             {showFreeShipping ? (
               <div className="mt-4 rounded-xl sm:rounded-sm border border-emerald-200 sm:border-sand/70 bg-emerald-50/75 sm:bg-sand/25 p-3 sm:p-3.5">
@@ -1016,9 +1098,11 @@ export function ProductPage() {
                 </p>
                 <p className="text-[11px] leading-relaxed text-muted">
                   {config?.payments.configured
-                    ? config?.cod?.enabled !== false
+                    ? product.fulfilmentMethod === 'SHIPROCKET' && config?.cod?.enabled !== false
                       ? `Cards, UPI & netbanking via Razorpay. Cash on Delivery (COD) available on Shiprocket orders over ${formatINR(config?.cod?.minOrderPaise ?? 50000)} (+${formatINR(config?.cod?.feePaise ?? 1900)} fee).`
-                      : 'Cards, UPI and netbanking are processed securely by Razorpay. Cash on delivery is not offered.'
+                      : product.fulfilmentMethod !== 'SHIPROCKET'
+                        ? 'Cards, UPI & netbanking are processed securely by Razorpay. Prepaid online payment required for this selection.'
+                        : 'Cards, UPI and netbanking are processed securely by Razorpay. Cash on delivery is not offered.'
                     : 'This deployment cannot collect online payments yet.'}
                 </p>
               </div>

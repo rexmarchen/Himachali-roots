@@ -58,6 +58,15 @@ import {
 import { POLICY_KEYS } from '../../shared/content.js';
 import { assertProductionConfig } from '../env.js';
 import { paymentProviderStatus } from '../lib/payments.js';
+import {
+  calculateExternalPricing,
+  enforceExternalPriceFloor,
+  evaluateExternalProductReadiness,
+  getProductSourcing,
+  parseProductVariants,
+  upsertProductSourcing,
+} from '../lib/externalSourcing.js';
+import { EXTERNAL_FIXED_MARKUP_PAISE } from '../../shared/types.js';
 import { firstComplianceError, findProtectedClaimViolations, sellerAcceptedProofFlags, validateProductCompliance, complianceGroupFor } from '../lib/productCompliance.js';
 import { listCrafts, listRegions, recordSlugRedirect, slugifyValue } from '../lib/himalayan.js';
 import {
@@ -627,6 +636,7 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
   router.get('/products', (req, res) => {
     const { page, pageSize, offset } = pageParams(req.query);
     const status = typeof req.query.status === 'string' && req.query.status ? req.query.status : undefined;
+    const filter = typeof req.query.filter === 'string' && req.query.filter ? req.query.filter : undefined;
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const lowStock = req.query.lowStock === 'true';
     const conditions: string[] = [];
@@ -634,6 +644,17 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
     if (status) {
       conditions.push('p.status = ?');
       params.push(status);
+    }
+    if (filter === 'external_fulfilment') {
+      conditions.push("p.fulfilment_method = 'EXTERNAL_SUPPLIER'");
+    } else if (filter === 'supplier_unavailable') {
+      conditions.push("p.fulfilment_method = 'EXTERNAL_SUPPLIER' AND COALESCE(ps.supplier_available, 0) = 0");
+    } else if (filter === 'price_verification_required') {
+      conditions.push("p.fulfilment_method = 'EXTERNAL_SUPPLIER' AND COALESCE(ps.price_verified, 0) = 0");
+    } else if (filter === 'image_authorization_required') {
+      conditions.push(
+        "p.fulfilment_method = 'EXTERNAL_SUPPLIER' AND COALESCE(ps.image_authorization_status, 'pending_authorization') != 'authorized'",
+      );
     }
     if (lowStock) {
       conditions.push('(i.quantity - i.reserved_quantity) <= i.low_stock_threshold');
@@ -648,7 +669,8 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
     const total = queryOne<{ count: number }>(
       db,
       `SELECT COUNT(*) AS count FROM products p JOIN seller_profiles s ON s.id = p.seller_id
-        JOIN inventory i ON i.product_id = p.id ${where}`,
+        JOIN inventory i ON i.product_id = p.id
+        LEFT JOIN product_sourcing ps ON ps.product_id = p.id ${where}`,
       ...params,
     )?.count ?? 0;
     const rows = queryAll<{
@@ -671,16 +693,30 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       low_stock_threshold: number;
       is_demo: number;
       origin_verified: number;
+      fulfilment_method: string;
+      is_select_curated: number;
+      sourcing_channel: string | null;
+      landed_cost_paise: number | null;
+      markup_paise: number | null;
+      price_verified: number | null;
+      supplier_available: number | null;
+      availability_verified: number | null;
+      image_authorization_status: string | null;
     }>(
       db,
       `SELECT p.id, p.name, p.slug, p.status, p.price_paise, p.sku, p.created_at, p.submitted_at, p.rejection_reason,
-              p.moderation_note, p.changes_requested_at, p.origin_verified, p.is_demo, s.business_name AS seller_name, s.id AS seller_id,
+              p.moderation_note, p.changes_requested_at, p.origin_verified, p.is_demo,
+              p.fulfilment_method, p.is_select_curated,
+              ps.sourcing_channel, ps.landed_cost_paise, ps.markup_paise, ps.price_verified,
+              ps.supplier_available, ps.availability_verified, ps.image_authorization_status,
+              s.business_name AS seller_name, s.id AS seller_id,
               i.quantity AS stock,
               i.reserved_quantity AS reserved,
               i.low_stock_threshold,
               (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url
          FROM products p JOIN seller_profiles s ON s.id = p.seller_id
          JOIN inventory i ON i.product_id = p.id
+         LEFT JOIN product_sourcing ps ON ps.product_id = p.id
         ${where} ORDER BY CASE p.status WHEN 'pending' THEN 0 ELSE 1 END, p.updated_at DESC
         LIMIT ? OFFSET ?`,
       ...params,
@@ -711,6 +747,9 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       product: {
         ...product,
         attributes: product.attributes ? JSON.parse(String(product.attributes)) : null,
+        variants: parseProductVariants(product.variants_json ? String(product.variants_json) : null),
+        sourcing: getProductSourcing(db, product.id),
+        externalReadiness: evaluateExternalProductReadiness(db, product.id),
         images,
       },
     });
@@ -771,9 +810,9 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         sellerFssaiNumber: typeof applicationData.fssaiNumber === 'string' ? applicationData.fssaiNumber : null,
       });
       const proofFlags = sellerAcceptedProofFlags(db, product.seller_id);
-      const claimRow = queryOne<{ short_description: string; gi_tagged: number }>(
+      const claimRow = queryOne<{ short_description: string; gi_tagged: number; fulfilment_method: string }>(
         db,
-        'SELECT short_description, gi_tagged FROM products WHERE id = ?',
+        'SELECT short_description, gi_tagged, fulfilment_method FROM products WHERE id = ?',
         product.id,
       );
       const claimCheck = findProtectedClaimViolations({
@@ -781,8 +820,10 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         hasAcceptedOriginOrCraftProof: proofFlags.hasAcceptedOriginOrCraftProof || input.originVerified === true,
         giVerifiedByAdmin: input.giTagged === true || claimRow?.gi_tagged === 1 || proofFlags.hasAcceptedGiProof,
         hasAcceptedOrganicProof: proofFlags.hasAcceptedOrganicProof,
+        isExternalSourced: claimRow?.fulfilment_method === 'EXTERNAL_SUPPLIER',
       });
-      const allComplianceErrors = { ...compliance.errors, ...claimCheck.errors };
+      const readiness = evaluateExternalProductReadiness(db, product.id);
+      const allComplianceErrors = { ...compliance.errors, ...claimCheck.errors, ...readiness.fieldErrors };
       if (Object.keys(allComplianceErrors).length) {
         throw badRequest(firstComplianceError(allComplianceErrors), allComplianceErrors);
       }
@@ -923,9 +964,23 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         isDemo: z.boolean().default(true),
         imageUrl: z.string().trim().max(500).optional(),
         imageAlt: z.string().trim().max(200).optional(),
+        fulfilmentMethod: z.enum(['SHIPROCKET', 'OWN_DELIVERY', 'EXTERNAL_SUPPLIER']).optional().default('SHIPROCKET'),
+        isSelectCurated: z.boolean().optional().default(false),
+        availabilityPolicy: z.enum(['stock_tracked', 'on_demand_external']).optional().default('stock_tracked'),
+        maxOrderQuantity: z.number().int().min(1).max(20).optional().default(10),
+        returnPolicyOverride: z.string().trim().max(500).nullable().optional(),
+        returnWindowDays: z.number().int().min(0).max(30).nullable().optional(),
+        returnShippingBearer: z.enum(['customer', 'seller', 'partner_defective_only', 'non_returnable']).nullable().optional(),
       }).strict(),
       req.body,
     );
+
+    if (input.status === 'approved' && input.fulfilmentMethod === 'EXTERNAL_SUPPLIER') {
+      throw badRequest(
+        'Create externally sourced listings as draft and complete price, availability, and image authorization checks before publishing.',
+        { status: 'Use draft status for External Supplier listings.' },
+      );
+    }
 
     if (
       input.compareAtPricePaise !== null &&
@@ -1015,9 +1070,11 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
            price_paise, compare_at_price_paise, sku, unit, weight_g, dimensions, materials,
            care_instructions, food_info, origin_place, region, region_slug, district_village,
            craft_type, craft_slug, technique, gi_tagged, gi_name, gi_registration_ref,
-           gi_verified_at, gi_verified_by, made_to_order, origin_verified, status,
+           gi_verified_at, gi_verified_by, made_to_order, origin_verified, fulfilment_method,
+           is_select_curated, availability_policy, max_order_quantity, return_policy_override,
+           return_window_days, return_shipping_bearer, status,
            is_demo, published_at, approved_at, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         productId,
         seller.id,
         category.id,
@@ -1048,6 +1105,13 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         input.giTagged ? req.user!.id : null,
         input.madeToOrder ? 1 : 0,
         input.giTagged ? 1 : 0,
+        input.fulfilmentMethod,
+        input.isSelectCurated ? 1 : 0,
+        input.availabilityPolicy,
+        input.maxOrderQuantity,
+        input.returnPolicyOverride ?? null,
+        input.returnWindowDays ?? null,
+        input.returnShippingBearer ?? null,
         input.status,
         input.isDemo ? 1 : 0,
         isApproved ? now : null,
@@ -1137,18 +1201,36 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         status: z.enum(['draft', 'pending', 'approved', 'paused', 'archived']).optional(),
         isDemo: z.boolean().optional(),
         originVerified: z.boolean().optional(),
+        isSelectCurated: z.boolean().optional(),
+        availabilityPolicy: z.enum(['stock_tracked', 'on_demand_external']).optional(),
+        maxOrderQuantity: z.number().int().min(1).max(20).optional(),
+        returnPolicyOverride: z.string().trim().max(500).nullable().optional(),
+        returnWindowDays: z.number().int().min(0).max(30).nullable().optional(),
+        returnShippingBearer: z.enum(['customer', 'seller', 'partner_defective_only', 'non_returnable']).nullable().optional(),
       }).strict(),
       req.body,
     );
 
-    const product = queryOne<{ id: string; seller_id: string; price_paise: number; compare_at_price_paise: number | null; slug: string; sku: string; status: string }>(
+    const product = queryOne<{
+      id: string;
+      seller_id: string;
+      price_paise: number;
+      compare_at_price_paise: number | null;
+      slug: string;
+      sku: string;
+      status: string;
+      fulfilment_method: string;
+    }>(
       db,
-      'SELECT id, seller_id, price_paise, compare_at_price_paise, slug, sku, status FROM products WHERE id = ?',
+      'SELECT id, seller_id, price_paise, compare_at_price_paise, slug, sku, status, fulfilment_method FROM products WHERE id = ?',
       req.params.id,
     );
     if (!product) throw notFound('Product not found.');
 
     const newPrice = input.pricePaise !== undefined ? input.pricePaise : product.price_paise;
+    if (product.fulfilment_method === 'EXTERNAL_SUPPLIER' && input.pricePaise !== undefined) {
+      enforceExternalPriceFloor(db, product.id, newPrice);
+    }
     const newCompareAt = input.compareAtPricePaise !== undefined ? input.compareAtPricePaise : product.compare_at_price_paise;
     if (newCompareAt !== null && newCompareAt !== undefined && newCompareAt < newPrice) {
       throw badRequest('Compare-at price must be greater than or equal to selling price.', {
@@ -1197,10 +1279,16 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         harvest_info: string | null;
         dispatch_conditions: string | null;
         category_id: string | null;
+        name: string;
+        short_description: string;
+        description: string;
+        origin_verified: number;
+        gi_tagged: number;
       }>(
         db,
         `SELECT materials, dimensions, care_instructions, weight_g, compliance_json,
-                variety_grade, harvest_info, dispatch_conditions, category_id
+                variety_grade, harvest_info, dispatch_conditions, category_id,
+                name, short_description, description, origin_verified, gi_tagged
            FROM products WHERE id = ?`,
         product.id,
       );
@@ -1226,8 +1314,23 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         },
         sellerFssaiNumber: typeof applicationData.fssaiNumber === 'string' ? applicationData.fssaiNumber : null,
       });
-      if (Object.keys(compliance.errors).length) {
-        throw badRequest(firstComplianceError(compliance.errors), compliance.errors);
+      const proofFlags = sellerAcceptedProofFlags(db, product.seller_id);
+      const claimCheck = findProtectedClaimViolations({
+        texts: [
+          input.name ?? current?.name ?? '',
+          input.shortDescription ?? current?.short_description ?? '',
+          input.description ?? current?.description ?? '',
+          input.materials !== undefined ? input.materials : (current?.materials ?? null),
+        ],
+        hasAcceptedOriginOrCraftProof: proofFlags.hasAcceptedOriginOrCraftProof || (input.originVerified ?? current?.origin_verified === 1),
+        giVerifiedByAdmin: (input.giTagged ?? current?.gi_tagged === 1) || proofFlags.hasAcceptedGiProof,
+        hasAcceptedOrganicProof: proofFlags.hasAcceptedOrganicProof,
+        isExternalSourced: product.fulfilment_method === 'EXTERNAL_SUPPLIER',
+      });
+      const readiness = evaluateExternalProductReadiness(db, product.id);
+      const allErrors = { ...compliance.errors, ...claimCheck.errors, ...readiness.fieldErrors };
+      if (Object.keys(allErrors).length) {
+        throw badRequest(firstComplianceError(allErrors), allErrors);
       }
     }
 
@@ -1268,6 +1371,12 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
            status = COALESCE(?, status),
            is_demo = CASE WHEN ? IS NOT NULL THEN ? ELSE is_demo END,
            origin_verified = CASE WHEN ? IS NOT NULL THEN ? ELSE origin_verified END,
+           is_select_curated = CASE WHEN ? IS NOT NULL THEN ? ELSE is_select_curated END,
+           availability_policy = COALESCE(?, availability_policy),
+           max_order_quantity = COALESCE(?, max_order_quantity),
+           return_policy_override = CASE WHEN ? IS NOT NULL THEN ? ELSE return_policy_override END,
+           return_window_days = CASE WHEN ? IS NOT NULL THEN ? ELSE return_window_days END,
+           return_shipping_bearer = CASE WHEN ? IS NOT NULL THEN ? ELSE return_shipping_bearer END,
            published_at = CASE WHEN ? = 'approved' THEN COALESCE(published_at, ?) ELSE published_at END,
            updated_at = ?
          WHERE id = ?`,
@@ -1324,6 +1433,16 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         input.isDemo ? 1 : 0,
         input.originVerified !== undefined ? 1 : null,
         input.originVerified ? 1 : 0,
+        input.isSelectCurated !== undefined ? 1 : null,
+        input.isSelectCurated ? 1 : 0,
+        input.availabilityPolicy ?? null,
+        input.maxOrderQuantity ?? null,
+        input.returnPolicyOverride !== undefined ? 1 : null,
+        input.returnPolicyOverride ?? null,
+        input.returnWindowDays !== undefined ? 1 : null,
+        input.returnWindowDays ?? null,
+        input.returnShippingBearer !== undefined ? 1 : null,
+        input.returnShippingBearer ?? null,
         nextStatus,
         now,
         now,
@@ -1388,13 +1507,20 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       sellerFssaiNumber: typeof applicationData.fssaiNumber === 'string' ? applicationData.fssaiNumber : null,
     });
     const proofFlags = sellerAcceptedProofFlags(db, product.seller_id);
+    const extCheck = queryOne<{ fulfilment_method: string }>(
+      db,
+      'SELECT fulfilment_method FROM products WHERE id = ?',
+      product.id,
+    );
     const claimCheck = findProtectedClaimViolations({
       texts: [product.name, product.short_description, product.description, product.materials],
       hasAcceptedOriginOrCraftProof: proofFlags.hasAcceptedOriginOrCraftProof || product.origin_verified === 1,
       giVerifiedByAdmin: product.gi_tagged === 1 || proofFlags.hasAcceptedGiProof,
       hasAcceptedOrganicProof: proofFlags.hasAcceptedOrganicProof,
+      isExternalSourced: extCheck?.fulfilment_method === 'EXTERNAL_SUPPLIER',
     });
-    const allComplianceErrors = { ...compliance.errors, ...claimCheck.errors };
+    const readiness = evaluateExternalProductReadiness(db, product.id);
+    const allComplianceErrors = { ...compliance.errors, ...claimCheck.errors, ...readiness.fieldErrors };
     if (Object.keys(allComplianceErrors).length) {
       throw badRequest(firstComplianceError(allComplianceErrors), allComplianceErrors);
     }
@@ -1408,6 +1534,128 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
     );
     audit(db, req.user!, 'product.published_by_admin', 'product', product.id, { status: product.status }, { status: 'approved' });
     res.json({ ok: true, status: 'approved', message: 'Product published to customer storefront.' });
+  });
+
+  router.patch('/products/:id/sourcing', (req, res) => {
+    const product = queryOne<{ id: string; price_paise: number; fulfilment_method: string }>(
+      db,
+      'SELECT id, price_paise, fulfilment_method FROM products WHERE id = ?',
+      req.params.id,
+    );
+    if (!product) throw notFound('Product not found.');
+
+    const variantSchema = z.object({
+      id: z.string().trim().min(1).max(60),
+      label: z.string().trim().min(1).max(80),
+      color: z.string().trim().max(40).nullable().optional(),
+      colorHex: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+      size: z.string().trim().max(40).nullable().optional(),
+      material: z.string().trim().max(80).nullable().optional(),
+      skuSuffix: z.string().trim().max(24).nullable().optional(),
+      priceDeltaPaise: z.number().int().min(-500_000).max(500_000).optional().default(0),
+      available: z.boolean().default(true),
+      stockQty: z.number().int().min(0).max(10_000).nullable().optional(),
+    });
+
+    const input = parse(
+      z.object({
+        sourcingChannel: z.string().trim().min(2).max(60).optional(),
+        sourceUrl: z.string().trim().max(500).nullable().optional(),
+        supplierName: z.string().trim().max(140).nullable().optional(),
+        supplierCatalogId: z.string().trim().max(80).nullable().optional(),
+        supplierSkuRef: z.string().trim().max(80).nullable().optional(),
+        supplierPricePaise: z.number().int().min(0).max(10_000_000).optional(),
+        supplierShippingPaise: z.number().int().min(0).max(1_000_000).optional(),
+        otherSourcingCostPaise: z.number().int().min(0).max(1_000_000).optional(),
+        markupPaise: z.number().int().min(EXTERNAL_FIXED_MARKUP_PAISE).max(5_000_000).optional(),
+        priceFloorLocked: z.boolean().optional(),
+        priceVerified: z.boolean().optional(),
+        supplierAvailable: z.boolean().optional(),
+        availabilityVerified: z.boolean().optional(),
+        imageAuthorizationStatus: z.enum(['pending_authorization', 'authorized', 'rejected']).optional(),
+        imageAuthorizationNote: z.string().trim().max(400).nullable().optional(),
+        supplierReturnPolicyNote: z.string().trim().max(500).nullable().optional(),
+        internalNotes: z.string().trim().max(1000).nullable().optional(),
+        autoPriceFromLanded: z.boolean().optional().default(true),
+        isSelectCurated: z.boolean().optional(),
+        availabilityPolicy: z.enum(['stock_tracked', 'on_demand_external']).optional(),
+        maxOrderQuantity: z.number().int().min(1).max(20).optional(),
+        variants: z.array(variantSchema).max(40).optional(),
+        returnPolicyOverride: z.string().trim().max(500).nullable().optional(),
+        returnWindowDays: z.number().int().min(0).max(30).nullable().optional(),
+        returnShippingBearer: z.enum(['customer', 'seller', 'partner_defective_only', 'non_returnable']).nullable().optional(),
+      }),
+      req.body,
+    );
+
+    const savedSourcing = tx(db, () => {
+      const existingSourcing = getProductSourcing(db, product.id);
+      const calc = calculateExternalPricing({
+        supplierPricePaise: input.supplierPricePaise ?? existingSourcing?.supplierPricePaise ?? 0,
+        supplierShippingPaise: input.supplierShippingPaise ?? existingSourcing?.supplierShippingPaise ?? 0,
+        otherSourcingCostPaise: input.otherSourcingCostPaise ?? existingSourcing?.otherSourcingCostPaise ?? 0,
+        markupPaise: input.markupPaise ?? existingSourcing?.markupPaise ?? EXTERNAL_FIXED_MARKUP_PAISE,
+      });
+
+      const nextPricePaise =
+        input.autoPriceFromLanded && calc.landedCostPaise > 0
+          ? calc.recommendedSellingPricePaise
+          : product.price_paise;
+
+      const sourcing = upsertProductSourcing(db, product.id, {
+        ...input,
+        markupPaise: calc.markupPaise,
+        verifiedBy: req.user!.id,
+      });
+
+      const now = new Date().toISOString();
+      execute(
+        db,
+        `UPDATE products SET
+           price_paise = ?,
+           is_select_curated = CASE WHEN ? IS NOT NULL THEN ? ELSE is_select_curated END,
+           availability_policy = COALESCE(?, availability_policy),
+           max_order_quantity = COALESCE(?, max_order_quantity),
+           variants_json = CASE WHEN ? IS NOT NULL THEN ? ELSE variants_json END,
+           return_policy_override = CASE WHEN ? IS NOT NULL THEN ? ELSE return_policy_override END,
+           return_window_days = CASE WHEN ? IS NOT NULL THEN ? ELSE return_window_days END,
+           return_shipping_bearer = CASE WHEN ? IS NOT NULL THEN ? ELSE return_shipping_bearer END,
+           updated_at = ?
+         WHERE id = ?`,
+        nextPricePaise,
+        input.isSelectCurated !== undefined ? 1 : null,
+        input.isSelectCurated ? 1 : 0,
+        input.availabilityPolicy ?? null,
+        input.maxOrderQuantity ?? null,
+        input.variants !== undefined ? 1 : null,
+        input.variants !== undefined ? JSON.stringify(input.variants) : null,
+        input.returnPolicyOverride !== undefined ? 1 : null,
+        input.returnPolicyOverride ?? null,
+        input.returnWindowDays !== undefined ? 1 : null,
+        input.returnWindowDays ?? null,
+        input.returnShippingBearer !== undefined ? 1 : null,
+        input.returnShippingBearer ?? null,
+        now,
+        product.id,
+      );
+
+      audit(db, req.user!, 'product.sourcing_updated', 'product', product.id, null, {
+        landedCostPaise: sourcing.landedCostPaise,
+        markupPaise: sourcing.markupPaise,
+        nextPricePaise,
+        priceVerified: sourcing.priceVerified,
+        availabilityVerified: sourcing.availabilityVerified,
+        imageAuthorizationStatus: sourcing.imageAuthorizationStatus,
+      });
+      return { sourcing, nextPricePaise };
+    });
+
+    res.json({
+      ok: true,
+      pricePaise: savedSourcing.nextPricePaise,
+      sourcing: savedSourcing.sourcing,
+      readiness: evaluateExternalProductReadiness(db, product.id),
+    });
   });
 
   router.post('/products/:id/unpublish', (req, res) => {
@@ -3856,10 +4104,18 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
     res.json({ ok: true, ...result });
   });
 
-  router.post('/shipping/fulfilments/:fulfilmentId/external', (req, res) => {
+  router.post('/shipping/fulfilments/:fulfilmentId/external', async (req, res) => {
     const input = parse(
       z.object({
-        action: z.enum(['confirm_supplier', 'place_external_order', 'update_tracking', 'delivered', 'delivery_exception']),
+        action: z.enum([
+          'confirm_supplier',
+          'place_external_order',
+          'update_tracking',
+          'delivered',
+          'delivery_exception',
+          'flag_sourcing_exception',
+          'resolve_sourcing_exception',
+        ]),
         supplierName: z.string().trim().max(140).optional(),
         externalOrderRef: z.string().trim().max(120).optional(),
         courierName: z.string().trim().max(100).optional(),
@@ -3867,12 +4123,31 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         trackingUrl: safeTrackingUrlSchema,
         dispatchDate: z.string().trim().max(40).optional(),
         deliveryStatus: z.enum(['in_transit', 'out_for_delivery']).optional(),
+        exceptionType: z.enum(['supplier_out_of_stock', 'supplier_price_increased', 'supplier_delayed']).optional(),
+        newCostPaise: z.number().int().min(0).max(10_000_000).optional(),
+        resolutionAction: z.enum(['accept_updated_cost', 'wait_for_restock', 'cancel_and_refund']).optional(),
         note: z.string().trim().max(500).optional(),
       }),
       req.body,
     );
+    const fulfilmentId = String(req.params.fulfilmentId);
+    if (input.action === 'resolve_sourcing_exception' && input.resolutionAction === 'cancel_and_refund') {
+      const cancelResult = await cancelSingleFulfilment(db, {
+        fulfilmentId,
+        actor: req.user!,
+        reason: input.note?.trim() || 'Item unavailable from partner warehouse — full refund initiated.',
+      });
+      execute(
+        db,
+        "UPDATE order_fulfilments SET sourcing_exception_resolved_action = 'cancel_and_refund', sourcing_exception_note = COALESCE(?, sourcing_exception_note) WHERE id = ?",
+        input.note?.trim() || null,
+        fulfilmentId,
+      );
+      res.json({ ...cancelResult, status: 'cancelled' });
+      return;
+    }
     const result = updateExternalSupplierFulfilment(db, {
-      fulfilmentId: String(req.params.fulfilmentId),
+      fulfilmentId,
       actor: req.user!,
       action: input.action,
       supplierName: input.supplierName,
@@ -3882,6 +4157,12 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       trackingUrl: input.trackingUrl || undefined,
       dispatchDate: input.dispatchDate,
       deliveryStatus: input.deliveryStatus,
+      exceptionType: input.exceptionType,
+      newCostPaise: input.newCostPaise,
+      resolutionAction:
+        input.resolutionAction === 'accept_updated_cost' || input.resolutionAction === 'wait_for_restock'
+          ? input.resolutionAction
+          : undefined,
       note: input.note,
     });
     res.json({ ok: true, ...result });

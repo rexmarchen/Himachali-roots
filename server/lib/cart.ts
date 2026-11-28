@@ -5,6 +5,7 @@ import type { CartLine, CartView } from '../../shared/types.js';
 import { conflict, notFound } from './http.js';
 import { newId, randomToken } from './ids.js';
 import { shippingFor } from './pricing.js';
+import { parseProductVariants } from './externalSourcing.js';
 
 export const CART_COOKIE = 'pr_cart';
 
@@ -17,6 +18,10 @@ interface CartRow {
 
 interface CartLineRow {
   product_id: string;
+  variant_id: string;
+  variant_label: string | null;
+  variants_json: string | null;
+  max_order_quantity: number | null;
   slug: string;
   name: string;
   image_url: string | null;
@@ -69,17 +74,18 @@ export function ensureCart(db: Db, userId: string | null, token: string | null):
 }
 
 function mergeCartInto(db: Db, guestCartId: string, userCartId: string): void {
-  const guestItems = queryAll<{ product_id: string; quantity: number }>(
+  const guestItems = queryAll<{ product_id: string; variant_id: string; variant_label: string | null; quantity: number }>(
     db,
-    'SELECT product_id, quantity FROM cart_items WHERE cart_id = ?',
+    'SELECT product_id, variant_id, variant_label, quantity FROM cart_items WHERE cart_id = ?',
     guestCartId,
   );
   for (const item of guestItems) {
     const existing = queryOne<{ id: string; quantity: number }>(
       db,
-      'SELECT id, quantity FROM cart_items WHERE cart_id = ? AND product_id = ?',
+      'SELECT id, quantity FROM cart_items WHERE cart_id = ? AND product_id = ? AND variant_id = ?',
       userCartId,
       item.product_id,
+      item.variant_id ?? '',
     );
     if (existing) {
       execute(
@@ -91,10 +97,12 @@ function mergeCartInto(db: Db, guestCartId: string, userCartId: string): void {
     } else {
       execute(
         db,
-        'INSERT INTO cart_items (id, cart_id, product_id, quantity) VALUES (?, ?, ?, ?)',
+        'INSERT INTO cart_items (id, cart_id, product_id, variant_id, variant_label, quantity) VALUES (?, ?, ?, ?, ?, ?)',
         newId('ci_'),
         userCartId,
         item.product_id,
+        item.variant_id ?? '',
+        item.variant_label ?? null,
         item.quantity,
       );
     }
@@ -117,7 +125,8 @@ export function setCartCookie(res: Response, token: string, req?: Request): void
 export function cartLines(db: Db, cartId: string): CartLine[] {
   const rows = queryAll<CartLineRow>(
     db,
-    `SELECT ci.product_id, p.slug, p.name, p.price_paise, acp.promo_price_paise, ci.quantity,
+    `SELECT ci.product_id, ci.variant_id, ci.variant_label, p.variants_json, p.max_order_quantity,
+            p.slug, p.name, p.price_paise, acp.promo_price_paise, ci.quantity,
             p.status AS product_status, p.fulfilment_method,
             i.quantity AS stock, i.reserved_quantity AS reserved,
             s.id AS seller_id, s.business_name AS seller_name, s.status AS seller_status,
@@ -133,13 +142,21 @@ export function cartLines(db: Db, cartId: string): CartLine[] {
     cartId,
   );
   return rows.map((row) => {
+    const variants = parseProductVariants(row.variants_json);
+    const chosenVariant = row.variant_id ? variants.find((v) => v.id === row.variant_id) : undefined;
+    const variantAvailable = chosenVariant ? chosenVariant.available !== false : true;
     const available = Math.max(0, row.stock - row.reserved);
-    const sellable = available > 0 && row.product_status === 'approved' && row.seller_status === 'approved';
+    const maxCap = Math.min(Math.max(1, Number(row.max_order_quantity ?? 10)), 99, available);
+    const sellable = available > 0 && variantAvailable && row.product_status === 'approved' && row.seller_status === 'approved';
+    const delta = chosenVariant?.priceDeltaPaise ?? 0;
+    const baseWithVariant = Math.max(100, row.price_paise + delta);
     // The cart shows the live promotional price. It is re-read on every request
     // so an expired or withdrawn campaign can never keep an old price in place.
     const campaignPrice =
-      row.promo_price_paise !== null && row.promo_price_paise < row.price_paise ? row.promo_price_paise : null;
-    const unitPrice = campaignPrice ?? row.price_paise;
+      row.promo_price_paise !== null && row.promo_price_paise < row.price_paise
+        ? Math.max(100, row.promo_price_paise + delta)
+        : null;
+    const unitPrice = campaignPrice ?? baseWithVariant;
     return {
       productId: row.product_id,
       slug: row.slug,
@@ -147,15 +164,17 @@ export function cartLines(db: Db, cartId: string): CartLine[] {
       imageUrl: row.image_url,
       imageAlt: row.image_alt,
       unitPricePaise: unitPrice,
-      originalUnitPricePaise: campaignPrice === null ? null : row.price_paise,
+      originalUnitPricePaise: campaignPrice === null ? null : baseWithVariant,
       quantity: row.quantity,
       lineTotalPaise: sellable ? unitPrice * row.quantity : 0,
       stock: available,
-      maxQuantity: Math.min(99, available),
+      maxQuantity: maxCap,
       sellerId: row.seller_id,
       sellerName: row.seller_name,
       status: row.product_status as CartLine['status'],
       fulfilmentMethod: (row.fulfilment_method as CartLine['fulfilmentMethod']) ?? 'SHIPROCKET',
+      variantId: row.variant_id || null,
+      variantLabel: chosenVariant?.label ?? row.variant_label ?? null,
     };
   });
 }
@@ -175,10 +194,17 @@ export function getCartView(db: Db, cartId: string): CartView {
   };
 }
 
-export function addToCart(db: Db, cartId: string, productId: string, quantity: number): void {
-  const product = queryOne<{ id: string; status: string; seller_status: string; name: string }>(
+export function addToCart(db: Db, cartId: string, productId: string, quantity: number, variantId?: string): void {
+  const product = queryOne<{
+    id: string;
+    status: string;
+    seller_status: string;
+    name: string;
+    variants_json: string | null;
+    max_order_quantity: number | null;
+  }>(
     db,
-    `SELECT p.id, p.status, p.name, s.status AS seller_status
+    `SELECT p.id, p.status, p.name, p.variants_json, p.max_order_quantity, s.status AS seller_status
        FROM products p JOIN seller_profiles s ON s.id = p.seller_id
       WHERE p.id = ?`,
     productId,
@@ -187,6 +213,25 @@ export function addToCart(db: Db, cartId: string, productId: string, quantity: n
   if (product.status !== 'approved' || product.seller_status !== 'approved') {
     throw conflict('This product is not currently available.');
   }
+  const variants = parseProductVariants(product.variants_json);
+  let resolvedVariantId = (variantId ?? '').trim();
+  let resolvedVariantLabel: string | null = null;
+  if (variants.length > 0) {
+    const match = resolvedVariantId
+      ? variants.find((v) => v.id === resolvedVariantId)
+      : variants.find((v) => v.available !== false) ?? variants[0];
+    if (!match) {
+      throw conflict('Selected product option is not available.');
+    }
+    if (!match.available) {
+      throw conflict(`${match.label} is currently unavailable.`);
+    }
+    resolvedVariantId = match.id;
+    resolvedVariantLabel = match.label;
+  } else {
+    resolvedVariantId = '';
+  }
+
   const stock = queryOne<{ available: number }>(
     db,
     'SELECT quantity - reserved_quantity AS available FROM inventory WHERE product_id = ?',
@@ -194,36 +239,49 @@ export function addToCart(db: Db, cartId: string, productId: string, quantity: n
   );
   const existing = queryOne<{ id: string; quantity: number }>(
     db,
-    'SELECT id, quantity FROM cart_items WHERE cart_id = ? AND product_id = ?',
+    'SELECT id, quantity FROM cart_items WHERE cart_id = ? AND product_id = ? AND variant_id = ?',
     cartId,
     productId,
+    resolvedVariantId,
   );
   const available = Math.max(0, stock?.available ?? 0);
   if (available <= 0) throw conflict('This product is out of stock.');
+  const maxOrderQty = Math.min(99, Math.max(1, Number(product.max_order_quantity ?? 10)));
   const desired = (existing?.quantity ?? 0) + quantity;
   if (desired > available) {
     throw conflict(`Only ${available} ${available === 1 ? 'unit is' : 'units are'} available right now.`);
   }
+  if (desired > maxOrderQty) {
+    throw conflict(`Maximum ${maxOrderQty} unit${maxOrderQty === 1 ? '' : 's'} allowed per order for this item.`);
+  }
   if (existing) {
-    execute(db, 'UPDATE cart_items SET quantity = ? WHERE id = ?', desired, existing.id);
+    execute(db, 'UPDATE cart_items SET quantity = ?, variant_label = ? WHERE id = ?', desired, resolvedVariantLabel, existing.id);
   } else {
     execute(
       db,
-      'INSERT INTO cart_items (id, cart_id, product_id, quantity) VALUES (?, ?, ?, ?)',
+      'INSERT INTO cart_items (id, cart_id, product_id, variant_id, variant_label, quantity) VALUES (?, ?, ?, ?, ?, ?)',
       newId('ci_'),
       cartId,
       productId,
+      resolvedVariantId,
+      resolvedVariantLabel,
       quantity,
     );
   }
   execute(db, 'UPDATE carts SET updated_at = ? WHERE id = ?', new Date().toISOString(), cartId);
 }
 
-export function updateCartItem(db: Db, cartId: string, productId: string, quantity: number): void {
+export function updateCartItem(db: Db, cartId: string, productId: string, quantity: number, variantId?: string): void {
+  const vKey = variantId !== undefined ? variantId.trim() : null;
   if (quantity === 0) {
-    execute(db, 'DELETE FROM cart_items WHERE cart_id = ? AND product_id = ?', cartId, productId);
+    if (vKey !== null) {
+      execute(db, 'DELETE FROM cart_items WHERE cart_id = ? AND product_id = ? AND variant_id = ?', cartId, productId, vKey);
+    } else {
+      execute(db, 'DELETE FROM cart_items WHERE cart_id = ? AND product_id = ?', cartId, productId);
+    }
     return;
   }
+  const prod = queryOne<{ max_order_quantity: number | null }>(db, 'SELECT max_order_quantity FROM products WHERE id = ?', productId);
   const stock = queryOne<{ available: number }>(
     db,
     'SELECT quantity - reserved_quantity AS available FROM inventory WHERE product_id = ?',
@@ -233,18 +291,23 @@ export function updateCartItem(db: Db, cartId: string, productId: string, quanti
   if (quantity > available) {
     throw conflict(`Only ${available} ${available === 1 ? 'unit is' : 'units are'} available right now.`);
   }
-  const result = execute(
-    db,
-    'UPDATE cart_items SET quantity = ? WHERE cart_id = ? AND product_id = ?',
-    quantity,
-    cartId,
-    productId,
-  );
+  const maxOrderQty = Math.min(99, Math.max(1, Number(prod?.max_order_quantity ?? 10)));
+  if (quantity > maxOrderQty) {
+    throw conflict(`Maximum ${maxOrderQty} unit${maxOrderQty === 1 ? '' : 's'} allowed per order for this item.`);
+  }
+  const result =
+    vKey !== null
+      ? execute(db, 'UPDATE cart_items SET quantity = ? WHERE cart_id = ? AND product_id = ? AND variant_id = ?', quantity, cartId, productId, vKey)
+      : execute(db, 'UPDATE cart_items SET quantity = ? WHERE cart_id = ? AND product_id = ?', quantity, cartId, productId);
   if (result.changes === 0) throw notFound('That item is no longer in your bag.');
   execute(db, 'UPDATE carts SET updated_at = ? WHERE id = ?', new Date().toISOString(), cartId);
 }
 
-export function removeCartItem(db: Db, cartId: string, productId: string): void {
-  execute(db, 'DELETE FROM cart_items WHERE cart_id = ? AND product_id = ?', cartId, productId);
+export function removeCartItem(db: Db, cartId: string, productId: string, variantId?: string): void {
+  if (variantId !== undefined) {
+    execute(db, 'DELETE FROM cart_items WHERE cart_id = ? AND product_id = ? AND variant_id = ?', cartId, productId, variantId.trim());
+  } else {
+    execute(db, 'DELETE FROM cart_items WHERE cart_id = ? AND product_id = ?', cartId, productId);
+  }
   execute(db, 'UPDATE carts SET updated_at = ? WHERE id = ?', new Date().toISOString(), cartId);
 }

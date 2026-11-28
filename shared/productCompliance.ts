@@ -284,6 +284,7 @@ export function findProtectedClaimViolations(input: {
   hasAcceptedOriginOrCraftProof?: boolean;
   giVerifiedByAdmin?: boolean;
   hasAcceptedOrganicProof?: boolean;
+  isExternalSourced?: boolean;
 }): { errors: Record<string, string>; matchedClaims: string[] } {
   const combined = input.texts.filter(Boolean).join(' ');
   const errors: Record<string, string> = {};
@@ -298,6 +299,26 @@ export function findProtectedClaimViolations(input: {
       errors.giTagged = rule.message;
     } else if (rule.id === 'organic_certified' && !input.hasAcceptedOrganicProof) {
       errors.claims = errors.claims ?? rule.message;
+    }
+  }
+
+  if (input.isExternalSourced) {
+    const externalClaimRules: Array<{ pattern: RegExp; message: string }> = [
+      {
+        pattern: /\b(pure\s+wool|100%\s+wool|authentic\s+kullu\s+handloom|100%\s+original|handcrafted)\b/i,
+        message:
+          'Externally sourced products cannot state unverified material or craft claims ("Pure Wool", "Authentic Kullu Handloom", "Handcrafted", "100% Original") without verified documentation.',
+      },
+      {
+        pattern: /\bmeesho\b|meesho\.com|external\s+supplier|reseller\s+link|supplier\s+price/i,
+        message:
+          'Customer-facing product fields must never mention third-party sourcing channels ("Meesho", "external supplier", or supplier links/pricing).',
+      },
+    ];
+    for (const rule of externalClaimRules) {
+      if (rule.pattern.test(combined)) {
+        errors.claims = errors.claims ?? rule.message;
+      }
     }
   }
 

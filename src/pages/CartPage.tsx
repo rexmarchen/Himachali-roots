@@ -24,8 +24,11 @@ export function CartPage() {
   const keyboardOpen = useKeyboardOpen();
 
   const updateQuantity = useMutation({
-    mutationFn: ({ productId, quantity }: { productId: string; quantity: number }) =>
-      api('/cart/items/' + encodeURIComponent(productId), { method: 'PATCH', body: { quantity } }),
+    mutationFn: ({ productId, variantId, quantity }: { productId: string; variantId?: string | null; quantity: number }) =>
+      api('/cart/items/' + encodeURIComponent(productId), {
+        method: 'PATCH',
+        body: { quantity, ...(variantId ? { variantId } : {}) },
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['cart'] });
     },
@@ -33,8 +36,10 @@ export function CartPage() {
   });
 
   const removeItem = useMutation({
-    mutationFn: (productId: string) =>
-      api('/cart/items/' + encodeURIComponent(productId), { method: 'DELETE' }),
+    mutationFn: ({ productId, variantId }: { productId: string; variantId?: string | null }) =>
+      api('/cart/items/' + encodeURIComponent(productId) + (variantId ? `?variantId=${encodeURIComponent(variantId)}` : ''), {
+        method: 'DELETE',
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['cart'] });
       toast.push('Item removed from your bag.');
@@ -123,7 +128,7 @@ export function CartPage() {
 
             <ul className="space-y-3 md:space-y-0 md:border-t md:border-line">
               {cart.lines.map((line) => (
-                <li key={line.productId} className="flex gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-2xs md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:border-line md:bg-transparent md:px-0 md:py-5 md:shadow-none sm:gap-5">
+                <li key={`${line.productId}::${line.variantId ?? ''}`} className="flex gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-2xs md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:border-line md:bg-transparent md:px-0 md:py-5 md:shadow-none sm:gap-5">
                   <Link to={`/shop/${line.slug}`} className="h-24 w-24 md:h-28 md:w-24 shrink-0 overflow-hidden rounded-xl md:rounded-none bg-sand/40">
                     {line.imageUrl ? (
                       <img src={line.imageUrl} alt={line.imageAlt ?? line.name} className="h-full w-full object-cover" />
@@ -135,6 +140,11 @@ export function CartPage() {
                       <h2 className="mt-0.5 font-serif text-base md:text-lg font-semibold md:font-normal leading-snug text-forest">
                         <Link to={`/shop/${line.slug}`} className="hover:text-terra">{line.name}</Link>
                       </h2>
+                      {line.variantLabel ? (
+                        <p className="mt-0.5 inline-flex items-center rounded-sm bg-sand/30 px-2 py-0.5 text-[10.5px] font-medium text-forest">
+                          Option: {line.variantLabel}
+                        </p>
+                      ) : null}
                       <p className="mt-1 text-xs text-muted">
                         {formatINR(line.unitPricePaise)} each
                         {line.originalUnitPricePaise ? (
@@ -152,7 +162,7 @@ export function CartPage() {
                       ) : null}
                       <button
                         type="button"
-                        onClick={() => removeItem.mutate(line.productId)}
+                        onClick={() => removeItem.mutate({ productId: line.productId, variantId: line.variantId })}
                         disabled={removeItem.isPending}
                         className="mt-1 inline-flex min-h-11 items-center text-[11px] text-muted underline underline-offset-4 hover:text-terra disabled:opacity-50"
                       >
@@ -163,7 +173,7 @@ export function CartPage() {
                       <div className="flex h-11 items-center border border-sand bg-surface">
                         <button
                           type="button"
-                          onClick={() => updateQuantity.mutate({ productId: line.productId, quantity: Math.max(1, line.quantity - 1) })}
+                          onClick={() => updateQuantity.mutate({ productId: line.productId, variantId: line.variantId, quantity: Math.max(1, line.quantity - 1) })}
                           className="h-full min-w-11 px-3 text-muted hover:text-ink disabled:opacity-40"
                           disabled={updateQuantity.isPending || line.quantity <= 1}
                           aria-label={`Decrease quantity of ${line.name}`}
@@ -173,7 +183,7 @@ export function CartPage() {
                         <span className="w-7 text-center text-xs tabular-nums">{line.quantity}</span>
                         <button
                           type="button"
-                          onClick={() => updateQuantity.mutate({ productId: line.productId, quantity: Math.min(line.maxQuantity, line.quantity + 1) })}
+                          onClick={() => updateQuantity.mutate({ productId: line.productId, variantId: line.variantId, quantity: Math.min(line.maxQuantity, line.quantity + 1) })}
                           className="h-full min-w-11 px-3 text-muted hover:text-ink disabled:opacity-40"
                           disabled={updateQuantity.isPending || line.quantity >= line.maxQuantity}
                           aria-label={`Increase quantity of ${line.name}`}

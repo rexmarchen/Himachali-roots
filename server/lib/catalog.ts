@@ -5,6 +5,7 @@ import { notFound } from './http.js';
 import { attachCampaignMeta } from './campaigns.js';
 import { regionMatchSql } from './himalayan.js';
 import { buildPublicProductShippingSummary } from './fulfilmentRouter.js';
+import { formatPublicReturnPolicy, parseProductVariants } from './externalSourcing.js';
 
 const PUBLIC_CONDITION = "p.status = 'approved' AND s.status = 'approved' AND s.store_status = 'active'";
 
@@ -35,6 +36,9 @@ interface SummaryRow {
   gi_registration_ref?: string | null;
   made_to_order?: number;
   is_featured: number;
+  is_select_curated?: number;
+  availability_policy?: string | null;
+  variants_json?: string | null;
   rating_average: number | null;
   rating_count: number;
 }
@@ -76,6 +80,9 @@ function mapSummary(row: SummaryRow): ProductSummary {
     giRegistrationRef: row.gi_registration_ref ?? null,
     madeToOrder: row.made_to_order === 1,
     isFeatured: row.is_featured === 1,
+    isSelectCurated: row.is_select_curated === 1,
+    availabilityPolicy: row.availability_policy === 'on_demand_external' ? 'on_demand_external' : 'stock_tracked',
+    variantCount: parseProductVariants(row.variants_json).length,
     ratingAverage: row.rating_average,
     ratingCount: row.rating_count,
   };
@@ -85,7 +92,7 @@ const SUMMARY_SELECT = `
   SELECT p.id, p.slug, p.name, p.short_description, p.price_paise, p.compare_at_price_paise,
          COALESCE(NULLIF(p.region, ''), s.region) AS region, p.region_slug, p.district_village,
          p.craft_type, p.craft_slug, p.technique, p.gi_tagged, p.gi_name, p.gi_registration_ref, p.made_to_order,
-         p.is_featured, p.is_demo, acp.promo_price_paise,
+         p.is_featured, p.is_demo, p.is_select_curated, p.availability_policy, p.variants_json, acp.promo_price_paise,
          i.quantity - i.reserved_quantity AS stock,
          s.business_name AS seller_name, s.slug AS seller_slug,
          c.name AS category_name, c.slug AS category_slug,
@@ -394,8 +401,23 @@ export function getProduct(db: Db, slug: string): ProductDetail {
       distribution,
     },
     related,
-    returnPolicy:
-      '7-day return window for unused, unopened items in original packaging. Perishable food and personalised items are not returnable unless damaged or incorrect. Return shipping is covered when the fault is ours.',
+    variants: parseProductVariants((row as { variants_json?: string | null }).variants_json),
+    maxOrderQuantity: Math.max(1, Math.min(20, Number((row as { max_order_quantity?: number | null }).max_order_quantity ?? 10))),
+    returnWindowDays:
+      typeof (row as { return_window_days?: number | null }).return_window_days === 'number'
+        ? (row as { return_window_days?: number | null }).return_window_days
+        : 7,
+    returnShippingBearer:
+      ((row as { return_shipping_bearer?: string | null }).return_shipping_bearer as
+        | 'customer'
+        | 'seller'
+        | 'partner_defective_only'
+        | 'non_returnable'
+        | null
+        | undefined) ?? null,
+    returnPolicy: formatPublicReturnPolicy(
+      row as { return_policy_override?: string | null; return_window_days?: number | null; return_shipping_bearer?: string | null },
+    ),
     shippingEstimate: (() => {
       const s = buildPublicProductShippingSummary(
         row as { fulfilment_method?: string | null; handling_days?: number | null; shipping_config_json?: string | null },

@@ -61,27 +61,38 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
 
   router.post('/cart/items', cartMutationLimiter, (req, res) => {
     const input = parse(
-      z.object({ productId: z.string().min(3).max(80), quantity: z.number().int().min(1).max(99) }),
+      z.object({
+        productId: z.string().min(3).max(80),
+        quantity: z.number().int().min(1).max(99),
+        variantId: z.string().trim().max(60).optional(),
+      }),
       req.body,
     );
     const { cart, token } = ensureCart(db, req.user?.id ?? null, cartTokenFrom(req));
     setCartCookie(res, token, req);
-    addToCart(db, cart.id, input.productId, input.quantity);
+    addToCart(db, cart.id, input.productId, input.quantity, input.variantId);
     res.status(201).json({ cart: getCartView(db, cart.id) });
   });
 
   router.patch('/cart/items/:productId', cartMutationLimiter, (req, res) => {
-    const input = parse(z.object({ quantity: z.number().int().min(0).max(99) }), req.body);
+    const input = parse(
+      z.object({
+        quantity: z.number().int().min(0).max(99),
+        variantId: z.string().trim().max(60).optional(),
+      }),
+      req.body,
+    );
     const { cart, token } = ensureCart(db, req.user?.id ?? null, cartTokenFrom(req));
     setCartCookie(res, token, req);
-    updateCartItem(db, cart.id, String(req.params.productId), input.quantity);
+    updateCartItem(db, cart.id, String(req.params.productId), input.quantity, input.variantId);
     res.json({ cart: getCartView(db, cart.id) });
   });
 
   router.delete('/cart/items/:productId', cartMutationLimiter, (req, res) => {
+    const variantId = typeof req.query.variantId === 'string' ? req.query.variantId : undefined;
     const { cart, token } = ensureCart(db, req.user?.id ?? null, cartTokenFrom(req));
     setCartCookie(res, token, req);
-    removeCartItem(db, cart.id, String(req.params.productId));
+    removeCartItem(db, cart.id, String(req.params.productId), variantId);
     res.json({ cart: getCartView(db, cart.id) });
   });
 

@@ -117,6 +117,18 @@ function reconcileLegacySchema(db: Db): void {
     addColumn(db, 'products', 'package_height_cm', 'REAL');
     addColumn(db, 'products', 'handling_days', 'INTEGER NOT NULL DEFAULT 2');
     addColumn(db, 'products', 'shipping_config_json', 'TEXT');
+    addColumn(db, 'products', 'is_select_curated', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(
+      db,
+      'products',
+      'availability_policy',
+      "TEXT NOT NULL DEFAULT 'stock_tracked' CHECK (availability_policy IN ('stock_tracked','on_demand_external'))",
+    );
+    addColumn(db, 'products', 'max_order_quantity', 'INTEGER NOT NULL DEFAULT 10');
+    addColumn(db, 'products', 'variants_json', 'TEXT');
+    addColumn(db, 'products', 'return_policy_override', 'TEXT');
+    addColumn(db, 'products', 'return_window_days', 'INTEGER');
+    addColumn(db, 'products', 'return_shipping_bearer', 'TEXT');
   }
   if (tableExists(db, 'order_items')) {
     addColumn(db, 'order_items', 'fulfilment_method', "TEXT NOT NULL DEFAULT 'SHIPROCKET'");
@@ -127,6 +139,15 @@ function reconcileLegacySchema(db: Db): void {
     addColumn(db, 'order_items', 'package_height_cm', 'REAL');
     addColumn(db, 'order_items', 'shipping_snapshot_json', 'TEXT');
     addColumn(db, 'order_items', 'fulfilment_id', 'TEXT');
+    addColumn(db, 'order_items', 'variant_id', 'TEXT');
+    addColumn(db, 'order_items', 'variant_label', 'TEXT');
+    addColumn(db, 'order_items', 'sourcing_cost_snapshot_paise', 'INTEGER');
+  }
+  if (tableExists(db, 'order_fulfilments')) {
+    addColumn(db, 'order_fulfilments', 'sourcing_exception_type', 'TEXT');
+    addColumn(db, 'order_fulfilments', 'sourcing_exception_new_cost_paise', 'INTEGER');
+    addColumn(db, 'order_fulfilments', 'sourcing_exception_note', 'TEXT');
+    addColumn(db, 'order_fulfilments', 'sourcing_exception_resolved_action', 'TEXT');
   }
   if (tableExists(db, 'shipments')) {
     addColumn(db, 'shipments', 'fulfilment_id', 'TEXT');
@@ -396,7 +417,113 @@ export function openDatabase(filename: string): Db {
 
   migrateCodSupport(db);
   markMigration(db, 18);
+
+  migrateExternalSourcingAndVariants(db);
+  markMigration(db, 19);
   return db;
+}
+
+/**
+ * Migration 19: External sourcing ledger (`product_sourcing`), Dear Hills Select
+ * curation badge & availability controls, verified product variants across cart &
+ * order snapshots, and supplier exception resolution columns on order_fulfilments.
+ */
+function migrateExternalSourcingAndVariants(db: Db): void {
+  addColumn(db, 'products', 'is_select_curated', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn(
+    db,
+    'products',
+    'availability_policy',
+    "TEXT NOT NULL DEFAULT 'stock_tracked' CHECK (availability_policy IN ('stock_tracked','on_demand_external'))",
+  );
+  addColumn(db, 'products', 'max_order_quantity', 'INTEGER NOT NULL DEFAULT 10');
+  addColumn(db, 'products', 'variants_json', 'TEXT');
+  addColumn(db, 'products', 'return_policy_override', 'TEXT');
+  addColumn(db, 'products', 'return_window_days', 'INTEGER');
+  addColumn(db, 'products', 'return_shipping_bearer', 'TEXT');
+
+  addColumn(db, 'order_items', 'variant_id', 'TEXT');
+  addColumn(db, 'order_items', 'variant_label', 'TEXT');
+  addColumn(db, 'order_items', 'sourcing_cost_snapshot_paise', 'INTEGER');
+
+  addColumn(db, 'order_fulfilments', 'sourcing_exception_type', 'TEXT');
+  addColumn(db, 'order_fulfilments', 'sourcing_exception_new_cost_paise', 'INTEGER');
+  addColumn(db, 'order_fulfilments', 'sourcing_exception_note', 'TEXT');
+  addColumn(db, 'order_fulfilments', 'sourcing_exception_resolved_action', 'TEXT');
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS product_sourcing (
+      product_id TEXT PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+      sourcing_channel TEXT NOT NULL DEFAULT 'external',
+      source_url TEXT,
+      supplier_name TEXT,
+      supplier_catalog_id TEXT,
+      supplier_sku_ref TEXT,
+      supplier_price_paise INTEGER NOT NULL DEFAULT 0 CHECK (supplier_price_paise >= 0),
+      supplier_shipping_paise INTEGER NOT NULL DEFAULT 0 CHECK (supplier_shipping_paise >= 0),
+      other_sourcing_cost_paise INTEGER NOT NULL DEFAULT 0 CHECK (other_sourcing_cost_paise >= 0),
+      landed_cost_paise INTEGER NOT NULL DEFAULT 0 CHECK (landed_cost_paise >= 0),
+      markup_paise INTEGER NOT NULL DEFAULT 10000 CHECK (markup_paise >= 0),
+      price_floor_locked INTEGER NOT NULL DEFAULT 1,
+      price_verified INTEGER NOT NULL DEFAULT 0,
+      last_price_verified_at TEXT,
+      supplier_available INTEGER NOT NULL DEFAULT 0,
+      availability_verified INTEGER NOT NULL DEFAULT 0,
+      last_availability_verified_at TEXT,
+      image_authorization_status TEXT NOT NULL DEFAULT 'pending_authorization'
+        CHECK (image_authorization_status IN ('pending_authorization','authorized','rejected')),
+      image_authorization_note TEXT,
+      supplier_return_policy_note TEXT,
+      internal_notes TEXT,
+      verified_by TEXT REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+  `);
+
+  if (tableExists(db, 'cart_items')) {
+    const cartCols = columns(db, 'cart_items');
+    if (!cartCols.includes('variant_id')) {
+      db.exec('PRAGMA foreign_keys = OFF');
+      db.exec('PRAGMA legacy_alter_table = ON');
+      try {
+        db.exec('BEGIN IMMEDIATE');
+        db.exec('ALTER TABLE cart_items RENAME TO cart_items_legacy');
+        db.exec(`
+          CREATE TABLE cart_items (
+            id TEXT PRIMARY KEY,
+            cart_id TEXT NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+            product_id TEXT NOT NULL REFERENCES products(id),
+            variant_id TEXT NOT NULL DEFAULT '',
+            variant_label TEXT,
+            quantity INTEGER NOT NULL CHECK (quantity > 0 AND quantity <= 99),
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            UNIQUE (cart_id, product_id, variant_id)
+          );
+        `);
+        db.exec(`
+          INSERT INTO cart_items (id, cart_id, product_id, variant_id, variant_label, quantity, created_at)
+          SELECT id, cart_id, product_id, '', NULL, quantity, created_at FROM cart_items_legacy;
+        `);
+        db.exec('DROP TABLE cart_items_legacy');
+        const fkIssues = db.prepare('PRAGMA foreign_key_check').all();
+        if (fkIssues.length > 0) {
+          throw new Error(`Migration 19 foreign key check failed: ${JSON.stringify(fkIssues.slice(0, 3))}`);
+        }
+        db.exec('COMMIT');
+      } catch (error) {
+        try {
+          db.exec('ROLLBACK');
+        } catch {
+          // Already rolled back.
+        }
+        throw error;
+      } finally {
+        db.exec('PRAGMA legacy_alter_table = OFF');
+        db.exec('PRAGMA foreign_keys = ON');
+      }
+    }
+  }
 }
 
 /**

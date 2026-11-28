@@ -40,6 +40,15 @@ import { decryptPayoutDetails, encryptPayoutDetails } from '../lib/payoutCrypto.
 import { notify, escapeHtml } from '../lib/email.js';
 import { COMMISSION_BASIS_NOTE } from '../lib/pricing.js';
 import {
+  calculateExternalPricing,
+  enforceExternalPriceFloor,
+  evaluateExternalProductReadiness,
+  getProductSourcing,
+  parseProductVariants,
+  upsertProductSourcing,
+} from '../lib/externalSourcing.js';
+import { EXTERNAL_FIXED_MARKUP_PAISE } from '../../shared/types.js';
+import {
   countDescriptionWords,
   findProtectedClaimViolations,
   firstComplianceError,
@@ -221,6 +230,12 @@ const productSchema = z.object({
   packageHeightCm: z.number().min(1).max(200).nullable().optional(),
   handlingDays: z.number().int().min(0).max(60).nullable().optional(),
   shippingConfig: z.record(z.string(), z.unknown()).nullable().optional(),
+  isSelectCurated: z.boolean().optional(),
+  availabilityPolicy: z.enum(['stock_tracked', 'on_demand_external']).optional(),
+  maxOrderQuantity: z.number().int().min(1).max(20).optional(),
+  returnPolicyOverride: z.string().trim().max(500).nullable().optional(),
+  returnWindowDays: z.number().int().min(0).max(30).nullable().optional(),
+  returnShippingBearer: z.enum(['customer', 'seller', 'partner_defective_only', 'non_returnable']).nullable().optional(),
   compliance: z
     .object({
       ingredients: z.string().trim().max(1000).optional(),
@@ -1303,7 +1318,25 @@ export function sellerRouter(db: Db): Router {
 
   router.get('/products', (req, res) => {
     const id = sellerId(req);
-    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const status = typeof req.query.status === 'string' && req.query.status ? req.query.status : undefined;
+    const filter = typeof req.query.filter === 'string' && req.query.filter ? req.query.filter : undefined;
+    const conditions: string[] = ['p.seller_id = ?'];
+    const params: (string | number)[] = [id];
+    if (status) {
+      conditions.push('p.status = ?');
+      params.push(status);
+    }
+    if (filter === 'external_fulfilment') {
+      conditions.push("p.fulfilment_method = 'EXTERNAL_SUPPLIER'");
+    } else if (filter === 'supplier_unavailable') {
+      conditions.push("p.fulfilment_method = 'EXTERNAL_SUPPLIER' AND COALESCE(ps.supplier_available, 0) = 0");
+    } else if (filter === 'price_verification_required') {
+      conditions.push("p.fulfilment_method = 'EXTERNAL_SUPPLIER' AND COALESCE(ps.price_verified, 0) = 0");
+    } else if (filter === 'image_authorization_required') {
+      conditions.push(
+        "p.fulfilment_method = 'EXTERNAL_SUPPLIER' AND COALESCE(ps.image_authorization_status, 'pending_authorization') != 'authorized'",
+      );
+    }
     const rows = queryAll<{
       id: string;
       name: string;
@@ -1322,17 +1355,46 @@ export function sellerRouter(db: Db): Router {
       is_demo: number;
       fulfilment_method: string | null;
       pickup_location_id: string | null;
+      is_select_curated: number;
+      availability_policy: string | null;
+      sourcing_channel: string | null;
+      source_url: string | null;
+      supplier_name: string | null;
+      supplier_catalog_id: string | null;
+      supplier_sku_ref: string | null;
+      supplier_price_paise: number | null;
+      supplier_shipping_paise: number | null;
+      other_sourcing_cost_paise: number | null;
+      landed_cost_paise: number | null;
+      markup_paise: number | null;
+      price_floor_locked: number | null;
+      price_verified: number | null;
+      last_price_verified_at: string | null;
+      supplier_available: number | null;
+      availability_verified: number | null;
+      last_availability_verified_at: string | null;
+      image_authorization_status: string | null;
+      image_authorization_note: string | null;
+      supplier_return_policy_note: string | null;
+      internal_notes: string | null;
     }>(
       db,
       `SELECT p.id, p.name, p.slug, p.status, p.price_paise, p.sku, p.rejection_reason, p.moderation_note,
               p.changes_requested_at, p.updated_at, p.is_demo, p.fulfilment_method, p.pickup_location_id,
+              p.is_select_curated, p.availability_policy,
+              ps.sourcing_channel, ps.source_url, ps.supplier_name, ps.supplier_catalog_id, ps.supplier_sku_ref,
+              ps.supplier_price_paise, ps.supplier_shipping_paise, ps.other_sourcing_cost_paise,
+              ps.landed_cost_paise, ps.markup_paise, ps.price_floor_locked, ps.price_verified, ps.last_price_verified_at,
+              ps.supplier_available, ps.availability_verified, ps.last_availability_verified_at,
+              ps.image_authorization_status, ps.image_authorization_note, ps.supplier_return_policy_note, ps.internal_notes,
               c.name AS category_name, i.quantity AS stock, i.reserved_quantity AS reserved,
               (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url
          FROM products p JOIN categories c ON c.id = p.category_id
          JOIN inventory i ON i.product_id = p.id
-        WHERE p.seller_id = ? ${status ? 'AND p.status = ?' : ''}
+         LEFT JOIN product_sourcing ps ON ps.product_id = p.id
+        WHERE ${conditions.join(' AND ')}
         ORDER BY p.updated_at DESC`,
-      ...(status ? [id, status] : [id]),
+      ...params,
     );
     res.json({
       products: rows.map((row) => ({
@@ -1360,6 +1422,38 @@ export function sellerRouter(db: Db): Router {
         isDemo: row.is_demo === 1,
         fulfilmentMethod: (row.fulfilment_method as 'SHIPROCKET' | 'OWN_DELIVERY' | 'EXTERNAL_SUPPLIER' | null) ?? 'SHIPROCKET',
         pickupLocationId: row.pickup_location_id ?? null,
+        isSelectCurated: row.is_select_curated === 1,
+        availabilityPolicy: row.availability_policy === 'on_demand_external' ? 'on_demand_external' : 'stock_tracked',
+        sourcing: row.landed_cost_paise !== null || row.sourcing_channel !== null
+          ? {
+              productId: row.id,
+              sourcingChannel: row.sourcing_channel ?? 'external',
+              sourceUrl: row.source_url,
+              supplierName: row.supplier_name,
+              supplierCatalogId: row.supplier_catalog_id,
+              supplierSkuRef: row.supplier_sku_ref,
+              supplierPricePaise: Number(row.supplier_price_paise ?? 0),
+              supplierShippingPaise: Number(row.supplier_shipping_paise ?? 0),
+              otherSourcingCostPaise: Number(row.other_sourcing_cost_paise ?? 0),
+              landedCostPaise: Number(row.landed_cost_paise ?? 0),
+              markupPaise: Math.max(EXTERNAL_FIXED_MARKUP_PAISE, Number(row.markup_paise ?? EXTERNAL_FIXED_MARKUP_PAISE)),
+              recommendedSellingPricePaise:
+                Number(row.landed_cost_paise ?? 0) +
+                Math.max(EXTERNAL_FIXED_MARKUP_PAISE, Number(row.markup_paise ?? EXTERNAL_FIXED_MARKUP_PAISE)),
+              priceFloorLocked: row.price_floor_locked === 1,
+              priceVerified: row.price_verified === 1,
+              lastPriceVerifiedAt: row.last_price_verified_at,
+              supplierAvailable: row.supplier_available === 1,
+              availabilityVerified: row.availability_verified === 1,
+              lastAvailabilityVerifiedAt: row.last_availability_verified_at,
+              imageAuthorizationStatus:
+                (row.image_authorization_status as 'pending_authorization' | 'authorized' | 'rejected') ??
+                'pending_authorization',
+              imageAuthorizationNote: row.image_authorization_note,
+              supplierReturnPolicyNote: row.supplier_return_policy_note,
+              internalNotes: row.internal_notes,
+            }
+          : null,
       })),
     });
   });
@@ -1450,6 +1544,16 @@ export function sellerRouter(db: Db): Router {
         shippingConfig: product.shipping_config_json
           ? parseJson<Record<string, unknown> | null>(String(product.shipping_config_json), null)
           : null,
+        isSelectCurated: product.is_select_curated === 1,
+        availabilityPolicy:
+          product.availability_policy === 'on_demand_external' ? 'on_demand_external' : 'stock_tracked',
+        maxOrderQuantity: Number(product.max_order_quantity ?? 10),
+        variants: parseProductVariants(product.variants_json ? String(product.variants_json) : null),
+        returnPolicyOverride: (product.return_policy_override as string | null) ?? null,
+        returnWindowDays: (product.return_window_days as number | null) ?? null,
+        returnShippingBearer: (product.return_shipping_bearer as string | null) ?? null,
+        sourcing: getProductSourcing(db, String(product.id)),
+        externalReadiness: evaluateExternalProductReadiness(db, String(product.id)),
       },
       commissionNote: COMMISSION_BASIS_NOTE,
     });
@@ -1587,6 +1691,23 @@ export function sellerRouter(db: Db): Router {
         input.attributes ? JSON.stringify(input.attributes) : null,
       );
       execute(db, 'INSERT INTO inventory (product_id, quantity) VALUES (?, 0)', productId);
+      if (shippingValues.fulfilmentMethod === 'EXTERNAL_SUPPLIER') {
+        const cfg = shippingValues.shippingConfigJson
+          ? parseJson<Record<string, unknown>>(shippingValues.shippingConfigJson, {})
+          : {};
+        upsertProductSourcing(db, productId, {
+          sourcingChannel: 'external',
+          supplierName: typeof cfg.supplierName === 'string' ? cfg.supplierName : null,
+          supplierCatalogId: typeof cfg.supplierReference === 'string' ? cfg.supplierReference : null,
+          verifiedBy: req.user!.id,
+        });
+        execute(
+          db,
+          "UPDATE products SET availability_policy = 'on_demand_external', max_order_quantity = COALESCE(?, max_order_quantity) WHERE id = ?",
+          input.maxOrderQuantity ?? 5,
+          productId,
+        );
+      }
       audit(db, req.user!, 'product.created', 'product', productId, null, { name: input.name, productSeller: id });
     });
     const wordCount = countDescriptionWords(description);
@@ -1633,6 +1754,9 @@ export function sellerRouter(db: Db): Router {
     }
     const input = parse(productUpdateSchema, req.body);
     const nextPricePaise = input.pricePaise ?? existing.price_paise;
+    if (((existing.fulfilment_method as string | null) ?? 'SHIPROCKET') === 'EXTERNAL_SUPPLIER' && input.pricePaise !== undefined) {
+      enforceExternalPriceFloor(db, existing.id, nextPricePaise);
+    }
     const nextCompareAtPaise =
       input.compareAtPricePaise !== undefined ? input.compareAtPricePaise : existing.compare_at_price_paise;
     if (nextCompareAtPaise !== null && nextCompareAtPaise !== undefined && nextCompareAtPaise < nextPricePaise) {
@@ -1988,9 +2112,9 @@ export function sellerRouter(db: Db): Router {
       sellerFssaiNumber: typeof applicationData.fssaiNumber === 'string' ? applicationData.fssaiNumber : null,
     });
     const proofFlags = sellerAcceptedProofFlags(db, id);
-    const productExtra = queryOne<{ short_description: string; gi_tagged: number }>(
+    const productExtra = queryOne<{ short_description: string; gi_tagged: number; fulfilment_method: string }>(
       db,
-      'SELECT short_description, gi_tagged FROM products WHERE id = ?',
+      'SELECT short_description, gi_tagged, fulfilment_method FROM products WHERE id = ?',
       product.id,
     );
     const claimCheck = findProtectedClaimViolations({
@@ -1998,8 +2122,10 @@ export function sellerRouter(db: Db): Router {
       hasAcceptedOriginOrCraftProof: proofFlags.hasAcceptedOriginOrCraftProof,
       giVerifiedByAdmin: productExtra?.gi_tagged === 1 || proofFlags.hasAcceptedGiProof,
       hasAcceptedOrganicProof: proofFlags.hasAcceptedOrganicProof,
+      isExternalSourced: ((productExtra as { fulfilment_method?: string } | undefined)?.fulfilment_method ?? '') === 'EXTERNAL_SUPPLIER',
     });
-    const mergedErrors = { ...compliance.errors, ...claimCheck.errors };
+    const readiness = evaluateExternalProductReadiness(db, product.id);
+    const mergedErrors = { ...compliance.errors, ...claimCheck.errors, ...readiness.fieldErrors };
     if (Object.keys(mergedErrors).length) {
       throw badRequest(firstComplianceError(mergedErrors), mergedErrors);
     }
@@ -2034,6 +2160,117 @@ export function sellerRouter(db: Db): Router {
     execute(db, "UPDATE products SET status = 'paused', updated_at = ? WHERE id = ?", new Date().toISOString(), product.id);
     audit(db, req.user!, 'product.paused', 'product', product.id, { status: 'approved' }, { status: 'paused' });
     res.json({ ok: true, status: 'paused' });
+  });
+
+  router.patch('/products/:id/sourcing', (req, res) => {
+    const id = sellerId(req);
+    const product = queryOne<{ id: string; price_paise: number; fulfilment_method: string }>(
+      db,
+      'SELECT id, price_paise, fulfilment_method FROM products WHERE id = ? AND seller_id = ?',
+      req.params.id,
+      id,
+    );
+    if (!product) throw notFound('Product not found.');
+
+    const variantSchema = z.object({
+      id: z.string().trim().min(1).max(60),
+      label: z.string().trim().min(1).max(80),
+      color: z.string().trim().max(40).nullable().optional(),
+      colorHex: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+      size: z.string().trim().max(40).nullable().optional(),
+      material: z.string().trim().max(80).nullable().optional(),
+      skuSuffix: z.string().trim().max(24).nullable().optional(),
+      priceDeltaPaise: z.number().int().min(-500_000).max(500_000).optional().default(0),
+      available: z.boolean().default(true),
+      stockQty: z.number().int().min(0).max(10_000).nullable().optional(),
+    });
+
+    const input = parse(
+      z.object({
+        sourcingChannel: z.string().trim().min(2).max(60).optional(),
+        sourceUrl: z.string().trim().max(500).nullable().optional(),
+        supplierName: z.string().trim().max(140).nullable().optional(),
+        supplierCatalogId: z.string().trim().max(80).nullable().optional(),
+        supplierSkuRef: z.string().trim().max(80).nullable().optional(),
+        supplierPricePaise: z.number().int().min(0).max(10_000_000).optional(),
+        supplierShippingPaise: z.number().int().min(0).max(1_000_000).optional(),
+        otherSourcingCostPaise: z.number().int().min(0).max(1_000_000).optional(),
+        markupPaise: z.number().int().min(EXTERNAL_FIXED_MARKUP_PAISE).max(5_000_000).optional(),
+        priceVerified: z.boolean().optional(),
+        supplierAvailable: z.boolean().optional(),
+        availabilityVerified: z.boolean().optional(),
+        imageAuthorizationStatus: z.enum(['pending_authorization', 'authorized', 'rejected']).optional(),
+        imageAuthorizationNote: z.string().trim().max(400).nullable().optional(),
+        supplierReturnPolicyNote: z.string().trim().max(500).nullable().optional(),
+        internalNotes: z.string().trim().max(1000).nullable().optional(),
+        autoPriceFromLanded: z.boolean().optional().default(true),
+        maxOrderQuantity: z.number().int().min(1).max(20).optional(),
+        variants: z.array(variantSchema).max(40).optional(),
+        returnPolicyOverride: z.string().trim().max(500).nullable().optional(),
+        returnWindowDays: z.number().int().min(0).max(30).nullable().optional(),
+        returnShippingBearer: z.enum(['customer', 'seller', 'partner_defective_only', 'non_returnable']).nullable().optional(),
+      }),
+      req.body,
+    );
+
+    const saved = tx(db, () => {
+      const existing = getProductSourcing(db, product.id);
+      const calc = calculateExternalPricing({
+        supplierPricePaise: input.supplierPricePaise ?? existing?.supplierPricePaise ?? 0,
+        supplierShippingPaise: input.supplierShippingPaise ?? existing?.supplierShippingPaise ?? 0,
+        otherSourcingCostPaise: input.otherSourcingCostPaise ?? existing?.otherSourcingCostPaise ?? 0,
+        markupPaise: input.markupPaise ?? existing?.markupPaise ?? EXTERNAL_FIXED_MARKUP_PAISE,
+      });
+
+      const nextPricePaise =
+        input.autoPriceFromLanded && calc.landedCostPaise > 0
+          ? calc.recommendedSellingPricePaise
+          : product.price_paise;
+
+      const sourcing = upsertProductSourcing(db, product.id, {
+        ...input,
+        markupPaise: calc.markupPaise,
+        verifiedBy: req.user!.id,
+      });
+
+      execute(
+        db,
+        `UPDATE products SET
+           price_paise = ?,
+           max_order_quantity = COALESCE(?, max_order_quantity),
+           variants_json = CASE WHEN ? IS NOT NULL THEN ? ELSE variants_json END,
+           return_policy_override = CASE WHEN ? IS NOT NULL THEN ? ELSE return_policy_override END,
+           return_window_days = CASE WHEN ? IS NOT NULL THEN ? ELSE return_window_days END,
+           return_shipping_bearer = CASE WHEN ? IS NOT NULL THEN ? ELSE return_shipping_bearer END,
+           updated_at = ?
+         WHERE id = ?`,
+        nextPricePaise,
+        input.maxOrderQuantity ?? null,
+        input.variants !== undefined ? 1 : null,
+        input.variants !== undefined ? JSON.stringify(input.variants) : null,
+        input.returnPolicyOverride !== undefined ? 1 : null,
+        input.returnPolicyOverride ?? null,
+        input.returnWindowDays !== undefined ? 1 : null,
+        input.returnWindowDays ?? null,
+        input.returnShippingBearer !== undefined ? 1 : null,
+        input.returnShippingBearer ?? null,
+        new Date().toISOString(),
+        product.id,
+      );
+
+      audit(db, req.user!, 'product.sourcing_updated_by_seller', 'product', product.id, null, {
+        landedCostPaise: sourcing.landedCostPaise,
+        nextPricePaise,
+      });
+      return { sourcing, nextPricePaise };
+    });
+
+    res.json({
+      ok: true,
+      pricePaise: saved.nextPricePaise,
+      sourcing: saved.sourcing,
+      readiness: evaluateExternalProductReadiness(db, product.id),
+    });
   });
 
   router.post('/products/:id/resume', (req, res) => {
@@ -2283,6 +2520,8 @@ export function sellerRouter(db: Db): Router {
           imageUrl: item.image_url,
           fulfilmentMethod: item.fulfilment_method ?? 'SHIPROCKET',
           fulfilmentId: item.fulfilment_id ?? null,
+          variantId: (item as { variant_id?: string | null }).variant_id ?? null,
+          variantLabel: (item as { variant_label?: string | null }).variant_label ?? null,
         })),
         shipment: shipment
           ? {
@@ -3294,11 +3533,19 @@ export function sellerRouter(db: Db): Router {
     res.json({ ok: true, ...result });
   });
 
-  router.post('/fulfilments/:fulfilmentId/external', (req, res) => {
+  router.post('/fulfilments/:fulfilmentId/external', async (req, res) => {
     const id = sellerId(req);
     const input = parse(
       z.object({
-        action: z.enum(['confirm_supplier', 'place_external_order', 'update_tracking', 'delivered', 'delivery_exception']),
+        action: z.enum([
+          'confirm_supplier',
+          'place_external_order',
+          'update_tracking',
+          'delivered',
+          'delivery_exception',
+          'flag_sourcing_exception',
+          'resolve_sourcing_exception',
+        ]),
         supplierName: z.string().trim().max(140).optional(),
         externalOrderRef: z.string().trim().max(120).optional(),
         courierName: z.string().trim().max(100).optional(),
@@ -3306,12 +3553,32 @@ export function sellerRouter(db: Db): Router {
         trackingUrl: safeTrackingUrlSchema,
         dispatchDate: z.string().trim().max(40).optional(),
         deliveryStatus: z.enum(['in_transit', 'out_for_delivery']).optional(),
+        exceptionType: z.enum(['supplier_out_of_stock', 'supplier_price_increased', 'supplier_delayed']).optional(),
+        newCostPaise: z.number().int().min(0).max(10_000_000).optional(),
+        resolutionAction: z.enum(['accept_updated_cost', 'wait_for_restock', 'cancel_and_refund']).optional(),
         note: z.string().trim().max(500).optional(),
       }),
       req.body,
     );
+    const fulfilmentId = String(req.params.fulfilmentId);
+    if (input.action === 'resolve_sourcing_exception' && input.resolutionAction === 'cancel_and_refund') {
+      const cancelResult = await cancelSingleFulfilment(db, {
+        fulfilmentId,
+        ownerSellerId: id,
+        actor: req.user!,
+        reason: input.note?.trim() || 'Item unavailable from partner warehouse — refund initiated.',
+      });
+      execute(
+        db,
+        "UPDATE order_fulfilments SET sourcing_exception_resolved_action = 'cancel_and_refund', sourcing_exception_note = COALESCE(?, sourcing_exception_note) WHERE id = ?",
+        input.note?.trim() || null,
+        fulfilmentId,
+      );
+      res.json({ ...cancelResult, status: 'cancelled' });
+      return;
+    }
     const result = updateExternalSupplierFulfilment(db, {
-      fulfilmentId: String(req.params.fulfilmentId),
+      fulfilmentId,
       ownerSellerId: id,
       actor: req.user!,
       action: input.action,
@@ -3322,6 +3589,12 @@ export function sellerRouter(db: Db): Router {
       trackingUrl: input.trackingUrl || undefined,
       dispatchDate: input.dispatchDate,
       deliveryStatus: input.deliveryStatus,
+      exceptionType: input.exceptionType,
+      newCostPaise: input.newCostPaise,
+      resolutionAction:
+        input.resolutionAction === 'accept_updated_cost' || input.resolutionAction === 'wait_for_restock'
+          ? input.resolutionAction
+          : undefined,
       note: input.note,
     });
     res.json({ ok: true, ...result });

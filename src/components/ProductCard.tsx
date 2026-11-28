@@ -105,6 +105,11 @@ export function ProductCard({
 
           {/* Badges */}
           <div className="absolute left-1.5 top-1.5 flex flex-col items-start gap-1 pointer-events-none">
+            {product.isSelectCurated ? (
+              <span className="rounded-md border border-[#D4AF37]/40 bg-[#172321]/92 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#F7EEDB] shadow-xs">
+                Dear Hills Select
+              </span>
+            ) : null}
             {discountPercent ? (
               <span className="rounded-md bg-gradient-to-r from-[#E11D48] to-[#F97316] sm:bg-none sm:bg-[#C96B4B] px-1.5 py-0.5 text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider text-white shadow-xs">
                 {discountPercent}% OFF

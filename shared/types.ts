@@ -17,6 +17,60 @@ export const FULFILMENT_METHOD_LABELS: Record<FulfilmentMethod, string> = {
   EXTERNAL_SUPPLIER: 'External Supplier Direct Delivery',
 };
 
+/**
+ * Customer-facing fulfilment labels. Never reveal internal sourcing channels,
+ * dropship/external supplier labels, or third-party marketplace references.
+ */
+export const PUBLIC_FULFILMENT_METHOD_LABELS: Record<FulfilmentMethod, string> = {
+  SHIPROCKET: 'Standard Courier Dispatch',
+  OWN_DELIVERY: 'Direct Local Delivery',
+  EXTERNAL_SUPPLIER: 'Dear Hills Select Dispatch',
+};
+
+export const EXTERNAL_FIXED_MARKUP_PAISE = 10000;
+
+export type AvailabilityPolicy = 'stock_tracked' | 'on_demand_external';
+export type ImageAuthorizationStatus = 'pending_authorization' | 'authorized' | 'rejected';
+export type ReturnShippingBearer = 'customer' | 'seller' | 'partner_defective_only' | 'non_returnable';
+
+export interface ProductVariant {
+  id: string;
+  label: string;
+  color?: string | null;
+  colorHex?: string | null;
+  size?: string | null;
+  material?: string | null;
+  skuSuffix?: string | null;
+  priceDeltaPaise?: number;
+  available: boolean;
+  stockQty?: number | null;
+}
+
+export interface ProductSourcingSummary {
+  productId: string;
+  sourcingChannel: string;
+  sourceUrl: string | null;
+  supplierName: string | null;
+  supplierCatalogId: string | null;
+  supplierSkuRef: string | null;
+  supplierPricePaise: number;
+  supplierShippingPaise: number;
+  otherSourcingCostPaise: number;
+  landedCostPaise: number;
+  markupPaise: number;
+  recommendedSellingPricePaise: number;
+  priceFloorLocked: boolean;
+  priceVerified: boolean;
+  lastPriceVerifiedAt: string | null;
+  supplierAvailable: boolean;
+  availabilityVerified: boolean;
+  lastAvailabilityVerifiedAt: string | null;
+  imageAuthorizationStatus: ImageAuthorizationStatus;
+  imageAuthorizationNote: string | null;
+  supplierReturnPolicyNote: string | null;
+  internalNotes: string | null;
+}
+
 export const FULFILMENT_METHOD_DESCRIPTIONS: Record<FulfilmentMethod, string> = {
   SHIPROCKET:
     'Ship orders through Shiprocket. Order details will automatically be sent to Shiprocket when the customer order is confirmed.',
@@ -131,6 +185,8 @@ export interface OrderFulfilmentItemView {
   lineSubtotalPaise: number;
   status: string;
   fulfilmentMethod: FulfilmentMethod | string;
+  variantId?: string | null;
+  variantLabel?: string | null;
 }
 
 export interface OrderFulfilmentView {
@@ -186,6 +242,10 @@ export interface OrderFulfilmentView {
   estimatedDeliveryText: string | null;
   adminReviewReason: string | null;
   shippingConfigSnapshot?: Record<string, unknown> | null;
+  sourcingExceptionType?: 'supplier_out_of_stock' | 'supplier_price_increased' | 'supplier_delayed' | null;
+  sourcingExceptionNewCostPaise?: number | null;
+  sourcingExceptionNote?: string | null;
+  sourcingExceptionResolvedAction?: string | null;
   items: OrderFulfilmentItemView[];
   events: OrderFulfilmentEventView[];
   createdAt: string;
@@ -336,6 +396,9 @@ export interface ProductSummary {
   campaignSlug?: string | null;
   campaignName?: string | null;
   campaignEndsAt?: string | null;
+  isSelectCurated?: boolean;
+  availabilityPolicy?: AvailabilityPolicy;
+  variantCount?: number;
 }
 
 export interface ProductDetail extends ProductSummary {
@@ -377,6 +440,10 @@ export interface ProductDetail extends ProductSummary {
   reviewSummary: { average: number | null; count: number; distribution: Record<string, number> };
   related: ProductSummary[];
   returnPolicy: string;
+  returnWindowDays?: number | null;
+  returnShippingBearer?: ReturnShippingBearer | null;
+  maxOrderQuantity?: number;
+  variants?: ProductVariant[];
   shippingEstimate: string;
   fulfilmentMethod?: FulfilmentMethod;
   handlingDays?: number;
@@ -387,7 +454,6 @@ export interface ProductDetail extends ProductSummary {
     deliveryArea?: string | null;
     serviceablePincodes?: string[];
     deliveryChargePaise?: number | null;
-    supplierName?: string | null;
   };
 }
 
@@ -417,6 +483,8 @@ export interface CartLine {
   status: ProductStatus;
   maxQuantity: number;
   fulfilmentMethod?: FulfilmentMethod;
+  variantId?: string | null;
+  variantLabel?: string | null;
 }
 
 export type CampaignStatus = 'draft' | 'scheduled' | 'active' | 'expired' | 'archived';
@@ -470,6 +538,8 @@ export interface OrderItemSummary {
   sellerOrderId: string;
   fulfilmentMethod?: FulfilmentMethod | string;
   fulfilmentId?: string | null;
+  variantId?: string | null;
+  variantLabel?: string | null;
   canReview: boolean;
   reviewed: boolean;
 }
@@ -570,6 +640,9 @@ export interface SellerProduct {
   isDemo: boolean;
   fulfilmentMethod?: FulfilmentMethod;
   pickupLocationId?: string | null;
+  isSelectCurated?: boolean;
+  availabilityPolicy?: AvailabilityPolicy;
+  sourcing?: ProductSourcingSummary | null;
 }
 
 export interface Paged<T> {

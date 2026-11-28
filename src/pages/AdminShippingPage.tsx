@@ -66,6 +66,9 @@ export function AdminShippingPage() {
   const [extCourier, setExtCourier] = useState('');
   const [extTracking, setExtTracking] = useState('');
   const [extUrl, setExtUrl] = useState('');
+  const [extExceptionType, setExtExceptionType] = useState<'supplier_out_of_stock' | 'supplier_price_increased' | 'supplier_delayed'>('supplier_price_increased');
+  const [extNewCostRupees, setExtNewCostRupees] = useState('');
+  const [extNote, setExtNote] = useState('');
 
   const overview = useQuery({
     queryKey: ['admin-shipping-overview'],
@@ -318,6 +321,14 @@ export function AdminShippingPage() {
                       )}
                     </div>
 
+                    {f.sourcingExceptionType ? (
+                      <Alert tone="warning" title={`Sourcing Exception: ${humanise(f.sourcingExceptionType)}`}>
+                        {f.sourcingExceptionNewCostPaise ? `Updated supplier cost: ₹${(f.sourcingExceptionNewCostPaise / 100).toFixed(2)}. ` : ''}
+                        {f.sourcingExceptionNote ?? 'Review required.'}
+                        {f.sourcingExceptionResolvedAction ? ` (Resolved: ${humanise(f.sourcingExceptionResolvedAction)})` : ''}
+                      </Alert>
+                    ) : null}
+
                     {f.lastSyncError || f.adminReviewReason ? (
                       <Alert tone="error" title="Sync / Routing Issue">
                         {f.lastSyncError || f.adminReviewReason}
@@ -393,6 +404,10 @@ export function AdminShippingPage() {
                             setExtCourier(f.courierName ?? '');
                             setExtTracking(f.trackingNumber ?? '');
                             setExtUrl(f.trackingUrl ?? '');
+                            setExtNewCostRupees(
+                              f.sourcingExceptionNewCostPaise ? String(Math.round(f.sourcingExceptionNewCostPaise / 100)) : '',
+                            );
+                            setExtNote(f.sourcingExceptionNote ?? '');
                           }}
                         >
                           Update External Supplier / Tracking
@@ -594,6 +609,16 @@ export function AdminShippingPage() {
         }
       >
         <div className="space-y-3">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+            <p className="font-semibold">White-Label Partner Fulfilment Checklist</p>
+            <ul className="mt-1 list-disc pl-4 space-y-0.5">
+              <li>Confirm no third-party invoice, supplier slip, or Meesho branding is included in parcel.</li>
+              <li>
+                Ordered variants:{' '}
+                {extEdit?.items.map((i) => `${i.name}${i.variantLabel ? ` (${i.variantLabel})` : ''} × ${i.quantity}`).join(', ')}
+              </li>
+            </ul>
+          </div>
           <Field label="External Order Reference">
             <Input value={extRef} onChange={(e) => setExtRef(e.target.value)} />
           </Field>
@@ -606,6 +631,108 @@ export function AdminShippingPage() {
           <Field label="Tracking URL">
             <Input value={extUrl} onChange={(e) => setExtUrl(e.target.value)} placeholder="https://" />
           </Field>
+
+          <div className="border-t border-line pt-3 space-y-2">
+            <p className="text-xs font-semibold text-ink">Supplier Availability / Cost Exception Controls</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Field label="Exception Reason">
+                <select
+                  value={extExceptionType}
+                  onChange={(e) => setExtExceptionType(e.target.value as typeof extExceptionType)}
+                  className="h-10 w-full rounded border border-line bg-white px-2.5 text-xs"
+                >
+                  <option value="supplier_price_increased">Supplier Price Increased</option>
+                  <option value="supplier_out_of_stock">Supplier Out of Stock</option>
+                  <option value="supplier_delayed">Supplier Dispatch Delayed</option>
+                </select>
+              </Field>
+              <Field label="Updated Supplier Cost (₹)">
+                <Input
+                  inputMode="decimal"
+                  value={extNewCostRupees}
+                  onChange={(e) => setExtNewCostRupees(e.target.value)}
+                  placeholder="Optional updated cost"
+                />
+              </Field>
+            </div>
+            <Field label="Exception Note">
+              <Input value={extNote} onChange={(e) => setExtNote(e.target.value)} placeholder="Internal audit note" />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={!extEdit}
+                onClick={() => {
+                  if (!extEdit) return;
+                  const target = extEdit;
+                  setExtEdit(null);
+                  void runAction(
+                    target.id,
+                    `/admin/shipping/fulfilments/${target.id}/external`,
+                    {
+                      action: 'flag_sourcing_exception',
+                      exceptionType: extExceptionType,
+                      newCostPaise: extNewCostRupees.trim() ? Math.round(Number(extNewCostRupees) * 100) : undefined,
+                      note: extNote.trim() || undefined,
+                    },
+                    'Sourcing exception recorded.',
+                  );
+                }}
+              >
+                Flag Exception
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={!extEdit}
+                onClick={() => {
+                  if (!extEdit) return;
+                  const target = extEdit;
+                  setExtEdit(null);
+                  void runAction(
+                    target.id,
+                    `/admin/shipping/fulfilments/${target.id}/external`,
+                    {
+                      action: 'resolve_sourcing_exception',
+                      resolutionAction: 'accept_updated_cost',
+                      newCostPaise: extNewCostRupees.trim() ? Math.round(Number(extNewCostRupees) * 100) : undefined,
+                      externalOrderRef: extRef.trim() || undefined,
+                      note: extNote.trim() || 'Accepted updated supplier cost',
+                    },
+                    'Accepted updated supplier cost & resumed.',
+                  );
+                }}
+              >
+                Accept Cost &amp; Proceed
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="danger"
+                disabled={!extEdit}
+                onClick={() => {
+                  if (!extEdit) return;
+                  const target = extEdit;
+                  setExtEdit(null);
+                  void runAction(
+                    target.id,
+                    `/admin/shipping/fulfilments/${target.id}/external`,
+                    {
+                      action: 'resolve_sourcing_exception',
+                      resolutionAction: 'cancel_and_refund',
+                      note: extNote.trim() || 'Cancelled due to supplier unavailability — refund initiated.',
+                    },
+                    'Package cancelled & refund requested.',
+                  );
+                }}
+              >
+                Cancel &amp; Refund Buyer
+              </Button>
+            </div>
+          </div>
         </div>
       </Modal>
     </AdminPage>
