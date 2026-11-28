@@ -21,6 +21,7 @@
     "db:verify": "node scripts/verify-backup.mjs",
     "diagnose": "tsx server/scripts/diagnose.ts",
     "audit:demo-data": "node scripts/audit-demo-data.mjs",
+    "cleanup:demo-products": "tsx server/scripts/removeDemoProducts.ts",
     "report:payouts": "node scripts/payout-verification-report.mjs",
     "drill:restore": "node scripts/restore-drill.mjs",
     "smoke": "node scripts/smoke.mjs",
