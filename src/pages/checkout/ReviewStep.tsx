@@ -52,7 +52,9 @@ export function ReviewStep({
       ? config?.payments.mode === 'test'
         ? 'Razorpay secure checkout · test mode'
         : 'Razorpay secure checkout'
-      : 'Development test payment (no money moves)';
+      : method === 'cod'
+        ? `Cash on Delivery (COD · +${formatINR(totals.codFeePaise)} fee)`
+        : 'Development test payment (no money moves)';
 
   return (
     <CheckoutPanel className="p-5 sm:p-6">
@@ -88,7 +90,9 @@ export function ReviewStep({
           <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
             {method === 'razorpay'
               ? 'After the order is saved you will be asked to pay in Razorpay’s secure window. The order is confirmed only after server-side verification.'
-              : 'The order is saved first, then marked paid through the local development simulation. This order is a demo, not a real sale.'}
+              : method === 'cod'
+                ? 'Your COD order is reviewed and confirmed by the Dear Hills team before dispatch via Shiprocket. Pay the courier on delivery.'
+                : 'The order is saved first, then marked paid through the local development simulation. This order is a demo, not a real sale.'}
           </p>
         </div>
       </div>
@@ -175,7 +179,7 @@ export function ReviewStep({
             disabled={cartUnavailable}
             fullWidth
           >
-            Place order
+            {method === 'cod' ? 'Place COD order' : 'Place order'}
             <span className="opacity-70">·</span>
             <span className="tabular-nums">{formatINR(totals.totalPaise)}</span>
           </CheckoutAction>
@@ -191,7 +195,10 @@ export function ReviewStep({
         <Link to="/policies/returns" className="underline underline-offset-2 hover:text-forest">
           returns policy
         </Link>
-        . Your order is confirmed after secure server payment verification.
+        .{' '}
+        {method === 'cod'
+          ? 'Your COD order is verified by our team before shipping via Shiprocket.'
+          : 'Your order is confirmed after secure server payment verification.'}
       </p>
     </CheckoutPanel>
   );

@@ -16,6 +16,7 @@ import { PaymentStep } from './checkout/PaymentStep';
 import { ReviewStep } from './checkout/ReviewStep';
 import { CheckoutPaymentPanel, OrderConfirmation } from './checkout/CheckoutPaymentPanel';
 import {
+  codEligibility,
   computeTotals,
   draftFromAddress,
   draftToAddressBody,
@@ -149,20 +150,31 @@ export function CheckoutPage() {
     return toOrderAddress(draft);
   }, [effectiveAddressId, addressList, draft]);
 
-  const totals = cart
-    ? computeTotals(cart, coupon?.discountPaise ?? 0, config?.shipping.flatRatePaise ?? FLAT_SHIPPING_PAISE)
-    : null;
   const options = paymentOptions(config);
+  const codCheck = codEligibility(cart, coupon?.discountPaise ?? 0, config);
   const effectiveMethod: PaymentMethod | null =
-    paymentMethod === 'razorpay' && options.razorpay
-      ? 'razorpay'
-      : paymentMethod === 'development' && options.development
-        ? 'development'
-        : options.razorpay
-          ? 'razorpay'
-          : options.development
-            ? 'development'
-            : null;
+    paymentMethod === 'cod' && options.cod && codCheck.eligible
+      ? 'cod'
+      : paymentMethod === 'razorpay' && options.razorpay
+        ? 'razorpay'
+        : paymentMethod === 'development' && options.development
+          ? 'development'
+          : options.razorpay
+            ? 'razorpay'
+            : options.development
+              ? 'development'
+              : options.cod && codCheck.eligible
+                ? 'cod'
+                : null;
+  const totals = cart
+    ? computeTotals(
+        cart,
+        coupon?.discountPaise ?? 0,
+        config?.shipping.flatRatePaise ?? FLAT_SHIPPING_PAISE,
+        effectiveMethod,
+        codCheck.feePaise,
+      )
+    : null;
 
   const resumeOrder = resumeOrderQuery.data?.order;
   const resumePaidOrder =
@@ -294,10 +306,16 @@ export function CheckoutPage() {
       setCouponChecking(true);
       try {
         const result = await api<AppliedCoupon>('/coupons/validate', {
-          method: 'POST',
-          body: { code: coupon.code },
-        });
-        setCoupon(result);
+        method: 'POST',
+        body: { code: coupon.code },
+      });
+      setCoupon(result);
+      if (effectiveMethod === 'cod' && !codEligibility(cart, result.discountPaise, config).eligible) {
+        setPaymentMethod(options.razorpay ? 'razorpay' : null);
+        setOrderError('Coupon discount brought the product total to ₹500 or below, so COD is no longer eligible. Switched to online payment.');
+        setCouponChecking(false);
+        return;
+      }
       } catch (error) {
         setCoupon(null);
         setCouponError(errorMessage(error));
@@ -329,11 +347,16 @@ export function CheckoutPage() {
           couponCode: coupon?.code,
           customerNote: note.trim() || undefined,
           idempotencyKey: idempotencyKey.current,
+          paymentMethod: effectiveMethod === 'cod' ? 'cod' : 'razorpay',
         },
       });
-      setCreated(result);
       await queryClient.invalidateQueries({ queryKey: ['cart'] });
       await queryClient.invalidateQueries({ queryKey: ['orders'] });
+      if (result.order.paymentMethod === 'cod' || result.payment.provider === 'cod') {
+        handleConfirmed(result.order);
+      } else {
+        setCreated(result);
+      }
     } catch (error) {
       const message = errorMessage(error);
       setOrderError(message);
@@ -713,6 +736,8 @@ export function CheckoutPage() {
             {stage === 2 ? (
               <PaymentStep
                 config={config}
+                cart={cart}
+                discountPaise={coupon?.discountPaise ?? 0}
                 method={effectiveMethod}
                 onSelect={setPaymentMethod}
                 amountPaise={totals?.totalPaise ?? 0}

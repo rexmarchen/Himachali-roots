@@ -4810,6 +4810,7 @@ interface SellerOrderRow {
   reference: string;
   orderNumber: string;
   status: string;
+  paymentMethod?: 'razorpay' | 'cod';
   totalPaise: number;
   earningPaise: number;
   commissionPaise: number;
@@ -4882,6 +4883,7 @@ export function SellerOrdersPage() {
                       </Link>
                       <p className="mt-0.5 text-[11px] text-muted">
                         {order.orderNumber} · {order.itemCount} item{order.itemCount === 1 ? '' : 's'}
+                        {order.paymentMethod === 'cod' ? ' · COD' : ''}
                       </p>
                     </div>
                     <StatusBadge status={order.status} label={sellerOrderStatusLabel(order.status)} />
@@ -4940,7 +4942,10 @@ export function SellerOrdersPage() {
                     <tr key={order.id}>
                       <td className="px-4 py-4">
                         <Link to={`/seller/orders/${order.id}`} className="font-medium text-forest hover:text-terra">{order.reference}</Link>
-                        <p className="text-[10.5px] text-muted">{order.orderNumber} · {order.itemCount} item{order.itemCount === 1 ? '' : 's'}</p>
+                        <p className="text-[10.5px] text-muted">
+                          {order.orderNumber} · {order.itemCount} item{order.itemCount === 1 ? '' : 's'}
+                          {order.paymentMethod === 'cod' ? ' · COD' : ''}
+                        </p>
                       </td>
                       <td className="px-4 py-4">{order.customerName}<p className="text-[10.5px] text-muted">{order.destination}</p></td>
                       <td className="px-4 py-4"><StatusBadge status={order.status} label={sellerOrderStatusLabel(order.status)} /></td>
@@ -4965,6 +4970,7 @@ interface SellerOrderDetail {
     reference: string;
     orderNumber: string;
     status: string;
+    paymentMethod?: 'razorpay' | 'cod';
     createdAt: string;
     dispatchBy: string | null;
     shippedAt: string | null;
@@ -5047,7 +5053,12 @@ export function SellerOrderDetailPage() {
         eyebrow="Seller order"
         title={data.reference}
         lede={`Marketplace order ${data.orderNumber} · placed ${formatDateTime(data.createdAt)}`}
-        actions={<StatusBadge status={data.status} label={sellerOrderStatusLabel(data.status)} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {data.paymentMethod === 'cod' ? <Badge tone="terra">COD Order</Badge> : null}
+            <StatusBadge status={data.status} label={sellerOrderStatusLabel(data.status)} />
+          </div>
+        }
       />
       <div className="flex flex-wrap items-center gap-2">
         {data.status === 'pending' ? (

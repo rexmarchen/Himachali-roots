@@ -496,10 +496,13 @@ CREATE TABLE IF NOT EXISTS orders (
   user_id TEXT NOT NULL REFERENCES users(id),
   email TEXT NOT NULL,
   status TEXT NOT NULL
-    CHECK (status IN ('pending_payment','paid','partially_fulfilled','fulfilled','cancelled','partially_refunded','refunded','expired')),
+    CHECK (status IN ('pending_payment','pending_cod_confirmation','confirmed','paid','partially_fulfilled','fulfilled','cancelled','partially_refunded','refunded','expired')),
+  payment_method TEXT NOT NULL DEFAULT 'razorpay'
+    CHECK (payment_method IN ('razorpay','cod')),
   subtotal_paise INTEGER NOT NULL,
   discount_paise INTEGER NOT NULL DEFAULT 0,
   shipping_paise INTEGER NOT NULL DEFAULT 0,
+  cod_fee_paise INTEGER NOT NULL DEFAULT 0,
   tax_paise INTEGER NOT NULL DEFAULT 0,
   total_paise INTEGER NOT NULL,
   coupon_code TEXT,
@@ -508,6 +511,7 @@ CREATE TABLE IF NOT EXISTS orders (
   reservation_expires_at TEXT,
   idempotency_key TEXT NOT NULL UNIQUE,
   placed_at TEXT NOT NULL,
+  confirmed_at TEXT,
   paid_at TEXT,
   cancelled_at TEXT,
   is_demo INTEGER NOT NULL DEFAULT 1,

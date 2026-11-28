@@ -9,7 +9,19 @@ import { audit } from '../lib/audit.js';
 import { badRequest, conflict, notFound, parse, safeSiteHrefSchema } from '../lib/http.js';
 import { newId, uniqueSlug } from '../lib/ids.js';
 import { escapeHtml, notify, notificationQueueSummary } from '../lib/email.js';
-import { getOrderView, decideRefund, createRefundForReturn, generateSettlement, markSettlementPaid, markManualRefundCompleted, sellerOrderAction, refreshOrderStatus } from '../lib/orders.js';
+import {
+  confirmCodOrderAndRoute,
+  createRefundForReturn,
+  decideRefund,
+  generateSettlement,
+  getOrderView,
+  markManualRefundCompleted,
+  markSettlementPaid,
+  notifyCodOrderConfirmedAndSync,
+  refreshOrderStatus,
+  rejectCodOrder,
+  sellerOrderAction,
+} from '../lib/orders.js';
 import { cleanupUploadedFile, imageUpload, hasValidFileSignature, resolvePrivateDocPath, sendPrivateDocument } from '../lib/uploads.js';
 import { decryptPayoutDetails } from '../lib/payoutCrypto.js';
 import { isSafeHttpUrl } from '../../shared/urls.js';
@@ -103,6 +115,7 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       real_orders: number;
       demo_orders: number;
       total_orders: number;
+      pending_cod_confirmations: number;
       published_products: number;
       draft_products: number;
       rejected_products: number;
@@ -113,10 +126,10 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
     }>(
       db,
       `SELECT
-        (SELECT COALESCE(SUM(total_paise),0) FROM orders WHERE paid_at IS NOT NULL AND is_demo = 0 AND created_at >= ?) AS gmv,
-        (SELECT COUNT(*) FROM orders WHERE paid_at IS NOT NULL AND is_demo = 0 AND created_at >= ?) AS orders,
+        (SELECT COALESCE(SUM(total_paise),0) FROM orders WHERE (paid_at IS NOT NULL OR confirmed_at IS NOT NULL) AND is_demo = 0 AND created_at >= ?) AS gmv,
+        (SELECT COUNT(*) FROM orders WHERE (paid_at IS NOT NULL OR confirmed_at IS NOT NULL) AND is_demo = 0 AND created_at >= ?) AS orders,
         (SELECT COALESCE(SUM(so.commission_paise),0) FROM seller_orders so JOIN orders o ON o.id = so.order_id
-          WHERE o.paid_at IS NOT NULL AND o.is_demo = 0 AND o.created_at >= ? AND so.status != 'cancelled') AS commission,
+          WHERE (o.paid_at IS NOT NULL OR o.confirmed_at IS NOT NULL) AND o.is_demo = 0 AND o.created_at >= ? AND so.status != 'cancelled') AS commission,
         (SELECT COALESCE(SUM(amount_paise),0) FROM refunds WHERE status = 'completed') AS refunds,
         (SELECT COUNT(*) FROM seller_profiles WHERE status IN ('submitted','under_review','more_info_required')) AS pending_sellers,
         (SELECT COUNT(*) FROM products WHERE status = 'pending') AS pending_products,
@@ -130,6 +143,7 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         (SELECT COUNT(*) FROM orders WHERE is_demo = 0) AS real_orders,
         (SELECT COUNT(*) FROM orders WHERE is_demo = 1) AS demo_orders,
         (SELECT COUNT(*) FROM orders) AS total_orders,
+        (SELECT COUNT(*) FROM orders WHERE status = 'pending_cod_confirmation') AS pending_cod_confirmations,
         (SELECT COUNT(*) FROM products WHERE status = 'approved') AS published_products,
         (SELECT COUNT(*) FROM products WHERE status = 'draft') AS draft_products,
         (SELECT COUNT(*) FROM products WHERE status = 'rejected') AS rejected_products,
@@ -272,9 +286,9 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
               (SELECT COUNT(*) FROM seller_documents sd WHERE sd.seller_id = sp.id) AS document_count,
               (SELECT COUNT(*) FROM products p WHERE p.seller_id = sp.id AND p.status = 'approved') AS product_count,
               (SELECT COUNT(*) FROM seller_orders so JOIN orders o ON o.id = so.order_id
-                WHERE so.seller_id = sp.id AND o.paid_at IS NOT NULL) AS paid_orders,
+                WHERE so.seller_id = sp.id AND (o.paid_at IS NOT NULL OR o.confirmed_at IS NOT NULL)) AS paid_orders,
               (SELECT COALESCE(SUM(so.total_paise),0) FROM seller_orders so JOIN orders o ON o.id = so.order_id
-                WHERE so.seller_id = sp.id AND o.paid_at IS NOT NULL AND so.status != 'cancelled') AS gmv
+                WHERE so.seller_id = sp.id AND (o.paid_at IS NOT NULL OR o.confirmed_at IS NOT NULL) AND so.status != 'cancelled') AS gmv
          ${from}
         ${where}
         ORDER BY CASE COALESCE(la.status, sp.status)
@@ -387,12 +401,12 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         (SELECT COUNT(*) FROM products WHERE seller_id = ? AND status = 'approved') AS active_products,
         (SELECT COUNT(*) FROM products WHERE seller_id = ? AND status = 'pending') AS pending_products,
         (SELECT COUNT(*) FROM seller_orders so JOIN orders o ON o.id = so.order_id
-          WHERE so.seller_id = ? AND o.paid_at IS NOT NULL) AS paid_orders,
+          WHERE so.seller_id = ? AND (o.paid_at IS NOT NULL OR o.confirmed_at IS NOT NULL)) AS paid_orders,
         (SELECT COUNT(*) FROM seller_orders WHERE seller_id = ? AND status = 'delivered') AS delivered_orders,
         (SELECT COALESCE(SUM(so.subtotal_paise - so.discount_paise),0) FROM seller_orders so
-          JOIN orders o ON o.id = so.order_id WHERE so.seller_id = ? AND o.paid_at IS NOT NULL AND so.status != 'cancelled') AS gross,
+          JOIN orders o ON o.id = so.order_id WHERE so.seller_id = ? AND (o.paid_at IS NOT NULL OR o.confirmed_at IS NOT NULL) AND so.status != 'cancelled') AS gross,
         (SELECT COALESCE(SUM(so.commission_paise),0) FROM seller_orders so
-          JOIN orders o ON o.id = so.order_id WHERE so.seller_id = ? AND o.paid_at IS NOT NULL AND so.status != 'cancelled') AS commission,
+          JOIN orders o ON o.id = so.order_id WHERE so.seller_id = ? AND (o.paid_at IS NOT NULL OR o.confirmed_at IS NOT NULL) AND so.status != 'cancelled') AS commission,
         (SELECT COALESCE(SUM(amount_paise),0) FROM seller_ledger_entries WHERE seller_id = ? AND status = 'eligible') AS eligible,
         (SELECT COALESCE(SUM(amount_paise),0) FROM seller_ledger_entries WHERE seller_id = ? AND status = 'settled') AS settled`,
       seller.id,
@@ -1547,6 +1561,10 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
     const { page, pageSize, offset } = pageParams(req.query);
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const status = typeof req.query.status === 'string' && req.query.status ? req.query.status : undefined;
+    const paymentMethod =
+      typeof req.query.paymentMethod === 'string' && ['cod', 'razorpay'].includes(req.query.paymentMethod)
+        ? req.query.paymentMethod
+        : undefined;
     const isDemo = typeof req.query.isDemo === 'string' && req.query.isDemo ? req.query.isDemo : undefined;
     const fulfilment = req.query.fulfilment === 'open';
     const conditions: string[] = [];
@@ -1559,6 +1577,10 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
     if (status) {
       conditions.push('o.status = ?');
       params.push(status);
+    }
+    if (paymentMethod) {
+      conditions.push('o.payment_method = ?');
+      params.push(paymentMethod);
     }
     if (isDemo === 'true') {
       conditions.push('o.is_demo = 1');
@@ -1576,8 +1598,11 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       order_number: string;
       email: string;
       status: string;
+      payment_method: string;
+      cod_fee_paise: number;
       total_paise: number;
       placed_at: string;
+      confirmed_at: string | null;
       paid_at: string | null;
       shipping_address: string;
       seller_orders: string;
@@ -1585,10 +1610,13 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       is_demo: number;
     }>(
       db,
-      `SELECT o.order_number, o.email, o.status, o.total_paise, o.placed_at, o.paid_at, o.shipping_address, o.is_demo,
+      `SELECT o.order_number, o.email, o.status, o.payment_method, o.cod_fee_paise, o.total_paise,
+              o.placed_at, o.confirmed_at, o.paid_at, o.shipping_address, o.is_demo,
               (SELECT GROUP_CONCAT(so.status) FROM seller_orders so WHERE so.order_id = o.id) AS seller_orders,
               (SELECT COUNT(*) FROM refunds r WHERE r.order_id = o.id) AS refund_count
-         FROM orders o ${where} ORDER BY o.placed_at DESC LIMIT ? OFFSET ?`,
+         FROM orders o ${where}
+        ORDER BY CASE o.status WHEN 'pending_cod_confirmation' THEN 0 ELSE 1 END, o.placed_at DESC
+        LIMIT ? OFFSET ?`,
       ...params,
       pageSize,
       offset,
@@ -1600,8 +1628,11 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
           orderNumber: row.order_number,
           email: row.email,
           status: row.status,
+          paymentMethod: (row.payment_method ?? 'razorpay') as 'razorpay' | 'cod',
+          codFeePaise: row.cod_fee_paise ?? 0,
           totalPaise: row.total_paise,
           placedAt: row.placed_at,
+          confirmedAt: row.confirmed_at,
           paidAt: row.paid_at,
           customerName: address.fullName,
           destination: `${address.city}, ${address.state}`,
@@ -1741,6 +1772,56 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       await cancelShiprocketOrdersForOrder(db, order.id, req.user!);
     }
     res.json({ ok: true, status: newStatus });
+  });
+
+  router.post('/orders/:orderNumber/cod/confirm', async (req, res) => {
+    const input = parse(
+      z.object({ note: z.string().trim().max(500).optional() }),
+      req.body ?? {},
+    );
+    const confirmed = confirmCodOrderAndRoute(db, {
+      orderNumber: req.params.orderNumber,
+      actor: req.user!,
+      note: input.note,
+    });
+    const syncResults = await notifyCodOrderConfirmedAndSync(db, confirmed.orderId);
+    const fulfilments = getFulfilmentsForOrder(db, confirmed.orderId, { includeInternal: true });
+    res.json({
+      ok: true,
+      orderNumber: confirmed.orderNumber,
+      alreadyConfirmed: confirmed.alreadyConfirmed,
+      order: getOrderView(db, confirmed.orderId, { includeFinancials: true }),
+      fulfilments,
+      syncResults,
+    });
+  });
+
+  router.post('/orders/:orderNumber/cod/reject', async (req, res) => {
+    const input = parse(
+      z.object({ reason: z.string().trim().max(500).optional() }),
+      req.body ?? {},
+    );
+    const rejected = rejectCodOrder(db, {
+      orderNumber: req.params.orderNumber,
+      actor: req.user!,
+      reason: input.reason,
+    });
+    const order = queryOne<{ user_id: string; email: string }>(
+      db,
+      'SELECT user_id, email FROM orders WHERE id = ?',
+      rejected.orderId,
+    );
+    if (order) {
+      await notify(db, {
+        userId: order.user_id,
+        email: order.email,
+        type: 'order_cancelled',
+        subject: `COD order ${rejected.orderNumber} could not be confirmed`,
+        body: `<p>Your Cash on Delivery order <strong>${rejected.orderNumber}</strong> was cancelled during verification.</p>${input.reason?.trim() ? `<p><strong>Reason:</strong> ${escapeHtml(input.reason.trim())}</p>` : ''}`,
+        dedupeKey: `cod-rejected:${rejected.orderId}`,
+      });
+    }
+    res.json({ ok: true, orderNumber: rejected.orderNumber });
   });
 
   /* ------------------------------ Payments ----------------------------- */

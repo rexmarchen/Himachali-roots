@@ -191,6 +191,8 @@ interface OrderListRow {
   id: string;
   orderNumber: string;
   status: string;
+  paymentMethod?: 'razorpay' | 'cod';
+  codFeePaise?: number;
   totalPaise: number;
   placedAt: string;
   paidAt: string | null;
@@ -229,6 +231,7 @@ export function OrdersPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-[13px] font-medium text-forest">{order.orderNumber}</p>
                       <StatusBadge status={order.status} label={orderStatusLabel(order.status)} />
+                      {order.paymentMethod === 'cod' ? <Badge tone="terra">COD</Badge> : null}
                       {order.shipmentStatus ? <Badge tone="sand">{order.shipmentStatus.replaceAll('_', ' ')}</Badge> : null}
                     </div>
                     <p className="mt-1 text-sm text-ink">{order.title}</p>
@@ -404,6 +407,7 @@ export function OrderDetailPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={data.status} label={orderStatusLabel(data.status, data.sellerOrders)} />
+          {data.paymentMethod === 'cod' ? <Badge tone="terra">Cash on Delivery</Badge> : null}
           {data.payment ? <Badge tone={data.payment.status === 'paid' ? 'forest' : 'sand'}>Payment: {data.payment.status}</Badge> : null}
           {data.status === 'pending_payment' ? (
             <>
@@ -411,8 +415,18 @@ export function OrderDetailPage() {
               <Button size="sm" variant="secondary" onClick={() => setCancelPendingOpen(true)}>Cancel unpaid order</Button>
             </>
           ) : null}
+          {data.status === 'pending_cod_confirmation' ? (
+            <Button size="sm" variant="secondary" onClick={() => setCancelPendingOpen(true)}>Cancel COD order</Button>
+          ) : null}
         </div>
       </div>
+
+      {data.status === 'pending_cod_confirmation' ? (
+        <Alert tone="info" title="Cash on Delivery — awaiting verification">
+          Your COD order has been placed and stock is reserved. Our team will verify and confirm it before sending it to
+          Shiprocket for dispatch.
+        </Alert>
+      ) : null}
 
       {data.isDemo ? (
         <Alert tone="warning" title="DEMO ORDER — NOT A REAL PURCHASE">
@@ -523,8 +537,11 @@ export function OrderDetailPage() {
               <div className="flex justify-between gap-4"><dt className="text-muted">Product value</dt><dd>{formatINR(data.subtotalPaise)}</dd></div>
               {data.discountPaise > 0 ? <div className="flex justify-between gap-4"><dt className="text-muted">Discount {data.couponCode ? `(${data.couponCode})` : ''}</dt><dd>−{formatINR(data.discountPaise)}</dd></div> : null}
               <div className="flex justify-between gap-4"><dt className="text-muted">Shipping</dt><dd>{data.shippingPaise ? formatINR(data.shippingPaise) : 'Free'}</dd></div>
+              {(data.codFeePaise ?? 0) > 0 ? (
+                <div className="flex justify-between gap-4"><dt className="text-muted">COD handling fee</dt><dd>{formatINR(data.codFeePaise!)}</dd></div>
+              ) : null}
               {data.taxPaise > 0 ? <div className="flex justify-between gap-4"><dt className="text-muted">Tax included</dt><dd>{formatINR(data.taxPaise)}</dd></div> : null}
-              <div className="flex justify-between gap-4 border-t border-line pt-2 font-medium"><dt>Total</dt><dd>{formatINR(data.totalPaise)}</dd></div>
+              <div className="flex justify-between gap-4 border-t border-line pt-2 font-medium"><dt>{data.paymentMethod === 'cod' && !data.paidAt ? 'Payable on delivery' : 'Total'}</dt><dd>{formatINR(data.totalPaise)}</dd></div>
             </dl>
             {data.payment ? (
               <p className="mt-3 break-all text-[10.5px] text-muted">

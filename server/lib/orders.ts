@@ -9,7 +9,15 @@ import type {
 } from '../../shared/types.js';
 import { AppError, badRequest, conflict, notFound, safeJsonParse } from './http.js';
 import { audit } from './audit.js';
-import { allocate, commissionOn, evaluateCoupon, resolveCommissionBp, shippingFor, taxComponentInclusive } from './pricing.js';
+import {
+  allocate,
+  commissionOn,
+  evaluateCodEligibility,
+  evaluateCoupon,
+  resolveCommissionBp,
+  shippingFor,
+  taxComponentInclusive,
+} from './pricing.js';
 import { newId, orderNumber, sellerOrderReference } from './ids.js';
 import type { SessionUser } from '../../shared/types.js';
 import { OutboxService } from '../core/outbox/OutboxService.js';
@@ -31,6 +39,7 @@ interface CheckoutInput {
   couponCode?: string;
   customerNote?: string;
   idempotencyKey: string;
+  paymentMethod?: 'razorpay' | 'cod';
   isDemo?: boolean;
 }
 
@@ -49,6 +58,7 @@ interface RawLine {
   quantity_available: number;
   product_status: string;
   seller_status: string;
+  fulfilment_method: string | null;
   image_url: string | null;
   is_demo: number;
 }
@@ -67,27 +77,45 @@ export function validateAddress(address: OrderAddress): void {
 
 const MAX_PENDING_ORDERS_PER_USER = 5;
 
-export function createOrder(db: Db, input: CheckoutInput): { orderId: string; orderNumber: string; totalPaise: number } {
-  const existing = queryOne<{ id: string; user_id: string; order_number: string; total_paise: number }>(
+export function createOrder(
+  db: Db,
+  input: CheckoutInput,
+): { orderId: string; orderNumber: string; totalPaise: number; paymentMethod: 'razorpay' | 'cod'; codFeePaise: number } {
+  const existing = queryOne<{
+    id: string;
+    user_id: string;
+    order_number: string;
+    total_paise: number;
+    payment_method: 'razorpay' | 'cod';
+    cod_fee_paise: number;
+  }>(
     db,
-    'SELECT id, user_id, order_number, total_paise FROM orders WHERE idempotency_key = ?',
+    'SELECT id, user_id, order_number, total_paise, payment_method, cod_fee_paise FROM orders WHERE idempotency_key = ?',
     input.idempotencyKey,
   );
   if (existing) {
     if (existing.user_id !== input.userId) throw conflict('Duplicate checkout key.');
-    return { orderId: existing.id, orderNumber: existing.order_number, totalPaise: existing.total_paise };
+    return {
+      orderId: existing.id,
+      orderNumber: existing.order_number,
+      totalPaise: existing.total_paise,
+      paymentMethod: existing.payment_method ?? 'razorpay',
+      codFeePaise: existing.cod_fee_paise ?? 0,
+    };
   }
 
   const activePendingCount =
     queryOne<{ count: number }>(
       db,
-      "SELECT COUNT(*) AS count FROM orders WHERE user_id = ? AND status = 'pending_payment' AND (reservation_expires_at IS NULL OR reservation_expires_at > ?)",
+      `SELECT COUNT(*) AS count FROM orders
+        WHERE user_id = ? AND status IN ('pending_payment','pending_cod_confirmation')
+          AND (reservation_expires_at IS NULL OR reservation_expires_at > ?)`,
       input.userId,
       new Date().toISOString(),
     )?.count ?? 0;
   if (activePendingCount >= MAX_PENDING_ORDERS_PER_USER) {
     throw conflict(
-      'You already have several orders awaiting payment. Complete or wait for an existing order before starting a new one.',
+      'You already have several orders awaiting payment or confirmation. Complete or wait for an existing order before starting a new one.',
       'too_many_pending_orders',
     );
   }
@@ -99,7 +127,7 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
     `SELECT ci.product_id, p.name, p.sku, p.slug,
             COALESCE(acp.promo_price_paise, p.price_paise) AS unit_price_paise,
             p.price_paise AS base_price_paise, ci.quantity,
-            p.tax_rate_bp, p.category_id, p.status AS product_status, p.is_demo,
+            p.tax_rate_bp, p.category_id, p.status AS product_status, p.fulfilment_method, p.is_demo,
             s.id AS seller_id, s.business_name AS seller_name, s.status AS seller_status,
             i.quantity - i.reserved_quantity AS quantity_available,
             (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url
@@ -137,7 +165,22 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
     couponCode = result.coupon.code;
     discount = result.discountPaise;
   }
-  const shipping = shippingFor(subtotal - discount);
+  const discountedSubtotal = subtotal - discount;
+  const shipping = shippingFor(discountedSubtotal);
+  const requestedMethod: 'razorpay' | 'cod' = input.paymentMethod === 'cod' ? 'cod' : 'razorpay';
+  let codFeePaise = 0;
+  if (requestedMethod === 'cod') {
+    const codCheck = evaluateCodEligibility(
+      discountedSubtotal,
+      lines.map((l) => l.fulfilment_method),
+    );
+    if (!codCheck.eligible) {
+      throw badRequest(codCheck.reason ?? 'Cash on Delivery is not available for this order.', {
+        paymentMethod: codCheck.reason ?? 'Cash on Delivery unavailable.',
+      });
+    }
+    codFeePaise = codCheck.feePaise;
+  }
 
   const itemDiscounts = allocate(
     discount,
@@ -209,15 +252,19 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
   const id = newId('ord_');
   const number = orderNumber();
   const now = new Date();
-  const expires = new Date(now.getTime() + env.reservationMinutes * 60_000).toISOString();
-  const provider = env.razorpay.configured ? 'razorpay' : 'unconfigured';
-  const total = subtotal - discount + shipping;
+  const isCod = requestedMethod === 'cod';
+  const expires = isCod ? null : new Date(now.getTime() + env.reservationMinutes * 60_000).toISOString();
+  const provider = isCod ? 'cod' : env.razorpay.configured ? 'razorpay' : 'unconfigured';
+  const initialOrderStatus = isCod ? 'pending_cod_confirmation' : 'pending_payment';
+  const initialPaymentStatus = isCod ? 'pending' : 'created';
+  const total = subtotal - discount + shipping + codFeePaise;
   const hasDemoLine = lines.some((l) => l.is_demo === 1);
   const isDemoOrder =
     hasDemoLine ||
-    (input.isDemo !== undefined
-      ? input.isDemo
-      : !env.razorpay.configured && (env.simulatedCheckoutEnabled || env.allowDevPayments))
+    (!isCod &&
+      (input.isDemo !== undefined
+        ? input.isDemo
+        : !env.razorpay.configured && (env.simulatedCheckoutEnabled || env.allowDevPayments)))
       ? 1
       : 0;
 
@@ -249,17 +296,20 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
 
     execute(
       db,
-      `INSERT INTO orders (id, order_number, user_id, email, status, subtotal_paise, discount_paise, shipping_paise,
-                           tax_paise, total_paise, coupon_code, shipping_address, customer_note,
-                           reservation_expires_at, idempotency_key, placed_at, is_demo)
-       VALUES (?, ?, ?, ?, 'pending_payment', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO orders (id, order_number, user_id, email, status, payment_method, subtotal_paise, discount_paise,
+                           shipping_paise, cod_fee_paise, tax_paise, total_paise, coupon_code, shipping_address,
+                           customer_note, reservation_expires_at, idempotency_key, placed_at, is_demo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       number,
       input.userId,
       input.email,
+      initialOrderStatus,
+      requestedMethod,
       subtotal,
       discount,
       shipping,
+      codFeePaise,
       built.reduce((sum, item) => sum + item.tax, 0),
       total,
       couponCode,
@@ -358,12 +408,14 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
 
     execute(
       db,
-      `INSERT INTO payments (id, order_id, provider, amount_paise, status)
-       VALUES (?, ?, ?, ?, 'created')`,
+      `INSERT INTO payments (id, order_id, provider, amount_paise, status, method)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       newId('pay_'),
       id,
       provider,
       total,
+      initialPaymentStatus,
+      isCod ? 'cash_on_delivery' : null,
     );
 
     if (couponId) {
@@ -381,9 +433,11 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
 
     recordOrderEvent(db, {
       orderId: id,
-      type: 'order.placed',
-      description: `Order placed with ${sellerIds.length} seller${sellerIds.length === 1 ? '' : 's'}; stock reserved for ${env.reservationMinutes} minutes.`,
-      metadata: { totalPaise: total, isDemo: isDemoOrder === 1 },
+      type: isCod ? 'order.cod_placed' : 'order.placed',
+      description: isCod
+        ? `Cash on Delivery order placed (COD fee ₹${(codFeePaise / 100).toLocaleString('en-IN')}); awaiting administrator confirmation before dispatch.`
+        : `Order placed with ${sellerIds.length} seller${sellerIds.length === 1 ? '' : 's'}; stock reserved for ${env.reservationMinutes} minutes.`,
+      metadata: { totalPaise: total, codFeePaise, paymentMethod: requestedMethod, isDemo: isDemoOrder === 1 },
     });
 
     execute(db, "UPDATE carts SET status = 'converted', updated_at = ? WHERE id = ?", now.toISOString(), input.cartId);
@@ -391,23 +445,25 @@ export function createOrder(db: Db, input: CheckoutInput): { orderId: string; or
     OutboxService.enqueue(db, {
       aggregateType: 'order',
       aggregateId: id,
-      eventType: 'order.placed',
+      eventType: isCod ? 'order.cod_placed' : 'order.placed',
       payload: {
         orderId: id,
         orderNumber: number,
         userId: input.userId,
         email: input.email,
         totalPaise: total,
+        codFeePaise,
+        paymentMethod: requestedMethod,
         isDemo: isDemoOrder === 1,
       },
     });
   });
 
-  return { orderId: id, orderNumber: number, totalPaise: total };
+  return { orderId: id, orderNumber: number, totalPaise: total, paymentMethod: requestedMethod, codFeePaise };
 }
 
 export interface PaymentInit {
-  provider: 'razorpay' | 'unconfigured';
+  provider: 'razorpay' | 'cod' | 'unconfigured';
   keyId?: string;
   providerOrderId?: string;
   amountPaise: number;
@@ -636,10 +692,12 @@ export function markOrderPaid(db: Db, params: PaidParams): { alreadyProcessed: b
           ),
         )
       : true;
+    const nowPaid = new Date().toISOString();
     execute(
       db,
-      'UPDATE orders SET status = \'paid\', paid_at = ?, is_demo = ? WHERE id = ?',
-      new Date().toISOString(),
+      "UPDATE orders SET status = 'paid', paid_at = ?, confirmed_at = COALESCE(confirmed_at, ?), is_demo = ? WHERE id = ?",
+      nowPaid,
+      nowPaid,
       isDev || hasDemoItem ? 1 : 0,
       order.id,
     );
@@ -654,59 +712,7 @@ export function markOrderPaid(db: Db, params: PaidParams): { alreadyProcessed: b
     });
 
     const dispatchBy = new Date(Date.now() + 2 * 86400_000).toISOString();
-    const sellerOrders = queryAll<{
-      id: string;
-      seller_id: string;
-      subtotal_paise: number;
-      discount_paise: number;
-      commission_rate_bp: number;
-      commission_paise: number;
-      seller_earning_paise: number;
-    }>(db, 'SELECT * FROM seller_orders WHERE order_id = ?', order.id);
-
-    for (const so of sellerOrders) {
-      const basis = so.subtotal_paise - so.discount_paise;
-      execute(
-        db,
-        `INSERT OR IGNORE INTO commission_entries (id, seller_order_id, seller_id, basis_paise, rate_bp, amount_paise)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        newId('cme_'),
-        so.id,
-        so.seller_id,
-        basis,
-        so.commission_rate_bp,
-        so.commission_paise,
-      );
-      execute(
-        db,
-        `INSERT OR IGNORE INTO seller_ledger_entries
-           (id, seller_id, order_id, seller_order_id, type, amount_paise, status, reference, note, created_at)
-         VALUES (?, ?, ?, ?, 'sale', ?, 'pending', ?, ?, ?)`,
-        newId('led_'),
-        so.seller_id,
-        order.id,
-        so.id,
-        basis,
-        `sale:${so.id}`,
-        'Product value after discount, before commission',
-        new Date().toISOString(),
-      );
-      execute(
-        db,
-        `INSERT OR IGNORE INTO seller_ledger_entries
-           (id, seller_id, order_id, seller_order_id, type, amount_paise, status, reference, note, created_at)
-         VALUES (?, ?, ?, ?, 'commission', ?, 'pending', ?, ?, ?)`,
-        newId('led_'),
-        so.seller_id,
-        order.id,
-        so.id,
-        -so.commission_paise,
-        `commission:${so.id}`,
-        `Marketplace commission at ${(so.commission_rate_bp / 100).toFixed(2)}%`,
-        new Date().toISOString(),
-      );
-      execute(db, 'UPDATE seller_orders SET dispatch_by = ?, updated_at = ? WHERE id = ?', dispatchBy, new Date().toISOString(), so.id);
-    }
+    recordSellerLedgerEntriesForOrder(db, order.id, dispatchBy);
 
     routeOrderFulfilmentsOnConfirmation(db, order.id);
 
@@ -729,6 +735,319 @@ export function markOrderPaid(db: Db, params: PaidParams): { alreadyProcessed: b
     });
     return { alreadyProcessed: false, status: 'paid' };
   });
+}
+
+function recordSellerLedgerEntriesForOrder(db: Db, orderId: string, dispatchBy: string): void {
+  const nowIso = new Date().toISOString();
+  const sellerOrders = queryAll<{
+    id: string;
+    seller_id: string;
+    subtotal_paise: number;
+    discount_paise: number;
+    commission_rate_bp: number;
+    commission_paise: number;
+    seller_earning_paise: number;
+  }>(db, 'SELECT * FROM seller_orders WHERE order_id = ?', orderId);
+
+  for (const so of sellerOrders) {
+    const basis = so.subtotal_paise - so.discount_paise;
+    execute(
+      db,
+      `INSERT OR IGNORE INTO commission_entries (id, seller_order_id, seller_id, basis_paise, rate_bp, amount_paise)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      newId('cme_'),
+      so.id,
+      so.seller_id,
+      basis,
+      so.commission_rate_bp,
+      so.commission_paise,
+    );
+    execute(
+      db,
+      `INSERT OR IGNORE INTO seller_ledger_entries
+         (id, seller_id, order_id, seller_order_id, type, amount_paise, status, reference, note, created_at)
+       VALUES (?, ?, ?, ?, 'sale', ?, 'pending', ?, ?, ?)`,
+      newId('led_'),
+      so.seller_id,
+      orderId,
+      so.id,
+      basis,
+      `sale:${so.id}`,
+      'Product value after discount, before commission',
+      nowIso,
+    );
+    execute(
+      db,
+      `INSERT OR IGNORE INTO seller_ledger_entries
+         (id, seller_id, order_id, seller_order_id, type, amount_paise, status, reference, note, created_at)
+       VALUES (?, ?, ?, ?, 'commission', ?, 'pending', ?, ?, ?)`,
+      newId('led_'),
+      so.seller_id,
+      orderId,
+      so.id,
+      -so.commission_paise,
+      `commission:${so.id}`,
+      `Marketplace commission at ${(so.commission_rate_bp / 100).toFixed(2)}%`,
+      nowIso,
+    );
+    execute(db, 'UPDATE seller_orders SET dispatch_by = ?, updated_at = ? WHERE id = ?', dispatchBy, nowIso, so.id);
+  }
+}
+
+export function confirmCodOrderAndRoute(
+  db: Db,
+  params: { orderNumber: string; actor: SessionUser; note?: string },
+): { orderId: string; orderNumber: string; alreadyConfirmed: boolean } {
+  return tx(db, () => {
+    const order = queryOne<{
+      id: string;
+      order_number: string;
+      status: string;
+      payment_method: string;
+      confirmed_at: string | null;
+      total_paise: number;
+    }>(
+      db,
+      'SELECT id, order_number, status, payment_method, confirmed_at, total_paise FROM orders WHERE order_number = ?',
+      params.orderNumber,
+    );
+    if (!order) throw notFound('Order not found.');
+    if (order.payment_method !== 'cod') {
+      throw conflict('Only Cash on Delivery orders can be confirmed from the COD queue.');
+    }
+    if (order.status === 'cancelled') {
+      throw conflict('This COD order has already been cancelled.');
+    }
+    if (order.status !== 'pending_cod_confirmation' || order.confirmed_at) {
+      routeOrderFulfilmentsOnConfirmation(db, order.id);
+      return { orderId: order.id, orderNumber: order.order_number, alreadyConfirmed: true };
+    }
+
+    const nowIso = new Date().toISOString();
+    const claimed = execute(
+      db,
+      "UPDATE orders SET status = 'confirmed', confirmed_at = ? WHERE id = ? AND status = 'pending_cod_confirmation'",
+      nowIso,
+      order.id,
+    );
+    if (Number(claimed.changes) !== 1) {
+      throw conflict('Order state changed before COD confirmation completed.');
+    }
+
+    const dispatchBy = new Date(Date.now() + 2 * 86400_000).toISOString();
+    recordSellerLedgerEntriesForOrder(db, order.id, dispatchBy);
+    routeOrderFulfilmentsOnConfirmation(db, order.id);
+
+    recordOrderEvent(db, {
+      orderId: order.id,
+      type: 'order.cod_confirmed',
+      description:
+        params.note?.trim() ||
+        'Administrator verified this Cash on Delivery order and routed eligible items to Shiprocket.',
+      actor: params.actor,
+      metadata: { totalPaise: order.total_paise },
+    });
+
+    OutboxService.enqueue(db, {
+      aggregateType: 'order',
+      aggregateId: order.id,
+      eventType: 'order.cod_confirmed',
+      payload: {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        actorId: params.actor.id,
+      },
+    });
+
+    audit(
+      db,
+      params.actor,
+      'order.cod_confirmed',
+      'order',
+      order.id,
+      { status: 'pending_cod_confirmation' },
+      { status: 'confirmed', note: params.note?.trim() || null },
+    );
+
+    return { orderId: order.id, orderNumber: order.order_number, alreadyConfirmed: false };
+  });
+}
+
+export async function notifyCodOrderConfirmedAndSync(
+  db: Db,
+  orderId: string,
+): Promise<Awaited<ReturnType<typeof processOrderFulfilments>>> {
+  const { notify } = await import('./email.js');
+  const order = queryOne<{ order_number: string; total_paise: number; cod_fee_paise: number; email: string; user_id: string }>(
+    db,
+    'SELECT order_number, total_paise, cod_fee_paise, email, user_id FROM orders WHERE id = ?',
+    orderId,
+  );
+  if (order) {
+    await notify(db, {
+      userId: order.user_id,
+      email: order.email,
+      type: 'cod_order_confirmed',
+      subject: `COD order ${order.order_number} confirmed for dispatch`,
+      body: `<p>Your Cash on Delivery order has been confirmed by our team and sent to the maker for dispatch.</p>
+        <p><strong>Order:</strong> ${order.order_number}<br/><strong>Payable on delivery:</strong> ₹${(order.total_paise / 100).toLocaleString('en-IN')} (includes ₹${((order.cod_fee_paise ?? 0) / 100).toLocaleString('en-IN')} COD fee)</p>`,
+      dedupeKey: `cod-confirmed:${orderId}`,
+    });
+
+    const sellers = queryAll<{ email: string; user_id: string; seller_order_id: string; reference: string }>(
+      db,
+      `SELECT u.email, u.id AS user_id, so.id AS seller_order_id, so.reference
+         FROM seller_orders so
+         JOIN seller_profiles sp ON sp.id = so.seller_id
+         JOIN users u ON u.id = sp.user_id
+        WHERE so.order_id = ?`,
+      orderId,
+    );
+    for (const seller of sellers) {
+      await notify(db, {
+        userId: seller.user_id,
+        email: seller.email,
+        type: 'seller_new_order',
+        subject: `New COD order ${seller.reference} confirmed — confirm within 48 hours`,
+        body: `<p>A Cash on Delivery customer order has been verified and confirmed for dispatch.</p>
+          <p><strong>Seller order:</strong> ${seller.reference}<br/><strong>Parent order:</strong> ${order.order_number}</p>
+          <p>Sign in to your seller dashboard to pack and mark it Ready to Ship.</p>`,
+        dedupeKey: `seller-new-order:${seller.seller_order_id}`,
+      });
+    }
+  }
+
+  return processOrderFulfilments(db, orderId);
+}
+
+export function rejectCodOrder(
+  db: Db,
+  params: { orderNumber: string; actor: SessionUser; reason?: string },
+): { orderId: string; orderNumber: string } {
+  const cleanReason = params.reason?.trim() || 'Rejected by administrator during COD verification';
+  return tx(db, () => {
+    const order = queryOne<{ id: string; order_number: string; user_id: string; status: string; payment_method: string }>(
+      db,
+      'SELECT id, order_number, user_id, status, payment_method FROM orders WHERE order_number = ?',
+      params.orderNumber,
+    );
+    if (!order) throw notFound('Order not found.');
+    if (order.payment_method !== 'cod') {
+      throw conflict('Only Cash on Delivery orders can be rejected from the COD verification queue.');
+    }
+    if (order.status !== 'pending_cod_confirmation') {
+      throw conflict('This COD order has already been confirmed or cancelled.');
+    }
+
+    const nowIso = new Date().toISOString();
+    const claimed = execute(
+      db,
+      "UPDATE orders SET status = 'cancelled', cancelled_at = ? WHERE id = ? AND status = 'pending_cod_confirmation'",
+      nowIso,
+      order.id,
+    );
+    if (Number(claimed.changes) !== 1) {
+      throw conflict('Order state changed before COD rejection completed.');
+    }
+
+    const items = queryAll<{ product_id: string; quantity: number }>(
+      db,
+      'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
+      order.id,
+    );
+    for (const item of items) {
+      execute(
+        db,
+        'UPDATE inventory SET reserved_quantity = MAX(0, reserved_quantity - ?), updated_at = ? WHERE product_id = ?',
+        item.quantity,
+        nowIso,
+        item.product_id,
+      );
+      execute(
+        db,
+        `INSERT INTO inventory_movements (id, product_id, change, reason, reference, note)
+         VALUES (?, ?, ?, 'release', ?, 'COD order rejected by admin')`,
+        newId('mov_'),
+        item.product_id,
+        -item.quantity,
+        order.order_number,
+      );
+    }
+
+    execute(db, "UPDATE seller_orders SET status = 'cancelled', updated_at = ? WHERE order_id = ?", nowIso, order.id);
+    execute(db, "UPDATE order_items SET status = 'cancelled' WHERE order_id = ?", order.id);
+    execute(db, "UPDATE payments SET status = 'cancelled', failure_reason = ? WHERE order_id = ? AND status IN ('created','pending')", cleanReason, order.id);
+
+    const redemption = queryOne<{ coupon_id: string }>(
+      db,
+      'SELECT coupon_id FROM coupon_redemptions WHERE order_id = ?',
+      order.id,
+    );
+    if (redemption) {
+      execute(db, 'DELETE FROM coupon_redemptions WHERE order_id = ?', order.id);
+      execute(db, 'UPDATE coupons SET used_count = MAX(0, used_count - 1) WHERE id = ?', redemption.coupon_id);
+    }
+
+    recordOrderEvent(db, {
+      orderId: order.id,
+      type: 'order.cod_rejected',
+      description: `Administrator rejected COD order. Reason: ${cleanReason.slice(0, 200)}`,
+      actor: params.actor,
+    });
+    audit(
+      db,
+      params.actor,
+      'order.cod_rejected',
+      'order',
+      order.id,
+      { status: 'pending_cod_confirmation' },
+      { status: 'cancelled', reason: cleanReason.slice(0, 200) },
+    );
+
+    return { orderId: order.id, orderNumber: order.order_number };
+  });
+}
+
+export function markCodDeliveredIfSettled(db: Db, orderId: string, collectedAt = new Date().toISOString()): void {
+  const order = queryOne<{ id: string; payment_method: string; paid_at: string | null }>(
+    db,
+    'SELECT id, payment_method, paid_at FROM orders WHERE id = ?',
+    orderId,
+  );
+  if (!order || order.payment_method !== 'cod' || order.paid_at) return;
+
+  const statuses = queryAll<{ status: string }>(db, 'SELECT status FROM seller_orders WHERE order_id = ?', orderId).map(
+    (row) => row.status,
+  );
+  const allDelivered =
+    statuses.length > 0 &&
+    statuses.some((s) => s === 'delivered') &&
+    statuses.every((s) => ['delivered', 'returned', 'refunded', 'cancelled'].includes(s));
+  if (!allDelivered) return;
+
+  execute(
+    db,
+    `UPDATE payments
+        SET status = 'paid', method = 'cod_collected', verified_at = COALESCE(verified_at, ?)
+      WHERE order_id = ? AND provider = 'cod' AND status != 'paid'`,
+    collectedAt,
+    orderId,
+  );
+  execute(
+    db,
+    'UPDATE orders SET paid_at = COALESCE(paid_at, ?) WHERE id = ?',
+    collectedAt,
+    orderId,
+  );
+  execute(
+    db,
+    `INSERT OR IGNORE INTO payment_events (id, provider, provider_event_id, order_id, type, summary)
+     VALUES (?, 'cod', ?, ?, 'cod.collected', ?)`,
+    newId('pev_'),
+    `cod-collected:${orderId}`,
+    orderId,
+    JSON.stringify({ collectedAt }),
+  );
 }
 
 export async function notifyOrderPaid(db: Db, orderId: string): Promise<void> {
@@ -853,14 +1172,17 @@ interface OrderRow {
   user_id: string;
   email: string;
   status: string;
+  payment_method: string;
   subtotal_paise: number;
   discount_paise: number;
   shipping_paise: number;
+  cod_fee_paise: number;
   tax_paise: number;
   total_paise: number;
   coupon_code: string | null;
   shipping_address: string;
   placed_at: string;
+  confirmed_at: string | null;
   paid_at: string | null;
   reservation_expires_at: string | null;
   is_demo: number;
@@ -1026,14 +1348,17 @@ export function getOrderView(
     id: order.id,
     orderNumber: order.order_number,
     status: order.status,
+    paymentMethod: (order.payment_method as 'razorpay' | 'cod') ?? 'razorpay',
     email: order.email,
     subtotalPaise: order.subtotal_paise,
     discountPaise: order.discount_paise,
     shippingPaise: order.shipping_paise,
+    codFeePaise: order.cod_fee_paise ?? 0,
     taxPaise: order.tax_paise,
     totalPaise: order.total_paise,
     couponCode: order.coupon_code,
     placedAt: order.placed_at,
+    confirmedAt: order.confirmed_at ?? order.paid_at,
     paidAt: order.paid_at,
     shippingAddress: safeJsonParse<OrderAddress>(order.shipping_address, {
       fullName: '',
@@ -1046,7 +1371,7 @@ export function getOrderView(
     sellerOrders,
     fulfilments: allFulfilments,
     payment: payment ? { provider: payment.provider, status: payment.status, providerPaymentId: payment.provider_payment_id } : null,
-    canCancel: order.status === 'paid' && cancellable,
+    canCancel: ['paid', 'confirmed', 'pending_cod_confirmation'].includes(order.status) && cancellable,
     canRequestReturn: order.status !== 'cancelled' && returnable,
     reservationExpiresAt: order.reservation_expires_at,
     timeline,
@@ -1081,15 +1406,17 @@ export function sellerOrderAction(
     total_paise: number;
     order_number: string;
     paid_at: string | null;
+    confirmed_at: string | null;
+    payment_method: string;
   }>(
     db,
-    `SELECT so.*, o.order_number, o.paid_at FROM seller_orders so
+    `SELECT so.*, o.order_number, o.paid_at, o.confirmed_at, o.payment_method FROM seller_orders so
        JOIN orders o ON o.id = so.order_id WHERE so.id = ?`,
     params.sellerOrderId,
   );
   if (!so) throw notFound('Seller order not found.');
   if (params.ownerSellerId && so.seller_id !== params.ownerSellerId) throw notFound('Seller order not found.');
-  if (!so.paid_at) throw conflict('This order has not been paid yet.');
+  if (!so.paid_at && !so.confirmed_at) throw conflict('This order has not been paid or confirmed yet.');
   if (so.status === 'cancelled') throw conflict('This order is already cancelled.');
 
   const action = params.action;
@@ -1321,19 +1648,21 @@ export function sellerOrderAction(
           "SELECT id FROM payments WHERE order_id = ? AND status = 'paid' ORDER BY created_at DESC LIMIT 1",
           so.order_id,
         );
-        execute(
-          db,
-          `INSERT OR IGNORE INTO refunds (id, order_id, seller_order_id, payment_id, amount_paise, reason, status, requested_by, dedupe_key)
-           VALUES (?, ?, ?, ?, ?, ?, 'requested', ?, ?)`,
-          newId('ref_'),
-          so.order_id,
-          so.id,
-          payment?.id ?? null,
-          so.total_paise,
-          params.note?.trim() || 'Seller order cancelled before dispatch',
-          params.actor.id,
-          `refund:cancel:${so.id}`,
-        );
+        if (so.payment_method !== 'cod' || payment) {
+          execute(
+            db,
+            `INSERT OR IGNORE INTO refunds (id, order_id, seller_order_id, payment_id, amount_paise, reason, status, requested_by, dedupe_key)
+             VALUES (?, ?, ?, ?, ?, ?, 'requested', ?, ?)`,
+            newId('ref_'),
+            so.order_id,
+            so.id,
+            payment?.id ?? null,
+            so.total_paise,
+            params.note?.trim() || 'Seller order cancelled before dispatch',
+            params.actor.id,
+            `refund:cancel:${so.id}`,
+          );
+        }
       }
       recordOrderEvent(db, {
         orderId: so.order_id,
@@ -1347,6 +1676,9 @@ export function sellerOrderAction(
     });
   }
 
+  if (action === 'deliver') {
+    markCodDeliveredIfSettled(db, so.order_id, now.toISOString());
+  }
   refreshOrderStatus(db, so.order_id);
 }
 
@@ -1746,19 +2078,26 @@ export function cancelPendingOrder(
   params: { orderId: string; userId: string; actor: SessionUser; reason: string },
 ): { status: string; message: string } {
   return tx(db, () => {
-    const order = queryOne<{ id: string; user_id: string; order_number: string; status: string; paid_at: string | null }>(
+    const order = queryOne<{
+      id: string;
+      user_id: string;
+      order_number: string;
+      status: string;
+      paid_at: string | null;
+      payment_method: string;
+    }>(
       db,
-      'SELECT id, user_id, order_number, status, paid_at FROM orders WHERE id = ?',
+      'SELECT id, user_id, order_number, status, paid_at, payment_method FROM orders WHERE id = ?',
       params.orderId,
     );
     if (!order || order.user_id !== params.userId) throw notFound('Order not found.');
-    if (order.status !== 'pending_payment' || order.paid_at) {
-      throw conflict('Only orders awaiting payment can be cancelled directly.');
+    if (!['pending_payment', 'pending_cod_confirmation'].includes(order.status) || order.paid_at) {
+      throw conflict('Only orders awaiting payment or COD confirmation can be cancelled directly.');
     }
     const nowIso = new Date().toISOString();
     const claimed = execute(
       db,
-      "UPDATE orders SET status = 'cancelled', cancelled_at = ? WHERE id = ? AND status = 'pending_payment' AND paid_at IS NULL",
+      "UPDATE orders SET status = 'cancelled', cancelled_at = ? WHERE id = ? AND status IN ('pending_payment','pending_cod_confirmation') AND paid_at IS NULL",
       nowIso,
       order.id,
     );
@@ -1783,11 +2122,12 @@ export function cancelPendingOrder(
       execute(
         db,
         `INSERT INTO inventory_movements (id, product_id, change, reason, reference, note)
-         VALUES (?, ?, ?, 'release', ?, 'Customer cancelled unpaid checkout')`,
+         VALUES (?, ?, ?, 'release', ?, ?)`,
         newId('mov_'),
         item.product_id,
         -item.quantity,
         order.order_number,
+        order.payment_method === 'cod' ? 'Customer cancelled unconfirmed COD order' : 'Customer cancelled unpaid checkout',
       );
     }
 
@@ -1795,6 +2135,11 @@ export function cancelPendingOrder(
       db,
       "UPDATE seller_orders SET status = 'cancelled', updated_at = ? WHERE order_id = ? AND status IN ('pending','confirmed','packed')",
       nowIso,
+      order.id,
+    );
+    execute(
+      db,
+      "UPDATE order_items SET status = 'cancelled' WHERE order_id = ? AND status != 'cancelled'",
       order.id,
     );
     execute(
@@ -1814,16 +2159,22 @@ export function cancelPendingOrder(
     recordOrderEvent(db, {
       orderId: order.id,
       type: 'order.cancelled',
-      description: `Customer cancelled unpaid order. Reason: ${params.reason.trim().slice(0, 200)}`,
+      description:
+        order.payment_method === 'cod'
+          ? `Customer cancelled unconfirmed COD order. Reason: ${params.reason.trim().slice(0, 200)}`
+          : `Customer cancelled unpaid order. Reason: ${params.reason.trim().slice(0, 200)}`,
       actor: params.actor,
     });
-    audit(db, params.actor, 'order.pending_cancelled', 'order', order.id, { status: 'pending_payment' }, {
+    audit(db, params.actor, 'order.pending_cancelled', 'order', order.id, { status: order.status }, {
       status: 'cancelled',
       reason: params.reason.trim().slice(0, 200),
     });
     return {
       status: 'completed',
-      message: 'Pending order cancelled and stock reservation released.',
+      message:
+        order.payment_method === 'cod'
+          ? 'COD order cancelled and stock reservation released.'
+          : 'Pending order cancelled and stock reservation released.',
     };
   });
 }
@@ -1839,16 +2190,18 @@ export function requestCancellation(
     status: string;
     total_paise: number;
     paid_at: string | null;
+    confirmed_at: string | null;
+    payment_method: string;
   }>(
     db,
-    `SELECT so.id, so.order_id, so.status, so.total_paise, o.user_id, o.paid_at
+    `SELECT so.id, so.order_id, so.status, so.total_paise, o.user_id, o.paid_at, o.confirmed_at, o.payment_method
        FROM seller_orders so JOIN orders o ON o.id = so.order_id
       WHERE so.id = ? AND so.order_id = ?`,
     params.sellerOrderId,
     params.orderId,
   );
   if (!so || so.user_id !== params.userId) throw notFound('Order not found.');
-  if (!so.paid_at) throw conflict('This order has no completed payment.');
+  if (!so.paid_at && !so.confirmed_at) throw conflict('This order has not been paid or confirmed yet.');
   if (!['pending', 'confirmed', 'packed', 'shipped'].includes(so.status)) {
     throw conflict('This shipment can no longer be cancelled. Please request a return after delivery.');
   }

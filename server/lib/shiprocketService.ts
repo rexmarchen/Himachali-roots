@@ -66,6 +66,9 @@ export interface ShiprocketOrderCreateInput {
   }>;
   paymentMethod: 'Prepaid' | 'COD';
   subTotalRupees: number;
+  shippingChargesRupees?: number;
+  transactionChargesRupees?: number;
+  totalDiscountRupees?: number;
   lengthCm: number;
   breadthCm: number;
   heightCm: number;
@@ -440,10 +443,10 @@ export async function createShiprocketOrderOnly(
       hsn: item.hsn ?? '',
     })),
     payment_method: input.paymentMethod,
-    shipping_charges: 0,
+    shipping_charges: Math.max(0, Math.round(input.shippingChargesRupees ?? 0)),
     giftwrap_charges: 0,
-    transaction_charges: 0,
-    total_discount: 0,
+    transaction_charges: Math.max(0, Math.round(input.transactionChargesRupees ?? 0)),
+    total_discount: Math.max(0, Math.round(input.totalDiscountRupees ?? 0)),
     sub_total: Math.max(1, Math.round(input.subTotalRupees)),
     length: Math.max(0.5, Number(input.lengthCm.toFixed(1))),
     breadth: Math.max(0.5, Number(input.breadthCm.toFixed(1))),

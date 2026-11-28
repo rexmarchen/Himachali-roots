@@ -487,6 +487,7 @@ interface OverviewResponse {
     real_orders?: number;
     demo_orders?: number;
     total_orders?: number;
+    pending_cod_confirmations?: number;
     published_products?: number;
     draft_products?: number;
     rejected_products?: number;
@@ -1513,6 +1514,14 @@ export function AdminOverviewPage() {
   const catalogueTotal = catalogue.reduce((sum, item) => sum + item.value, 0);
 
   const queues = [
+    {
+      key: 'cod',
+      label: 'COD orders to confirm',
+      count: m.pending_cod_confirmations ?? 0,
+      note: 'Confirm Cash on Delivery orders and push to Shiprocket in one click',
+      to: '/admin/orders?status=pending_cod_confirmation',
+      icon: <NavIcon type="orders" />,
+    },
     {
       key: 'sellers',
       label: 'Seller applications',
@@ -4829,7 +4838,8 @@ export function AdminProductDetailPage() {
 }
 
 interface AdminOrderRow {
-  orderNumber: string; email: string; status: string; totalPaise: number; placedAt: string; paidAt: string | null;
+  orderNumber: string; email: string; status: string; paymentMethod?: 'razorpay' | 'cod'; codFeePaise?: number;
+  totalPaise: number; placedAt: string; confirmedAt?: string | null; paidAt: string | null;
   customerName: string; destination: string; sellerStatuses: string[]; refundCount: number; isDemo?: boolean;
 }
 
@@ -5326,19 +5336,70 @@ function AdminCraftsManager() {
 export function AdminOrdersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = searchParams.get('status') ?? '';
+  const paymentMethod = searchParams.get('paymentMethod') ?? '';
   const isDemo = searchParams.get('isDemo') ?? '';
   const fulfilment = searchParams.get('fulfilment') === 'open';
+  const toast = useToast();
+  const queryClient = useQueryClient();
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
+  const [codBusy, setCodBusy] = useState<string | null>(null);
   const orders = useQuery({
-    queryKey: ['admin-orders', q, status, isDemo, fulfilment, page],
+    queryKey: ['admin-orders', q, status, paymentMethod, isDemo, fulfilment, page],
     queryFn: () =>
       api<{ orders: AdminOrderRow[]; page: number; totalPages: number; total: number }>(
-        `/admin/orders?page=${page}${status ? `&status=${encodeURIComponent(status)}` : ''}${isDemo ? `&isDemo=${isDemo}` : ''}${fulfilment ? '&fulfilment=open' : ''}${q ? `&q=${encodeURIComponent(q)}` : ''}`,
+        `/admin/orders?page=${page}${status ? `&status=${encodeURIComponent(status)}` : ''}${paymentMethod ? `&paymentMethod=${encodeURIComponent(paymentMethod)}` : ''}${isDemo ? `&isDemo=${isDemo}` : ''}${fulfilment ? '&fulfilment=open' : ''}${q ? `&q=${encodeURIComponent(q)}` : ''}`,
       ),
   });
 
-  const setParam = (key: 'status' | 'isDemo', value: string) => {
+  const confirmCodOrder = async (orderNumber: string) => {
+    setCodBusy(orderNumber);
+    try {
+      const res = await api<{
+        ok: boolean;
+        fulfilments?: { shiprocketOrderId: number | null; shiprocketSyncStatus: string; lastSyncError: string | null }[];
+      }>(`/admin/orders/${encodeURIComponent(orderNumber)}/cod/confirm`, { method: 'POST', body: {} });
+      const srIds = (res.fulfilments ?? []).map((f) => f.shiprocketOrderId).filter(Boolean);
+      const syncErr = (res.fulfilments ?? []).find((f) => f.lastSyncError)?.lastSyncError;
+      if (srIds.length > 0) {
+        toast.push(`COD ${orderNumber} confirmed & sent to Shiprocket (#${srIds.join(', #')}).`);
+      } else if (syncErr) {
+        toast.push(`COD ${orderNumber} confirmed locally, but Shiprocket sync reported: ${syncErr}`, 'error');
+      } else {
+        toast.push(`COD ${orderNumber} confirmed & routed for fulfilment.`);
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin-orders'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-overview'] }),
+      ]);
+    } catch (err) {
+      toast.push(errorMessage(err), 'error');
+    } finally {
+      setCodBusy(null);
+    }
+  };
+
+  const rejectCodOrder = async (orderNumber: string) => {
+    if (!window.confirm(`Reject and cancel COD order ${orderNumber}? Stock will be released.`)) return;
+    setCodBusy(orderNumber);
+    try {
+      await api(`/admin/orders/${encodeURIComponent(orderNumber)}/cod/reject`, {
+        method: 'POST',
+        body: { reason: 'Rejected by administrator during COD verification' },
+      });
+      toast.push(`COD ${orderNumber} rejected and stock released.`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin-orders'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-overview'] }),
+      ]);
+    } catch (err) {
+      toast.push(errorMessage(err), 'error');
+    } finally {
+      setCodBusy(null);
+    }
+  };
+
+  const setParam = (key: 'status' | 'isDemo' | 'paymentMethod', value: string) => {
     const params = new URLSearchParams(searchParams);
     if (value) params.set(key, value);
     else params.delete(key);
@@ -5354,15 +5415,31 @@ export function AdminOrdersPage() {
     setSearchParams(params, { replace: true });
   };
 
+  const codPendingFilterActive = status === 'pending_cod_confirmation';
+  const toggleCodPending = () => {
+    const params = new URLSearchParams(searchParams);
+    if (codPendingFilterActive) params.delete('status');
+    else params.set('status', 'pending_cod_confirmation');
+    setPage(1);
+    setSearchParams(params, { replace: true });
+  };
+
   return (
     <div>
-      <PageHeader eyebrow="Operations" title="Orders" lede="Marketplace orders split into seller shipments. Actions are recorded against the shipment and the audit log." />
+      <PageHeader eyebrow="Operations" title="Orders" lede="Marketplace orders split into seller shipments. Confirm COD orders here to send them to Shiprocket in one click." />
       <div className="mt-5 flex flex-wrap items-end gap-3">
         <Field label="Search"><Input value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Order, email or customer" /></Field>
         <Field label="Status">
           <Select value={status} onChange={(event) => setParam('status', event.target.value)} className="max-w-56">
             <option value="">All statuses</option>
-            {Object.keys({ pending_payment: 1, paid: 1, partially_fulfilled: 1, fulfilled: 1, cancelled: 1, partially_refunded: 1, refunded: 1, expired: 1 }).map((value) => <option key={value} value={value}>{orderStatusLabel(value)}</option>)}
+            {Object.keys({ pending_cod_confirmation: 1, confirmed: 1, pending_payment: 1, paid: 1, partially_fulfilled: 1, fulfilled: 1, cancelled: 1, partially_refunded: 1, refunded: 1, expired: 1 }).map((value) => <option key={value} value={value}>{orderStatusLabel(value)}</option>)}
+          </Select>
+        </Field>
+        <Field label="Payment">
+          <Select value={paymentMethod} onChange={(event) => setParam('paymentMethod', event.target.value)} className="max-w-44">
+            <option value="">All payments</option>
+            <option value="razorpay">Prepaid (Razorpay)</option>
+            <option value="cod">Cash on Delivery</option>
           </Select>
         </Field>
         <Field label="Order type">
@@ -5372,6 +5449,15 @@ export function AdminOrdersPage() {
             <option value="true">Demo orders only</option>
           </Select>
         </Field>
+        <Button
+          type="button"
+          size="sm"
+          variant={codPendingFilterActive ? 'primary' : 'secondary'}
+          onClick={toggleCodPending}
+          className="mb-0.5"
+        >
+          COD Pending
+        </Button>
         <Button
           type="button"
           size="sm"
@@ -5407,6 +5493,7 @@ export function AdminOrdersPage() {
                         >
                           {order.orderNumber}
                         </Link>
+                        {order.paymentMethod === 'cod' ? <Badge tone="terra">COD</Badge> : null}
                         {order.isDemo ? <Badge tone="sand">DEMO</Badge> : null}
                       </div>
                       <p className="mt-0.5 text-[11px] text-[#5C6662]">{formatDate(order.placedAt)}</p>
@@ -5449,7 +5536,27 @@ export function AdminOrdersPage() {
                     </p>
                   ) : null}
 
-                  <div className="mt-3.5 pt-2 border-t border-[#EFE7DA]">
+                  <div className="mt-3.5 pt-2 border-t border-[#EFE7DA] space-y-2">
+                    {order.status === 'pending_cod_confirmation' ? (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          loading={codBusy === order.orderNumber}
+                          onClick={() => void confirmCodOrder(order.orderNumber)}
+                          className="flex-1"
+                        >
+                          Confirm COD → Shiprocket
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          disabled={codBusy === order.orderNumber}
+                          onClick={() => void rejectCodOrder(order.orderNumber)}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    ) : null}
                     <Link
                       to={`/admin/orders/${order.orderNumber}`}
                       className="flex h-10 w-full items-center justify-center rounded-xl border border-[#C6E3D5] bg-[#E7F4EE] text-xs font-semibold text-[#0D4A3A] hover:bg-[#0D4A3A] hover:text-white transition-colors"
@@ -5473,12 +5580,35 @@ export function AdminOrdersPage() {
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-1.5">
                           <Link to={`/admin/orders/${order.orderNumber}`} className="font-semibold text-[#0D4A3A] hover:text-[#B85A3A]">{order.orderNumber}</Link>
+                          {order.paymentMethod === 'cod' ? <Badge tone="terra">COD</Badge> : null}
                           {order.isDemo ? <Badge tone="sand">DEMO</Badge> : null}
                         </div>
                         {order.refundCount ? <p className="text-[10.5px] text-[#9B3D2D]">{order.refundCount} refund record{order.refundCount === 1 ? '' : 's'}</p> : null}
                       </td>
                       <td className="px-4 py-4">{order.customerName}<p className="text-[10.5px] text-[#5C6662]">{order.email} · {order.destination}</p></td>
-                      <td className="px-4 py-4"><StatusBadge status={order.status} label={orderStatusLabel(order.status)} /></td>
+                      <td className="px-4 py-4">
+                        <StatusBadge status={order.status} label={orderStatusLabel(order.status)} />
+                        {order.status === 'pending_cod_confirmation' ? (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <Button
+                              size="sm"
+                              loading={codBusy === order.orderNumber}
+                              onClick={() => void confirmCodOrder(order.orderNumber)}
+                            >
+                              Confirm COD → Shiprocket
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={codBusy === order.orderNumber}
+                              onClick={() => void rejectCodOrder(order.orderNumber)}
+                              className="text-red-700 hover:text-red-800"
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-4"><div className="flex flex-wrap gap-1">{order.sellerStatuses.map((sellerStatus, index) => <StatusBadge key={`${sellerStatus}-${index}`} status={sellerStatus} label={sellerOrderStatusLabel(sellerStatus)} />)}</div></td>
                       <td className="px-4 py-4 font-semibold tabular-nums text-[#0D4A3A]">{formatINR(order.totalPaise)}</td>
                       <td className="px-4 py-4 text-[#5C6662]">{formatDate(order.placedAt)}</td>
@@ -5539,6 +5669,7 @@ export function AdminOrderDetailPage() {
   const [cancelWholeOrderOpen, setCancelWholeOrderOpen] = useState(false);
   const [cancelNote, setCancelNote] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  const [codBusy, setCodBusy] = useState<'confirm' | 'reject' | null>(null);
 
   const detail = useQuery({
     queryKey: ['admin-order', orderNumber],
@@ -5609,6 +5740,47 @@ export function AdminOrderDetailPage() {
     }
   };
 
+  const confirmCodOrder = async () => {
+    setCodBusy('confirm');
+    try {
+      const res = await api<{
+        ok: boolean;
+        fulfilments?: { shiprocketOrderId: number | null; lastSyncError: string | null }[];
+      }>(`/admin/orders/${encodeURIComponent(orderNumber)}/cod/confirm`, { method: 'POST', body: {} });
+      const srIds = (res.fulfilments ?? []).map((f) => f.shiprocketOrderId).filter(Boolean);
+      const syncErr = (res.fulfilments ?? []).find((f) => f.lastSyncError)?.lastSyncError;
+      if (srIds.length > 0) {
+        toast.push(`COD order confirmed & sent to Shiprocket (#${srIds.join(', #')}).`);
+      } else if (syncErr) {
+        toast.push(`COD confirmed, but Shiprocket sync reported: ${syncErr}`, 'error');
+      } else {
+        toast.push('COD order confirmed & routed for fulfilment.');
+      }
+      await refresh();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setCodBusy(null);
+    }
+  };
+
+  const rejectCodOrder = async () => {
+    if (!window.confirm(`Reject COD order ${orderNumber}? Reserved stock will be released.`)) return;
+    setCodBusy('reject');
+    try {
+      await api(`/admin/orders/${encodeURIComponent(orderNumber)}/cod/reject`, {
+        method: 'POST',
+        body: { reason: 'Rejected by administrator from order file' },
+      });
+      toast.push('COD order rejected and reserved stock restored.');
+      await refresh();
+    } catch (error) {
+      toast.push(errorMessage(error), 'error');
+    } finally {
+      setCodBusy(null);
+    }
+  };
+
   if (detail.isLoading) return <LoadingBlock rows={4} />;
   if (detail.isError || !detail.data) return <ErrorState title="Order not found" body={detail.error ? errorMessage(detail.error) : undefined} onRetry={() => void detail.refetch()} />;
   const data = detail.data;
@@ -5619,17 +5791,41 @@ export function AdminOrderDetailPage() {
       <PageHeader
         eyebrow="Order file"
         title={order.orderNumber}
-        lede={`${order.email} · placed ${formatDateTime(order.placedAt)} · payment ${order.payment?.status ?? 'none'}`}
+        lede={`${order.email} · placed ${formatDateTime(order.placedAt)} · payment ${order.paymentMethod === 'cod' ? 'COD' : 'Razorpay'} (${order.payment?.status ?? 'none'})`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {order.paymentMethod === 'cod' ? <Badge tone="terra">COD Order</Badge> : null}
             {order.isDemo ? <Badge tone="sand">DEMO ORDER</Badge> : null}
             <StatusBadge status={order.status} label={orderStatusLabel(order.status)} />
+            {order.status === 'pending_cod_confirmation' ? (
+              <Button size="sm" loading={codBusy === 'confirm'} onClick={() => void confirmCodOrder()}>
+                Confirm COD &amp; Send to Shiprocket
+              </Button>
+            ) : null}
             {order.status !== 'cancelled' && order.status !== 'fulfilled' ? (
               <Button size="sm" variant="danger" onClick={() => setCancelWholeOrderOpen(true)}>Cancel Order & Restore Stock</Button>
             ) : null}
           </div>
         }
       />
+
+      {order.status === 'pending_cod_confirmation' ? (
+        <Alert tone="warning" title="Cash on Delivery awaiting admin confirmation">
+          <p>
+            This COD order ({formatINR(order.totalPaise)}, including {formatINR(order.codFeePaise ?? 0)} COD fee) has{' '}
+            <strong>not</strong> been sent to Shiprocket yet. Verify customer details, then click once to confirm and
+            push to Shiprocket.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" loading={codBusy === 'confirm'} onClick={() => void confirmCodOrder()}>
+              Confirm COD &amp; Send to Shiprocket
+            </Button>
+            <Button size="sm" variant="danger" loading={codBusy === 'reject'} onClick={() => void rejectCodOrder()}>
+              Reject COD Order
+            </Button>
+          </div>
+        </Alert>
+      ) : null}
 
       {order.isDemo ? (
         <Alert tone="warning" title="DEMO ORDER — NOT A REAL PURCHASE">
@@ -5692,6 +5888,14 @@ export function AdminOrderDetailPage() {
         <aside className="space-y-5">
           <section className="rounded-2xl border border-[#DFD5C6] bg-white p-5 shadow-[0_2px_12px_rgba(13,74,58,0.04)]">
             <h2 className="text-lg">Payment</h2>
+            <dl className="mt-2 space-y-1 border-b border-line pb-3 text-[11.5px]">
+              <div className="flex justify-between gap-2"><dt className="text-muted">Method</dt><dd className="font-medium">{order.paymentMethod === 'cod' ? 'Cash on Delivery (COD)' : 'Online (Razorpay)'}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-muted">Subtotal</dt><dd>{formatINR(order.subtotalPaise)}</dd></div>
+              {order.discountPaise > 0 ? <div className="flex justify-between gap-2"><dt className="text-muted">Discount</dt><dd>−{formatINR(order.discountPaise)}</dd></div> : null}
+              <div className="flex justify-between gap-2"><dt className="text-muted">Shipping</dt><dd>{formatINR(order.shippingPaise)}</dd></div>
+              {(order.codFeePaise ?? 0) > 0 ? <div className="flex justify-between gap-2"><dt className="text-muted">COD Fee</dt><dd className="font-medium text-terra">{formatINR(order.codFeePaise!)}</dd></div> : null}
+              <div className="flex justify-between gap-2 pt-1 font-semibold text-forest"><dt>{order.paymentMethod === 'cod' && !order.paidAt ? 'COD Collectible' : 'Total'}</dt><dd>{formatINR(order.totalPaise)}</dd></div>
+            </dl>
             {data.payments.length ? (
               <ul className="mt-3 space-y-3 text-[11.5px]">
                 {data.payments.map((payment) => (

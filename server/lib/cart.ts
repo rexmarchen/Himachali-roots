@@ -30,6 +30,7 @@ interface CartLineRow {
   seller_id: string;
   seller_name: string;
   seller_status: string;
+  fulfilment_method: string | null;
 }
 
 export function ensureCart(db: Db, userId: string | null, token: string | null): { cart: CartRow; token: string } {
@@ -117,7 +118,7 @@ export function cartLines(db: Db, cartId: string): CartLine[] {
   const rows = queryAll<CartLineRow>(
     db,
     `SELECT ci.product_id, p.slug, p.name, p.price_paise, acp.promo_price_paise, ci.quantity,
-            p.status AS product_status,
+            p.status AS product_status, p.fulfilment_method,
             i.quantity AS stock, i.reserved_quantity AS reserved,
             s.id AS seller_id, s.business_name AS seller_name, s.status AS seller_status,
             (SELECT url FROM product_images pi WHERE pi.product_id = p.id ORDER BY sort_order LIMIT 1) AS image_url,
@@ -154,6 +155,7 @@ export function cartLines(db: Db, cartId: string): CartLine[] {
       sellerId: row.seller_id,
       sellerName: row.seller_name,
       status: row.product_status as CartLine['status'],
+      fulfilmentMethod: (row.fulfilment_method as CartLine['fulfilmentMethod']) ?? 'SHIPROCKET',
     };
   });
 }

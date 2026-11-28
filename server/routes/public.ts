@@ -478,6 +478,7 @@ export function publicRouter(db: Db): Router {
         freeThresholdPaise: env.freeShippingThresholdPaise,
         flatRatePaise: env.flatShippingPaise,
       },
+      cod: env.cod,
       supportEmail: env.smtp.supportEmail,
       supportEmailIsPlaceholder: env.smtp.supportEmail.endsWith('.example'),
       devMode: !env.isProduction,

@@ -416,6 +416,7 @@ export interface CartLine {
   sellerName: string;
   status: ProductStatus;
   maxQuantity: number;
+  fulfilmentMethod?: FulfilmentMethod;
 }
 
 export type CampaignStatus = 'draft' | 'scheduled' | 'active' | 'expired' | 'archived';
@@ -515,14 +516,17 @@ export interface OrderView {
   id: string;
   orderNumber: string;
   status: string;
+  paymentMethod?: 'razorpay' | 'cod';
   email: string;
   subtotalPaise: number;
   discountPaise: number;
   shippingPaise: number;
+  codFeePaise?: number;
   taxPaise: number;
   totalPaise: number;
   couponCode: string | null;
   placedAt: string;
+  confirmedAt?: string | null;
   paidAt: string | null;
   shippingAddress: OrderAddress;
   sellerOrders: SellerOrderView[];
@@ -582,10 +586,15 @@ export interface ApiErrorShape {
 
 export const FREE_SHIPPING_THRESHOLD_PAISE = 69900;
 export const FLAT_SHIPPING_PAISE = 2900;
+export const COD_MIN_ORDER_PAISE = 50000;
+export const COD_STRICT_OVER_MIN = true;
+export const COD_FEE_PAISE = 1900;
 export const DEFAULT_COMMISSION_BP = 1200;
 
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending_payment: 'Awaiting payment',
+  pending_cod_confirmation: 'COD — Pending confirmation',
+  confirmed: 'Confirmed — Preparing',
   paid: 'Paid',
   partially_fulfilled: 'Dispatched',
   fulfilled: 'Delivered',

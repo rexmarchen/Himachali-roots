@@ -114,6 +114,7 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
         couponCode: z.string().trim().max(40).optional(),
         customerNote: z.string().trim().max(500).optional(),
         idempotencyKey: z.string().trim().min(16, 'Missing checkout key. Refresh and try again.').max(100),
+        paymentMethod: z.enum(['razorpay', 'cod']).default('razorpay'),
       }),
       req.body,
     );
@@ -126,8 +127,38 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
       couponCode: input.couponCode || undefined,
       customerNote: input.customerNote,
       idempotencyKey: input.idempotencyKey,
-      isDemo: !env.razorpay.configured && (env.simulatedCheckoutEnabled || env.allowDevPayments) ? true : undefined,
+      paymentMethod: input.paymentMethod,
+      isDemo:
+        input.paymentMethod === 'cod'
+          ? false
+          : !env.razorpay.configured && (env.simulatedCheckoutEnabled || env.allowDevPayments)
+            ? true
+            : undefined,
     });
+
+    if (created.paymentMethod === 'cod') {
+      await notify(db, {
+        userId: req.user!.id,
+        email: req.user!.email,
+        type: 'cod_order_placed',
+        subject: `COD order ${created.orderNumber} received — awaiting confirmation`,
+        body: `<p>Thank you for your order! We have received your Cash on Delivery order.</p>
+          <p><strong>Order:</strong> ${created.orderNumber}<br/><strong>Payable on delivery:</strong> ₹${(created.totalPaise / 100).toLocaleString('en-IN')} (includes ₹${(created.codFeePaise / 100).toLocaleString('en-IN')} COD fee)</p>
+          <p>Our team will verify and confirm your COD order shortly before dispatching it via Shiprocket.</p>`,
+        dedupeKey: `cod-placed:${created.orderId}`,
+      });
+      const order = getOrderView(db, created.orderId);
+      res.status(201).json({
+        order,
+        payment: {
+          provider: 'cod' as const,
+          amountPaise: created.totalPaise,
+          orderNumber: created.orderNumber,
+          devPaymentsEnabled: false,
+        },
+      });
+      return;
+    }
 
     let payment;
     try {
@@ -168,13 +199,16 @@ export function shopRouter(db: Db, deps: Partial<ShopRouterDeps> = {}): Router {
   });
 
   router.post('/orders/:orderNumber/payment', requireAuth, async (req, res) => {
-    const order = queryOne<{ id: string; user_id: string }>(
+    const order = queryOne<{ id: string; user_id: string; payment_method: string }>(
       db,
-      'SELECT id, user_id FROM orders WHERE order_number = ?',
+      'SELECT id, user_id, payment_method FROM orders WHERE order_number = ?',
       String(req.params.orderNumber),
     );
     if (!order) throw notFound('Order not found.');
     if (order.user_id !== req.user!.id) throw notFound('Order not found.');
+    if (order.payment_method === 'cod') {
+      throw conflict('This Cash on Delivery order is payable upon delivery.');
+    }
     const payment = await initializeOrderPayment(db, order.id, req.user!.id);
     res.json({ payment, order: getOrderView(db, order.id) });
   });

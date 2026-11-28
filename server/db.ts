@@ -393,7 +393,104 @@ export function openDatabase(filename: string): Db {
 
   migrateProductFulfilmentShipping(db);
   markMigration(db, 17);
+
+  migrateCodSupport(db);
+  markMigration(db, 18);
   return db;
+}
+
+/**
+ * Migration 18: Cash on Delivery (COD) support — adds payment_method,
+ * cod_fee_paise, and confirmed_at on orders, plus pending_cod_confirmation and
+ * confirmed order lifecycle statuses without breaking existing foreign keys.
+ */
+function migrateCodSupport(db: Db): void {
+  const orderCols = columns(db, 'orders');
+  const needsRebuild =
+    !orderCols.includes('payment_method') ||
+    !orderCols.includes('cod_fee_paise') ||
+    !orderCols.includes('confirmed_at');
+
+  if (!needsRebuild) {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_orders_payment_method ON orders(payment_method, status);');
+    return;
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec('PRAGMA legacy_alter_table = ON');
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    db.exec('DROP INDEX IF EXISTS idx_orders_user');
+    db.exec('DROP INDEX IF EXISTS idx_orders_status');
+    db.exec('DROP INDEX IF EXISTS idx_orders_demo');
+    db.exec('DROP INDEX IF EXISTS idx_orders_payment_method');
+    db.exec('ALTER TABLE orders RENAME TO orders_legacy');
+    db.exec(`
+      CREATE TABLE orders (
+        id TEXT PRIMARY KEY,
+        order_number TEXT NOT NULL UNIQUE,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        email TEXT NOT NULL,
+        status TEXT NOT NULL
+          CHECK (status IN ('pending_payment','pending_cod_confirmation','confirmed','paid','partially_fulfilled','fulfilled','cancelled','partially_refunded','refunded','expired')),
+        payment_method TEXT NOT NULL DEFAULT 'razorpay'
+          CHECK (payment_method IN ('razorpay','cod')),
+        subtotal_paise INTEGER NOT NULL,
+        discount_paise INTEGER NOT NULL DEFAULT 0,
+        shipping_paise INTEGER NOT NULL DEFAULT 0,
+        cod_fee_paise INTEGER NOT NULL DEFAULT 0,
+        tax_paise INTEGER NOT NULL DEFAULT 0,
+        total_paise INTEGER NOT NULL,
+        coupon_code TEXT,
+        shipping_address TEXT NOT NULL,
+        customer_note TEXT,
+        reservation_expires_at TEXT,
+        idempotency_key TEXT NOT NULL UNIQUE,
+        placed_at TEXT NOT NULL,
+        confirmed_at TEXT,
+        paid_at TEXT,
+        cancelled_at TEXT,
+        is_demo INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+    `);
+    db.exec(`
+      INSERT INTO orders (
+        id, order_number, user_id, email, status, payment_method,
+        subtotal_paise, discount_paise, shipping_paise, cod_fee_paise,
+        tax_paise, total_paise, coupon_code, shipping_address, customer_note,
+        reservation_expires_at, idempotency_key, placed_at, confirmed_at, paid_at,
+        cancelled_at, is_demo, created_at
+      )
+      SELECT
+        id, order_number, user_id, email, status, 'razorpay',
+        subtotal_paise, discount_paise, shipping_paise, 0,
+        tax_paise, total_paise, coupon_code, shipping_address, customer_note,
+        reservation_expires_at, idempotency_key, placed_at, paid_at, paid_at,
+        cancelled_at, is_demo, created_at
+      FROM orders_legacy;
+    `);
+    db.exec('DROP TABLE orders_legacy');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_orders_demo ON orders(is_demo)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_orders_payment_method ON orders(payment_method, status)');
+    const fkIssues = db.prepare('PRAGMA foreign_key_check').all();
+    if (fkIssues.length > 0) {
+      throw new Error(`Migration 18 foreign key check failed: ${JSON.stringify(fkIssues.slice(0, 3))}`);
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      // Already rolled back.
+    }
+    throw error;
+  } finally {
+    db.exec('PRAGMA legacy_alter_table = OFF');
+    db.exec('PRAGMA foreign_keys = ON');
+  }
 }
 
 /**

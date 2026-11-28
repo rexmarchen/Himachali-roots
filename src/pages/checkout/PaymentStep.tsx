@@ -1,11 +1,14 @@
+import type { CartView } from '@shared/types';
 import { formatINR } from '@shared/types';
 import { Alert } from '@/components/ui';
 import type { SiteConfig } from '@/lib/session';
 import { BackLink, CheckoutAction, CheckoutPanel, SectionHeading } from './CheckoutParts';
-import { paymentOptions, type PaymentMethod } from './checkoutUtils';
+import { codEligibility, paymentOptions, type PaymentMethod } from './checkoutUtils';
 
 export function PaymentStep({
   config,
+  cart,
+  discountPaise,
   method,
   onSelect,
   amountPaise,
@@ -15,6 +18,8 @@ export function PaymentStep({
   cartUnavailable,
 }: {
   config: SiteConfig | null;
+  cart: CartView;
+  discountPaise: number;
   method: PaymentMethod | null;
   onSelect: (method: PaymentMethod) => void;
   amountPaise: number;
@@ -24,6 +29,7 @@ export function PaymentStep({
   cartUnavailable: boolean;
 }) {
   const options = paymentOptions(config);
+  const codCheck = codEligibility(cart, discountPaise, config);
   const testMode = config?.payments.mode === 'test';
 
   return (
@@ -75,6 +81,49 @@ export function PaymentStep({
                       Razorpay test keys are configured. This is a real integration in test mode; no real money moves.
                     </span>
                   ) : null}
+                </span>
+              </label>
+            ) : null}
+
+            {options.cod ? (
+              <label
+                className={`flex gap-3 border p-4 transition-colors ${
+                  !codCheck.eligible
+                    ? 'cursor-not-allowed border-line bg-paper/70 opacity-75'
+                    : method === 'cod'
+                      ? 'cursor-pointer border-forest bg-forest/[0.035]'
+                      : 'cursor-pointer border-line bg-white hover:border-forest/35'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="payment-method"
+                  value="cod"
+                  disabled={!codCheck.eligible}
+                  checked={method === 'cod'}
+                  onChange={() => codCheck.eligible && onSelect('cod')}
+                  className="mt-1 h-4 w-4 shrink-0 accent-forest"
+                />
+                <span className="min-w-0">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="text-[13.5px] font-semibold text-forest">Cash on Delivery (COD)</span>
+                    <span className="border border-terra/30 bg-terra/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-terra">
+                      + {formatINR(codCheck.feePaise)} COD fee
+                    </span>
+                    <span className="border border-line bg-paper px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
+                      Orders over {formatINR(codCheck.minOrderPaise)}
+                    </span>
+                  </span>
+                  {codCheck.eligible ? (
+                    <span className="mt-1 block text-[11.5px] leading-relaxed text-muted">
+                      Pay in cash or UPI when Shiprocket delivers your parcel. A {formatINR(codCheck.feePaise)} COD
+                      handling fee is added. Our team verifies COD orders before dispatch.
+                    </span>
+                  ) : (
+                    <span className="mt-1 block text-[11.5px] leading-relaxed text-danger">
+                      {codCheck.reason}
+                    </span>
+                  )}
                 </span>
               </label>
             ) : null}

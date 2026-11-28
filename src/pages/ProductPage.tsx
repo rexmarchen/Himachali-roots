@@ -1016,8 +1016,10 @@ export function ProductPage() {
                 </p>
                 <p className="text-[11px] leading-relaxed text-muted">
                   {config?.payments.configured
-                    ? 'Cards, UPI and netbanking are processed securely by Razorpay. Cash on delivery is not offered.'
-                    : 'This deployment cannot collect online payments yet. Cash on delivery is not offered.'}
+                    ? config?.cod?.enabled !== false
+                      ? `Cards, UPI & netbanking via Razorpay. Cash on Delivery (COD) available on Shiprocket orders over ${formatINR(config?.cod?.minOrderPaise ?? 50000)} (+${formatINR(config?.cod?.feePaise ?? 1900)} fee).`
+                      : 'Cards, UPI and netbanking are processed securely by Razorpay. Cash on delivery is not offered.'
+                    : 'This deployment cannot collect online payments yet.'}
                 </p>
               </div>
             </div>

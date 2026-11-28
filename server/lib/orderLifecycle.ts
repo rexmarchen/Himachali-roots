@@ -42,13 +42,15 @@ export function recordOrderEvent(
 }
 
 export function refreshOrderStatus(db: Db, orderId: string): string {
-  const order = queryOne<{ status: string; paid_at: string | null }>(
+  const order = queryOne<{ status: string; confirmed_at: string | null; paid_at: string | null; payment_method: string }>(
     db,
-    'SELECT status, paid_at FROM orders WHERE id = ?',
+    'SELECT status, confirmed_at, paid_at, payment_method FROM orders WHERE id = ?',
     orderId,
   );
   if (!order) return 'unknown';
-  if (['pending_payment', 'expired', 'refunded', 'partially_refunded'].includes(order.status)) return order.status;
+  if (['pending_payment', 'pending_cod_confirmation', 'expired', 'refunded', 'partially_refunded'].includes(order.status)) {
+    return order.status;
+  }
   const statuses = queryAll<{ status: string }>(db, 'SELECT status FROM seller_orders WHERE order_id = ?', orderId).map(
     (row) => row.status,
   );
@@ -60,7 +62,13 @@ export function refreshOrderStatus(db: Db, orderId: string): string {
     next = 'partially_fulfilled';
   } else if (statuses.some((status) => ['shipped', 'delivered', 'returned'].includes(status))) {
     next = 'partially_fulfilled';
-  } else if (order.paid_at) next = 'paid';
+  } else if (order.payment_method === 'cod' && order.confirmed_at && !order.paid_at) {
+    next = 'confirmed';
+  } else if (order.paid_at) {
+    next = 'paid';
+  } else if (order.confirmed_at) {
+    next = 'confirmed';
+  }
 
   const refunded = queryOne<{ total: number }>(
     db,
@@ -76,4 +84,41 @@ export function refreshOrderStatus(db: Db, orderId: string): string {
     execute(db, 'UPDATE orders SET status = ? WHERE id = ?', next, orderId);
   }
   return next;
+}
+
+export function markCodDeliveredIfSettled(db: Db, orderId: string, collectedAt = new Date().toISOString()): void {
+  const order = queryOne<{ id: string; payment_method: string; paid_at: string | null }>(
+    db,
+    'SELECT id, payment_method, paid_at FROM orders WHERE id = ?',
+    orderId,
+  );
+  if (!order || order.payment_method !== 'cod' || order.paid_at) return;
+
+  const statuses = queryAll<{ status: string }>(db, 'SELECT status FROM seller_orders WHERE order_id = ?', orderId).map(
+    (row) => row.status,
+  );
+  const allDelivered =
+    statuses.length > 0 &&
+    statuses.some((s) => s === 'delivered') &&
+    statuses.every((s) => ['delivered', 'returned', 'refunded', 'cancelled'].includes(s));
+  if (!allDelivered) return;
+
+  execute(
+    db,
+    `UPDATE payments
+        SET status = 'paid', method = 'cod_collected', verified_at = COALESCE(verified_at, ?)
+      WHERE order_id = ? AND provider = 'cod' AND status != 'paid'`,
+    collectedAt,
+    orderId,
+  );
+  execute(db, 'UPDATE orders SET paid_at = COALESCE(paid_at, ?) WHERE id = ?', collectedAt, orderId);
+  execute(
+    db,
+    `INSERT OR IGNORE INTO payment_events (id, provider, provider_event_id, order_id, type, summary)
+     VALUES (?, 'cod', ?, ?, 'cod.collected', ?)`,
+    newId('pev_'),
+    `cod-collected:${orderId}`,
+    orderId,
+    JSON.stringify({ collectedAt }),
+  );
 }

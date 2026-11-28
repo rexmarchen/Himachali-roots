@@ -105,6 +105,13 @@ export const env = {
   defaultCommissionBp: int(process.env.DEFAULT_COMMISSION_BP, 1200),
   freeShippingThresholdPaise: int(process.env.FREE_SHIPPING_THRESHOLD_PAISE, 69900),
   flatShippingPaise: int(process.env.FLAT_SHIPPING_PAISE, 2900),
+  cod: {
+    enabled: bool(process.env.COD_ENABLED, true),
+    minOrderPaise: int(process.env.COD_MIN_ORDER_PAISE, 50000),
+    strictOverMin: bool(process.env.COD_STRICT_OVER_MIN, true),
+    feePaise: int(process.env.COD_FEE_PAISE, 1900),
+    shiprocketOnly: bool(process.env.COD_SHIPROCKET_ONLY, true),
+  },
   reservationMinutes: int(process.env.RESERVATION_MINUTES, 30),
   allowDevPayments: bool(process.env.ALLOW_DEV_PAYMENTS, false) && !isProduction,
   simulatedCheckoutEnabled: bool(process.env.SIMULATED_CHECKOUT_ENABLED ?? process.env.ALLOW_DEV_PAYMENTS, false) && !isProduction,

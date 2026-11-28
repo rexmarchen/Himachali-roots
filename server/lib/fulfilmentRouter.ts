@@ -18,7 +18,8 @@ import { audit } from './audit.js';
 import { notify, escapeHtml } from './email.js';
 import { AppError, badRequest, conflict, notFound, safeJsonParse, safeTrackingUrlSchema } from './http.js';
 import { newId } from './ids.js';
-import { recordOrderEvent, refreshOrderStatus } from './orderLifecycle.js';
+import { markCodDeliveredIfSettled, recordOrderEvent, refreshOrderStatus } from './orderLifecycle.js';
+import { allocate } from './pricing.js';
 import {
   assignShiprocketAwb,
   cancelShiprocketPickupOrOrder,
@@ -1058,7 +1059,15 @@ export async function syncShiprocketFulfilment(
     email: string;
     shipping_address: string;
     placed_at: string;
-  }>(db, 'SELECT id, order_number, email, shipping_address, placed_at FROM orders WHERE id = ?', row.order_id);
+    payment_method: string;
+    shipping_paise: number;
+    cod_fee_paise: number;
+  }>(
+    db,
+    `SELECT id, order_number, email, shipping_address, placed_at, payment_method, shipping_paise, cod_fee_paise
+       FROM orders WHERE id = ?`,
+    row.order_id,
+  );
   if (!order) throw notFound('Parent order not found.');
 
   const address = safeJsonParse<OrderAddress>(order.shipping_address, {
@@ -1088,12 +1097,57 @@ export async function syncShiprocketFulfilment(
   const nameParts = address.fullName.trim().split(/\s+/);
   const firstName = nameParts[0] || 'Customer';
   const lastName = nameParts.slice(1).join(' ') || '.';
-  const netPaise = items.reduce((sum, i) => sum + Math.max(0, i.line_subtotal_paise - i.discount_paise), 0);
-  const payment = queryOne<{ provider: string }>(
+  const grossPaise = items.reduce((sum, i) => sum + Math.max(0, i.line_subtotal_paise), 0);
+  const discountPaise = items.reduce((sum, i) => sum + Math.max(0, i.discount_paise), 0);
+  const netPaise = Math.max(0, grossPaise - discountPaise);
+
+  const payment = queryOne<{ provider: string; status: string }>(
     db,
-    "SELECT provider FROM payments WHERE order_id = ? AND status = 'paid' ORDER BY created_at DESC LIMIT 1",
+    'SELECT provider, status FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1',
     order.id,
   );
+  const isCod = order.payment_method === 'cod' || payment?.provider === 'cod';
+
+  // Allocate shipping and COD fee across Shiprocket parcels on this order so
+  // Shiprocket's COD collectible amount matches the customer's checkout total.
+  let parcelShippingPaise = 0;
+  let parcelCodFeePaise = 0;
+  if (isCod) {
+    const orderFulfilments = queryAll<{ id: string; fulfilment_method: string; status: string }>(
+      db,
+      "SELECT id, fulfilment_method, status FROM order_fulfilments WHERE order_id = ? AND status != 'cancelled' ORDER BY created_at, id",
+      order.id,
+    );
+    const allWeights = orderFulfilments.map((f) => {
+      const sumRow = queryOne<{ total: number }>(
+        db,
+        'SELECT COALESCE(SUM(MAX(0, line_subtotal_paise - discount_paise)), 0) AS total FROM order_items WHERE fulfilment_id = ?',
+        f.id,
+      );
+      return Math.max(1, sumRow?.total ?? 0);
+    });
+    const idxAll = orderFulfilments.findIndex((f) => f.id === fulfilmentId);
+    if (idxAll >= 0) {
+      parcelShippingPaise = allocate(order.shipping_paise ?? 0, allWeights)[idxAll] ?? 0;
+    }
+
+    const srFulfilments = orderFulfilments.filter((f) => f.fulfilment_method === 'SHIPROCKET');
+    const srWeights = srFulfilments.map((f) => {
+      const idx = orderFulfilments.findIndex((o) => o.id === f.id);
+      return idx >= 0 ? allWeights[idx] : 1;
+    });
+    const idxSr = srFulfilments.findIndex((f) => f.id === fulfilmentId);
+    if (idxSr >= 0) {
+      parcelCodFeePaise = allocate(order.cod_fee_paise ?? 0, srWeights)[idxSr] ?? 0;
+    }
+  }
+
+  const grossRupees = Math.max(1, Math.round(grossPaise / 100));
+  const discountRupees = Math.max(0, Math.round(discountPaise / 100));
+  const useDiscountField = discountRupees > 0 && grossRupees > discountRupees;
+  const subTotalRupees = useDiscountField ? grossRupees : Math.max(1, Math.round(netPaise / 100));
+  const totalDiscountRupees = useDiscountField ? discountRupees : 0;
+
   const channelOrderId = `${order.order_number}-${fulfilmentId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
 
   try {
@@ -1118,8 +1172,11 @@ export async function syncShiprocketFulfilment(
         units: i.quantity,
         sellingPriceRupees: Math.max(1, Math.round(i.unit_price_paise / 100)),
       })),
-      paymentMethod: payment?.provider === 'cod' ? 'COD' : 'Prepaid',
-      subTotalRupees: Math.max(1, Math.round(netPaise / 100)),
+      paymentMethod: isCod ? 'COD' : 'Prepaid',
+      subTotalRupees,
+      shippingChargesRupees: isCod ? Math.round(parcelShippingPaise / 100) : 0,
+      transactionChargesRupees: isCod ? Math.round(parcelCodFeePaise / 100) : 0,
+      totalDiscountRupees,
       lengthCm: row.package_length_cm,
       breadthCm: row.package_breadth_cm,
       heightCm: row.package_height_cm,
@@ -1542,6 +1599,7 @@ export function rollupSellerOrderAndParentOrderStatus(db: Db, sellerOrderId: str
       availableAt,
       so.id,
     );
+    markCodDeliveredIfSettled(db, so.order_id, nowIso);
   }
 
   refreshOrderStatus(db, so.order_id);
@@ -2277,25 +2335,32 @@ export async function cancelSingleFulfilment(
     }
 
     if (refundPaise > 0) {
+      const orderPayment = queryOne<{ payment_method: string }>(
+        db,
+        'SELECT payment_method FROM orders WHERE id = ?',
+        row.order_id,
+      );
       const payment = queryOne<{ id: string }>(
         db,
         "SELECT id FROM payments WHERE order_id = ? AND status = 'paid' ORDER BY created_at DESC LIMIT 1",
         row.order_id,
       );
-      execute(
-        db,
-        `INSERT OR IGNORE INTO refunds
-           (id, order_id, seller_order_id, payment_id, amount_paise, reason, status, requested_by, dedupe_key)
-         VALUES (?, ?, ?, ?, ?, ?, 'requested', ?, ?)`,
-        newId('ref_'),
-        row.order_id,
-        row.seller_order_id,
-        payment?.id ?? null,
-        refundPaise,
-        params.reason?.trim() || `Partial cancellation of ${row.fulfilment_method} fulfilment`,
-        params.actor.id,
-        `refund:fulfilment:${row.id}`,
-      );
+      if (orderPayment?.payment_method !== 'cod' || payment) {
+        execute(
+          db,
+          `INSERT OR IGNORE INTO refunds
+             (id, order_id, seller_order_id, payment_id, amount_paise, reason, status, requested_by, dedupe_key)
+           VALUES (?, ?, ?, ?, ?, ?, 'requested', ?, ?)`,
+          newId('ref_'),
+          row.order_id,
+          row.seller_order_id,
+          payment?.id ?? null,
+          refundPaise,
+          params.reason?.trim() || `Partial cancellation of ${row.fulfilment_method} fulfilment`,
+          params.actor.id,
+          `refund:fulfilment:${row.id}`,
+        );
+      }
     }
 
     recordFulfilmentEvent(db, {
@@ -2841,6 +2906,7 @@ export async function processHardenedShippingWebhook(
         type: 'seller_order.delivered',
         description: 'Delivery confirmed by courier webhook. The 7-day return window now applies.',
       });
+      markCodDeliveredIfSettled(db, so.order_id, deliveredAt ?? nowIso);
       refreshOrderStatus(db, so.order_id);
     }
 

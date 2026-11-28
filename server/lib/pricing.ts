@@ -14,6 +14,58 @@ export function shippingFor(subtotalAfterDiscountPaise: number): number {
   return env.flatShippingPaise;
 }
 
+export interface CodEligibilityResult {
+  eligible: boolean;
+  reason?: string;
+  minOrderPaise: number;
+  strictOverMin: boolean;
+  feePaise: number;
+}
+
+export function evaluateCodEligibility(
+  subtotalAfterDiscountPaise: number,
+  fulfilmentMethods: (string | null | undefined)[],
+): CodEligibilityResult {
+  const { enabled, minOrderPaise, strictOverMin, feePaise, shiprocketOnly } = env.cod;
+  if (!enabled) {
+    return {
+      eligible: false,
+      reason: 'Cash on Delivery is currently disabled.',
+      minOrderPaise,
+      strictOverMin,
+      feePaise,
+    };
+  }
+  const meetsThreshold = strictOverMin
+    ? subtotalAfterDiscountPaise > minOrderPaise
+    : subtotalAfterDiscountPaise >= minOrderPaise;
+  if (!meetsThreshold) {
+    const thresholdRupees = Math.round(minOrderPaise / 100);
+    return {
+      eligible: false,
+      reason: strictOverMin
+        ? `Cash on Delivery is available only on orders over ₹${thresholdRupees} (product value after discounts).`
+        : `Cash on Delivery is available on orders of ₹${thresholdRupees} or more.`,
+      minOrderPaise,
+      strictOverMin,
+      feePaise,
+    };
+  }
+  if (shiprocketOnly) {
+    const hasNonShiprocket = fulfilmentMethods.some((m) => (m ?? 'SHIPROCKET').toUpperCase() !== 'SHIPROCKET');
+    if (hasNonShiprocket) {
+      return {
+        eligible: false,
+        reason: 'Cash on Delivery is available only when all items ship via Shiprocket.',
+        minOrderPaise,
+        strictOverMin,
+        feePaise,
+      };
+    }
+  }
+  return { eligible: true, minOrderPaise, strictOverMin, feePaise };
+}
+
 /** Prices are GST-inclusive. Extract the tax component without changing the payable total. */
 export function taxComponentInclusive(amountPaise: number, rateBp: number): number {
   if (rateBp <= 0 || amountPaise <= 0) return 0;

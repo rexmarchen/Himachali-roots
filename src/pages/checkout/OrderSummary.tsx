@@ -159,6 +159,12 @@ export function OrderSummary({
             {totals.shippingPaise === 0 ? 'Complimentary' : formatINR(totals.shippingPaise)}
           </dd>
         </div>
+        {totals.codFeePaise > 0 ? (
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted">COD handling fee</dt>
+            <dd className="tabular-nums text-forest">{formatINR(totals.codFeePaise)}</dd>
+          </div>
+        ) : null}
         <div className="flex justify-between gap-4">
           <dt className="text-muted">GST</dt>
           <dd className="text-[11px] text-muted">Included in item prices</dd>

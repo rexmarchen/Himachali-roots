@@ -343,6 +343,7 @@ export function CheckoutPaymentPanel({
 
 export function OrderConfirmation({ order }: { order: OrderView }) {
   const demo = Boolean(order.isDemo || order.payment?.provider === 'dev-simulation');
+  const isCod = order.paymentMethod === 'cod' || order.payment?.provider === 'cod';
   const items = order.sellerOrders.flatMap((sellerOrder) => sellerOrder.items);
   const address = order.shippingAddress;
 
@@ -354,12 +355,26 @@ export function OrderConfirmation({ order }: { order: OrderView }) {
             <path d="m5 12.5 4.5 4.5L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
-        <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-terra">Payment confirmed</p>
-        <h1 className="mt-1 font-serif text-[36px] leading-tight text-forest sm:text-[42px]">Order confirmed</h1>
+        <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-terra">
+          {isCod ? (order.confirmedAt ? 'Cash on Delivery confirmed' : 'Cash on Delivery received') : 'Payment confirmed'}
+        </p>
+        <h1 className="mt-1 font-serif text-[36px] leading-tight text-forest sm:text-[42px]">
+          {isCod ? (order.confirmedAt ? 'COD order confirmed' : 'COD order placed') : 'Order confirmed'}
+        </h1>
         <p className="mx-auto mt-2 max-w-md text-[12.5px] leading-relaxed text-muted">
-          Our server has recorded payment for order{' '}
-          <span className="font-semibold text-forest">{order.orderNumber}</span>. Thank you for supporting Himalayan
-          makers.
+          {isCod ? (
+            <>
+              We have received Cash on Delivery order{' '}
+              <span className="font-semibold text-forest">{order.orderNumber}</span>. Our team will verify and confirm it
+              before sending it to Shiprocket for dispatch.
+            </>
+          ) : (
+            <>
+              Our server has recorded payment for order{' '}
+              <span className="font-semibold text-forest">{order.orderNumber}</span>. Thank you for supporting Himalayan
+              makers.
+            </>
+          )}
         </p>
 
         {demo ? (
@@ -377,8 +392,13 @@ export function OrderConfirmation({ order }: { order: OrderView }) {
             <dd className="mt-0.5 text-[12.5px] font-medium text-forest">{order.orderNumber}</dd>
           </div>
           <div className="text-right">
-            <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Amount paid</dt>
+            <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">
+              {isCod ? 'Payable on delivery' : 'Amount paid'}
+            </dt>
             <dd className="mt-0.5 font-serif text-[22px] leading-none text-forest">{formatINR(order.totalPaise)}</dd>
+            {isCod && (order.codFeePaise ?? 0) > 0 ? (
+              <p className="mt-1 text-[10px] text-muted">Includes {formatINR(order.codFeePaise!)} COD fee</p>
+            ) : null}
           </div>
           <div>
             <dt className="text-[10px] uppercase tracking-[0.12em] text-muted">Updates</dt>

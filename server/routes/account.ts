@@ -298,9 +298,12 @@ export function accountRouter(db: Db): Router {
       title: string;
       seller_count: number;
       shipment_status: string | null;
+      payment_method: string;
+      cod_fee_paise: number;
     }>(
       db,
       `SELECT o.id, o.order_number, o.status, o.total_paise, o.placed_at, o.paid_at,
+              o.payment_method, o.cod_fee_paise,
               (SELECT SUM(quantity) FROM order_items WHERE order_id = o.id) AS item_count,
               (SELECT name FROM order_items WHERE order_id = o.id LIMIT 1) AS title,
               (SELECT image_url FROM order_items WHERE order_id = o.id LIMIT 1) AS image_url,
@@ -317,6 +320,8 @@ export function accountRouter(db: Db): Router {
         id: row.id,
         orderNumber: row.order_number,
         status: row.status,
+        paymentMethod: row.payment_method ?? 'razorpay',
+        codFeePaise: row.cod_fee_paise ?? 0,
         totalPaise: row.total_paise,
         placedAt: row.placed_at,
         paidAt: row.paid_at,
@@ -357,7 +362,8 @@ export function accountRouter(db: Db): Router {
       req.params.orderNumber,
     );
     if (!order || order.user_id !== req.user!.id) throw notFound('Order not found.');
-    if (order.status === 'pending_payment' && !order.paid_at) {
+    if (['pending_payment', 'pending_cod_confirmation'].includes(order.status) && !order.paid_at) {
+      const isCodPending = order.status === 'pending_cod_confirmation';
       const result = cancelPendingOrder(db, {
         orderId: order.id,
         userId: req.user!.id,
@@ -369,7 +375,9 @@ export function accountRouter(db: Db): Router {
         email: order.email,
         type: 'order_cancelled',
         subject: `Order ${order.order_number} cancelled`,
-        body: `<p>Your unpaid order was cancelled and reserved stock has been released.</p><p><strong>Reason:</strong> ${escapeHtml(input.reason)}</p>`,
+        body: isCodPending
+          ? `<p>Your Cash on Delivery order was cancelled before confirmation and reserved stock has been released.</p><p><strong>Reason:</strong> ${escapeHtml(input.reason)}</p>`
+          : `<p>Your unpaid order was cancelled and reserved stock has been released.</p><p><strong>Reason:</strong> ${escapeHtml(input.reason)}</p>`,
         dedupeKey: `cust-cancel-pending:${order.id}`,
       });
       res.json(result);

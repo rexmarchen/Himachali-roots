@@ -14,6 +14,13 @@ export interface SiteConfig {
     devPaymentsEnabled: boolean;
   };
   shipping: { freeThresholdPaise: number; flatRatePaise: number };
+  cod?: {
+    enabled: boolean;
+    minOrderPaise: number;
+    strictOverMin: boolean;
+    feePaise: number;
+    shiprocketOnly: boolean;
+  };
   supportEmail: string;
   supportEmailIsPlaceholder: boolean;
   devMode: boolean;

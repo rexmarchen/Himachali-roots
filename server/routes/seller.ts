@@ -1045,7 +1045,7 @@ export function sellerRouter(db: Db): Router {
               COALESCE(SUM(so.seller_earning_paise),0) AS earnings,
               COUNT(*) AS orders
          FROM seller_orders so JOIN orders o ON o.id = so.order_id
-        WHERE so.seller_id = ? AND o.paid_at IS NOT NULL AND o.created_at >= ?
+        WHERE so.seller_id = ? AND (o.paid_at IS NOT NULL OR o.confirmed_at IS NOT NULL) AND o.created_at >= ?
           AND so.status != 'cancelled'`,
       id,
       since,
@@ -1117,7 +1117,7 @@ export function sellerRouter(db: Db): Router {
               COALESCE(SUM(so.subtotal_paise - so.discount_paise), 0) AS gross_paise,
               COUNT(*) AS order_count
          FROM seller_orders so JOIN orders o ON o.id = so.order_id
-        WHERE so.seller_id = ? AND o.paid_at IS NOT NULL AND o.created_at >= ?
+        WHERE so.seller_id = ? AND (o.paid_at IS NOT NULL OR o.confirmed_at IS NOT NULL) AND o.created_at >= ?
           AND so.status != 'cancelled'
         GROUP BY substr(o.created_at, 1, 10)
         ORDER BY day ASC`,
@@ -1148,7 +1148,7 @@ export function sellerRouter(db: Db): Router {
          JOIN seller_orders so ON so.id = oi.seller_order_id
          JOIN orders o ON o.id = so.order_id
          LEFT JOIN products p ON p.id = oi.product_id
-        WHERE so.seller_id = ? AND o.paid_at IS NOT NULL AND o.created_at >= ?
+        WHERE so.seller_id = ? AND (o.paid_at IS NOT NULL OR o.confirmed_at IS NOT NULL) AND o.created_at >= ?
           AND so.status != 'cancelled'`,
       id,
       since,
@@ -1181,7 +1181,7 @@ export function sellerRouter(db: Db): Router {
          JOIN seller_orders so ON so.id = oi.seller_order_id
          JOIN orders o ON o.id = so.order_id
          LEFT JOIN products p ON p.id = oi.product_id
-        WHERE so.seller_id = ? AND o.paid_at IS NOT NULL AND o.created_at >= ?
+        WHERE so.seller_id = ? AND (o.paid_at IS NOT NULL OR o.confirmed_at IS NOT NULL) AND o.created_at >= ?
           AND so.status != 'cancelled'
         GROUP BY oi.product_id, oi.name
         ORDER BY revenue_paise DESC
@@ -2121,14 +2121,15 @@ export function sellerRouter(db: Db): Router {
       shipping_address: string;
       customer_name: string;
       item_count: number;
+      payment_method: string;
     }>(
       db,
       `SELECT so.id, so.reference, o.order_number, so.status, so.total_paise, so.seller_earning_paise,
-              so.commission_paise, so.created_at, so.dispatch_by, o.shipping_address,
+              so.commission_paise, so.created_at, so.dispatch_by, o.shipping_address, o.payment_method,
               json_extract(o.shipping_address, '$.fullName') AS customer_name,
               (SELECT SUM(quantity) FROM order_items WHERE seller_order_id = so.id) AS item_count
          FROM seller_orders so JOIN orders o ON o.id = so.order_id
-        WHERE so.seller_id = ? AND o.paid_at IS NOT NULL ${status ? 'AND so.status = ?' : ''}
+        WHERE so.seller_id = ? AND (o.paid_at IS NOT NULL OR o.confirmed_at IS NOT NULL) ${status ? 'AND so.status = ?' : ''}
         ORDER BY CASE so.status WHEN 'pending' THEN 0 WHEN 'confirmed' THEN 1 WHEN 'packed' THEN 2 ELSE 3 END,
                  so.created_at DESC
         LIMIT 100`,
@@ -2143,6 +2144,7 @@ export function sellerRouter(db: Db): Router {
           reference: row.reference,
           orderNumber: row.order_number,
           status: row.status,
+          paymentMethod: row.payment_method ?? 'razorpay',
           totalPaise: row.total_paise,
           earningPaise: row.seller_earning_paise,
           commissionPaise: row.commission_paise,
@@ -2185,9 +2187,10 @@ export function sellerRouter(db: Db): Router {
       shipping_address: string;
       customer_note: string | null;
       reservation_expires_at: string | null;
+      payment_method: string;
     }>(
       db,
-      `SELECT so.*, o.order_number, o.shipping_address, o.customer_note, o.reservation_expires_at
+      `SELECT so.*, o.order_number, o.shipping_address, o.customer_note, o.reservation_expires_at, o.payment_method
          FROM seller_orders so JOIN orders o ON o.id = so.order_id
         WHERE so.id = ? AND so.seller_id = ?`,
       req.params.id,
@@ -2248,6 +2251,7 @@ export function sellerRouter(db: Db): Router {
         reference: row.reference,
         orderNumber: row.order_number,
         status: row.status,
+        paymentMethod: row.payment_method ?? 'razorpay',
         createdAt: row.created_at,
         dispatchBy: row.dispatch_by,
         shippedAt: row.shipped_at,
@@ -2498,13 +2502,13 @@ export function sellerRouter(db: Db): Router {
     );
     if (!so) throw notFound('Seller order not found.');
 
-    const order = queryOne<{ order_number: string; paid_at: string | null }>(
+    const order = queryOne<{ order_number: string; paid_at: string | null; confirmed_at: string | null }>(
       db,
-      'SELECT order_number, paid_at FROM orders WHERE id = ?',
+      'SELECT order_number, paid_at, confirmed_at FROM orders WHERE id = ?',
       so.order_id,
     );
-    if (!order || !order.paid_at) {
-      throw badRequest('Cannot arrange shipping for an unpaid order.');
+    if (!order || (!order.paid_at && !order.confirmed_at)) {
+      throw badRequest('Cannot arrange shipping for an unpaid or unconfirmed order.');
     }
 
     const fulfilments = getFulfilmentsForSellerOrder(db, so.id);
