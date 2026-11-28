@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeDb, execute, queryAll, queryOne, type Db } from '../db.js';
 import { env } from '../env.js';
 import { POOKI_EMAIL, POOKI_SELLER_ID, seedPookiSelectCatalogue } from '../scripts/seedPookiSelectCatalogue.js';
+import { completePookiSelectCatalogue } from '../scripts/completePookiSelectCatalogue.js';
 import { resetShiprocketTokenCache } from '../lib/shiprocketService.js';
 import { ADDRESS, IDS, checkout, login, mutate, resetDb, seedFixtures, setupTestApp } from './helpers.js';
 
@@ -109,7 +110,8 @@ describe('Dear Hills Select: External Sourcing, ₹100 Markup, Brand Isolation &
     expect(publicRes.body.items.every((item: { slug: string }) => !item.slug.includes('select'))).toBe(true);
     const sitemapRes = await request(app).get('/sitemap.xml');
     expect(sitemapRes.text.toLowerCase()).not.toContain('meesho');
-    const feedRes = await request(app).get('/api/feeds/google-merchant.xml');
+    const feedRes = await request(app).get('/feeds/google-merchant.xml');
+    expect(feedRes.status).toBe(200);
     expect(feedRes.text.toLowerCase()).not.toContain('meesho');
   });
 
@@ -293,6 +295,89 @@ describe('Dear Hills Select: External Sourcing, ₹100 Markup, Brand Isolation &
     expect(cancelRes.status).toBe(200);
     expect(cancelRes.body.status).toBe('cancelled');
     expect(cancelRes.body.refundPaise).toBe(110000);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('TEST 6: completes existing 6 verified in-stock Pooki listings with ₹100 markup into pending review while keeping 2 HTTP 410 out-of-stock listings in draft', async () => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+      calls.push(String(input));
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+
+    seedPookiSelectCatalogue(db, { createExtraCategories: true });
+    const first = completePookiSelectCatalogue(db);
+    expect(first.missingSkus).toHaveLength(0);
+    expect(first.reviewReadySkus).toEqual([
+      'DH-SEL-KSH-01',
+      'DH-SEL-MCS-02',
+      'DH-SEL-BKS-03',
+      'DH-SEL-HMC-04',
+      'DH-SEL-GMK-05',
+      'DH-SEL-PHT-06',
+    ]);
+    expect(first.outOfStockDraftSkus).toEqual(['DH-SEL-MFL-07', 'DH-SEL-WJK-08']);
+
+    // Idempotent second run creates zero duplicates and preserves stock movements
+    const second = completePookiSelectCatalogue(db);
+    expect(second.reviewReadySkus).toHaveLength(6);
+    expect(queryAll(db, 'SELECT id FROM products WHERE seller_id = ?', POOKI_SELLER_ID)).toHaveLength(8);
+    expect(queryAll(db, 'SELECT id FROM inventory_movements')).toHaveLength(6);
+
+    // Every verified SKU passes price/spec/compliance checks and is blocked ONLY on authorized images
+    for (const sku of first.reviewReadySkus) {
+      expect(first.readinessBlockersBySku[sku]).toEqual([
+        'Upload at least one verified product photograph before publishing.',
+        'Product photographs must have confirmed commercial usage authorization before publishing.',
+      ]);
+    }
+
+    const pookiRows = queryAll<{
+      sku: string;
+      status: string;
+      price_paise: number;
+      landed_cost_paise: number;
+      markup_paise: number;
+      price_verified: number;
+      availability_verified: number;
+      supplier_available: number;
+      fulfilment_method: string;
+    }>(
+      db,
+      `SELECT p.sku, p.status, p.price_paise, ps.landed_cost_paise, ps.markup_paise,
+              ps.price_verified, ps.availability_verified, ps.supplier_available, p.fulfilment_method
+         FROM products p JOIN product_sourcing ps ON ps.product_id = p.id
+        WHERE p.seller_id = ? ORDER BY p.sku`,
+      POOKI_SELLER_ID,
+    );
+    const bySku = Object.fromEntries(pookiRows.map((r) => [r.sku, r]));
+    expect(bySku['DH-SEL-KSH-01']?.price_paise).toBe(62500);
+    expect(bySku['DH-SEL-MCS-02']?.price_paise).toBe(39000);
+    expect(bySku['DH-SEL-BKS-03']?.price_paise).toBe(47100);
+    expect(bySku['DH-SEL-HMC-04']?.price_paise).toBe(28600);
+    expect(bySku['DH-SEL-GMK-05']?.price_paise).toBe(61900);
+    expect(bySku['DH-SEL-PHT-06']?.price_paise).toBe(27400);
+    for (const sku of first.reviewReadySkus) {
+      expect(bySku[sku]?.status).toBe('pending');
+      expect(bySku[sku]?.price_paise).toBe((bySku[sku]?.landed_cost_paise ?? 0) + 10000);
+      expect(bySku[sku]?.price_verified).toBe(1);
+      expect(bySku[sku]?.availability_verified).toBe(1);
+      expect(bySku[sku]?.supplier_available).toBe(1);
+      expect(bySku[sku]?.fulfilment_method).toBe('EXTERNAL_SUPPLIER');
+    }
+    expect(bySku['DH-SEL-MFL-07']?.status).toBe('draft');
+    expect(bySku['DH-SEL-MFL-07']?.supplier_available).toBe(0);
+    expect(bySku['DH-SEL-WJK-08']?.status).toBe('draft');
+    expect(bySku['DH-SEL-WJK-08']?.supplier_available).toBe(0);
+
+    // Zero pending/draft listings leak to public storefront, sitemap, or Google Merchant feed
+    const publicRes = await request(app).get('/api/products?pageSize=48');
+    expect(publicRes.body.items.every((item: { slug: string }) => !item.slug.includes('select'))).toBe(true);
+    const sitemapRes = await request(app).get('/sitemap.xml');
+    expect(sitemapRes.text.toLowerCase()).not.toContain('meesho');
+    const feedRes = await request(app).get('/feeds/google-merchant.xml');
+    expect(feedRes.status).toBe(200);
+    expect(feedRes.text.toLowerCase()).not.toContain('meesho');
     expect(calls).toHaveLength(0);
   });
 });
