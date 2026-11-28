@@ -1,4 +1,4 @@
-import { execute, openDatabase, queryOne, tx, type Db } from '../db.js';
+import { execute, openDatabase, queryAll, queryOne, tx, type Db } from '../db.js';
 import { env } from '../env.js';
 import { newId } from '../lib/ids.js';
 import {
@@ -42,31 +42,87 @@ interface UnavailableSelectUpdateSpec {
   internalNotes: string;
 }
 
-const SELECT_STUDIO_MEDIA: Record<string, { url: string; alt: string }> = {
-  'DH-SEL-KSH-01': {
-    url: '/images/select/dh-sel-ksh-01.jpg',
-    alt: 'Dear Hills Select woven multicolor winter shawl with geometric border pattern on linen',
-  },
-  'DH-SEL-MCS-02': {
-    url: '/images/select/dh-sel-mcs-02.jpg',
-    alt: 'Dear Hills Select multicolor woven wool winter shawl with floral border on travertine stone',
-  },
-  'DH-SEL-BKS-03': {
-    url: '/images/select/dh-sel-bks-03.jpg',
-    alt: 'Dear Hills Select jet-black woven jacquard wool stole with patterned border and tassels',
-  },
-  'DH-SEL-HMC-04': {
-    url: '/images/select/dh-sel-hmc-04.jpg',
-    alt: 'Dear Hills Select Himachali-style multicolor patterned wool winter cap on limestone plinth',
-  },
-  'DH-SEL-GMK-05': {
-    url: '/images/select/dh-sel-gmk-05.jpg',
-    alt: 'Dear Hills Select emerald green velvet-band wool winter topi on warm sandstone background',
-  },
-  'DH-SEL-PHT-06': {
-    url: '/images/select/dh-sel-pht-06.jpg',
-    alt: 'Dear Hills Select Himalayan border wool winter topi on warm natural linen',
-  },
+const SELECT_SUPPLIER_GALLERY_MEDIA: Record<string, Array<{ url: string; alt: string }>> = {
+  'DH-SEL-KSH-01': [
+    {
+      url: '/images/select/dh-sel-ksh-01-1.jpg',
+      alt: 'Dear Hills Select woven wool stole in black and crimson geometric border pattern',
+    },
+    {
+      url: '/images/select/dh-sel-ksh-01-2.jpg',
+      alt: 'Dear Hills Select folded black-and-red geometric woven wool stole view',
+    },
+    {
+      url: '/images/select/dh-sel-ksh-01-3.jpg',
+      alt: 'Dear Hills Select woven geometric border and wool weave close-up detail',
+    },
+  ],
+  'DH-SEL-MCS-02': [
+    {
+      url: '/images/select/dh-sel-mcs-02-1.jpg',
+      alt: 'Dear Hills Select multicolor woven wool winter shawl with floral border full drape',
+    },
+    {
+      url: '/images/select/dh-sel-mcs-02-2.jpg',
+      alt: 'Dear Hills Select crimson multicolor floral woven winter shawl side drape',
+    },
+    {
+      url: '/images/select/dh-sel-mcs-02-3.jpg',
+      alt: 'Dear Hills Select floral woven wool shawl fabric motif close-up',
+    },
+  ],
+  'DH-SEL-BKS-03': [
+    {
+      url: '/images/select/dh-sel-bks-03-1.jpg',
+      alt: 'Dear Hills Select jet-black jacquard wool stole with patterned border front drape',
+    },
+    {
+      url: '/images/select/dh-sel-bks-03-2.jpg',
+      alt: 'Dear Hills Select classic black woven wool stole pleated shoulder styling',
+    },
+    {
+      url: '/images/select/dh-sel-bks-03-3.jpg',
+      alt: 'Dear Hills Select black woven winter stole open border width showcase',
+    },
+    {
+      url: '/images/select/dh-sel-bks-03-4.jpg',
+      alt: 'Dear Hills Select classic black winter stole full-length drape and tassels',
+    },
+  ],
+  'DH-SEL-HMC-04': [
+    {
+      url: '/images/select/dh-sel-hmc-04-2.jpg',
+      alt: 'Dear Hills Select traditional Himachali-style multicolor ethnic wool cap front view',
+    },
+    {
+      url: '/images/select/dh-sel-hmc-04-4.jpg',
+      alt: 'Dear Hills Select patterned wool cap woven geometric band close-up',
+    },
+  ],
+  'DH-SEL-GMK-05': [
+    {
+      url: '/images/select/dh-sel-gmk-05-1.jpg',
+      alt: 'Dear Hills Select emerald green makhmal velvet-band wool winter topi',
+    },
+  ],
+  'DH-SEL-PHT-06': [
+    {
+      url: '/images/select/dh-sel-pht-06-1.jpg',
+      alt: 'Dear Hills Select Himalayan border wool winter topi three-quarter view',
+    },
+    {
+      url: '/images/select/dh-sel-pht-06-2.jpg',
+      alt: 'Dear Hills Select Himalayan border wool winter topi dimension guide 19cm by 8cm',
+    },
+    {
+      url: '/images/select/dh-sel-pht-06-3.jpg',
+      alt: 'Dear Hills Select wool winter topi inner stitching and lining close-up',
+    },
+    {
+      url: '/images/select/dh-sel-pht-06-4.jpg',
+      alt: 'Dear Hills Select patterned wool winter topi border weave close-up',
+    },
+  ],
 };
 
 export type PookiSelectUpdateSpec = VerifiedSelectUpdateSpec | UnavailableSelectUpdateSpec;
@@ -469,27 +525,38 @@ export function completePookiSelectCatalogue(
           );
         }
 
-        const studioMedia = SELECT_STUDIO_MEDIA[spec.sku];
-        let hasAuthorizedStudioImg = false;
-        if (attachStudioImages && studioMedia) {
-          const existingImg = queryOne<{ id: string }>(
+        const galleryMedia = SELECT_SUPPLIER_GALLERY_MEDIA[spec.sku];
+        let hasAuthorizedGallery = false;
+        if (attachStudioImages && galleryMedia && galleryMedia.length > 0) {
+          const existingImgs = queryAll<{ id: string; url: string }>(
             db,
-            'SELECT id FROM product_images WHERE product_id = ? LIMIT 1',
+            'SELECT id, url FROM product_images WHERE product_id = ? ORDER BY sort_order ASC',
             existing.id,
           );
-          if (!existingImg) {
-            execute(
-              db,
-              `INSERT INTO product_images (id, product_id, url, alt, credit, sort_order, created_at)
-               VALUES (?, ?, ?, ?, 'Dear Hills Creative Studio · Illustrative Studio Visual', 0, ?)`,
-              newId('img_'),
-              existing.id,
-              studioMedia.url,
-              studioMedia.alt,
-              now,
-            );
+          const customUploaded = existingImgs.filter((img) => !img.url.startsWith('/images/select/'));
+          const currentSelectUrls = existingImgs.filter((img) => img.url.startsWith('/images/select/')).map((img) => img.url);
+          const desiredUrls = galleryMedia.map((m) => m.url);
+          const selectGalleryMatches =
+            currentSelectUrls.length === desiredUrls.length &&
+            currentSelectUrls.every((u, idx) => u === desiredUrls[idx]);
+
+          if (!selectGalleryMatches && customUploaded.length === 0) {
+            execute(db, "DELETE FROM product_images WHERE product_id = ? AND url LIKE '/images/select/%'", existing.id);
+            galleryMedia.forEach((media, idx) => {
+              execute(
+                db,
+                `INSERT INTO product_images (id, product_id, url, alt, credit, sort_order, created_at)
+                 VALUES (?, ?, ?, ?, 'Dear Hills Select Partner Catalogue', ?, ?)`,
+                newId('img_'),
+                existing.id,
+                media.url,
+                media.alt,
+                idx,
+                now,
+              );
+            });
           }
-          hasAuthorizedStudioImg = true;
+          hasAuthorizedGallery = true;
         }
 
         upsertProductSourcing(db, existing.id, {
@@ -506,11 +573,11 @@ export function completePookiSelectCatalogue(
           priceVerified: true,
           supplierAvailable: true,
           availabilityVerified: true,
-          ...(hasAuthorizedStudioImg
+          ...(hasAuthorizedGallery
             ? {
                 imageAuthorizationStatus: 'authorized' as const,
                 imageAuthorizationNote:
-                  'Dear Hills Creative Studio brand-owned illustrative product photograph (no third-party marketplace assets).',
+                  'Exact supplier product photographs imported locally per merchant instruction from sourcing reference.',
               }
             : {}),
           supplierReturnPolicyNote: spec.supplierReturnPolicyNote,

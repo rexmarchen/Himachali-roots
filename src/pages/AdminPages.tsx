@@ -15,6 +15,7 @@ import type {
 } from '@shared/types';
 import { ExternalSourcingPanel } from '@/components/products/ExternalSourcingPanel';
 import { APPLICATION_STATUS_LABELS, PRODUCT_WORKFLOW_LABELS, STORE_STATUS_LABELS, formatINR } from '@shared/types';
+import { safeExternalUrl } from '@shared/urls';
 import type { SiteContent } from '@shared/content';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/session';
@@ -3043,6 +3044,7 @@ interface AdminProductRow {
   price_verified?: number | null;
   supplier_available?: number | null;
   image_authorization_status?: string | null;
+  source_url?: string | null;
 }
 
 function productWorkflowStatus(row: { status: string; changes_requested_at?: string | null }): string {
@@ -3381,6 +3383,16 @@ export function AdminProductsPage() {
                         <p className="mt-0.5 text-[11px] text-muted">
                           By <Link to={`/admin/sellers/${product.seller_id}`} className="font-medium text-forest hover:underline">{product.seller_name}</Link>
                         </p>
+                        {safeExternalUrl(product.source_url) ? (
+                          <a
+                            href={safeExternalUrl(product.source_url)!}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-900 hover:bg-amber-100"
+                          >
+                            Open Meesho Link ↗
+                          </a>
+                        ) : null}
                         <div className="mt-2 flex items-center justify-between">
                           <span className="font-semibold text-ink text-sm">
                             {formatINR(product.price_paise)}
@@ -3489,6 +3501,16 @@ export function AdminProductsPage() {
                                 {product.sku}
                                 {product.origin_verified ? ' · origin verified' : ''}
                               </p>
+                              {safeExternalUrl(product.source_url) ? (
+                                <a
+                                  href={safeExternalUrl(product.source_url)!}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-1 inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-900 hover:bg-amber-100"
+                                >
+                                  Open Meesho Link ↗
+                                </a>
+                              ) : null}
                             </div>
                           </div>
                         </td>
@@ -5917,9 +5939,31 @@ export function AdminOrderDetailPage() {
                 <StatusBadge status={sellerOrder.status} label={sellerOrderStatusLabel(sellerOrder.status)} />
               </div>
               <ul className="divide-y divide-line text-[12.5px]">
-                {sellerOrder.items.map((item) => (
-                  <li key={item.id} className="flex justify-between gap-3 px-5 py-3"><span>{item.name}<span className="block text-[10.5px] text-muted">Qty {item.quantity} · {formatINR(item.unitPricePaise)} each</span></span><span>{formatINR(item.lineSubtotalPaise)}</span></li>
-                ))}
+                {sellerOrder.items.map((item) => {
+                  const safeItemSource = safeExternalUrl(item.sourceUrl);
+                  return (
+                    <li key={item.id} className="flex justify-between gap-3 px-5 py-3">
+                      <span>
+                        {item.name}
+                        <span className="block text-[10.5px] text-muted">
+                          Qty {item.quantity} · {formatINR(item.unitPricePaise)} each
+                          {item.variantLabel ? ` · ${item.variantLabel}` : ''}
+                        </span>
+                        {safeItemSource ? (
+                          <a
+                            href={safeItemSource}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-900 hover:bg-amber-100"
+                          >
+                            Open Meesho Source ↗
+                          </a>
+                        ) : null}
+                      </span>
+                      <span>{formatINR(item.lineSubtotalPaise)}</span>
+                    </li>
+                  );
+                })}
               </ul>
               <div className="grid gap-2 border-t border-line px-5 py-3 text-[11.5px] sm:grid-cols-2">
                 <span>Product value {formatINR(sellerOrder.subtotalPaise)}</span>

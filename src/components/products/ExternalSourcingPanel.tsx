@@ -10,6 +10,7 @@ import {
   type ReturnShippingBearer,
 } from '@shared/types';
 import { api, errorMessage } from '@/lib/api';
+import { safeExternalUrl } from '@shared/urls';
 import { useToast } from '@/lib/toast';
 import { formatDateTime } from '@/lib/format';
 import { Alert, Badge, Button, Field, Input, Select, Textarea } from '@/components/ui';
@@ -238,8 +239,25 @@ export function ExternalSourcingPanel({
         <Field label="Supplier Catalog / SKU Code">
           <Input value={supplierCatalogId} onChange={(e) => setSupplierCatalogId(e.target.value)} placeholder="Catalog ID" />
         </Field>
-        <Field label="Internal Source Reference URL (Private)" className="sm:col-span-2 lg:col-span-3">
-          <Input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://www.meesho.com/..." />
+        <Field label="Internal Source Reference URL (Private — Admin Only)" className="sm:col-span-2 lg:col-span-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+              placeholder="https://www.meesho.com/..."
+              className="flex-1"
+            />
+            {isAdmin && safeExternalUrl(sourceUrl) ? (
+              <a
+                href={safeExternalUrl(sourceUrl)!}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded border border-forest/30 bg-white px-3.5 text-xs font-semibold text-forest hover:bg-paper"
+              >
+                Open Meesho Link ↗
+              </a>
+            ) : null}
+          </div>
         </Field>
       </div>
 

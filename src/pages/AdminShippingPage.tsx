@@ -239,7 +239,25 @@ export function AdminShippingPage() {
                           <span className="text-xs text-muted">Seller: {f.sellerName}</span>
                         </div>
                         <p className="mt-1 text-xs text-ink">
-                          {f.items.map((i) => `${i.name} × ${i.quantity} (${i.sku})`).join(', ')}
+                          {f.items.map((i, idx) => {
+                            const safeSource = safeExternalUrl(i.sourceUrl);
+                            return (
+                              <span key={i.id} className="inline-flex flex-wrap items-center gap-1 mr-2">
+                                {idx > 0 ? <span className="text-muted">·</span> : null}
+                                <span>{i.name} × {i.quantity} ({i.sku})</span>
+                                {safeSource ? (
+                                  <a
+                                    href={safeSource}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.2 text-[10px] font-semibold text-amber-900 hover:bg-amber-100"
+                                  >
+                                    Meesho ↗
+                                  </a>
+                                ) : null}
+                              </span>
+                            );
+                          })}
                         </p>
                       </div>
                       <Badge
@@ -615,7 +633,20 @@ export function AdminShippingPage() {
               <li>Confirm no third-party invoice, supplier slip, or Meesho branding is included in parcel.</li>
               <li>
                 Ordered variants:{' '}
-                {extEdit?.items.map((i) => `${i.name}${i.variantLabel ? ` (${i.variantLabel})` : ''} × ${i.quantity}`).join(', ')}
+                {extEdit?.items.map((i, idx) => {
+                  const safeSource = safeExternalUrl(i.sourceUrl);
+                  return (
+                    <span key={i.id} className="inline-flex flex-wrap items-center gap-1 mr-2">
+                      {idx > 0 ? ',' : ''}
+                      <span>{i.name}{i.variantLabel ? ` (${i.variantLabel})` : ''} × {i.quantity}</span>
+                      {safeSource ? (
+                        <a href={safeSource} target="_blank" rel="noreferrer" className="underline font-semibold text-amber-950">
+                          [Meesho ↗]
+                        </a>
+                      ) : null}
+                    </span>
+                  );
+                })}
               </li>
             </ul>
           </div>

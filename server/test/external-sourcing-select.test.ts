@@ -337,7 +337,40 @@ describe('Dear Hills Select: External Sourcing, ₹100 Markup, Brand Isolation &
     expect(secondPass.publishedSkus).toEqual(reviewPass.reviewReadySkus);
     expect(queryAll(db, 'SELECT id FROM products WHERE seller_id = ?', POOKI_SELLER_ID)).toHaveLength(8);
     expect(queryAll(db, 'SELECT id FROM inventory_movements')).toHaveLength(6);
-    expect(queryAll(db, 'SELECT id FROM product_images WHERE url LIKE \'/images/select/%\'')).toHaveLength(6);
+    expect(queryAll(db, "SELECT id FROM product_images WHERE url LIKE '/images/select/%'")).toHaveLength(17);
+
+    // Admin panel product list receives private source_url (Meesho links), while public API hides it
+    const admin = await login(app, 'admin@test.local');
+    const adminList = await admin.get('/api/admin/products?filter=external_fulfilment');
+    expect(adminList.status).toBe(200);
+    expect(
+      (adminList.body.products as Array<{ sku: string; source_url?: string | null }>).every(
+        (p) => Boolean(p.source_url?.includes('meesho.com')),
+      ),
+    ).toBe(true);
+
+    // Buyer checkout & order view never expose sourceUrl, while Admin order & shipping views expose Meesho link
+    const buyer = await login(app, 'customer@test.local');
+    const shawlId = queryOne<{ id: string }>(db, "SELECT id FROM products WHERE sku = 'DH-SEL-KSH-01'")!.id;
+    expect((await mutate(buyer.post('/api/cart/items')).send({ productId: shawlId, quantity: 1 })).status).toBe(201);
+    const orderRes = await checkout(app, buyer, { address: ADDRESS });
+    expect(orderRes.status).toBe(201);
+    const orderNumber = orderRes.body.order.orderNumber as string;
+    expect((await mutate(buyer.post(`/api/dev/orders/${orderNumber}/pay`)).send({})).status).toBe(200);
+
+    const buyerOrder = await buyer.get(`/api/orders/${orderNumber}`);
+    expect(JSON.stringify(buyerOrder.body).toLowerCase()).not.toContain('meesho');
+    expect(buyerOrder.body.order.sellerOrders[0].items[0].sourceUrl).toBeUndefined();
+
+    const adminOrder = await admin.get(`/api/admin/orders/${orderNumber}`);
+    expect(adminOrder.status).toBe(200);
+    expect(adminOrder.body.order.sellerOrders[0].items[0].sourceUrl).toContain('meesho.com/');
+    const adminShip = await admin.get('/api/admin/shipping/fulfilments');
+    expect(adminShip.status).toBe(200);
+    const matchingFul = (adminShip.body.fulfilments as Array<{ orderNumber: string; items: Array<{ sourceUrl?: string }> }>).find(
+      (f) => f.orderNumber === orderNumber,
+    );
+    expect(matchingFul?.items[0]?.sourceUrl).toContain('meesho.com/');
 
     for (const sku of publishedPass.publishedSkus) {
       expect(publishedPass.readinessBlockersBySku[sku]).toEqual([]);

@@ -702,13 +702,14 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       supplier_available: number | null;
       availability_verified: number | null;
       image_authorization_status: string | null;
+      source_url: string | null;
     }>(
       db,
       `SELECT p.id, p.name, p.slug, p.status, p.price_paise, p.sku, p.created_at, p.submitted_at, p.rejection_reason,
               p.moderation_note, p.changes_requested_at, p.origin_verified, p.is_demo,
               p.fulfilment_method, p.is_select_curated,
               ps.sourcing_channel, ps.landed_cost_paise, ps.markup_paise, ps.price_verified,
-              ps.supplier_available, ps.availability_verified, ps.image_authorization_status,
+              ps.supplier_available, ps.availability_verified, ps.image_authorization_status, ps.source_url,
               s.business_name AS seller_name, s.id AS seller_id,
               i.quantity AS stock,
               i.reserved_quantity AS reserved,
@@ -4057,7 +4058,7 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
 
     const byId = new Map<string, ReturnType<typeof getFulfilmentsForOrder>[number]>();
     for (const oid of new Set(orderIds.map((r) => r.order_id))) {
-      for (const view of getFulfilmentsForOrder(db, oid, { includeInternal: true })) {
+      for (const view of getFulfilmentsForOrder(db, oid, { includeInternal: true, includeAdminSourceUrls: true })) {
         byId.set(view.id, view);
       }
     }

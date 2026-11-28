@@ -187,6 +187,7 @@ export interface OrderFulfilmentItemView {
   fulfilmentMethod: FulfilmentMethod | string;
   variantId?: string | null;
   variantLabel?: string | null;
+  sourceUrl?: string | null;
 }
 
 export interface OrderFulfilmentView {
@@ -485,6 +486,7 @@ export interface CartLine {
   fulfilmentMethod?: FulfilmentMethod;
   variantId?: string | null;
   variantLabel?: string | null;
+  sourceUrl?: string | null;
 }
 
 export type CampaignStatus = 'draft' | 'scheduled' | 'active' | 'expired' | 'archived';
@@ -540,6 +542,7 @@ export interface OrderItemSummary {
   fulfilmentId?: string | null;
   variantId?: string | null;
   variantLabel?: string | null;
+  sourceUrl?: string | null;
   canReview: boolean;
   reviewed: boolean;
 }

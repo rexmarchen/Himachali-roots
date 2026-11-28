@@ -2999,7 +2999,12 @@ export async function processHardenedShippingWebhook(
 /* Order / Admin Fulfilment View Hydration                             */
 /* ------------------------------------------------------------------ */
 
-function hydrateFulfilmentRows(db: Db, rows: FulfilmentRow[], includeInternal = false): OrderFulfilmentView[] {
+function hydrateFulfilmentRows(
+  db: Db,
+  rows: FulfilmentRow[],
+  includeInternal = false,
+  includeAdminSourceUrls = false,
+): OrderFulfilmentView[] {
   if (rows.length === 0) return [];
 
   return rows.map((row) => {
@@ -3032,11 +3037,15 @@ function hydrateFulfilmentRows(db: Db, rows: FulfilmentRow[], includeInternal = 
       fulfilment_method: string;
       variant_id: string | null;
       variant_label: string | null;
+      source_url: string | null;
     }>(
       db,
-      `SELECT id, product_id, name, sku, image_url, quantity, unit_price_paise, line_subtotal_paise,
-              status, fulfilment_method, variant_id, variant_label
-         FROM order_items WHERE fulfilment_id = ? ORDER BY created_at`,
+      `SELECT oi.id, oi.product_id, oi.name, oi.sku, oi.image_url, oi.quantity, oi.unit_price_paise, oi.line_subtotal_paise,
+              oi.status, oi.fulfilment_method, oi.variant_id, oi.variant_label,
+              ${includeAdminSourceUrls ? 'ps.source_url AS source_url' : 'NULL AS source_url'}
+         FROM order_items oi
+         ${includeAdminSourceUrls ? 'LEFT JOIN product_sourcing ps ON ps.product_id = oi.product_id' : ''}
+        WHERE oi.fulfilment_id = ? ORDER BY oi.created_at`,
       row.id,
     );
 
@@ -3076,6 +3085,7 @@ function hydrateFulfilmentRows(db: Db, rows: FulfilmentRow[], includeInternal = 
       fulfilmentMethod: i.fulfilment_method,
       variantId: i.variant_id ?? null,
       variantLabel: i.variant_label ?? null,
+      ...(includeAdminSourceUrls ? { sourceUrl: i.source_url ?? null } : {}),
     }));
 
     const sanitizePublicDesc = (desc: string | null): string | null => {
@@ -3159,13 +3169,17 @@ function hydrateFulfilmentRows(db: Db, rows: FulfilmentRow[], includeInternal = 
   });
 }
 
-export function getFulfilmentsForOrder(db: Db, orderId: string, options: { includeInternal?: boolean } = {}): OrderFulfilmentView[] {
+export function getFulfilmentsForOrder(
+  db: Db,
+  orderId: string,
+  options: { includeInternal?: boolean; includeAdminSourceUrls?: boolean } = {},
+): OrderFulfilmentView[] {
   const rows = queryAll<FulfilmentRow>(
     db,
     'SELECT * FROM order_fulfilments WHERE order_id = ? ORDER BY created_at, id',
     orderId,
   );
-  return hydrateFulfilmentRows(db, rows, Boolean(options.includeInternal));
+  return hydrateFulfilmentRows(db, rows, Boolean(options.includeInternal), Boolean(options.includeAdminSourceUrls));
 }
 
 export function getFulfilmentsForSellerOrder(db: Db, sellerOrderId: string): OrderFulfilmentView[] {

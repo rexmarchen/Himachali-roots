@@ -1266,19 +1266,25 @@ export function getOrderView(
     fulfilment_id: string | null;
     variant_id: string | null;
     variant_label: string | null;
+    source_url?: string | null;
     review_id: string | null;
     seller_name: string;
   }>(
     db,
-    `SELECT oi.*, sp.business_name AS seller_name, r.id AS review_id
+    `SELECT oi.*, sp.business_name AS seller_name, r.id AS review_id,
+            ${options.includeFinancials ? 'ps.source_url AS source_url' : 'NULL AS source_url'}
        FROM order_items oi
        JOIN seller_profiles sp ON sp.id = oi.seller_id
        LEFT JOIN reviews r ON r.order_item_id = oi.id
+       ${options.includeFinancials ? 'LEFT JOIN product_sourcing ps ON ps.product_id = oi.product_id' : ''}
       WHERE oi.order_id = ? ORDER BY oi.created_at`,
     orderId,
   );
 
-  const allFulfilments = getFulfilmentsForOrder(db, orderId, { includeInternal: options.includeFinancials });
+  const allFulfilments = getFulfilmentsForOrder(db, orderId, {
+    includeInternal: options.includeFinancials,
+    includeAdminSourceUrls: options.includeFinancials,
+  });
 
   const sellerOrders: SellerOrderView[] = sellers.map((seller) => {
     const shipmentRow = queryOne<{
@@ -1325,6 +1331,7 @@ export function getOrderView(
         fulfilmentId: item.fulfilment_id ?? undefined,
         variantId: item.variant_id ?? null,
         variantLabel: item.variant_label ?? null,
+        ...(options.includeFinancials ? { sourceUrl: item.source_url ?? null } : {}),
         canReview: item.status === 'delivered' && !item.review_id,
         reviewed: Boolean(item.review_id),
       }));
