@@ -877,4 +877,67 @@ describe('Product-wise fulfilment routing & Shiprocket automatic integration (TE
       'order_confirmed',
     );
   });
+
+  it('TEST 10: Customer mistaken order auto-cancels remote Shiprocket order & AWB before dispatch and releases stock/queues refund', async () => {
+    const { calls } = installMockShiprocket();
+    const pickupId = createVerifiedPickup(IDS.seller, 'Kullu_Workshop_Hub');
+    const prodId = createProductDirectly({
+      id: 'prd_mistake_sr',
+      sellerId: IDS.seller,
+      name: 'Mistaken Order Shiprocket Shawl',
+      sku: 'MIST-SR-1',
+      method: 'SHIPROCKET',
+      pickupLocationId: pickupId,
+    });
+
+    // Scenario A: Paid order auto-synced to Shiprocket (no AWB yet) -> customer cancels by mistake
+    const customer = await login(app, 'customer@test.local');
+    await addToCart(app, customer, prodId, 1);
+    const ord1 = await checkout(app, customer);
+    const ord1Num = ord1.body.order.orderNumber as string;
+    await mutate(customer.post(`/api/dev/orders/${ord1Num}/pay`)).send({});
+
+    const so1 = queryOne<{ id: string }>(db, 'SELECT id FROM seller_orders WHERE order_id = ?', ord1.body.order.id)!;
+    const cancel1 = await mutate(customer.post(`/api/account/orders/${ord1Num}/cancel`)).send({
+      sellerOrderId: so1.id,
+      reason: 'Placed order by mistake — wrong address selected.',
+    });
+    expect(cancel1.status).toBe(200);
+    expect(cancel1.body.status).toBe('completed');
+
+    const srCancelOrderCalls = calls.filter((c) => c.url.endsWith('/orders/cancel'));
+    expect(srCancelOrderCalls).toHaveLength(1);
+    expect(srCancelOrderCalls[0].body?.ids).toEqual([910001]);
+
+    expect(queryOne<{ status: string }>(db, 'SELECT status FROM orders WHERE id = ?', ord1.body.order.id)!.status).toBe('cancelled');
+    expect(queryOne<{ reserved_quantity: number }>(db, 'SELECT reserved_quantity FROM inventory WHERE product_id = ?', prodId)!.reserved_quantity).toBe(0);
+
+    // Scenario B: Paid order already marked READY_TO_SHIP (has AWB, packed, not picked up) -> customer can still cancel -> cancels AWB in Shiprocket
+    await addToCart(app, customer, prodId, 1);
+    const ord2 = await checkout(app, customer);
+    const ord2Num = ord2.body.order.orderNumber as string;
+    await mutate(customer.post(`/api/dev/orders/${ord2Num}/pay`)).send({});
+
+    const ful2 = queryOne<{ id: string; seller_order_id: string }>(
+      db,
+      'SELECT id, seller_order_id FROM order_fulfilments WHERE order_id = ?',
+      ord2.body.order.id,
+    )!;
+    const seller = await login(app, 'seller@test.local');
+    await mutate(seller.post(`/api/seller/fulfilments/${ful2.id}/ready-to-ship`)).send({});
+
+    const orderView2 = await customer.get(`/api/account/orders/${ord2Num}`);
+    expect(orderView2.body.order.canCancel).toBe(true);
+
+    const cancel2 = await mutate(customer.post(`/api/account/orders/${ord2Num}/cancel`)).send({
+      sellerOrderId: ful2.seller_order_id,
+      reason: 'Mistaken duplicate order before courier pickup.',
+    });
+    expect(cancel2.status).toBe(200);
+    expect(cancel2.body.status).toBe('completed');
+
+    const awbCancelCalls = calls.filter((c) => c.url.includes('/orders/cancel/shipment/awbs'));
+    expect(awbCancelCalls).toHaveLength(1);
+    expect(awbCancelCalls[0].body?.awbs).toEqual(['SR_AWB_778899']);
+  });
 });

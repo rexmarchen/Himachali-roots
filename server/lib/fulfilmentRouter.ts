@@ -1127,6 +1127,39 @@ export async function syncShiprocketFulfilment(
     });
 
     const syncedAt = new Date().toISOString();
+    // Guard against simultaneous cancellation while the Shiprocket HTTP call was in-flight
+    const latestBeforeCommit = queryOne<{ status: string }>(
+      db,
+      'SELECT status FROM order_fulfilments WHERE id = ?',
+      fulfilmentId,
+    );
+    if (latestBeforeCommit?.status === 'cancelled') {
+      try {
+        await cancelShiprocketPickupOrOrder({ shiprocketOrderId: srResult.shiprocketOrderId });
+      } catch {
+        // Best-effort remote cleanup logged below
+      }
+      execute(
+        db,
+        `UPDATE order_fulfilments
+            SET shiprocket_order_id = ?, shiprocket_shipment_id = ?, updated_at = ?
+          WHERE id = ?`,
+        srResult.shiprocketOrderId,
+        srResult.shiprocketShipmentId,
+        syncedAt,
+        fulfilmentId,
+      );
+      recordFulfilmentEvent(db, {
+        fulfilmentId,
+        eventId: `sr-cancel-race:${srResult.shiprocketOrderId}`,
+        source: 'shiprocket_api',
+        status: 'cancelled',
+        description: `Order cancelled locally while Shiprocket sync finished; cancelled Shiprocket order #${srResult.shiprocketOrderId} automatically.`,
+        occurredAt: syncedAt,
+      });
+      return { synced: false, error: 'Fulfilment cancelled while syncing; remote Shiprocket order cancelled automatically.' };
+    }
+
     tx(db, () => {
       execute(
         db,
@@ -2289,6 +2322,88 @@ export async function cancelSingleFulfilment(
   });
 
   return { ok: true, ...summary };
+}
+
+/**
+ * Automatically cancels any synced Shiprocket orders/AWBs belonging to a cancelled
+ * seller order (or whole order) after customer/seller/admin cancellation.
+ */
+async function cancelRemoteShiprocketRows(
+  db: Db,
+  rows: FulfilmentRow[],
+  actor?: SessionUser | null,
+): Promise<void> {
+  if (!env.shiprocket.configured || rows.length === 0) return;
+  for (const row of rows) {
+    if (row.fulfilment_method !== 'SHIPROCKET') continue;
+    if (!row.shiprocket_order_id && !row.awb_code) continue;
+    const cancelEventId = `sr-cancel:${row.id}`;
+    const alreadyDone = queryOne<{ id: string }>(
+      db,
+      'SELECT id FROM fulfilment_events WHERE event_id = ?',
+      cancelEventId,
+    );
+    if (alreadyDone) continue;
+    try {
+      const res = await cancelShiprocketPickupOrOrder({
+        shiprocketOrderId: row.shiprocket_order_id,
+        awbCode: row.awb_code,
+      });
+      recordFulfilmentEvent(db, {
+        fulfilmentId: row.id,
+        eventId: cancelEventId,
+        source: 'shiprocket_api',
+        status: 'cancelled',
+        description: `Cancelled in Shiprocket automatically (${res.note}).`,
+        actor,
+      });
+      audit(db, actor ?? null, 'fulfilment.shiprocket_cancelled', 'order_fulfilment', row.id, null, {
+        shiprocketOrderId: row.shiprocket_order_id,
+        awbCode: row.awb_code,
+        note: res.note,
+      });
+    } catch (err) {
+      const errMsg = sanitizeShiprocketMessage(err);
+      recordFulfilmentEvent(db, {
+        fulfilmentId: row.id,
+        source: 'shiprocket_api',
+        status: 'cancelled',
+        description: `Local order cancelled; automatic Shiprocket cancel returned warning: ${errMsg}`,
+        actor,
+      });
+      audit(db, actor ?? null, 'fulfilment.shiprocket_cancel_warning', 'order_fulfilment', row.id, null, {
+        shiprocketOrderId: row.shiprocket_order_id,
+        awbCode: row.awb_code,
+        error: errMsg,
+      });
+    }
+  }
+}
+
+export async function cancelShiprocketOrdersForSellerOrder(
+  db: Db,
+  sellerOrderId: string,
+  actor?: SessionUser | null,
+): Promise<void> {
+  const rows = queryAll<FulfilmentRow>(
+    db,
+    "SELECT * FROM order_fulfilments WHERE seller_order_id = ? AND fulfilment_method = 'SHIPROCKET'",
+    sellerOrderId,
+  );
+  await cancelRemoteShiprocketRows(db, rows, actor);
+}
+
+export async function cancelShiprocketOrdersForOrder(
+  db: Db,
+  orderId: string,
+  actor?: SessionUser | null,
+): Promise<void> {
+  const rows = queryAll<FulfilmentRow>(
+    db,
+    "SELECT * FROM order_fulfilments WHERE order_id = ? AND fulfilment_method = 'SHIPROCKET'",
+    orderId,
+  );
+  await cancelRemoteShiprocketRows(db, rows, actor);
 }
 
 /* ------------------------------------------------------------------ */

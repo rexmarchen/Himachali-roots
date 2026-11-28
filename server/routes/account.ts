@@ -14,6 +14,7 @@ import {
 import { badRequest, clientIp, conflict, notFound, parse, unauthorized } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { cancelPendingOrder, getOrderView, requestCancellation, requestReturn, validateAddress } from '../lib/orders.js';
+import { cancelShiprocketOrdersForSellerOrder } from '../lib/fulfilmentRouter.js';
 import { notify, escapeHtml } from '../lib/email.js';
 import { audit } from '../lib/audit.js';
 
@@ -384,6 +385,9 @@ export function accountRouter(db: Db): Router {
       actor: req.user!,
       reason: input.reason,
     });
+    if (result.status === 'completed') {
+      await cancelShiprocketOrdersForSellerOrder(db, input.sellerOrderId, req.user!);
+    }
     await notify(db, {
       userId: order.user_id,
       email: order.email,

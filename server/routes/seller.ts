@@ -1,6 +1,7 @@
 import { checkCourierServiceability, type ShippingAddressInfo } from '../lib/shipping.js';
 import {
   cancelShiprocketFulfilmentPickup,
+  cancelShiprocketOrdersForSellerOrder,
   cancelSingleFulfilment,
   getFulfilmentsForSellerOrder,
   listSellerPickupLocations,
@@ -2300,7 +2301,7 @@ export function sellerRouter(db: Db): Router {
     });
   });
 
-  router.post('/orders/:id/action', (req, res) => {
+  router.post('/orders/:id/action', async (req, res) => {
     const id = sellerId(req);
     const input = parse(
       z.object({
@@ -2326,6 +2327,10 @@ export function sellerRouter(db: Db): Router {
       trackingUrl: input.trackingUrl || undefined,
       note: input.reason || input.note,
     });
+
+    if (canonicalAction === 'cancel') {
+      await cancelShiprocketOrdersForSellerOrder(db, req.params.id, req.user!);
+    }
 
     const so = queryOne<{ reference: string; order_id: string }>(
       db,

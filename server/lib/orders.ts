@@ -1016,7 +1016,7 @@ export function getOrderView(
     occurredAt: event.created_at,
   }));
 
-  const cancellable = sellerOrders.every((so) => ['pending', 'confirmed'].includes(so.status));
+  const cancellable = sellerOrders.some((so) => ['pending', 'confirmed', 'packed'].includes(so.status));
   const returnWindowEnd = Date.now() - 7 * 86400_000;
   const returnable = sellerOrders.some(
     (so) => so.status === 'delivered' && so.deliveredAt && new Date(so.deliveredAt).getTime() > returnWindowEnd,

@@ -15,6 +15,8 @@ import { decryptPayoutDetails } from '../lib/payoutCrypto.js';
 import { isSafeHttpUrl } from '../../shared/urls.js';
 import { safeTrackingUrlSchema } from '../lib/http.js';
 import {
+  cancelShiprocketOrdersForOrder,
+  cancelShiprocketOrdersForSellerOrder,
   cancelSingleFulfilment,
   getFulfilmentsForOrder,
   mapPickupLocationRow,
@@ -1653,7 +1655,7 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
     res.json({ order: view, payments, refunds, returns, cancellations, events });
   });
 
-  router.post('/orders/:orderNumber/seller-orders/:sellerOrderId/action', (req, res) => {
+  router.post('/orders/:orderNumber/seller-orders/:sellerOrderId/action', async (req, res) => {
     const input = parse(
       z.object({
         action: z.enum(['confirm', 'pack', 'ship', 'deliver', 'cancel']),
@@ -1678,10 +1680,13 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       trackingNumber: input.trackingNumber,
       note: input.note,
     });
+    if (input.action === 'cancel') {
+      await cancelShiprocketOrdersForSellerOrder(db, sellerOrder.id, req.user!);
+    }
     res.json({ ok: true });
   });
 
-  router.post('/orders/:orderNumber/status', (req, res) => {
+  router.post('/orders/:orderNumber/status', async (req, res) => {
     const input = parse(
       z.object({
         action: z.enum(['confirm', 'pack', 'ship', 'deliver', 'cancel']),
@@ -1732,6 +1737,9 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
       audit(db, req.user!, 'order.status_updated', 'order', order.id, { action: input.action, status: nextStatus });
       return nextStatus;
     });
+    if (input.action === 'cancel') {
+      await cancelShiprocketOrdersForOrder(db, order.id, req.user!);
+    }
     res.json({ ok: true, status: newStatus });
   });
 
@@ -2043,6 +2051,7 @@ export function adminRouter(db: Db, deps: AdminRouterDeps = {}): Router {
         action: 'cancel',
         note: `Cancellation approved: ${input.note}`,
       });
+      await cancelShiprocketOrdersForSellerOrder(db, request.seller_order_id, req.user!);
     }
     execute(
       db,

@@ -500,7 +500,7 @@ export function OrderDetailPage() {
                 </div>
               ) : null}
               <div className="flex flex-wrap gap-2 border-t border-line px-5 py-3">
-                {data.canCancel && ['pending', 'confirmed'].includes(sellerOrder.status) ? (
+                {data.canCancel && ['pending', 'confirmed', 'packed'].includes(sellerOrder.status) ? (
                   <Button size="sm" variant="secondary" onClick={() => setCancelSeller(sellerOrder.id)}>Cancel shipment</Button>
                 ) : null}
                 {data.canRequestReturn && sellerOrder.status === 'delivered' ? (
