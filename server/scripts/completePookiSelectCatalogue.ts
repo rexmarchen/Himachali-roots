@@ -42,6 +42,33 @@ interface UnavailableSelectUpdateSpec {
   internalNotes: string;
 }
 
+const SELECT_STUDIO_MEDIA: Record<string, { url: string; alt: string }> = {
+  'DH-SEL-KSH-01': {
+    url: '/images/select/dh-sel-ksh-01.jpg',
+    alt: 'Dear Hills Select woven multicolor winter shawl with geometric border pattern on linen',
+  },
+  'DH-SEL-MCS-02': {
+    url: '/images/select/dh-sel-mcs-02.jpg',
+    alt: 'Dear Hills Select multicolor woven wool winter shawl with floral border on travertine stone',
+  },
+  'DH-SEL-BKS-03': {
+    url: '/images/select/dh-sel-bks-03.jpg',
+    alt: 'Dear Hills Select jet-black woven jacquard wool stole with patterned border and tassels',
+  },
+  'DH-SEL-HMC-04': {
+    url: '/images/select/dh-sel-hmc-04.jpg',
+    alt: 'Dear Hills Select Himachali-style multicolor patterned wool winter cap on limestone plinth',
+  },
+  'DH-SEL-GMK-05': {
+    url: '/images/select/dh-sel-gmk-05.jpg',
+    alt: 'Dear Hills Select emerald green velvet-band wool winter topi on warm sandstone background',
+  },
+  'DH-SEL-PHT-06': {
+    url: '/images/select/dh-sel-pht-06.jpg',
+    alt: 'Dear Hills Select Himalayan border wool winter topi on warm natural linen',
+  },
+};
+
 export type PookiSelectUpdateSpec = VerifiedSelectUpdateSpec | UnavailableSelectUpdateSpec;
 
 /**
@@ -296,18 +323,26 @@ export const POOKI_VERIFIED_UPDATES: PookiSelectUpdateSpec[] = [
 export interface CompletePookiResult {
   sellerId: string;
   reviewReadySkus: string[];
+  publishedSkus: string[];
   outOfStockDraftSkus: string[];
   missingSkus: string[];
   readinessBlockersBySku: Record<string, string[]>;
 }
 
+export interface CompletePookiOptions {
+  sellerId?: string;
+  attachStudioImages?: boolean;
+  publishVerified?: boolean;
+}
+
 /**
  * Updates the existing 8 Pooki external-sourcing records with verified supplier data
- * without creating duplicate products, submitting verified in-stock records to 'pending' (review).
+ * without creating duplicate products, attaching brand-owned illustrative photos and
+ * publishing verified listings only when readiness passes cleanly.
  */
 export function completePookiSelectCatalogue(
   db: Db,
-  options: { sellerId?: string } = {},
+  options: CompletePookiOptions = {},
 ): CompletePookiResult {
   const targetSeller = queryOne<{ id: string; status: string }>(
     db,
@@ -322,8 +357,11 @@ export function completePookiSelectCatalogue(
     throw new Error(`Existing Pooki seller (${POOKI_SELLER_ID} / ${POOKI_EMAIL}) was not found.`);
   }
 
+  const attachStudioImages = options.attachStudioImages ?? true;
+  const publishVerified = options.publishVerified ?? true;
   const now = new Date().toISOString();
   const reviewReadySkus: string[] = [];
+  const publishedSkus: string[] = [];
   const outOfStockDraftSkus: string[] = [];
   const missingSkus: string[] = [];
   const readinessBlockersBySku: Record<string, string[]> = {};
@@ -358,8 +396,6 @@ export function completePookiSelectCatalogue(
             'Dispatch in neutral white-label packaging; zero third-party marketplace slips inside.',
         };
 
-        const nextStatus = existing.status === 'approved' ? 'approved' : 'pending';
-
         execute(
           db,
           `UPDATE products
@@ -382,7 +418,7 @@ export function completePookiSelectCatalogue(
                   variants_json = ?,
                   return_window_days = ?,
                   return_shipping_bearer = 'partner_defective_only',
-                  status = ?,
+                  status = CASE WHEN status = 'approved' THEN 'approved' ELSE 'pending' END,
                   submitted_at = COALESCE(submitted_at, ?),
                   rejection_reason = NULL,
                   moderation_note = NULL,
@@ -402,7 +438,6 @@ export function completePookiSelectCatalogue(
           JSON.stringify(shippingCfg),
           JSON.stringify(spec.variants),
           spec.returnWindowDays,
-          nextStatus,
           now,
           now,
           existing.id,
@@ -434,6 +469,29 @@ export function completePookiSelectCatalogue(
           );
         }
 
+        const studioMedia = SELECT_STUDIO_MEDIA[spec.sku];
+        let hasAuthorizedStudioImg = false;
+        if (attachStudioImages && studioMedia) {
+          const existingImg = queryOne<{ id: string }>(
+            db,
+            'SELECT id FROM product_images WHERE product_id = ? LIMIT 1',
+            existing.id,
+          );
+          if (!existingImg) {
+            execute(
+              db,
+              `INSERT INTO product_images (id, product_id, url, alt, credit, sort_order, created_at)
+               VALUES (?, ?, ?, ?, 'Dear Hills Creative Studio · Illustrative Studio Visual', 0, ?)`,
+              newId('img_'),
+              existing.id,
+              studioMedia.url,
+              studioMedia.alt,
+              now,
+            );
+          }
+          hasAuthorizedStudioImg = true;
+        }
+
         upsertProductSourcing(db, existing.id, {
           sourcingChannel: 'meesho',
           sourceUrl: spec.sourceUrl,
@@ -448,13 +506,39 @@ export function completePookiSelectCatalogue(
           priceVerified: true,
           supplierAvailable: true,
           availabilityVerified: true,
+          ...(hasAuthorizedStudioImg
+            ? {
+                imageAuthorizationStatus: 'authorized' as const,
+                imageAuthorizationNote:
+                  'Dear Hills Creative Studio brand-owned illustrative product photograph (no third-party marketplace assets).',
+              }
+            : {}),
           supplierReturnPolicyNote: spec.supplierReturnPolicyNote,
           internalNotes: spec.internalNotes,
         });
 
         const readiness = evaluateExternalProductReadiness(db, existing.id);
         readinessBlockersBySku[spec.sku] = readiness.blockers;
-        reviewReadySkus.push(spec.sku);
+
+        if (publishVerified && readiness.ready) {
+          execute(
+            db,
+            `UPDATE products
+                SET status = 'approved',
+                    approved_at = COALESCE(approved_at, ?),
+                    published_at = COALESCE(published_at, ?),
+                    updated_at = ?
+              WHERE id = ? AND seller_id = ?`,
+            now,
+            now,
+            now,
+            existing.id,
+            targetSeller.id,
+          );
+          publishedSkus.push(spec.sku);
+        } else {
+          reviewReadySkus.push(spec.sku);
+        }
       } else {
         execute(
           db,
@@ -492,6 +576,7 @@ export function completePookiSelectCatalogue(
   return {
     sellerId: targetSeller.id,
     reviewReadySkus,
+    publishedSkus,
     outOfStockDraftSkus,
     missingSkus,
     readinessBlockersBySku,
@@ -501,8 +586,12 @@ export function completePookiSelectCatalogue(
 const isCliRun = /completePookiSelectCatalogue\.(ts|js)$/.test(process.argv[1] ?? '');
 if (isCliRun) {
   const db = openDatabase(env.databasePath);
+  const reviewOnly = process.argv.includes('--review-only');
   try {
-    const result = completePookiSelectCatalogue(db);
+    const result = completePookiSelectCatalogue(db, {
+      attachStudioImages: !reviewOnly,
+      publishVerified: !reviewOnly,
+    });
     console.log(JSON.stringify({ ok: true, ...result }, null, 2));
   } finally {
     db.close();

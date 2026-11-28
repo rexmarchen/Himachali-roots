@@ -298,7 +298,7 @@ describe('Dear Hills Select: External Sourcing, ₹100 Markup, Brand Isolation &
     expect(calls).toHaveLength(0);
   });
 
-  it('TEST 6: completes existing 6 verified in-stock Pooki listings with ₹100 markup into pending review while keeping 2 HTTP 410 out-of-stock listings in draft', async () => {
+  it('TEST 6: completes existing 6 verified in-stock Pooki listings into review and publishes them cleanly with brand-owned photos, ₹100 markup & zero Shiprocket while keeping 2 HTTP 410 items in draft', async () => {
     const calls: string[] = [];
     globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
       calls.push(String(input));
@@ -306,9 +306,11 @@ describe('Dear Hills Select: External Sourcing, ₹100 Markup, Brand Isolation &
     }) as typeof fetch;
 
     seedPookiSelectCatalogue(db, { createExtraCategories: true });
-    const first = completePookiSelectCatalogue(db);
-    expect(first.missingSkus).toHaveLength(0);
-    expect(first.reviewReadySkus).toEqual([
+
+    // Stage A: review-only leaves unphotographed verified listings in pending review without leaking publicly
+    const reviewPass = completePookiSelectCatalogue(db, { attachStudioImages: false, publishVerified: false });
+    expect(reviewPass.missingSkus).toHaveLength(0);
+    expect(reviewPass.reviewReadySkus).toEqual([
       'DH-SEL-KSH-01',
       'DH-SEL-MCS-02',
       'DH-SEL-BKS-03',
@@ -316,20 +318,29 @@ describe('Dear Hills Select: External Sourcing, ₹100 Markup, Brand Isolation &
       'DH-SEL-GMK-05',
       'DH-SEL-PHT-06',
     ]);
-    expect(first.outOfStockDraftSkus).toEqual(['DH-SEL-MFL-07', 'DH-SEL-WJK-08']);
-
-    // Idempotent second run creates zero duplicates and preserves stock movements
-    const second = completePookiSelectCatalogue(db);
-    expect(second.reviewReadySkus).toHaveLength(6);
-    expect(queryAll(db, 'SELECT id FROM products WHERE seller_id = ?', POOKI_SELLER_ID)).toHaveLength(8);
-    expect(queryAll(db, 'SELECT id FROM inventory_movements')).toHaveLength(6);
-
-    // Every verified SKU passes price/spec/compliance checks and is blocked ONLY on authorized images
-    for (const sku of first.reviewReadySkus) {
-      expect(first.readinessBlockersBySku[sku]).toEqual([
+    expect(reviewPass.publishedSkus).toHaveLength(0);
+    for (const sku of reviewPass.reviewReadySkus) {
+      expect(reviewPass.readinessBlockersBySku[sku]).toEqual([
         'Upload at least one verified product photograph before publishing.',
         'Product photographs must have confirmed commercial usage authorization before publishing.',
       ]);
+    }
+    const reviewPublicRes = await request(app).get('/api/products?pageSize=48');
+    expect(reviewPublicRes.body.items.every((item: { slug: string }) => !item.slug.includes('select'))).toBe(true);
+
+    // Stage B: attaching authorized Dear Hills studio photos passes 100% readiness and publishes live (idempotent on re-run)
+    const publishedPass = completePookiSelectCatalogue(db, { attachStudioImages: true, publishVerified: true });
+    expect(publishedPass.publishedSkus).toEqual(reviewPass.reviewReadySkus);
+    expect(publishedPass.outOfStockDraftSkus).toEqual(['DH-SEL-MFL-07', 'DH-SEL-WJK-08']);
+
+    const secondPass = completePookiSelectCatalogue(db, { attachStudioImages: true, publishVerified: true });
+    expect(secondPass.publishedSkus).toEqual(reviewPass.reviewReadySkus);
+    expect(queryAll(db, 'SELECT id FROM products WHERE seller_id = ?', POOKI_SELLER_ID)).toHaveLength(8);
+    expect(queryAll(db, 'SELECT id FROM inventory_movements')).toHaveLength(6);
+    expect(queryAll(db, 'SELECT id FROM product_images WHERE url LIKE \'/images/select/%\'')).toHaveLength(6);
+
+    for (const sku of publishedPass.publishedSkus) {
+      expect(publishedPass.readinessBlockersBySku[sku]).toEqual([]);
     }
 
     const pookiRows = queryAll<{
@@ -357,8 +368,8 @@ describe('Dear Hills Select: External Sourcing, ₹100 Markup, Brand Isolation &
     expect(bySku['DH-SEL-HMC-04']?.price_paise).toBe(28600);
     expect(bySku['DH-SEL-GMK-05']?.price_paise).toBe(61900);
     expect(bySku['DH-SEL-PHT-06']?.price_paise).toBe(27400);
-    for (const sku of first.reviewReadySkus) {
-      expect(bySku[sku]?.status).toBe('pending');
+    for (const sku of publishedPass.publishedSkus) {
+      expect(bySku[sku]?.status).toBe('approved');
       expect(bySku[sku]?.price_paise).toBe((bySku[sku]?.landed_cost_paise ?? 0) + 10000);
       expect(bySku[sku]?.price_verified).toBe(1);
       expect(bySku[sku]?.availability_verified).toBe(1);
@@ -370,9 +381,16 @@ describe('Dear Hills Select: External Sourcing, ₹100 Markup, Brand Isolation &
     expect(bySku['DH-SEL-WJK-08']?.status).toBe('draft');
     expect(bySku['DH-SEL-WJK-08']?.supplier_available).toBe(0);
 
-    // Zero pending/draft listings leak to public storefront, sitemap, or Google Merchant feed
+    // Public storefront shows all 6 published items with photos and ZERO Meesho / supplier leaks
     const publicRes = await request(app).get('/api/products?pageSize=48');
-    expect(publicRes.body.items.every((item: { slug: string }) => !item.slug.includes('select'))).toBe(true);
+    const publishedItems = (publicRes.body.items as Array<{ slug: string; imageUrl: string | null; isSelectCurated: boolean }>).filter(
+      (item) => item.slug.includes('dear-hills-select'),
+    );
+    expect(publishedItems).toHaveLength(6);
+    expect(publishedItems.every((i) => Boolean(i.imageUrl?.startsWith('/images/select/')))).toBe(true);
+    expect(publishedItems.every((i) => i.isSelectCurated)).toBe(true);
+    expect(JSON.stringify(publicRes.body).toLowerCase()).not.toContain('meesho');
+
     const sitemapRes = await request(app).get('/sitemap.xml');
     expect(sitemapRes.text.toLowerCase()).not.toContain('meesho');
     const feedRes = await request(app).get('/feeds/google-merchant.xml');
